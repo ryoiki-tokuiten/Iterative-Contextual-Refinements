@@ -106,7 +106,6 @@ body {
     overflow-x: hidden;
 }
 
-/* Screen reader only utility */
 .sr-only {
     position: absolute;
     width: 1px;
@@ -291,7 +290,7 @@ body {
     letter-spacing: 0.05em;
     padding-bottom: var(--space-3);
     border-bottom: 1px solid var(--border-secondary);
-    margin-bottom: var(--space-2); /* Reduced margin */
+    margin-bottom: var(--space-2);
 }
 
 hr.sidebar-divider {
@@ -308,7 +307,6 @@ hr.sidebar-divider {
    - Refined hover and focus states.
    ========================================================================== */
 
-/* --- Base Input Style --- */
 .input-base {
     width: 100%;
     background: var(--tertiary-surface-bg);
@@ -335,14 +333,12 @@ hr.sidebar-divider {
     border-color: var(--border-secondary);
 }
 
-/* --- Textarea --- */
 #initial-idea {
     min-height: 120px;
     resize: vertical;
     line-height: var(--line-height-base);
 }
 
-/* --- Segmented Control (App Mode) --- */
 #app-mode-selector {
     display: flex;
     background-color: color-mix(in srgb, var(--tertiary-surface-bg) 80%, black);
@@ -385,7 +381,6 @@ hr.sidebar-divider {
     box-shadow: var(--shadow-focus-ring);
 }
 
-/* --- Labels & Select --- */
 .model-select-label {
     font-size: 0.9rem;
     font-weight: 500;
@@ -409,7 +404,6 @@ hr.sidebar-divider {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23586078'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
 }
 
-/* --- API Key Input --- */
 #api-key-input {
     font-family: var(--font-family-mono);
 }
@@ -431,7 +425,6 @@ hr.sidebar-divider {
     margin-top: var(--space-2);
 }
 
-/* --- File Input --- */
 .file-input { cursor: pointer; }
 .file-input::-webkit-file-upload-button {
     background: var(--accent-blue-alt);
@@ -454,7 +447,6 @@ hr.sidebar-divider {
     box-shadow: var(--shadow-sm);
 }
 
-/* --- Checkboxes (Pipeline Selectors) --- */
 .pipeline-selectors-container {
     display: flex;
     flex-direction: column;
@@ -486,7 +478,7 @@ hr.sidebar-divider {
     user-select: none;
     transition: color var(--transition-speed-fast) var(--easing-subtle);
 }
-.pipeline-selector-item label::before { /* Custom checkbox box */
+.pipeline-selector-item label::before {
     content: '';
     position: absolute;
     left: 0;
@@ -499,7 +491,7 @@ hr.sidebar-divider {
     border-radius: 4px;
     transition: all var(--transition-speed-fast) var(--easing-subtle);
 }
-.pipeline-selector-item label::after { /* Custom checkbox checkmark */
+.pipeline-selector-item label::after {
     content: '';
     position: absolute;
     left: 6px;
@@ -532,7 +524,6 @@ hr.sidebar-divider {
     box-shadow: var(--shadow-focus-ring);
 }
 
-/* --- Custom Prompts Section --- */
 #custom-prompts-collapsible-container.input-group {
     padding: 0;
     background-color: transparent;
@@ -595,7 +586,7 @@ hr.sidebar-divider {
     transition: all var(--transition-speed-slow) var(--easing-standard);
 }
 #custom-prompts-collapsible-container.is-open .custom-prompts-content-wrapper {
-    max-height: 1000vh; /* Large value */
+    max-height: 1000vh;
     opacity: 1;
     visibility: visible;
     padding: var(--space-6);
@@ -653,7 +644,6 @@ hr.sidebar-divider {
    - Subtle, professional hover and active states.
    ========================================================================== */
 
-/* --- Base Button Style --- */
 .button-base {
     display: inline-flex;
     justify-content: center;
@@ -690,7 +680,6 @@ hr.sidebar-divider {
     border-color: var(--border-primary) !important;
 }
 
-/* --- Primary Action Button --- */
 #generate-button {
     background-color: var(--accent-pink-alt);
     color: var(--text-title-color);
@@ -706,7 +695,6 @@ hr.sidebar-divider {
     box-shadow: 0 4px 12px color-mix(in srgb, var(--accent-pink-alt) 35%, transparent), var(--shadow-inset-subtle);
 }
 
-/* --- Secondary/Config Buttons --- */
 .config-button {
     flex: 1;
     background: var(--accent-blue-alt);
@@ -728,7 +716,6 @@ hr.sidebar-divider {
 }
 label#import-config-label { text-align: center; }
 
-/* --- Action Buttons (in main content) --- */
 .action-button {
     padding: var(--space-2) var(--space-4);
     font-size: 0.85rem;
@@ -741,11 +728,11 @@ label#import-config-label { text-align: center; }
 .stop-pipeline-button:hover:not(:disabled) {
     background: color-mix(in srgb, var(--accent-error) 90%, white 10%);
 }
-.download-html-button, .download-text-button {
+.download-html-button, .download-text-button, #download-react-app-code {
     background-color: var(--accent-blue-alt);
     color: var(--text-title-color);
 }
-.download-html-button:hover:not(:disabled), .download-text-button:hover:not(:disabled) {
+.download-html-button:hover:not(:disabled), .download-text-button:hover:not(:disabled), #download-react-app-code:hover:not(:disabled) {
     background-color: color-mix(in srgb, var(--accent-blue-alt) 90%, #fff 10%);
 }
 .copy-html-button, .copy-text-button, .copy-react-worker-code-btn {
@@ -771,8 +758,7 @@ label#import-config-label { text-align: center; }
    - Subtle background tints for less visual noise.
    ========================================================================== */
 
-/* --- Base Status Badge Style --- */
-.status-badge {
+.status-badge, .pipeline-status, .iteration-status, .math-step-status {
     font-weight: 500;
     padding: var(--space-1) var(--space-3);
     border-radius: var(--radius-md);
@@ -781,6 +767,7 @@ label#import-config-label { text-align: center; }
     border: 1px solid;
     line-height: 1.4;
     text-align: center;
+    white-space: nowrap;
 }
 .status-idle, .status-pending,
 #global-status.status-idle, .api-key-status-message.status-ok {
@@ -788,7 +775,7 @@ label#import-config-label { text-align: center; }
     color: var(--accent-primary);
     border-color: color-mix(in srgb, var(--accent-primary) 25%, transparent);
 }
-.status-running, .status-processing, .status-retrying, .status-math-processing, .status-orchestrating, .status-processing_workers,
+.status-running, .status-processing, .status-retrying, .status-math-processing, .status-orchestrating, .status-processing_workers, .status-orchestrating_retrying,
 #global-status.status-processing, .api-key-status-message.status-processing, .api-key-status-message.status-warning {
     background-color: color-mix(in srgb, var(--accent-tertiary) 12%, transparent);
     color: var(--accent-tertiary);
@@ -834,7 +821,6 @@ label#import-config-label { text-align: center; }
    - Improved readability and visual hierarchy.
    ========================================================================== */
 
-/* --- Tabs --- */
 #tabs-nav-container {
     display: flex;
     border-bottom: 1px solid var(--border-secondary);
@@ -867,7 +853,7 @@ label#import-config-label { text-align: center; }
     font-weight: 600;
 }
 .tab-button.active.status-idle, .tab-button.active.status-pending { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
-.tab-button.active.status-running, .tab-button.active.status-processing, .tab-button.active.status-retrying, .tab-button.active.status-math-processing { color: var(--accent-tertiary); border-bottom-color: var(--accent-tertiary); }
+.tab-button.active.status-running, .tab-button.active.status-processing, .tab-button.active.status-retrying, .tab-button.active.status-math-processing, .tab-button.active.status-orchestrating, .tab-button.active.status-processing_workers { color: var(--accent-tertiary); border-bottom-color: var(--accent-tertiary); }
 .tab-button.active.status-stopping { color: var(--accent-stopping); border-bottom-color: var(--accent-stopping); }
 .tab-button.active.status-completed, .tab-button.active.status-math-completed { color: var(--accent-secondary); border-bottom-color: var(--accent-secondary); }
 .tab-button.active.status-failed, .tab-button.active.status-error, .tab-button.active.status-stopped, .tab-button.active.status-cancelled, .tab-button.active.status-math-error { color: var(--accent-error); border-bottom-color: var(--accent-error); }
@@ -875,7 +861,6 @@ label#import-config-label { text-align: center; }
     box-shadow: var(--shadow-focus-ring) inset;
 }
 
-/* --- Content Panes --- */
 #pipelines-content-container {
     flex-grow: 1;
     overflow-y: auto;
@@ -894,10 +879,9 @@ label#import-config-label { text-align: center; }
     display: block;
 }
 .react-orchestrator-pane, .react-final-output-pane {
-    display: block; /* These are always visible in their mode */
+    display: block;
 }
 
-/* --- Headers --- */
 .pipeline-header {
     background-color: color-mix(in srgb, var(--secondary-surface-bg) 80%, black);
     padding: var(--space-4) var(--space-6);
@@ -909,9 +893,12 @@ label#import-config-label { text-align: center; }
     top: calc(-1 * var(--space-8));
     margin: calc(-1 * var(--space-8)) calc(-1 * var(--space-8)) var(--space-8) calc(-1 * var(--space-8));
     z-index: 10;
-    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top-left-radius: var(--radius-xl);
+    border-top-right-radius: var(--radius-xl);
 }
-.pipeline-header h3 {
+.pipeline-header h3, .pipeline-header h4 {
     margin: 0;
     font-size: 1.1rem;
     font-weight: 600;
@@ -921,11 +908,7 @@ label#import-config-label { text-align: center; }
     align-items: center;
     gap: var(--space-4);
 }
-.pipeline-status {
-    composes: status-badge;
-}
 
-/* --- Iteration/Details Items --- */
 .iterations-list {
     list-style: none;
 }
@@ -936,7 +919,7 @@ label#import-config-label { text-align: center; }
     margin-bottom: var(--space-6);
     box-shadow: var(--shadow-md);
     transition: all var(--transition-speed-base) var(--easing-subtle);
-    overflow: hidden; /* For border radius */
+    overflow: hidden;
 }
 .iteration-item:hover {
     border-color: var(--border-hover);
@@ -951,10 +934,10 @@ label#import-config-label { text-align: center; }
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: var(--space-4);
     transition: background-color var(--transition-speed-fast) var(--easing-subtle);
     outline: none;
-    position: relative;
-    list-style: none; /* Hide default marker */
+    list-style: none;
 }
 .iteration-item details summary::-webkit-details-marker { display: none; }
 .iteration-item details[open] > summary {
@@ -974,16 +957,15 @@ label#import-config-label { text-align: center; }
     transform: translateY(-25%) rotate(45deg);
     margin-right: var(--space-4);
     transition: transform var(--transition-speed-base) var(--easing-standard);
+    flex-shrink: 0;
 }
 .iteration-item details[open] > summary::before {
-    transform: rotate(225deg);
+    transform: translateY(0) rotate(225deg);
 }
-.iteration-status {
-    composes: status-badge;
-    font-size: 0.8rem;
-    margin-left: auto;
-    padding-left: var(--space-4);
+.iteration-title {
+    flex-grow: 1;
 }
+
 .iteration-details {
     padding: var(--space-6);
     background-color: color-mix(in srgb, var(--tertiary-surface-bg) 95%, black);
@@ -995,7 +977,7 @@ label#import-config-label { text-align: center; }
 .iteration-detail-group:first-child { padding-top: 0; }
 .iteration-detail-group:last-child { padding-bottom: 0; border-bottom: none; }
 
-.iteration-details h4, .iteration-details h5 {
+.iteration-details h4, .iteration-details h5, .prompt-title {
     font-size: 0.8rem;
     font-weight: 600;
     color: var(--text-secondary-color);
@@ -1005,7 +987,7 @@ label#import-config-label { text-align: center; }
     display: flex;
     align-items: center;
 }
-.iteration-details h4::before, .iteration-details h5::before {
+.iteration-details h4::before, .iteration-details h5::before, .prompt-title::before {
     content: '';
     display: inline-block;
     width: 3px;
@@ -1019,7 +1001,6 @@ label#import-config-label { text-align: center; }
 .prompt-title-feature-implement::before, .prompt-title-revise::before, .prompt-title-agent-rendered::before { background-color: var(--accent-primary); }
 .prompt-title-polish::before, .prompt-title-math-solution::before, .prompt-title-agent-generated::before { background-color: var(--accent-secondary); }
 
-/* --- Code/Text/Preview Blocks --- */
 .prompt-block, .code-block, .text-block {
     background-color: var(--tertiary-surface-bg);
     padding: var(--space-4) var(--space-5);
@@ -1107,7 +1088,6 @@ label#import-config-label { text-align: center; }
     line-height: 1.6;
 }
 
-/* --- Math & React Mode Specifics --- */
 .react-orchestrator-pane, .math-problem-display, .math-strategy-branch, .react-final-output-pane {
     padding: var(--space-6);
     background-color: var(--secondary-surface-bg);
@@ -1117,7 +1097,7 @@ label#import-config-label { text-align: center; }
     box-shadow: var(--shadow-md);
 }
 .react-details-section {
-    background-color: color-mix(in srgb, var(--tertiary-surface-bg) 95%, black);
+    background-color: transparent;
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-md);
     margin-top: var(--space-6);
@@ -1128,22 +1108,73 @@ label#import-config-label { text-align: center; }
     cursor: pointer;
     font-weight: 600;
     color: var(--text-secondary-color);
-    list-style: none; /* Hide default marker */
+    list-style: none;
     transition: background-color var(--transition-speed-fast) var(--easing-subtle);
     outline: none;
+    display: flex;
+    align-items: center;
 }
 .react-details-section summary::-webkit-details-marker { display: none; }
 .react-details-section[open] > summary {
     border-bottom: 1px solid var(--border-secondary);
     color: var(--text-color);
+    background-color: color-mix(in srgb, var(--tertiary-surface-bg) 50%, black);
 }
 .react-details-section summary:hover {
     background-color: color-mix(in srgb, var(--accent-primary) 10%, transparent);
 }
 .react-details-section .detail-content {
     padding: var(--space-5);
+    background-color: color-mix(in srgb, var(--tertiary-surface-bg) 80%, black);
 }
-
+.math-problem-display .problem-text {
+    font-size: 1.1rem;
+    line-height: 1.7;
+    margin-top: var(--space-2);
+    margin-bottom: var(--space-4);
+}
+.math-problem-display .problem-image-display {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius-md);
+    margin-top: var(--space-4);
+}
+.math-strategy-branch details summary {
+    list-style: none;
+    padding: var(--space-4) var(--space-5);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+}
+.math-strategy-branch details[open] > summary {
+    border-bottom: 1px solid var(--border-secondary);
+}
+.math-strategy-branch details summary::-webkit-details-marker { display: none; }
+.math-strategy-details, .math-sub-strategy-details {
+    padding: var(--space-5);
+    border-top: 1px solid var(--border-secondary);
+}
+.math-strategy-branch > details > summary {
+    font-size: 1.1rem;
+    color: var(--text-title-color);
+}
+.math-sub-strategies-list {
+    list-style: none;
+    margin-top: var(--space-6);
+    padding-left: var(--space-6);
+    border-left: 2px solid var(--border-primary);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+}
+.math-sub-strategy-item {
+    background-color: color-mix(in srgb, var(--tertiary-surface-bg) 95%, black);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-primary);
+    overflow: hidden;
+}
 
 /* ==========================================================================
    9. SCROLLBAR & MEDIA QUERIES
@@ -1161,6 +1192,8 @@ label#import-config-label { text-align: center; }
 ::-webkit-scrollbar-thumb {
     background: color-mix(in srgb, var(--accent-primary) 50%, transparent);
     border-radius: var(--radius-md);
+    border: 2px solid transparent;
+    background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
     background: color-mix(in srgb, var(--accent-primary) 70%, transparent);
@@ -1187,9 +1220,8 @@ label#import-config-label { text-align: center; }
     }
     #controls-sidebar { padding: var(--space-4); }
     .input-group { padding: var(--space-4); }
-    #pipelines-content-container, .react-orchestrator-pane { padding: var(--space-4); }
+    #pipelines-content-container, .react-orchestrator-pane { padding: var(--space-6); }
     #tabs-nav-container { padding: 0 var(--space-4); }
-    .config-buttons-container { flex-direction: column; }
     .api-key-buttons { flex-direction: column; }
     #app-mode-selector { flex-wrap: wrap; }
     .radio-button-label { flex-basis: calc(50% - var(--space-1)); }

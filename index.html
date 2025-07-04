@@ -79,22 +79,20 @@
             <div id="model-selection-container" class="input-group">
                 <label for="model-select" class="model-select-label">Select Model:</label>
                 <select id="model-select" class="input-base model-select-dropdown" aria-label="Select Gemini Model">
-                    <option value="gemini-2.5-flash-preview-04-17">Gemini 2.5 Flash Preview 04-17</option>
-                    <option value="gemini-2.5-pro"> Gemini 2.5 Pro </option>
-                    <option value="gemini-2.5-flash"> Gemini 2.5 Flash </option>
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
                 </select>
             </div>
 
             <div id="temperature-selection-container" class="input-group">
                 <label class="model-select-label" id="pipeline-select-heading">Select Variants (Temperature):</label>
                 <div id="pipeline-selectors-container" class="pipeline-selectors-container" role="group" aria-labelledby="pipeline-select-heading">
-                    <!-- Checkboxes will be dynamically inserted here -->
                 </div>
             </div>
 
             <div class="input-group">
                 <h3 class="section-subtitle">Configuration</h3>
-                <div class="config-buttons-container">
+                <div class="config-buttons-container" style="display: flex; gap: var(--space-3);">
                     <button id="export-config-button" class="button-base config-button" type="button">Export</button>
                     <input type="file" id="import-config-input" accept=".json" style="display: none;">
                     <label for="import-config-input" id="import-config-label" class="button-base config-button" role="button" tabindex="0">
@@ -255,10 +253,8 @@
         <main id="main-content" aria-labelledby="main-content-heading">
              <h2 id="main-content-heading" class="sr-only">Generation Pipelines Output</h2>
             <div id="tabs-nav-container" role="tablist" aria-label="Generation Variants">
-                <!-- Tab buttons will be dynamically inserted here -->
             </div>
             <div id="pipelines-content-container">
-                <!-- Pipeline content panes will be dynamically inserted here -->
             </div>
         </main>
     </div>
