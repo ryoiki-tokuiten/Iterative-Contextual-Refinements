@@ -47,28 +47,56 @@
     --border-radius-md: 10px;
     --border-radius-sm: 8px;
 
-    --shadow-xs: 0 1px 2px rgba(0,0,0,0.3); /* Slightly intensified for dark theme */
-    --shadow-sm: 0 3px 6px rgba(0,0,0,0.35);
-    --shadow-md: 0 7px 14px rgba(0,0,0,0.4);
-    --shadow-lg: 0 12px 24px rgba(0,0,0,0.45);
-    --shadow-xl: 0 18px 36px rgba(0,0,0,0.5);
-    --shadow-inset-light: inset 0 1px 2px rgba(255,255,255,0.03); /* Much more subtle */
-    --shadow-inset-dark: inset 0 2px 5px rgba(0,0,0,0.35);
+    --shadow-xs: 0 1px 2px rgba(0,0,0,0.15); /* Softer shadows */
+    --shadow-sm: 0 2px 4px rgba(0,0,0,0.18);
+    --shadow-md: 0 4px 8px rgba(0,0,0,0.2);
+    --shadow-lg: 0 8px 16px rgba(0,0,0,0.22);
+    --shadow-xl: 0 12px 24px rgba(0,0,0,0.25);
+    --shadow-inset-light: inset 0 1px 1px rgba(255,255,255,0.02); /* Even more subtle */
+    --shadow-inset-dark: inset 0 1px 3px rgba(0,0,0,0.25);
 
-    --space-xxs: 0.375rem; /* 6px */
-    --space-xs:  0.625rem; /* 10px */
-    --space-sm:  1rem;    /* 16px */
-    --space-md:  1.25rem; /* 20px */
-    --space-lg:  1.75rem; /* 28px */
-    --space-xl:  2.5rem;  /* 40px */
-    --space-xxl: 3.5rem;  /* 56px */
+    /* New Spacing System (base unit: 4px) */
+    --space-unit: 4px;
+    --space-1: var(--space-unit);      /* 4px */
+    --space-2: calc(var(--space-unit) * 2);  /* 8px */
+    --space-3: calc(var(--space-unit) * 3);  /* 12px */
+    --space-4: calc(var(--space-unit) * 4);  /* 16px */
+    --space-5: calc(var(--space-unit) * 5);  /* 20px */
+    --space-6: calc(var(--space-unit) * 6);  /* 24px */
+    --space-7: calc(var(--space-unit) * 7);  /* 28px */
+    --space-8: calc(var(--space-unit) * 8);  /* 32px */
+    --space-10: calc(var(--space-unit) * 10); /* 40px */
+    --space-12: calc(var(--space-unit) * 12); /* 48px */
+    --space-14: calc(var(--space-unit) * 14); /* 56px */
+    --space-16: calc(var(--space-unit) * 16); /* 64px */
+
+    /* Legacy spacing variables - map to new system or phase out */
+    --space-xxs: var(--space-2); /* Was 6px, now 8px */
+    --space-xs:  var(--space-3); /* Was 10px, now 12px */
+    --space-sm:  var(--space-4); /* Was 16px, unchanged */
+    --space-md:  var(--space-5); /* Was 20px, unchanged */
+    --space-lg:  var(--space-7); /* Was 28px, unchanged */
+    --space-xl:  var(--space-10); /* Was 40px, unchanged */
+    --space-xxl: var(--space-14); /* Was 56px, unchanged */
+
+    /* Border Simplification */
+    --border-primary: var(--border-color); /* Main border color */
+    --border-secondary: var(--divider-color); /* For less prominent dividers */
+    --border-focus: var(--accent-primary); /* For focus states */
+    /* --border-highlight-color can be deprecated or merged with --border-focus */
+    /* --border-strong-color can be deprecated or merged with --border-primary */
+
+    /* Transitions */
+    --easing-standard: cubic-bezier(0.3, 0, 0.1, 1); /* Smoother, less aggressive */
+    --easing-subtle: cubic-bezier(0.4, 0, 0.2, 1); /* For subtle transitions like hover */
+    /* --easing-elastic might be too playful, use sparingly or replace */
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-size: 16px; }
+html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; font-size: 16px; /* Base font size, consider 17px for more spacious feel */ }
 body {
     background-color: var(--bg-color); color: var(--text-color); font-family: var(--font-family);
-    overflow-x: hidden; line-height: 1.7; min-height: 100vh;
+    overflow-x: hidden; line-height: 1.65; /* Slightly increased line height for readability */ min-height: 100vh;
 }
 
 #preloader {
@@ -79,257 +107,653 @@ body {
 }
 #preloader.hidden { opacity: 0; visibility: hidden; }
 .spinner {
-    width: 60px; height: 60px; border: 5px solid rgba(74, 59, 108, 0.3); /* Muted primary accent */
-    border-top-color: var(--accent-primary); border-radius: 50%; animation: spin 1.2s var(--easing-elastic) infinite;
+    width: 50px; height: 50px; /* Slightly smaller */
+    border: 4px solid rgba(74, 59, 108, 0.25); /* More subtle base */
+    border-top-color: var(--accent-primary); border-radius: 50%; animation: spin 1s var(--easing-subtle) infinite; /* Smoother spin */
 }
-@keyframes spin { 0% { transform: rotate(0deg) scale(1); } 50% { transform: rotate(180deg) scale(1.15); } 100% { transform: rotate(360deg) scale(1); } }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } } /* Simplified spin */
 
 .background-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; overflow: hidden; }
 .background-gradient::before, .background-gradient::after {
-    content: ''; position: absolute; width: 55vmax; height: 55vmax; border-radius: 50%;
-    opacity: 0.08; /* Reduced opacity for darker theme */ filter: blur(150px); /* Increased blur */ will-change: transform, opacity; transition: opacity 3s ease-in-out;
+    content: ''; position: absolute; width: 60vmax; height: 60vmax; border-radius: 50%;
+    opacity: 0.05; /* Further Reduced opacity */ filter: blur(180px); /* Further Increased blur for subtlety */ will-change: transform, opacity; transition: opacity 4s ease-in-out;
 }
-.background-gradient::before { background-color: var(--accent-primary); top: -25%; left: -25%; animation: move1 20s infinite alternate cubic-bezier(0.42, 0, 0.58, 1); }
-.background-gradient::after { background-color: var(--accent-blue-alt); bottom: -25%; right: -25%; animation: move2 24s infinite alternate cubic-bezier(0.42, 0, 0.58, 1); }
+.background-gradient::before { background-color: var(--accent-primary); top: -30%; left: -30%; animation: move1 25s infinite alternate cubic-bezier(0.42, 0, 0.58, 1); }
+.background-gradient::after { background-color: var(--accent-blue-alt); bottom: -30%; right: -30%; animation: move2 28s infinite alternate cubic-bezier(0.42, 0, 0.58, 1); }
 .background-noise {
     position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
     background: transparent url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 250 250"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="1.5" numOctaves="1" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(%23n)"/></svg>') 0% 0% / 150px 150px;
-    opacity: 0.008; /* Further reduced noise opacity */ animation: noise-pan 20s linear infinite;
+    opacity: 0.006; /* Even further reduced noise opacity */ animation: noise-pan 25s linear infinite;
 }
-@keyframes move1 { 0% { transform: translate(0, 0) scale(0.95); opacity: 0.06; } 50% { opacity: 0.1; } 100% { transform: translate(12vw, 18vh) scale(1.2); opacity: 0.06; } }
-@keyframes move2 { 0% { transform: translate(0, 0) scale(1.05); opacity: 0.06; } 50% { opacity: 0.1; } 100% { transform: translate(-18vw, -12vh) scale(0.9); opacity: 0.06; } }
-@keyframes noise-pan { 0% { transform: translate(0,0); } 100% { transform: translate(-100px, -100px); } }
+@keyframes move1 { 0% { transform: translate(0, 0) scale(0.9); opacity: 0.04; } 50% { opacity: 0.07; } 100% { transform: translate(10vw, 15vh) scale(1.15); opacity: 0.04; } }
+@keyframes move2 { 0% { transform: translate(0, 0) scale(1.0); opacity: 0.04; } 50% { opacity: 0.07; } 100% { transform: translate(-15vw, -10vh) scale(0.85); opacity: 0.04; } }
+@keyframes noise-pan { 0% { transform: translate(0,0); } 100% { transform: translate(-120px, -120px); } }
 
-#app-container { display: flex; min-height: 100vh; padding: var(--space-xl); gap: var(--space-xl); }
+#app-container { display: flex; min-height: 100vh; padding: var(--space-12); gap: var(--space-10); } /* Increased padding and gap */
 
 #controls-sidebar {
-    width: 440px;
+    width: 460px; /* Slightly wider for more content space */
     flex-shrink: 0;
-    max-height: calc(100vh - (2 * var(--space-xl)));
+    max-height: calc(100vh - (2 * var(--space-12))); /* Adjusted for new padding */
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 0; 
-    padding: var(--space-lg);
+    gap: var(--space-6); /* Added gap between direct children if needed, or rely on children's margins */
+    padding: var(--space-8); /* Increased padding */
     background: var(--primary-surface-bg);
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--border-primary);
     border-radius: var(--border-radius-xl);
-    backdrop-filter: blur(45px); /* Stronger blur */
-    -webkit-backdrop-filter: blur(45px); /* Stronger blur */
-    box-shadow: var(--shadow-xl), 0 0 0 1px var(--border-color), var(--shadow-inset-light);
+    backdrop-filter: blur(30px); /* Reduced blur */
+    -webkit-backdrop-filter: blur(30px); /* Reduced blur */
+    box-shadow: var(--shadow-lg), 0 0 0 1px var(--border-primary), var(--shadow-inset-light); /* Softer shadow */
     opacity: 0;
-    transform: translateX(-30px) scale(0.98);
-    transition: opacity 0.7s var(--easing-standard), transform 0.7s var(--easing-standard);
+    transform: translateX(-20px) scale(0.99); /* Subtler entry animation */
+    transition: opacity 0.6s var(--easing-standard), transform 0.6s var(--easing-standard);
 }
 #controls-sidebar.is-visible { opacity: 1; transform: translateX(0) scale(1); }
 
 .input-group {
-    padding: var(--space-lg);
-    margin-bottom: var(--space-lg);
+    padding: var(--space-7); /* Adjusted padding */
+    margin-bottom: var(--space-7); /* Consistent spacing */
     background-color: var(--control-group-bg);
     border-radius: var(--border-radius-lg);
-    border: 1px solid var(--border-strong-color);
-    box-shadow: var(--shadow-md), var(--shadow-inset-dark);
+    border: 1px solid var(--border-primary); /* Simplified border */
+    box-shadow: var(--shadow-md), var(--shadow-inset-dark); /* Softer shadow */
 }
 .input-group:last-child { margin-bottom: 0; }
 
 .section-subtitle {
-    font-size: 0.85rem; font-weight: 700; color: var(--text-secondary-color);
-    text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: var(--space-lg);
-    padding-bottom: var(--space-md); border-bottom: 1px solid var(--divider-color); opacity: 0.9;
+    font-size: 0.875rem; /* Slightly adjusted */
+    font-weight: 600;
+    color: var(--text-secondary-color);
+    text-transform: uppercase;
+    letter-spacing: 0.025em; /* Fine-tuned */
+    margin-bottom: var(--space-5);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--border-secondary);
+    opacity: 0.95;
 }
 
 
 #main-content {
-    flex-grow: 1; height: calc(100vh - (2 * var(--space-xl))); display: flex; flex-direction: column; overflow: hidden;
-    padding: 0; background: var(--primary-surface-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius-xl);
-    backdrop-filter: blur(45px); /* Stronger blur */
-    -webkit-backdrop-filter: blur(45px); /* Stronger blur */
-    box-shadow: var(--shadow-xl), 0 0 0 1px var(--border-color), var(--shadow-inset-light);
-    opacity: 0; transform: translateY(30px) scale(0.98);
-    transition: opacity 0.7s var(--easing-standard) 0.1s, transform 0.7s var(--easing-standard) 0.1s;
+    flex-grow: 1; height: calc(100vh - (2 * var(--space-12))); /* Adjusted for new padding */
+    display: flex; flex-direction: column; overflow: hidden;
+    padding: 0; /* Padding will be on children like pipelines-content-container */
+    background: var(--primary-surface-bg);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--border-radius-xl);
+    backdrop-filter: blur(30px); /* Reduced blur */
+    -webkit-backdrop-filter: blur(30px); /* Reduced blur */
+    box-shadow: var(--shadow-lg), 0 0 0 1px var(--border-primary), var(--shadow-inset-light); /* Softer shadow */
+    opacity: 0; transform: translateY(20px) scale(0.99); /* Subtler entry animation */
+    transition: opacity 0.6s var(--easing-standard) 0.05s, transform 0.6s var(--easing-standard) 0.05s; /* Slightly faster, small delay */
 }
 #main-content.is-visible { opacity: 1; transform: translateY(0) scale(1); }
 
 /* App Mode Selector - Segmented Control Style */
-#app-mode-selector { display: flex; background-color: rgba(0,0,0,0.5); /* Darker base */ border-radius: var(--border-radius-md); padding: var(--space-xs); box-shadow: var(--shadow-inset-dark); }
+#app-mode-selector {
+    display: flex;
+    background-color: color-mix(in srgb, var(--tertiary-surface-bg) 80%, black 20%); /* Base closer to inputs */
+    border-radius: var(--border-radius-md);
+    padding: var(--space-2); /* Increased padding around segments */
+    box-shadow: var(--shadow-inset-dark);
+    margin-bottom: var(--space-6); /* Spacing after selector */
+}
 .radio-button-label { flex: 1; display: block; position: relative; cursor: pointer; }
 .radio-button-label input[type="radio"] { position: absolute; opacity: 0; width: 0; height: 0; }
 .radio-button-label span {
-    display: block; padding: var(--space-sm) var(--space-md); text-align: center; border-radius: var(--border-radius-sm);
-    color: var(--text-secondary-color); font-weight: 500; font-size: 0.95rem;
-    transition: background-color var(--transition-speed-fast) var(--easing-standard), color var(--transition-speed-fast) var(--easing-standard), box-shadow var(--transition-speed-fast) var(--easing-standard);
-    position: relative; z-index: 1;
+    display: block;
+    padding: var(--space-3) var(--space-4); /* Increased padding within segments */
+    text-align: center;
+    border-radius: var(--border-radius-sm); /* Slightly smaller radius for inner element */
+    color: var(--text-secondary-color);
+    font-weight: 500;
+    font-size: 0.9rem; /* Slightly smaller font */
+    transition: background-color var(--transition-speed-fast) var(--easing-subtle), color var(--transition-speed-fast) var(--easing-subtle), box-shadow var(--transition-speed-fast) var(--easing-subtle);
+    position: relative;
+    z-index: 1;
 }
-.radio-button-label input[type="radio"]:checked + span { background-color: var(--accent-primary); color: var(--text-title-color); font-weight: 600; box-shadow: 0 3px 10px color-mix(in srgb, var(--accent-primary) 30%, transparent); }
-.radio-button-label input[type="radio"]:focus-visible + span { outline: 2.5px solid var(--border-highlight-color); outline-offset: 3px; }
-.radio-button-label:not(:first-child) span::before {
-    content: ''; position: absolute; left: -1px; top: 20%; height: 60%; width: 1px;
-    background-color: var(--divider-color); z-index: 0;
+.radio-button-label input[type="radio"]:checked + span {
+    background-color: var(--accent-primary);
+    color: var(--text-title-color);
+    font-weight: 600;
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--accent-primary) 25%, transparent); /* Softer shadow */
 }
-.radio-button-label input[type="radio"]:checked + span::before, .radio-button-label input[type="radio"]:checked + span + input[type="radio"] + span::before { display: none; }
-.radio-button-label:hover span:not(input[type="radio"]:checked + span) { background-color: color-mix(in srgb, var(--accent-primary) 10%, transparent); }
+.radio-button-label input[type="radio"]:focus-visible + span {
+    outline: 2px solid var(--border-focus);
+    outline-offset: 2px;
+}
+.radio-button-label:not(:first-child) span::before { /* Divider */
+    content: '';
+    position: absolute;
+    left: calc(-1 * var(--space-1) / 2 - 0.5px); /* Centered between segments based on parent padding */
+    top: 25%;
+    height: 50%;
+    width: 1px;
+    background-color: var(--border-secondary);
+    z-index: 0;
+    opacity: 0.7;
+}
+.radio-button-label input[type="radio"]:checked + span::before,
+.radio-button-label input[type="radio"]:checked + span + input[type="radio"] + span::before { display: none; }
+.radio-button-label:hover span:not(input[type="radio"]:checked + span) {
+    background-color: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+    color: var(--text-color);
+}
 
-.model-select-label { font-size: 0.95rem; font-weight: 500; color: var(--text-secondary-color); margin-bottom: var(--space-md); display: block; }
-#initial-idea {
-    width: 100%; padding: var(--space-md); background: var(--tertiary-surface-bg); border: 1px solid var(--border-color);
-    color: var(--text-color); border-radius: var(--border-radius-md); font-size: 1rem; font-family: var(--font-family);
-    resize: vertical; min-height: 130px;
-    transition: border-color var(--transition-speed-base) var(--easing-standard), box-shadow var(--transition-speed-base) var(--easing-standard), background-color var(--transition-speed-base) var(--easing-standard);
-    box-shadow: var(--shadow-inset-dark); margin-bottom: var(--space-xs);
+.model-select-label {
+    font-size: 0.9rem; /* Consistent with other labels */
+    font-weight: 500;
+    color: var(--text-secondary-color);
+    margin-bottom: var(--space-3); /* Consistent spacing */
+    display: block;
 }
-#initial-idea::placeholder { color: var(--text-placeholder-color); }
-#initial-idea:hover { border-color: var(--border-highlight-color); }
-#initial-idea:focus { outline: none; background: var(--tertiary-surface-bg); border-color: var(--accent-primary); box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--accent-primary) 35%, transparent), var(--shadow-inset-dark); }
-#initial-idea:disabled { background-color: color-mix(in srgb, var(--tertiary-surface-bg) 70%, black); opacity: 0.6; cursor: not-allowed; border-color: var(--divider-color); }
+
+/* Common styles for text inputs and textareas */
+.text-input-base {
+    width: 100%;
+    padding: var(--space-3) var(--space-4); /* Standardized padding */
+    background: var(--tertiary-surface-bg);
+    border: 1px solid var(--border-primary);
+    color: var(--text-color);
+    border-radius: var(--border-radius-md);
+    font-size: 0.95rem; /* Standardized font size */
+    font-family: var(--font-family);
+    transition: border-color var(--transition-speed-base) var(--easing-subtle), box-shadow var(--transition-speed-base) var(--easing-subtle), background-color var(--transition-speed-base) var(--easing-subtle);
+    box-shadow: var(--shadow-inset-dark);
+}
+.text-input-base::placeholder { color: var(--text-placeholder-color); }
+.text-input-base:hover { border-color: color-mix(in srgb, var(--border-focus) 60%, transparent); }
+.text-input-base:focus {
+    outline: none;
+    background: var(--tertiary-surface-bg);
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--border-focus) 30%, transparent), var(--shadow-inset-dark); /* Subtler focus */
+}
+.text-input-base:disabled {
+    background-color: color-mix(in srgb, var(--tertiary-surface-bg) 70%, black);
+    opacity: 0.6;
+    cursor: not-allowed;
+    border-color: var(--border-secondary);
+}
+
+#initial-idea {
+    composes: text-input-base; /* Apply common styles */
+    resize: vertical;
+    min-height: 120px; /* Adjusted min-height */
+    margin-bottom: var(--space-4); /* Consistent spacing */
+    line-height: 1.6; /* Improved readability for textarea */
+}
 
 .file-input {
-    width: 100%; background: var(--tertiary-surface-bg); border: 1px solid var(--border-color); color: var(--text-secondary-color);
-    border-radius: var(--border-radius-md); font-size: 0.9rem; font-family: var(--font-family); cursor: pointer;
-    transition: border-color var(--transition-speed-base), box-shadow var(--transition-speed-base); padding: var(--space-xs) var(--space-xs) var(--space-xs) var(--space-sm);
+    composes: text-input-base; /* Apply common styles, then override */
+    padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3); /* Adjusted padding for file input structure */
+    font-size: 0.875rem; /* Slightly smaller for file input text */
+    cursor: pointer;
 }
 .file-input::file-selector-button {
-    background: var(--accent-blue-alt); color: var(--text-title-color); border: none; padding: var(--space-sm) var(--space-md); border-radius: var(--border-radius-sm);
-    font-weight: 500; cursor: pointer; margin-right: var(--space-md); transition: background-color var(--transition-speed-fast), transform var(--transition-speed-fast);
+    background: var(--accent-blue-alt);
+    color: var(--text-title-color);
+    border: none;
+    padding: var(--space-2) var(--space-4); /* Adjusted padding */
+    border-radius: var(--border-radius-sm);
+    font-weight: 500;
+    cursor: pointer;
+    margin-right: var(--space-3);
+    transition: background-color var(--transition-speed-fast) var(--easing-subtle), transform var(--transition-speed-fast) var(--easing-subtle);
 }
-.file-input::file-selector-button:hover { background: color-mix(in srgb, var(--accent-blue-alt) 85%, #fff 15%); transform: scale(1.03); }
-.file-input:hover { border-color: var(--border-highlight-color); }
-.file-input:focus-within { outline: none; border-color: var(--accent-blue-alt); box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--accent-blue-alt) 35%, transparent); }
-#math-problem-image-preview { border: 1px solid var(--border-color); box-shadow: var(--shadow-sm); border-radius: var(--border-radius-md); margin-top: var(--space-md); }
+.file-input::file-selector-button:hover {
+    background: color-mix(in srgb, var(--accent-blue-alt) 85%, #fff 10%); /* Subtler hover */
+    transform: scale(1.01); /* Subtler transform */
+}
+/* Focus for file input is handled by .text-input-base:focus on the wrapper */
+#math-problem-image-preview {
+    border: 1px solid var(--border-primary);
+    box-shadow: var(--shadow-sm);
+    border-radius: var(--border-radius-md);
+    margin-top: var(--space-4);
+}
 
 .model-select-dropdown {
-    width: 100%; padding: var(--space-md); background-color: var(--tertiary-surface-bg); border: 1px solid var(--border-color);
-    color: var(--text-color); border-radius: var(--border-radius-md); font-size: 1rem; font-family: var(--font-family);
-    cursor: pointer; appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238890A8' width='24' height='24'%3E%3Cpath d='M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z'/%3E%3C/svg%3E"); /* Updated fill to match new text-secondary */
-    background-repeat: no-repeat; background-position: right var(--space-md) center; background-size: 1.6em;
-    transition: border-color var(--transition-speed-base), box-shadow var(--transition-speed-base); box-shadow: var(--shadow-inset-dark);
+    composes: text-input-base; /* Apply common styles */
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238890A8' width='20' height='20'%3E%3Cpath d='M7 10l5 5 5-5H7z'/%3E%3C/svg%3E"); /* Cleaner arrow */
+    background-repeat: no-repeat;
+    background-position: right var(--space-4) center;
+    background-size: 1.25em; /* Adjust size if needed */
+    cursor: pointer;
+    margin-bottom: var(--space-4); /* Consistent spacing */
 }
-.model-select-dropdown:hover { border-color: var(--border-highlight-color); }
-.model-select-dropdown:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--accent-primary) 35%, transparent); }
-.model-select-dropdown option { background-color: var(--bg-color); color: var(--text-color); padding: var(--space-md); }
+.model-select-dropdown option {
+    background-color: var(--tertiary-surface-bg); /* Match dropdown bg for consistency */
+    color: var(--text-color);
+    padding: var(--space-3) var(--space-4);
+}
 .model-select-dropdown:disabled {
-    background-color: color-mix(in srgb, var(--tertiary-surface-bg) 70%, black); opacity: 0.6; cursor: not-allowed; border-color: var(--divider-color);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23586078' width='24' height='24'%3E%3Cpath d='M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z'/%3E%3C/svg%3E"); /* Updated disabled fill */
+    /* compose rule handles most, but background image needs specific update */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23586078' width='20' height='20'%3E%3Cpath d='M7 10l5 5 5-5H7z'/%3E%3C/svg%3E");
 }
 
 /* API Key Section Styles */
 .api-key-section {
     /* Uses .input-group styling by default */
     /* Specific overrides or additions can go here if needed */
+     margin-bottom: var(--space-4); /* Space before hr */
 }
 
 #api-key-input {
-    width: 100%;
-    padding: var(--space-md);
-    background: var(--tertiary-surface-bg);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-    border-radius: var(--border-radius-md);
-    font-size: 1rem;
-    font-family: var(--font-family); /* Standard font for input */
-    transition: border-color var(--transition-speed-base) var(--easing-standard), box-shadow var(--transition-speed-base) var(--easing-standard), background-color var(--transition-speed-base) var(--easing-standard);
-    box-shadow: var(--shadow-inset-dark);
-    margin-bottom: var(--space-md); /* Space before buttons */
-}
-#api-key-input::placeholder {
-    color: var(--text-placeholder-color);
-}
-#api-key-input:hover {
-    border-color: var(--border-highlight-color);
-}
-#api-key-input:focus {
-    outline: none;
-    background: var(--tertiary-surface-bg);
-    border-color: var(--accent-primary);
-    box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--accent-primary) 35%, transparent), var(--shadow-inset-dark);
+    composes: text-input-base;
+    font-family: var(--font-family-mono); /* Monospace for API keys */
+    margin-bottom: var(--space-4); /* Space before buttons */
 }
 
 .api-key-buttons {
     display: flex;
-    gap: var(--space-md);
-    margin-bottom: var(--space-md); /* Space before status message */
+    gap: var(--space-4); /* Consistent spacing */
+    margin-bottom: var(--space-4); /* Space before status message */
 }
 
 /* #save-api-key-button is styled by .config-button */
 /* #clear-api-key-button is styled by .config-button and .clear-button */
-.clear-button {
-    background-color: var(--tertiary-surface-bg) !important; /* More neutral */
+.clear-button { /* This is a modifier for .config-button */
+    background-color: var(--secondary-surface-bg) !important;
     color: var(--text-secondary-color) !important;
-    border-color: var(--border-strong-color) !important;
+    border-color: var(--border-primary) !important; /* Use primary border */
 }
 .clear-button:hover:not(:disabled) {
-    background-color: color-mix(in srgb, var(--tertiary-surface-bg) 85%, var(--border-color) 15%) !important;
+    background-color: color-mix(in srgb, var(--secondary-surface-bg) 85%, var(--border-primary) 15%) !important;
     color: var(--text-color) !important;
-    border-color: var(--border-highlight-color) !important;
+    border-color: color-mix(in srgb, var(--border-focus) 60%, transparent) !important; /* Use hover from text-input-base */
 }
 
 
 .api-key-status-message {
-    font-size: 0.85rem;
+    font-size: 0.875rem; /* Standardized */
     font-weight: 500;
-    padding: var(--space-sm);
-    border-radius: var(--border-radius-sm);
-    margin-top: 0; /* api-key-buttons provides margin-bottom */
-    margin-bottom: var(--space-sm); /* Space before security note */
+    padding: var(--space-3) var(--space-4); /* Standardized padding */
+    border-radius: var(--border-radius-sm); /* Smaller radius for status messages */
+    margin-top: 0;
+    margin-bottom: var(--space-3); /* Space before security note */
     text-align: center;
     border: 1px solid transparent;
+    line-height: 1.5;
 }
 .api-key-status-message.status-ok {
-    background-color: color-mix(in srgb, var(--accent-secondary) 15%, transparent);
+    background-color: color-mix(in srgb, var(--accent-secondary) 12%, transparent); /* Slightly less intense */
     color: var(--accent-secondary);
-    border-color: color-mix(in srgb, var(--accent-secondary) 35%, transparent);
+    border-color: color-mix(in srgb, var(--accent-secondary) 30%, transparent);
 }
 .api-key-status-message.status-error {
-    background-color: color-mix(in srgb, var(--accent-error) 15%, transparent);
+    background-color: color-mix(in srgb, var(--accent-error) 12%, transparent);
     color: var(--accent-error);
-    border-color: color-mix(in srgb, var(--accent-error) 35%, transparent);
+    border-color: color-mix(in srgb, var(--accent-error) 30%, transparent);
 }
 .api-key-status-message.status-processing {
-    background-color: color-mix(in srgb, var(--accent-tertiary) 15%, transparent);
-    color: var(--accent-tertiary);
-    border-color: color-mix(in srgb, var(--accent-tertiary) 35%, transparent);
-}
-.api-key-status-message.status-warning { /* For general info like key cleared */
-    background-color: color-mix(in srgb, var(--accent-tertiary) 12%, transparent); /* Similar to processing or a unique one */
+    background-color: color-mix(in srgb, var(--accent-tertiary) 12%, transparent);
     color: var(--accent-tertiary);
     border-color: color-mix(in srgb, var(--accent-tertiary) 30%, transparent);
+}
+.api-key-status-message.status-warning {
+    background-color: color-mix(in srgb, var(--accent-tertiary) 10%, transparent);
+    color: var(--accent-tertiary);
+    border-color: color-mix(in srgb, var(--accent-tertiary) 25%, transparent);
 }
 
 
 .api-key-security-note {
-    font-size: 0.8rem;
+    font-size: 0.825rem; /* Slightly smaller */
     color: var(--text-secondary-color);
     font-style: italic;
     text-align: center;
-    line-height: 1.4;
-    margin-top: 0; /* api-key-status-message provides margin-bottom */
-    margin-bottom: var(--space-md); /* Space before hr */
+    line-height: 1.5; /* Improved line height */
+    margin-top: 0;
+    margin-bottom: 0; /* Removed bottom margin, parent .api-key-section has it */
 }
 
 hr.sidebar-divider {
     border: none;
     height: 1px;
-    background-color: var(--divider-color);
-    margin-top: 0; /* api-key-section already has margin-bottom from .input-group */
-    margin-bottom: var(--space-lg); /* Space after the divider before next input-group */
+    background-color: var(--border-secondary); /* Use simplified border color */
+    margin-top: var(--space-7); /* Ensure consistent spacing from .input-group or .api-key-section */
+    margin-bottom: var(--space-7); /* Space after the divider before next input-group */
+    opacity: 0.7;
 }
 
-/* React Mode Specific UI Styles */
-.react-orchestrator-pane {
-    padding: var(--space-xl); /* Consistent padding */
-    background-color: var(--secondary-surface-bg); /* Similar to iteration items or main sections */
+.pipeline-selectors-container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3); /* Consistent spacing */
+    margin-bottom: var(--space-6); /* Spacing after container */
+}
+.pipeline-selector-item {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: var(--space-3) var(--space-4); /* Standardized padding */
+    border-radius: var(--border-radius-md);
+    transition: background-color var(--transition-speed-fast) var(--easing-subtle);
+}
+.pipeline-selector-item:hover {
+    background-color: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+}
+.pipeline-selector-item input[type="checkbox"] {
+    opacity: 0; width: 0; height: 0; position: absolute;
+}
+.pipeline-selector-item label {
+    font-size: 0.9rem; /* Standardized font size */
+    color: var(--text-secondary-color);
+    position: relative;
+    padding-left: calc(20px + var(--space-3)); /* checkbox width + gap */
+    cursor: pointer;
+    user-select: none;
+    width: 100%;
+    transition: color var(--transition-speed-fast) var(--easing-subtle);
+    line-height: 1.5; /* Ensure text aligns well with checkbox */
+}
+.pipeline-selector-item label::before { /* Custom checkbox box */
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px; /* Slightly smaller */
+    height: 18px;
+    background-color: var(--tertiary-surface-bg);
+    border: 1.5px solid var(--border-primary); /* Thinner border */
+    border-radius: 4px; /* Softer radius */
+    transition: all var(--transition-speed-fast) var(--easing-subtle);
+}
+.pipeline-selector-item label::after { /* Custom checkbox checkmark */
+    content: '';
+    position: absolute;
+    left: 6px; /* Adjusted for new box size */
+    top: 48%; /* Fine-tune alignment */
+    width: 4px;
+    height: 8px;
+    border: solid var(--bg-color); /* Checkmark color against accent bg */
+    border-width: 0 2.5px 2.5px 0; /* Slightly thinner checkmark */
+    transform: translateY(-50%) rotate(45deg) scale(0);
+    opacity: 0;
+    transition: transform 0.15s var(--easing-standard), opacity 0.1s ease-out; /* Use standard easing for pop */
+}
+.pipeline-selector-item input[type="checkbox"]:checked + label::before {
+    background-color: var(--accent-primary);
+    border-color: var(--accent-primary);
+}
+.pipeline-selector-item input[type="checkbox"]:checked + label::after {
+    transform: translateY(-50%) rotate(45deg) scale(1);
+    opacity: 1;
+}
+.pipeline-selector-item input[type="checkbox"]:disabled + label,
+.pipeline-selector-item input[type="checkbox"]:disabled + label::before {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.pipeline-selector-item input[type="checkbox"]:focus-visible + label::before {
+    box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--border-focus) 35%, transparent); /* Subtler focus */
+}
+.pipeline-selector-item input[type="checkbox"]:checked + label {
+    color: var(--text-color);
+}
+
+.config-management-section {
+    padding-top: var(--space-7); /* Consistent spacing */
+    border-top: 1px solid var(--border-secondary); /* Use simplified border */
+    margin-top: var(--space-4); /* Added margin if it's after a group without its own margin */
+}
+.config-buttons-container {
+    display: flex;
+    gap: var(--space-4); /* Consistent spacing */
+}
+
+/* Base Button Style */
+.button-base {
+    padding: var(--space-3) var(--space-5); /* Standardized padding */
+    font-size: 0.9rem; /* Standardized font size */
+    font-weight: 600;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    transition: all var(--transition-speed-fast) var(--easing-subtle); /* Faster, subtler transition */
+    text-align: center;
+    border: 1px solid transparent; /* Base for border manipulation */
+    box-shadow: var(--shadow-sm);
+    text-shadow: 0 1px 1px rgba(0,0,0,0.1); /* Softer text shadow */
+}
+.button-base:hover:not(:disabled) {
+    transform: translateY(-1px); /* Subtler hover transform */
+    box-shadow: var(--shadow-md);
+}
+.button-base:active:not(:disabled) {
+    transform: translateY(0) scale(0.99); /* Subtler active state */
+    box-shadow: var(--shadow-xs), var(--shadow-inset-dark);
+}
+.button-base:disabled, .button-base.disabled {
+    background: var(--tertiary-surface-bg) !important; /* Important to override specifics */
+    color: var(--text-placeholder-color) !important;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: var(--shadow-inset-dark) !important;
+    border-color: var(--border-primary) !important;
+    text-shadow: none !important;
+}
+
+.config-button {
+    composes: button-base;
+    flex: 1;
+    background: var(--accent-blue-alt);
+    color: var(--text-title-color);
+    border-color: color-mix(in srgb, var(--accent-blue-alt) 70%, #000 30%);
+}
+.config-button:hover:not(:disabled) {
+    /* compose handles transform & shadow */
+    background: color-mix(in srgb, var(--accent-blue-alt) 85%, #fff 10%); /* Subtler brightness */
+    border-color: var(--accent-blue-alt); /* Keep or slightly lighten border */
+}
+
+/* Apply .button-base to .clear-button which is a modifier of .config-button */
+/* .clear-button specific background/color are already handled and should take precedence after compose */
+
+#generate-button {
+    composes: button-base;
+    width: 100%;
+    background: var(--accent-pink-alt);
+    color: white;
+    border-color: color-mix(in srgb, var(--accent-pink-alt) 70%, #000 30%);
+    padding: var(--space-4) var(--space-5); /* Larger padding for primary action */
+    font-size: 1rem; /* Larger font for primary action */
+    font-weight: 700;
+    margin-top: var(--space-7); /* Consistent spacing */
+    box-shadow: 0 3px 10px color-mix(in srgb, var(--accent-pink-alt) 25%, transparent), var(--shadow-inset-light); /* Softer glow */
+}
+#generate-button:hover:not(:disabled) {
+    /* composes handles transform */
+    background: color-mix(in srgb, var(--accent-pink-alt) 85%, #fff 10%);
+    border-color: var(--accent-pink-alt);
+    box-shadow: 0 4px 15px color-mix(in srgb, var(--accent-pink-alt) 35%, transparent), var(--shadow-inset-light); /* Slightly enhanced glow on hover */
+}
+
+#global-status {
+    padding: var(--space-3) var(--space-4); /* Standardized padding */
+    border-radius: var(--border-radius-md);
+    font-size: 0.9rem; /* Standardized font size */
+    font-weight: 500;
+    transition: all var(--transition-speed-base) var(--easing-subtle);
+    border: 1px solid;
+    text-align: center;
+    box-shadow: var(--shadow-sm);
+    margin-top: var(--space-7); /* Consistent spacing */
+    line-height: 1.5;
+}
+#global-status.status-idle { background-color: color-mix(in srgb, var(--accent-primary) 10%, transparent); color: var(--accent-primary); border-color: color-mix(in srgb, var(--accent-primary) 25%, transparent); }
+#global-status.status-processing { background-color: color-mix(in srgb, var(--accent-tertiary) 12%, transparent); color: var(--accent-tertiary); border-color: color-mix(in srgb, var(--accent-tertiary) 30%, transparent); }
+#global-status.status-completed { background-color: color-mix(in srgb, var(--accent-secondary) 12%, transparent); color: var(--accent-secondary); border-color: color-mix(in srgb, var(--accent-secondary) 30%, transparent); }
+#global-status.status-error { background-color: color-mix(in srgb, var(--accent-error) 12%, transparent); color: var(--accent-error); border-color: color-mix(in srgb, var(--accent-error) 30%, transparent); }
+#global-status.status-stopped { background-color: color-mix(in srgb, var(--text-secondary-color) 10%, transparent); color: var(--text-secondary-color); border-color: color-mix(in srgb, var(--text-secondary-color) 25%, transparent); }
+
+
+/* Custom Prompts Section Styling */
+#custom-prompts-collapsible-container {
+    background: transparent;
+    border: none;
+    margin-top: var(--space-7); /* Spacing from elements above */
+}
+.custom-prompts-section.disabled-section {
+    opacity: 0.6;
+    pointer-events: none;
+}
+.custom-prompts-header {
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid var(--border-primary);
     border-radius: var(--border-radius-lg);
-    margin-bottom: var(--space-xl);
-    border: 1px solid var(--border-strong-color);
-    box-shadow: var(--shadow-lg);
+    background-color: color-mix(in srgb, var(--control-group-bg) 80%, black 20%); /* Similar to input groups but distinct */
+    transition: border-color var(--transition-speed-fast) var(--easing-subtle), background-color var(--transition-speed-fast) var(--easing-subtle);
+    outline: none;
+    padding: var(--space-4) var(--space-5); /* Good padding */
+}
+.custom-prompts-header:hover,
+.custom-prompts-header:focus-visible {
+    background-color: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+    border-color: color-mix(in srgb, var(--border-focus) 60%, transparent);
+}
+.custom-prompts-header:focus-visible {
+    box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--border-focus) 35%, transparent); /* Subtler focus */
+}
+.custom-prompts-header .section-subtitle { /* Overriding general .section-subtitle for this context */
+    margin-bottom: 0;
+    font-size: 1rem; /* Slightly larger to feel like a main title for this section */
+    color: var(--text-color);
+    text-transform: none;
+    letter-spacing: normal;
+    border: none;
+    opacity: 1;
+    padding-bottom: 0;
+    font-weight: 500; /* Not too bold */
+}
+.custom-prompts-header .collapse-icon {
+    transition: transform var(--transition-speed-base) var(--easing-standard); /* Smoother icon transition */
+    color: var(--text-secondary-color);
+    font-size: 1.1em;
+}
+#custom-prompts-collapsible-container.is-open .custom-prompts-header {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom-color: transparent; /* Hide bottom border when open to connect with content */
 }
 
-.react-orchestrator-pane .pipeline-header { /* Reuse existing pipeline-header styles */
-    position: static; /* Override sticky if not needed here */
-    border-radius: var(--border-radius-md) var(--border-radius-md) 0 0; /* Match if it's the top element */
-    margin: calc(-1 * var(--space-xl)) calc(-1 * var(--space-xl)) var(--space-xl) calc(-1 * var(--space-xl)); /* Make it flush if it's first child */
-    padding: var(--space-lg);
+.custom-prompts-content-wrapper {
+    max-height: 0;
+    overflow: hidden;
+    padding: 0 var(--space-5); /* Horizontal padding to match header, vertical applied when open */
+    opacity: 0;
+    visibility: hidden;
+    background-color: color-mix(in srgb, var(--control-group-bg) 80%, black 20%); /* Match header or slightly different */
+    border: 1px solid var(--border-primary);
+    border-top: none;
+    border-bottom-left-radius: var(--border-radius-lg);
+    border-bottom-right-radius: var(--border-radius-lg);
+    transition: max-height 0.4s var(--easing-standard), opacity 0.3s var(--easing-standard) 0.05s, visibility 0s linear 0.4s, padding-top 0.4s var(--easing-standard), padding-bottom 0.4s var(--easing-standard), border-width 0.4s var(--easing-standard);
+}
+#custom-prompts-collapsible-container:not(.is-open) .custom-prompts-content-wrapper {
+    border-width: 0 1px; /* Keep side borders to avoid jump if needed, or set to 0 */
+}
+#custom-prompts-collapsible-container.is-open .custom-prompts-content-wrapper {
+    max-height: 1000vh; /* Large enough value */
+    opacity: 1;
+    visibility: visible;
+    padding-top: var(--space-6); /* Vertical padding when open */
+    padding-bottom: var(--space-7);
+    border-top: 1px solid var(--border-secondary); /* Separator line from header */
+    transition-delay: 0s, 0s, 0s, 0s, 0s, 0s, 0s;
+}
+.custom-prompts-description {
+    font-size: 0.875rem;
+    color: var(--text-secondary-color);
+    margin-bottom: var(--space-6);
+    line-height: 1.6;
+}
+
+
+.prompt-group {
+    margin-bottom: var(--space-7);
+    padding: var(--space-6); /* Slightly less padding than input-group */
+    background-color: var(--secondary-surface-bg);
+    border-radius: var(--border-radius-md); /* Smaller radius for inner groups */
+    border: 1px solid var(--border-primary);
+    box-shadow: var(--shadow-sm);
+}
+.prompt-group:last-child { margin-bottom: 0; }
+
+.prompt-group-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--accent-primary);
+    margin-bottom: var(--space-5);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent);
+}
+.prompt-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--text-secondary-color);
+    margin-bottom: var(--space-2);
+}
+.prompt-label code {
+    background-color: var(--tertiary-surface-bg); /* Match textarea bg */
+    padding: 0.2em 0.4em;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: var(--accent-tertiary);
+    border: 1px solid var(--border-secondary);
+}
+.prompt-textarea {
+    composes: text-input-base; /* Inherit base styles */
+    font-family: var(--font-family-mono);
+    line-height: 1.65;
+    resize: vertical;
+    min-height: 90px; /* Adjusted min-height */
+    margin-bottom: var(--space-6);
+}
+.prompt-textarea:last-of-type { margin-bottom: 0; }
+
+/* General Dividers */
+hr.sidebar-divider, hr.sub-divider, hr.sub-divider-prompts {
+    border: none;
+    height: 1px;
+    background-color: var(--border-secondary); /* Use the secondary border color */
+    opacity: 0.6; /* Make them subtle */
+}
+hr.sidebar-divider { /* Already handled by previous section, ensure consistency */
+    margin-top: var(--space-7);
+    margin-bottom: var(--space-7);
+}
+hr.sub-divider { /* For larger section breaks in main content if used */
+    margin: var(--space-8) 0 var(--space-10) 0; /* Generous spacing */
+}
+hr.sub-divider-prompts { /* For breaks within custom prompts or similar sections */
+    margin: var(--space-6) 0; /* Consistent spacing */
+}
+
+
+/* React Mode Specific UI Styles - Ensure these are consistent with overall theme */
+.react-orchestrator-pane {
+    padding: var(--space-8);
+    background-color: var(--secondary-surface-bg);
+    border-radius: var(--border-radius-lg);
+    margin-bottom: var(--space-8);
+    border: 1px solid var(--border-primary);
+    box-shadow: var(--shadow-md);
+}
+
+.react-orchestrator-pane .pipeline-header {
+    position: static;
+    border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
+    /* Adjust margin to align with new padding of parent */
+    margin: calc(-1 * var(--space-8)) calc(-1 * var(--space-8)) var(--space-7) calc(-1 * var(--space-8));
+    padding: var(--space-6); /* Consistent padding */
 }
 
 
@@ -527,26 +951,28 @@ hr.sidebar-divider {
 
 #tabs-nav-container {
     display: flex;
-    border-bottom: 2px solid var(--border-strong-color);
+    border-bottom: 1.5px solid var(--border-secondary); /* Thinner, subtler border */
     flex-shrink: 0;
     overflow-x: auto;
-    padding: 0 var(--space-lg);
-    margin-bottom: var(--space-xl);
+    padding: 0 var(--space-7); /* Consistent padding with content */
+    margin-bottom: var(--space-8); /* Consistent spacing */
 }
 
 .tab-button {
-    padding: var(--space-md) var(--space-lg);
+    padding: var(--space-4) var(--space-5); /* Adjusted padding */
     cursor: pointer;
     border: none;
     background-color: transparent;
-    font-size: 1rem;
+    font-size: 0.95rem; /* Slightly smaller */
     font-weight: 500;
     color: var(--text-secondary-color);
-    border-bottom: 3.5px solid transparent;
-    margin-bottom: -2px;
-    margin-right: var(--space-md);
-    transition: color var(--transition-speed-fast), border-color var(--transition-speed-fast), background-color var(--transition-speed-fast);
-    border-radius: var(--border-radius-md) var(--border-radius-md) 0 0;
+    border-bottom: 2.5px solid transparent; /* Thinner active indicator */
+    margin-bottom: -1.5px; /* Align with container border */
+    margin-right: var(--space-5); /* Consistent spacing */
+    transition: color var(--transition-speed-fast) var(--easing-subtle),
+                border-color var(--transition-speed-fast) var(--easing-subtle),
+                background-color var(--transition-speed-fast) var(--easing-subtle);
+    border-radius: var(--border-radius-sm) var(--border-radius-sm) 0 0; /* Softer radius */
     white-space: nowrap;
     position: relative;
     outline: none;
@@ -554,16 +980,14 @@ hr.sidebar-divider {
 .tab-button:last-child { margin-right: 0; }
 .tab-button:not(.active):hover {
     color: var(--text-color);
-    background-color: rgba(255, 255, 255, 0.02); /* Even more subtle hover */
+    background-color: color-mix(in srgb, var(--primary-surface-bg) 50%, transparent); /* Subtle hover bg */
 }
-.tab-button.status-idle:not(.active):hover,
-.tab-button.status-pending:not(.active):hover {
-    border-bottom-color: color-mix(in srgb, var(--divider-color) 70%, var(--accent-primary) 30%);
-}
+/* Removed specific status hover border colors for inactive tabs to simplify */
 .tab-button.active {
-    color: var(--text-title-color);
+    color: var(--text-title-color); /* Default active color */
     font-weight: 600;
-    background-color: color-mix(in srgb, var(--primary-surface-bg) 80%, rgba(0,0,0,0.1) 20%); /* Darker active tab bg */
+    /* background-color: color-mix(in srgb, var(--primary-surface-bg) 70%, black 10%); /* Slightly lighter active tab bg */
+    /* No specific background for active, rely on border and text color */
 }
 .tab-button.active.status-idle,
 .tab-button.active.status-pending { border-bottom-color: var(--accent-primary); color: var(--accent-primary); }
@@ -579,111 +1003,217 @@ hr.sidebar-divider {
 .tab-button.active.status-math-error,
 .tab-button.active.status-error,
 .tab-button.active.status-cancelled { border-bottom-color: var(--accent-error); color: var(--accent-error); }
-.tab-button.status-idle:not(.active),
-.tab-button.status-pending:not(.active) { border-bottom-color: var(--divider-color); }
-.tab-button.status-running:not(.active),
-.tab-button.status-math-processing:not(.active),
-.tab-button.status-processing:not(.active),
-.tab-button.status-retrying:not(.active) { border-bottom-color: var(--accent-tertiary); }
-.tab-button.status-stopping:not(.active) { border-bottom-color: var(--accent-stopping); }
-.tab-button.status-completed:not(.active),
-.tab-button.status-math-completed:not(.active) { border-bottom-color: var(--accent-secondary); }
-.tab-button.status-failed:not(.active),
-.tab-button.status-stopped:not(.active),
-.tab-button.status-math-error:not(.active),
-.tab-button.status-error:not(.active),
-.tab-button.status-cancelled:not(.active) { border-bottom-color: var(--accent-error); }
-.tab-button:focus-visible { box-shadow: 0 0 0 3px var(--border-highlight-color) inset; }
+
+/* Inactive tabs now just use default text color and a subtle hover, no specific border colors for status */
+.tab-button:not(.active) {
+    border-bottom-color: transparent; /* Ensure no persistent border on inactive */
+}
+.tab-button:focus-visible {
+    box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--border-focus) 35%, transparent) inset; /* Subtler focus */
+}
 
 
-#pipelines-content-container { flex-grow: 1; overflow-y: auto; position: relative; padding: 0 var(--space-xl) var(--space-xl) var(--space-xl); }
-.pipeline-content, .math-pipeline-content-pane { display: none; height: 100%; animation: contentFadeInUp 0.5s var(--easing-standard) forwards; }
-@keyframes contentFadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+#pipelines-content-container {
+    flex-grow: 1;
+    overflow-y: auto;
+    position: relative;
+    padding: 0 var(--space-8) var(--space-8) var(--space-8); /* Consistent padding */
+}
+.pipeline-content, .math-pipeline-content-pane {
+    display: none;
+    height: 100%;
+    animation: contentFadeInUp 0.4s var(--easing-standard) forwards; /* Slightly faster fade */
+}
+@keyframes contentFadeInUp {
+    from { opacity: 0; transform: translateY(15px); } /* Subtler entry */
+    to { opacity: 1; transform: translateY(0); }
+}
 .pipeline-content.active, .math-pipeline-content-pane.active { display: block; }
 
 .pipeline-header {
-    background-color: color-mix(in srgb, var(--primary-surface-bg) 90%, black 10%); /* Darker header */ color: var(--text-color);
-    padding: var(--space-lg); border-bottom: 1px solid var(--border-strong-color);
-    display: flex; justify-content: space-between; align-items: center; position: sticky; top: -1px; z-index: 10;
-    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+    background-color: color-mix(in srgb, var(--secondary-surface-bg) 90%, black 10%); /* Consistent with other headers */
+    color: var(--text-title-color);
+    padding: var(--space-6) var(--space-7); /* Consistent padding */
+    border-bottom: 1px solid var(--border-primary); /* Simplified border */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: -1px; /* To hide the main container's top border if content scrolls */
+    z-index: 10;
+    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0; /* Match parent */
 }
-.pipeline-header h3 { margin: 0; font-size: 1.25rem; font-weight: 600; }
-.pipeline-header-controls { display: flex; align-items: center; gap: var(--space-lg); }
-.pipeline-status {
-    font-weight: 600; padding: var(--space-sm) var(--space-md); border-radius: var(--border-radius-md); font-size: 0.9rem;
-    text-transform: capitalize; transition: all var(--transition-speed-fast); border: 1px solid;
+.pipeline-header h3 {
+    margin: 0;
+    font-size: 1.15rem; /* Standardized */
+    font-weight: 600;
 }
-.status-idle, .status-pending { background-color: color-mix(in srgb, var(--accent-primary) 12%, transparent); color: var(--accent-primary); border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent); }
-.status-running, .status-processing, .status-retrying, .status-math-processing { background-color: color-mix(in srgb, var(--accent-tertiary) 15%, transparent); color: var(--accent-tertiary); border-color: color-mix(in srgb, var(--accent-tertiary) 35%, transparent); }
-.status-stopping { background-color: color-mix(in srgb, var(--accent-stopping) 15%, transparent); color: var(--accent-stopping); border-color: color-mix(in srgb, var(--accent-stopping) 35%, transparent); }
-.status-completed, .status-math-completed { background-color: color-mix(in srgb, var(--accent-secondary) 15%, transparent); color: var(--accent-secondary); border-color: color-mix(in srgb, var(--accent-secondary) 35%, transparent); }
-.status-error, .status-failed, .status-math-error { background-color: color-mix(in srgb, var(--accent-error) 15%, transparent); color: var(--accent-error); border-color: color-mix(in srgb, var(--accent-error) 35%, transparent); }
-.status-stopped, .status-cancelled { background-color: color-mix(in srgb, var(--text-secondary-color) 12%, transparent); color: var(--text-secondary-color); border-color: color-mix(in srgb, var(--text-secondary-color) 28%, transparent); }
-
-.action-button {
-    border: 1px solid transparent; padding: var(--space-sm) var(--space-lg); font-size: 0.9rem; font-weight: 600;
-    border-radius: var(--border-radius-md); cursor: pointer; transition: all var(--transition-speed-fast) var(--easing-standard);
-    display: inline-flex; align-items: center; gap: var(--space-sm); box-shadow: var(--shadow-sm);
+.pipeline-header-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5); /* Consistent spacing */
 }
-.action-button:disabled { cursor: not-allowed; opacity: 0.5; transform: none !important; box-shadow: none !important; background-color: var(--tertiary-surface-bg) !important; color: var(--text-placeholder-color) !important; border: 1px solid var(--border-color) !important; }
 
-.stop-pipeline-button { background: var(--accent-error); color: white; border-color: color-mix(in srgb, var(--accent-error) 70%, #000 30%);}
-.stop-pipeline-button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-error) 85%, white); transform: translateY(-1px); box-shadow: 0 2px 6px color-mix(in srgb, var(--accent-error) 30%, transparent); }
-.stop-pipeline-button:disabled { background: var(--tertiary-surface-bg); color: var(--text-placeholder-color); }
+/* Status Badge Base Style */
+.status-badge-base {
+    font-weight: 500; /* Less bold */
+    padding: var(--space-2) var(--space-3); /* Standardized padding */
+    border-radius: var(--border-radius-sm); /* Softer radius */
+    font-size: 0.85rem; /* Standardized font size */
+    text-transform: capitalize;
+    transition: all var(--transition-speed-fast) var(--easing-subtle);
+    border: 1px solid;
+    line-height: 1.4;
+}
 
-.iterations-list { list-style: none; padding: 0; margin: var(--space-xl) 0 0 0; }
+.pipeline-status { /* Specific instance of status badge */
+    composes: status-badge-base;
+}
+/* Apply base to all status elements and simplify color variations */
+.status-idle, .status-pending {
+    background-color: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+    color: var(--accent-primary);
+    border-color: color-mix(in srgb, var(--accent-primary) 25%, transparent);
+}
+.status-running, .status-processing, .status-retrying, .status-math-processing {
+    background-color: color-mix(in srgb, var(--accent-tertiary) 12%, transparent);
+    color: var(--accent-tertiary);
+    border-color: color-mix(in srgb, var(--accent-tertiary) 30%, transparent);
+}
+.status-stopping {
+    background-color: color-mix(in srgb, var(--accent-stopping) 12%, transparent);
+    color: var(--accent-stopping);
+    border-color: color-mix(in srgb, var(--accent-stopping) 30%, transparent);
+}
+.status-completed, .status-math-completed {
+    background-color: color-mix(in srgb, var(--accent-secondary) 12%, transparent);
+    color: var(--accent-secondary);
+    border-color: color-mix(in srgb, var(--accent-secondary) 30%, transparent);
+}
+.status-error, .status-failed, .status-math-error {
+    background-color: color-mix(in srgb, var(--accent-error) 12%, transparent);
+    color: var(--accent-error);
+    border-color: color-mix(in srgb, var(--accent-error) 30%, transparent);
+}
+.status-stopped, .status-cancelled {
+    background-color: color-mix(in srgb, var(--text-secondary-color) 10%, transparent);
+    color: var(--text-secondary-color);
+    border-color: color-mix(in srgb, var(--text-secondary-color) 25%, transparent);
+}
+
+.action-button { /* This will now use button-base */
+    composes: button-base;
+    padding: var(--space-2) var(--space-4); /* Slightly smaller padding for secondary actions */
+    font-size: 0.875rem;
+    display: inline-flex; /* Keep for icon alignment */
+    align-items: center; /* Keep for icon alignment */
+    gap: var(--space-2); /* Keep for icon alignment */
+}
+/* Disabled state is handled by .button-base */
+
+.stop-pipeline-button { /* Modifier for .action-button -> .button-base */
+    composes: action-button; /* or directly button-base if it doesn't need action-button specifics */
+    background: var(--accent-error);
+    color: white;
+    border-color: color-mix(in srgb, var(--accent-error) 70%, #000 30%);
+}
+.stop-pipeline-button:hover:not(:disabled) {
+    /* composes button-base:hover:not(:disabled) handles transform and shadow */
+    background: color-mix(in srgb, var(--accent-error) 85%, white 10%);
+}
+/* Disabled state handled by .button-base */
+
+.iterations-list {
+    list-style: none;
+    padding: 0;
+    margin: var(--space-8) 0 0 0; /* Consistent spacing */
+}
 .iteration-item {
-    background-color: var(--secondary-surface-bg); border: 1px solid var(--border-strong-color);
-    border-radius: var(--border-radius-lg); margin-bottom: var(--space-xl);
-    box-shadow: var(--shadow-lg); transition: box-shadow var(--transition-speed-base), transform var(--transition-speed-base), border-color var(--transition-speed-base);
+    background-color: var(--secondary-surface-bg);
+    border: 1px solid var(--border-primary); /* Simplified border */
+    border-radius: var(--border-radius-lg);
+    margin-bottom: var(--space-8); /* Consistent spacing */
+    box-shadow: var(--shadow-md); /* Softer shadow */
+    transition: box-shadow var(--transition-speed-base) var(--easing-subtle),
+                transform var(--transition-speed-base) var(--easing-subtle),
+                border-color var(--transition-speed-base) var(--easing-subtle);
     overflow: hidden;
 }
 .iteration-item:last-child { margin-bottom: 0; }
 .iteration-item:hover {
-    box-shadow: var(--shadow-xl), 0 0 15px -5px color-mix(in srgb, var(--glow-primary) 50%, transparent); /* More subtle glow */
-    border-color: var(--border-highlight-color); transform: translateY(-3px);
+    box-shadow: var(--shadow-lg); /* Slightly more prominent shadow on hover */
+    border-color: color-mix(in srgb, var(--border-focus) 60%, transparent); /* Use focus color system */
+    transform: translateY(-2px); /* Subtler lift */
 }
 .iteration-item details summary {
-    padding: var(--space-lg); cursor: pointer; font-weight: 600; font-size: 1.1rem;
-    display: flex; justify-content: space-between; align-items: center;
-    border-radius: var(--border-radius-lg); transition: background-color var(--transition-speed-fast); outline: none; position: relative;
+    padding: var(--space-6) var(--space-7); /* Consistent padding */
+    cursor: pointer;
+    font-weight: 500; /* Less bold */
+    font-size: 1.05rem; /* Standardized */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: var(--border-radius-lg);
+    transition: background-color var(--transition-speed-fast) var(--easing-subtle);
+    outline: none;
+    position: relative;
 }
 .iteration-item details[open] summary {
-    border-bottom: 1px solid var(--border-strong-color); border-bottom-left-radius: 0; border-bottom-right-radius: 0;
-    background-color: rgba(0,0,0,0.25); /* Darker when open */
+    border-bottom: 1px solid var(--border-secondary); /* Simplified border */
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    background-color: color-mix(in srgb, var(--secondary-surface-bg) 60%, black 40%); /* Darker when open */
 }
-.iteration-item details summary:hover { background-color: color-mix(in srgb, var(--accent-primary) 10%, transparent); }
+.iteration-item details summary:hover {
+    background-color: color-mix(in srgb, var(--accent-primary) 8%, transparent); /* Consistent hover */
+}
 .iteration-item details summary::-webkit-details-marker { display: none; }
-.iteration-item details summary::before {
-    content: ''; display: inline-block; width: 9px; height: 9px;
-    border-right: 2.5px solid var(--text-secondary-color); border-bottom: 2.5px solid var(--text-secondary-color);
-    transform: translateY(-3px) rotate(45deg); margin-right: var(--space-lg);
-    transition: transform var(--transition-speed-fast) ease-in-out;
+.iteration-item details summary::before { /* Cleaner expand icon */
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid var(--text-secondary-color);
+    border-bottom: 2px solid var(--text-secondary-color);
+    transform: translateY(-2px) rotate(45deg); /* Adjusted for alignment */
+    margin-right: var(--space-4); /* Consistent spacing */
+    transition: transform var(--transition-speed-base) var(--easing-standard);
 }
-.iteration-item details[open] summary::before { transform: translateY(0px) rotate(225deg); }
+.iteration-item details[open] summary::before {
+    transform: translateY(1px) rotate(225deg); /* Adjusted for alignment */
+}
 .iteration-title { color: var(--text-color); }
-.iteration-status { font-size: 0.85rem; margin-left: auto; padding-left: var(--space-lg); }
+.iteration-status {
+    composes: status-badge-base; /* Use base status badge */
+    font-size: 0.8rem; /* Slightly smaller for iteration status */
+    margin-left: auto;
+    padding-left: var(--space-5); /* Consistent spacing */
+}
 
 .iteration-details {
     padding: 0;
-    display: flex; flex-direction: column;
-    background-color: color-mix(in srgb, var(--secondary-surface-bg) 80%, black 20%); /* Darker details bg */
+    display: flex;
+    flex-direction: column;
+    background-color: color-mix(in srgb, var(--tertiary-surface-bg) 95%, black 5%); /* Slightly different from item bg */
 }
 .iteration-detail-group {
-    padding: var(--space-xl);
-    border-bottom: 1px solid var(--divider-color);
-    animation: detailGroupFadeIn 0.4s var(--easing-standard) forwards; opacity: 0;
+    padding: var(--space-7) var(--space-8); /* Consistent padding */
+    border-bottom: 1px solid var(--border-secondary); /* Simplified border */
+    animation: detailGroupFadeIn 0.35s var(--easing-standard) forwards; opacity: 0; /* Slightly faster */
 }
 .iteration-detail-group:last-child { border-bottom: none; }
-@keyframes detailGroupFadeIn { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+@keyframes detailGroupFadeIn {
+    from { opacity: 0; transform: scale(0.99); } /* Subtler scale */
+    to { opacity: 1; transform: scale(1); }
+}
 .iteration-details h4, .iteration-details h5 {
-    font-size: 1rem;
+    font-size: 0.9rem; /* Standardized */
     font-weight: 600;
     color: var(--text-secondary-color);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.03em; /* Reduced spacing */
     margin-top: 0;
-    margin-bottom: var(--space-lg);
+    margin-bottom: var(--space-5); /* Consistent spacing */
     display: flex;
     align-items: center;
 }
@@ -691,12 +1221,18 @@ hr.sidebar-divider {
 .iteration-detail-group > *:not(:first-child) > h5,
 .iteration-detail-group > h4:not(:first-child),
 .iteration-detail-group > h5:not(:first-child) {
-    margin-top: var(--space-xl);
+    margin-top: var(--space-7); /* Consistent spacing */
 }
-.iteration-details h4::before, .iteration-details h5::before {
-    content: ''; display: inline-block; width: 3.5px; height: 1em;
-    margin-right: var(--space-md); border-radius: 2px; opacity: 0.75;
+.iteration-details h4::before, .iteration-details h5::before { /* Decorative element for titles */
+    content: '';
+    display: inline-block;
+    width: 3px; /* Thinner */
+    height: 0.9em; /* Relative to font size */
+    margin-right: var(--space-3);
+    border-radius: 1.5px;
+    opacity: 0.8;
 }
+/* Specific colors for these decorative elements remain as they are semantic */
 .prompt-title-initial-gen::before, .prompt-title-draft-gen::before, .prompt-title-agent-judge::before, .prompt-title-math-initial-strategy::before { background-color: var(--accent-blue-alt); }
 .prompt-title-bug-fix::before, .prompt-title-critique::before, .prompt-title-agent-sys::before { background-color: var(--accent-pink-alt); }
 .prompt-title-feature-suggest::before, .prompt-title-agent-user::before, .prompt-title-math-sub-strategy::before { background-color: var(--accent-tertiary); }
@@ -706,61 +1242,128 @@ hr.sidebar-divider {
 
 .prompt-block, .code-block, .text-block {
     background-color: var(--tertiary-surface-bg);
-    padding: var(--space-lg);
+    padding: var(--space-5) var(--space-6); /* Increased padding */
     border-radius: var(--border-radius-md);
     font-family: var(--font-family-mono);
-    font-size: 0.95rem;
-    line-height: 1.8;
+    font-size: 0.9rem; /* Standardized */
+    line-height: 1.7; /* Improved line height */
     white-space: pre-wrap;
     word-wrap: break-word;
     color: var(--text-secondary-color);
-    border: 1px solid var(--border-strong-color);
-    max-height: 450px;
+    border: 1px solid var(--border-primary); /* Simplified border */
+    max-height: 400px; /* Adjusted max height */
     overflow-y: auto;
     box-shadow: var(--shadow-inset-dark);
     margin-top: 0;
-    margin-bottom: var(--space-xl);
+    margin-bottom: var(--space-7); /* Consistent spacing */
 }
 .prompt-block:last-child, .code-block:last-child, .text-block:last-child { margin-bottom: 0; }
-.prompt-block { background-color: color-mix(in srgb, var(--tertiary-surface-bg) 92%, var(--accent-primary) 4%); color: var(--text-color); } /* More subtle prompt block */
+.prompt-block {
+    background-color: color-mix(in srgb, var(--tertiary-surface-bg) 95%, var(--accent-primary) 3%); /* Even more subtle prompt block */
+    color: var(--text-color);
+}
 .generated-text-block { color: var(--text-color); }
-.language-html { color: #6C95FF; } .language-json { color: #A8D17A; } .language-python { color: #FFC35C; } .language-text, .language-markdown { color: var(--text-color); } /* Adjusted for better contrast on dark */
+/* Language specific colors remain */
+.language-html { color: #6C95FF; } .language-json { color: #A8D17A; } .language-python { color: #FFC35C; } .language-text, .language-markdown { color: var(--text-color); }
 
 
-.download-html-button, .download-text-button { background-color: var(--accent-blue-alt); color: var(--text-title-color); border-color: color-mix(in srgb, var(--accent-blue-alt) 70%, #000 30%); margin-top: 0; margin-right: var(--space-md); }
-.download-html-button:hover:not(:disabled), .download-text-button:hover:not(:disabled) { background-color: color-mix(in srgb, var(--accent-blue-alt) 85%, white); transform: translateY(-1px); }
-.copy-html-button, .copy-text-button { background-color: var(--accent-secondary); color: var(--text-title-color); border-color: color-mix(in srgb, var(--accent-secondary) 70%, #000 30%); margin-top: 0; }
-.copy-html-button:hover:not(:disabled), .copy-text-button:hover:not(:disabled) { background-color: color-mix(in srgb, var(--accent-secondary) 85%, white); transform: translateY(-1px); }
-.copy-html-button.copied, .copy-text-button.copied { background-color: var(--accent-secondary) !important; color: var(--text-title-color); transform: scale(1.05); }
+.download-html-button, .download-text-button {
+    composes: action-button; /* Use action button base */
+    background-color: var(--accent-blue-alt);
+    color: var(--text-title-color);
+    border-color: color-mix(in srgb, var(--accent-blue-alt) 70%, #000 30%);
+    margin-top: 0;
+    margin-right: var(--space-3); /* Consistent spacing */
+}
+.download-html-button:hover:not(:disabled), .download-text-button:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--accent-blue-alt) 85%, white 10%);
+    /* transform is handled by button-base */
+}
+.copy-html-button, .copy-text-button {
+    composes: action-button;
+    background-color: var(--accent-secondary);
+    color: var(--text-title-color);
+    border-color: color-mix(in srgb, var(--accent-secondary) 70%, #000 30%);
+    margin-top: 0;
+}
+.copy-html-button:hover:not(:disabled), .copy-text-button:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--accent-secondary) 85%, white 10%);
+}
+.copy-html-button.copied, .copy-text-button.copied {
+    background-color: var(--accent-secondary) !important; /* Keep color */
+    color: var(--text-title-color);
+    transform: scale(1.02); /* Subtler copied feedback */
+}
 
 .feature-list, .critique-list {
-    list-style: none; padding-left: 0;
+    list-style: none;
+    padding-left: 0;
     margin-top: 0;
-    margin-bottom: var(--space-xl);
-    display: flex; flex-direction: column; gap: var(--space-md);
+    margin-bottom: var(--space-7); /* Consistent spacing */
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3); /* Consistent spacing */
 }
 .feature-list:last-child, .critique-list:last-child { margin-bottom: 0; }
 .feature-list li, .critique-list li {
-    background-color: color-mix(in srgb, var(--accent-primary) 10%, transparent); padding: var(--space-md);
-    border-radius: var(--border-radius-md); border-left: 5px solid var(--accent-primary);
-    color: var(--text-color); font-size: 0.95rem; line-height: 1.65;
+    background-color: color-mix(in srgb, var(--accent-primary) 8%, transparent); /* Subtler background */
+    padding: var(--space-4); /* Consistent padding */
+    border-radius: var(--border-radius-md);
+    border-left: 3.5px solid var(--accent-primary); /* Thinner border */
+    color: var(--text-color);
+    font-size: 0.9rem; /* Standardized */
+    line-height: 1.6;
 }
 
-.preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0; }
-.fullscreen-toggle-button { background: var(--accent-primary); color: white; padding: var(--space-sm) var(--space-md); border-color: color-mix(in srgb, var(--accent-primary) 70%, #000 30%); }
-.fullscreen-toggle-button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-primary) 85%, white); transform: translateY(-1px); }
-.fullscreen-toggle-button .icon-fullscreen, .fullscreen-toggle-button .icon-exit-fullscreen { font-size: 1.15em; }
+.preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--space-4); /* Add some space before the preview container */
+}
+.fullscreen-toggle-button {
+    composes: action-button; /* Use action button base */
+    background: var(--accent-primary);
+    color: white;
+    padding: var(--space-2) var(--space-3); /* Adjusted padding */
+    border-color: color-mix(in srgb, var(--accent-primary) 70%, #000 30%);
+}
+.fullscreen-toggle-button:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent-primary) 85%, white 10%);
+}
+.fullscreen-toggle-button .icon-fullscreen, .fullscreen-toggle-button .icon-exit-fullscreen {
+    font-size: 1.1em; /* Adjusted icon size */
+}
 .html-preview-container {
-    border: 1px solid var(--border-strong-color); border-radius: var(--border-radius-md);
-    min-height: 350px; height: 55vh; max-height: 650px;
-    overflow: hidden; background-color: #f0f0f8; /* Light background for preview content for contrast */ box-shadow: var(--shadow-lg); transition: all var(--transition-speed-base); position: relative;
-    margin-top: var(--space-lg);
-    margin-bottom: var(--space-xl);
+    border: 1px solid var(--border-primary); /* Simplified border */
+    border-radius: var(--border-radius-md);
+    min-height: 300px; /* Adjusted */
+    height: 50vh; /* Adjusted */
+    max-height: 600px; /* Adjusted */
+    overflow: hidden;
+    background-color: #ffffff; /* Standard light background for preview */
+    box-shadow: var(--shadow-md); /* Softer shadow */
+    transition: all var(--transition-speed-base) var(--easing-subtle);
+    position: relative;
+    margin-top: 0; /* preview-header handles top margin */
+    margin-bottom: var(--space-7); /* Consistent spacing */
 }
 .html-preview-container:last-child { margin-bottom: 0; }
 .html-preview-container iframe { width: 100%; height: 100%; border: none; }
-.no-preview-message-container { display: flex; justify-content: center; align-items: center; text-align: center; padding: var(--space-xl); background-color: var(--tertiary-surface-bg); }
-.no-preview-message { color: var(--text-secondary-color); font-style: italic; font-size: 1rem; }
+.no-preview-message-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: var(--space-8); /* Generous padding */
+    background-color: var(--tertiary-surface-bg);
+    height: 100%; /* Fill container if no preview */
+}
+.no-preview-message {
+    color: var(--text-secondary-color);
+    font-style: italic;
+    font-size: 0.95rem;
+}
 
 #custom-prompts-collapsible-container { background: transparent; border: none; transition: background-color var(--transition-speed-base); }
 .custom-prompts-section.disabled-section { opacity: 0.6; pointer-events: none; }
@@ -856,54 +1459,157 @@ hr.sub-divider-prompts {
     background-color: color-mix(in srgb, var(--accent-error) 12%, transparent); color: var(--accent-error);
     border: 1px solid color-mix(in srgb, var(--accent-error) 30%, transparent); border-left: 5px solid var(--accent-error);
     padding: var(--space-lg); border-radius: var(--border-radius-md); font-size: 0.95rem; margin-top: var(--space-lg);
-    margin-bottom: var(--space-xl);
+    margin-bottom: var(--space-7); /* Consistent spacing */
 }
 .error-message:last-child { margin-bottom: 0; }
-.error-message strong { display: block; margin-bottom: var(--space-sm); font-weight: 600; }
-.error-message pre { white-space: pre-wrap; word-break: break-all; font-family: var(--font-family-mono); font-size: 0.88em; background: transparent; padding: 0; border: none; box-shadow: none; max-height: 220px; overflow-y: auto; color: currentColor; }
+.error-message strong {
+    display: block;
+    margin-bottom: var(--space-2); /* Consistent spacing */
+    font-weight: 600;
+}
+.error-message pre {
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-family: var(--font-family-mono);
+    font-size: 0.85em; /* Slightly smaller */
+    background: transparent;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    max-height: 200px; /* Adjusted max height */
+    overflow-y: auto;
+    color: currentColor;
+    line-height: 1.6;
+}
 
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0; }
-::-webkit-scrollbar { width: 14px; height: 14px; }
-::-webkit-scrollbar-track { background: rgba(4, 2, 10, 0.7); border-radius: var(--border-radius-md); } /* Darker track */
-::-webkit-scrollbar-thumb {
-    background: color-mix(in srgb, var(--accent-primary) 65%, transparent); border-radius: var(--border-radius-md);
-    border: 3.5px solid transparent; background-clip: content-box;
+
+/* Scrollbar Refinements */
+::-webkit-scrollbar {
+    width: 12px; /* Slightly thinner */
+    height: 12px;
 }
-::-webkit-scrollbar-thumb:hover { background: var(--accent-primary); }
+::-webkit-scrollbar-track {
+    background: rgba(10, 7, 20, 0.5); /* Base on control-group-bg or similar, slightly transparent */
+    border-radius: var(--border-radius-sm);
+}
+::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--accent-primary) 50%, transparent); /* Less intense thumb color */
+    border-radius: var(--border-radius-sm);
+    border: 3px solid transparent; /* Thinner border/padding effect */
+    background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--accent-primary) 70%, transparent); /* Slightly more intense on hover */
+}
 
+
+/* Media Query Adjustments - Reviewing existing ones for new spacing system */
 @media (max-width: 1200px) {
-    #app-container { flex-direction: column; padding: var(--space-lg); gap: var(--space-lg); }
-    #controls-sidebar, #main-content { width: 100%; max-height: none; }
-    #controls-sidebar { max-height: 65vh; }
-    #main-content { height: calc(100vh - (2 * var(--space-lg)) - var(--space-lg) - 65vh ); }
+    #app-container {
+        flex-direction: column;
+        padding: var(--space-8); /* Adjusted padding */
+        gap: var(--space-8); /* Adjusted gap */
+    }
+    #controls-sidebar, #main-content {
+        width: 100%;
+        max-height: none;
+    }
+    #controls-sidebar {
+        max-height: 60vh; /* Adjusted max-height */
+    }
+    #main-content {
+        /* Auto height or calc based on new sidebar max-height and app-container padding */
+        height: auto;
+        min-height: calc(100vh - 60vh - (2 * var(--space-8)) - var(--space-8)); /* Example calculation */
+    }
 
-    .background-gradient::before, .background-gradient::after { width: 75vmax; height: 75vmax; filter: blur(120px); opacity: 0.06;}
+    .background-gradient::before, .background-gradient::after {
+        width: 70vmax; /* Adjusted size */
+        height: 70vmax;
+        filter: blur(140px); /* Adjusted blur */
+        opacity: 0.04; /* Adjusted opacity */
+    }
 }
 @media (max-width: 768px) {
-    html { font-size: 15px; }
-    #app-container { padding: var(--space-md); gap: var(--space-md); }
-    #controls-sidebar { padding: var(--space-lg); }
-    .input-group { padding: var(--space-lg); margin-bottom: var(--space-lg); }
-    #pipelines-content-container { padding: 0 var(--space-lg) var(--space-lg) var(--space-lg); }
-    #tabs-nav-container { padding: 0 var(--space-md); margin-bottom: var(--space-lg); }
-    .tab-button { padding: var(--space-md) var(--space-lg); }
-    .pipeline-header { padding: var(--space-lg); }
-    .pipeline-header h3 { font-size: 1.15rem; }
-    .iteration-item details summary { padding: var(--space-lg); font-size: 1.05rem; }
-    .iteration-detail-group { padding: var(--space-lg); }
-    .config-buttons-container { flex-direction: column; gap: var(--space-md); }
-    #initial-idea { min-height: 110px; } .prompt-textarea { min-height: 90px; }
-    #app-mode-selector { flex-wrap: wrap; }
-    .radio-button-label { flex-basis: calc(50% - var(--space-xs)); }
-    .radio-button-label span { font-size: 0.9rem; padding: var(--space-sm) var(--space-md); }
+    html { font-size: 15px; } /* Keep or adjust based on visual testing */
+    #app-container {
+        padding: var(--space-6);
+        gap: var(--space-6);
+    }
+    #controls-sidebar {
+        padding: var(--space-6);
+        max-height: 55vh; /* Further adjust */
+    }
+    .input-group {
+        padding: var(--space-6);
+        margin-bottom: var(--space-6);
+    }
+    #pipelines-content-container {
+        padding: 0 var(--space-6) var(--space-6) var(--space-6);
+    }
+    #tabs-nav-container {
+        padding: 0 var(--space-5);
+        margin-bottom: var(--space-6);
+    }
+    .tab-button {
+        padding: var(--space-3) var(--space-4);
+        font-size: 0.9rem;
+    }
+    .pipeline-header {
+        padding: var(--space-5);
+    }
+    .pipeline-header h3 {
+        font-size: 1.1rem;
+    }
+    .iteration-item details summary {
+        padding: var(--space-5);
+        font-size: 1rem;
+    }
+    .iteration-detail-group {
+        padding: var(--space-6);
+    }
+    .config-buttons-container {
+        flex-direction: column;
+        gap: var(--space-3);
+    }
+    #initial-idea { min-height: 100px; }
+    .prompt-textarea { min-height: 80px; }
+
+    #app-mode-selector { flex-wrap: wrap; gap: var(--space-2); } /* Add gap for wrapped items */
+    .radio-button-label { flex-basis: calc(50% - var(--space-1)); } /* Adjust for gap */
+    .radio-button-label span {
+        font-size: 0.875rem;
+        padding: var(--space-2) var(--space-3);
+    }
 }
 @media (max-width: 480px) {
     html { font-size: 14px; }
+    #app-container { padding: var(--space-4); gap: var(--space-4); }
+    #controls-sidebar { padding: var(--space-4); max-height: 50vh; }
+    .input-group { padding: var(--space-4); margin-bottom: var(--space-4); }
+    #pipelines-content-container { padding: 0 var(--space-4) var(--space-4) var(--space-4); }
+    #tabs-nav-container { padding: 0 var(--space-3); margin-bottom: var(--space-4); }
+
     .radio-button-label { flex-basis: 100%; }
-    .tab-button { padding: var(--space-md) var(--space-lg); font-size: 0.95rem; }
-    .pipeline-header-controls { flex-direction: column; align-items: flex-start; gap: var(--space-md); }
-    .stop-pipeline-button { width: 100%; text-align: center; }
-    .iteration-detail-group { padding: var(--space-lg); }
-    .action-button { width: 100%; margin-bottom: var(--space-sm); }
-    .download-html-button, .download-text-button, .copy-html-button, .copy-text-button { margin-right: 0; }
+    .tab-button {
+        padding: var(--space-3) var(--space-3);
+        font-size: 0.85rem;
+        margin-right: var(--space-3);
+    }
+    .pipeline-header-controls {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--space-3);
+    }
+    /* Action buttons are already full width via .button-base potentially, or need specific override */
+    .action-button, .stop-pipeline-button {
+        width: 100%;
+        margin-bottom: var(--space-2);
+        justify-content: center; /* Center text/icon in button */
+    }
+    .download-html-button, .download-text-button, .copy-html-button, .copy-text-button {
+        margin-right: 0;
+    }
+    .iteration-detail-group { padding: var(--space-4); }
 }
