@@ -45,6 +45,10 @@
                         <input type="radio" name="appMode" value="agent">
                         <span>Agent</span>
                     </label>
+                    <label class="radio-button-label">
+                        <input type="radio" name="appMode" value="react">
+                        <span>React</span>
+                    </label>
                 </div>
             </div>
             
@@ -271,6 +275,22 @@
                             <textarea id="sys-agent-judge-llm" class="prompt-textarea" rows="8" aria-label="System Instruction for Agent Judge LLM"></textarea>
                             <label for="user-agent-judge-llm" class="prompt-label">User Prompt Template (for Judge LLM):</label>
                             <textarea id="user-agent-judge-llm" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Agent Judge LLM"></textarea>
+                        </div>
+                    </div>
+
+                    <div id="react-prompts-container" style="display: none;"> <!-- Added for React mode -->
+                        <p class="custom-prompts-description">
+                           Configure the "Orchestrator Agent" for React Mode.
+                           It will analyze your React app request and generate a detailed plan (\`plan.txt\`)
+                           and specific prompts for 5 parallel worker LLMs that will build the React application components.
+                           Available placeholders for User Prompt: <code>{{user_request}}</code>.
+                        </p>
+                        <div class="prompt-group">
+                            <h4 class="prompt-group-title">React Mode: Orchestrator Agent Configuration</h4>
+                            <label for="sys-react-orchestrator" class="prompt-label">System Instruction (for Orchestrator Agent):</label>
+                            <textarea id="sys-react-orchestrator" class="prompt-textarea" rows="8" aria-label="System Instruction for React Orchestrator Agent"></textarea>
+                            <label for="user-react-orchestrator" class="prompt-label">User Prompt Template (for Orchestrator Agent):</label>
+                            <textarea id="user-react-orchestrator" class="prompt-textarea" rows="3" aria-label="User Prompt Template for React Orchestrator Agent"></textarea>
                         </div>
                     </div>
 
