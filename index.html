@@ -26,6 +26,18 @@
 
     <div id="app-container">
         <aside id="controls-sidebar" aria-label="Controls and Settings Panel">
+            <div class="input-group api-key-section">
+                <h3 class="section-subtitle">API Key Configuration</h3>
+                <label for="api-key-input" class="model-select-label">Gemini API Key:</label>
+                <input type="password" id="api-key-input" placeholder="Enter your API Key" aria-labelledby="api-key-input">
+                <div class="api-key-buttons">
+                    <button id="save-api-key-button" class="config-button" type="button">Save Key</button>
+                    <button id="clear-api-key-button" class="config-button clear-button" type="button">Clear Key</button>
+                </div>
+                <p id="api-key-status" class="api-key-status-message" aria-live="polite">No API Key set. Key is stored in localStorage.</p>
+                <p class="api-key-security-note">Note: API keys saved here are stored in your browser's local storage. Avoid using on shared computers if the key is sensitive.</p>
+                <hr class="sidebar-divider">
+            </div>
             <div class="input-group">
                 <h3 class="section-subtitle">Application Mode</h3>
                 <div id="app-mode-selector" role="radiogroup" aria-label="Select Application Mode">

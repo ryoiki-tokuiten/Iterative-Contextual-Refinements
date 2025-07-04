@@ -269,6 +269,11 @@ let customPromptsAgentState: CustomizablePromptsAgent = createDefaultCustomPromp
 let customPromptsReactState: CustomizablePromptsReact = JSON.parse(JSON.stringify(defaultCustomPromptsReact)); // Added for React mode
 
 
+const apiKeyInput = document.getElementById('api-key-input') as HTMLInputElement;
+const saveApiKeyButton = document.getElementById('save-api-key-button') as HTMLButtonElement;
+const clearApiKeyButton = document.getElementById('clear-api-key-button') as HTMLButtonElement;
+const apiKeyStatusElement = document.getElementById('api-key-status') as HTMLParagraphElement;
+
 const initialIdeaInput = document.getElementById('initial-idea') as HTMLTextAreaElement;
 const initialIdeaLabel = document.getElementById('initial-idea-label') as HTMLLabelElement;
 const mathProblemImageInputContainer = document.getElementById('math-problem-image-input-container') as HTMLElement;
@@ -362,24 +367,62 @@ const collapseIconSvgDown = `<svg viewBox="0 0 24 24" fill="currentColor" width=
 
 
 function initializeApiKey() {
-    if (!API_KEY) {
-        const errorMsg = "API_KEY environment variable not set. Please set it to use the Gemini API.";
-        console.error(errorMsg);
-        globalStatusDiv.textContent = `Error: ${errorMsg}`;
-        globalStatusDiv.className = 'status-error';
-        if (generateButton) generateButton.disabled = true;
+    let userApiKey = localStorage.getItem('geminiApiKey');
+    let keyToUse: string | undefined = undefined;
+    let statusMessage = "";
+    let isKeyAvailable = false;
+
+    if (userApiKey) {
+        keyToUse = userApiKey;
+        statusMessage = "API Key loaded from Local Storage.";
+        isKeyAvailable = true;
+        if(apiKeyInput && !apiKeyInput.placeholder) apiKeyInput.placeholder = "Using key from Local Storage";
+    } else if (API_KEY) { // process.env.API_KEY
+        keyToUse = API_KEY;
+        statusMessage = "API Key loaded from build configuration (environment variable).";
+        isKeyAvailable = true;
+         if(apiKeyInput) apiKeyInput.placeholder = "Using key from build config";
+    } else {
+        statusMessage = "Gemini API Key not set. Please enter your API key above and click 'Save Key'.";
+        isKeyAvailable = false;
+        if(apiKeyInput) apiKeyInput.placeholder = "Enter your API Key";
+    }
+
+    if (apiKeyStatusElement) {
+        apiKeyStatusElement.textContent = statusMessage;
+        apiKeyStatusElement.className = isKeyAvailable ? 'api-key-status-message status-ok' : 'api-key-status-message status-error';
+    }
+
+    if (generateButton) { // Ensure generate button exists
+        generateButton.disabled = !isKeyAvailable || isGenerating; // Also consider isGenerating
+    }
+
+
+    if (keyToUse) {
+        try {
+            ai = new GoogleGenAI({ apiKey: keyToUse });
+            // globalStatusDiv.textContent = "API Client initialized. Ready."; // Avoid overriding other global statuses
+            // globalStatusDiv.className = 'status-completed';
+            if (generateButton) generateButton.disabled = isGenerating; // Re-evaluate generateButton based on isGenerating
+            return true;
+        } catch (e: any) {
+            console.error("Failed to initialize GoogleGenAI with the provided key:", e);
+            if (apiKeyStatusElement) {
+                apiKeyStatusElement.textContent = `Error initializing API with key: ${e.message}. Please check the key.`;
+                apiKeyStatusElement.className = 'api-key-status-message status-error';
+            }
+            globalStatusDiv.textContent = `Error initializing API: ${e.message}`; // Show in global status too
+            globalStatusDiv.className = 'status-error';
+            if (generateButton) generateButton.disabled = true;
+            ai = null; // Ensure AI client is null if initialization fails
+            return false;
+        }
+    } else {
+        // This case is already handled by setting generateButton.disabled = true
+        // and the message in apiKeyStatusElement.
+        ai = null; // Ensure AI client is null
         return false;
     }
-    try {
-        ai = new GoogleGenAI({ apiKey: API_KEY });
-    } catch (e: any) {
-        console.error("Failed to initialize GoogleGenAI:", e);
-        globalStatusDiv.textContent = `Error initializing API: ${e.message}`;
-        globalStatusDiv.className = 'status-error';
-        if (generateButton) generateButton.disabled = true;
-        return false;
-    }
-    return true;
 }
 
 
@@ -2800,7 +2843,46 @@ function aggregateReactOutputs() {
 
 function initializeUI() {
     if (!initializeApiKey()) {
-        return; 
+        // If API key init fails, message is already shown by initializeApiKey().
+        // Controls will be disabled.
+    }
+
+    if (saveApiKeyButton && apiKeyInput && apiKeyStatusElement) {
+        saveApiKeyButton.addEventListener('click', () => {
+            const newApiKey = apiKeyInput.value.trim();
+            if (newApiKey) {
+                localStorage.setItem('geminiApiKey', newApiKey);
+                apiKeyInput.value = ''; // Clear field for security
+                apiKeyStatusElement.textContent = "API Key saved to Local Storage. Initializing...";
+                apiKeyStatusElement.className = 'api-key-status-message status-processing';
+                if(initializeApiKey()){ // Attempt to re-initialize with the new key
+                    apiKeyStatusElement.textContent = "API Key saved and client initialized.";
+                    apiKeyStatusElement.className = 'api-key-status-message status-ok';
+                    globalStatusDiv.textContent = "API Client ready."; // Update global status as well
+                    globalStatusDiv.className = 'status-completed';
+                } else {
+                    // initializeApiKey will set its own error messages
+                }
+            } else {
+                apiKeyStatusElement.textContent = "Please enter an API Key to save.";
+                apiKeyStatusElement.className = 'api-key-status-message status-error';
+            }
+        });
+    }
+
+    if (clearApiKeyButton && apiKeyInput && apiKeyStatusElement) {
+        clearApiKeyButton.addEventListener('click', () => {
+            localStorage.removeItem('geminiApiKey');
+            apiKeyInput.value = '';
+            apiKeyInput.placeholder = 'Enter your API Key';
+            ai = null; // De-initialize the AI client
+            apiKeyStatusElement.textContent = "API Key cleared from Local Storage. Enter a new key to use the API.";
+            apiKeyStatusElement.className = 'api-key-status-message status-error';
+            if (generateButton) generateButton.disabled = true; // Disable generation
+            globalStatusDiv.textContent = "API Key cleared. Operations requiring API will fail.";
+            globalStatusDiv.className = 'status-warning';
+            initializeApiKey(); // Re-run to update status and button states based on fallback (if any)
+        });
     }
 
     renderPipelineSelectors();
@@ -2809,6 +2891,11 @@ function initializeUI() {
 
     if (generateButton) {
         generateButton.addEventListener('click', async () => {
+            if (!ai) { // Double check if API client is not initialized
+                alert("API Key is not configured or failed to initialize. Please set your API Key.");
+                initializeApiKey(); // Try to re-initialize or prompt user
+                return;
+            }
             const initialIdea = initialIdeaInput.value.trim();
             if (!initialIdea) {
                 alert("Please enter an idea, premise, math problem, or request.");
