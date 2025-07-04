@@ -213,6 +213,243 @@ body {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23586078' width='24' height='24'%3E%3Cpath d='M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z'/%3E%3C/svg%3E"); /* Updated disabled fill */
 }
 
+/* API Key Section Styles */
+.api-key-section {
+    /* Uses .input-group styling by default */
+    /* Specific overrides or additions can go here if needed */
+}
+
+#api-key-input {
+    width: 100%;
+    padding: var(--space-md);
+    background: var(--tertiary-surface-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    border-radius: var(--border-radius-md);
+    font-size: 1rem;
+    font-family: var(--font-family); /* Standard font for input */
+    transition: border-color var(--transition-speed-base) var(--easing-standard), box-shadow var(--transition-speed-base) var(--easing-standard), background-color var(--transition-speed-base) var(--easing-standard);
+    box-shadow: var(--shadow-inset-dark);
+    margin-bottom: var(--space-md); /* Space before buttons */
+}
+#api-key-input::placeholder {
+    color: var(--text-placeholder-color);
+}
+#api-key-input:hover {
+    border-color: var(--border-highlight-color);
+}
+#api-key-input:focus {
+    outline: none;
+    background: var(--tertiary-surface-bg);
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--accent-primary) 35%, transparent), var(--shadow-inset-dark);
+}
+
+.api-key-buttons {
+    display: flex;
+    gap: var(--space-md);
+    margin-bottom: var(--space-md); /* Space before status message */
+}
+
+/* #save-api-key-button is styled by .config-button */
+/* #clear-api-key-button is styled by .config-button and .clear-button */
+.clear-button {
+    background-color: var(--tertiary-surface-bg) !important; /* More neutral */
+    color: var(--text-secondary-color) !important;
+    border-color: var(--border-strong-color) !important;
+}
+.clear-button:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--tertiary-surface-bg) 85%, var(--border-color) 15%) !important;
+    color: var(--text-color) !important;
+    border-color: var(--border-highlight-color) !important;
+}
+
+
+.api-key-status-message {
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: var(--space-sm);
+    border-radius: var(--border-radius-sm);
+    margin-top: 0; /* api-key-buttons provides margin-bottom */
+    margin-bottom: var(--space-sm); /* Space before security note */
+    text-align: center;
+    border: 1px solid transparent;
+}
+.api-key-status-message.status-ok {
+    background-color: color-mix(in srgb, var(--accent-secondary) 15%, transparent);
+    color: var(--accent-secondary);
+    border-color: color-mix(in srgb, var(--accent-secondary) 35%, transparent);
+}
+.api-key-status-message.status-error {
+    background-color: color-mix(in srgb, var(--accent-error) 15%, transparent);
+    color: var(--accent-error);
+    border-color: color-mix(in srgb, var(--accent-error) 35%, transparent);
+}
+.api-key-status-message.status-processing {
+    background-color: color-mix(in srgb, var(--accent-tertiary) 15%, transparent);
+    color: var(--accent-tertiary);
+    border-color: color-mix(in srgb, var(--accent-tertiary) 35%, transparent);
+}
+.api-key-status-message.status-warning { /* For general info like key cleared */
+    background-color: color-mix(in srgb, var(--accent-tertiary) 12%, transparent); /* Similar to processing or a unique one */
+    color: var(--accent-tertiary);
+    border-color: color-mix(in srgb, var(--accent-tertiary) 30%, transparent);
+}
+
+
+.api-key-security-note {
+    font-size: 0.8rem;
+    color: var(--text-secondary-color);
+    font-style: italic;
+    text-align: center;
+    line-height: 1.4;
+    margin-top: 0; /* api-key-status-message provides margin-bottom */
+    margin-bottom: var(--space-md); /* Space before hr */
+}
+
+hr.sidebar-divider {
+    border: none;
+    height: 1px;
+    background-color: var(--divider-color);
+    margin-top: 0; /* api-key-section already has margin-bottom from .input-group */
+    margin-bottom: var(--space-lg); /* Space after the divider before next input-group */
+}
+
+/* React Mode Specific UI Styles */
+.react-orchestrator-pane {
+    padding: var(--space-xl); /* Consistent padding */
+    background-color: var(--secondary-surface-bg); /* Similar to iteration items or main sections */
+    border-radius: var(--border-radius-lg);
+    margin-bottom: var(--space-xl);
+    border: 1px solid var(--border-strong-color);
+    box-shadow: var(--shadow-lg);
+}
+
+.react-orchestrator-pane .pipeline-header { /* Reuse existing pipeline-header styles */
+    position: static; /* Override sticky if not needed here */
+    border-radius: var(--border-radius-md) var(--border-radius-md) 0 0; /* Match if it's the top element */
+    margin: calc(-1 * var(--space-xl)) calc(-1 * var(--space-xl)) var(--space-xl) calc(-1 * var(--space-xl)); /* Make it flush if it's first child */
+    padding: var(--space-lg);
+}
+
+
+.react-details-section {
+    background-color: color-mix(in srgb, var(--tertiary-surface-bg) 95%, black 5%); /* Slightly different from iteration details for distinction */
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    margin-bottom: var(--space-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden; /* Ensures border-radius is respected by children */
+}
+.react-details-section:last-child {
+    margin-bottom: 0;
+}
+.react-details-section summary {
+    padding: var(--space-md);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text-secondary-color);
+    background-color: color-mix(in srgb, var(--tertiary-surface-bg) 90%, black 10%);
+    border-bottom: 1px solid transparent; /* For when open */
+    transition: background-color var(--transition-speed-fast);
+    outline: none;
+}
+.react-details-section[open] summary {
+    border-bottom-color: var(--border-color);
+    color: var(--text-color);
+    background-color: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+}
+.react-details-section summary:hover {
+    background-color: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+}
+.react-details-section summary::-webkit-details-marker {
+    display: none; /* Using custom marker or none */
+}
+/* Basic custom marker, can be enhanced */
+.react-details-section summary::before {
+    content: '►'; /* Simple expand icon */
+    display: inline-block;
+    margin-right: var(--space-sm);
+    transition: transform var(--transition-speed-fast);
+    font-size: 0.8em;
+    color: var(--text-secondary-color);
+}
+.react-details-section[open] summary::before {
+    transform: rotate(90deg);
+}
+.react-details-section .detail-content {
+    padding: var(--space-lg);
+    background-color: var(--tertiary-surface-bg); /* Darker content area */
+}
+.react-details-section .prompt-block,
+.react-details-section .code-block {
+    margin-top: var(--space-sm);
+    margin-bottom: 0; /* Remove bottom margin if it's the only child or last child of detail-content */
+}
+
+
+/* Worker Agent Panes */
+.react-worker-content-pane .pipeline-header { /* Reusing .pipeline-header for worker title/status */
+    margin-bottom: var(--space-lg);
+    border-radius: var(--border-radius-md); /* Full radius for these headers */
+}
+.react-worker-content-pane .pipeline-header h4 {
+    font-size: 1.1rem; /* Slightly smaller than main pipeline H3 */
+    font-weight: 600;
+    margin:0;
+}
+.react-worker-content-pane .iteration-status { /* Reusing iteration-status for worker status */
+    font-size: 0.8rem;
+}
+.copy-react-worker-code-btn {
+    /* Uses .action-button */
+    background-color: var(--accent-secondary);
+    color: var(--text-title-color);
+    border-color: color-mix(in srgb, var(--accent-secondary) 70%, #000 30%);
+    margin-top: var(--space-md);
+}
+.copy-react-worker-code-btn:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--accent-secondary) 85%, white);
+}
+
+/* Final Output Pane */
+.react-final-output-pane {
+    margin-top: var(--space-xl);
+    padding: var(--space-xl);
+    background-color: var(--secondary-surface-bg);
+    border: 1px solid var(--border-strong-color);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--shadow-lg);
+}
+.react-final-output-pane h3 {
+    color: var(--text-title-color);
+    font-size: 1.2rem;
+    margin-bottom: var(--space-sm);
+}
+.react-final-output-pane p {
+    color: var(--text-secondary-color);
+    font-size: 0.9rem;
+    margin-bottom: var(--space-lg);
+}
+#react-final-appended-code {
+    max-height: 60vh; /* Allow more height for final code */
+    margin-bottom: var(--space-lg);
+}
+#download-react-app-code {
+    /* Uses .action-button */
+    background-color: var(--accent-pink-alt); /* Primary action color */
+    color: white;
+    border-color: color-mix(in srgb, var(--accent-pink-alt) 70%, #000 30%);
+    width: 100%; /* Make it full width like generate button */
+    padding: var(--space-lg);
+    font-size: 1rem;
+}
+#download-react-app-code:hover:not(:disabled) {
+    background-color: color-mix(in srgb, var(--accent-pink-alt) 85%, white);
+}
+
+
 .pipeline-selectors-container { display: flex; flex-direction: column; gap: var(--space-sm); }
 .pipeline-selector-item { display: flex; align-items: center; cursor: pointer; padding: var(--space-sm) var(--space-md); border-radius: var(--border-radius-md); transition: background-color var(--transition-speed-fast); }
 .pipeline-selector-item:hover { background-color: color-mix(in srgb, var(--accent-primary) 8%, transparent); }
