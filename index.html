@@ -1,4 +1,4 @@
-
+<!-- [OVERHAUL] index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,14 +6,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gemini Iterative Studio</title>
     <link rel="stylesheet" href="index.css">
-<script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://esm.sh/@google/genai@^1.4.0"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
+    <script type="importmap">
+    {
+      "imports": {
+        "@google/genai": "https://esm.sh/@google/genai@^1.4.0"
+      }
+    }
+    </script>
 </head>
 <body>
     <div id="preloader">
@@ -25,19 +24,21 @@
     </div>
 
     <div id="app-container">
-        <aside id="controls-sidebar" aria-label="Controls and Settings Panel">
-            <div class="input-group api-key-section">
+        <aside id="controls-sidebar" aria-labelledby="controls-sidebar-heading">
+            <h2 id="controls-sidebar-heading" class="sr-only">Controls and Settings Panel</h2>
+
+            <div class="input-group">
                 <h3 class="section-subtitle">API Key Configuration</h3>
                 <label for="api-key-input" class="model-select-label">Gemini API Key:</label>
-                <input type="password" id="api-key-input" placeholder="Enter your API Key" aria-labelledby="api-key-input">
+                <input type="password" id="api-key-input" class="input-base" placeholder="Enter your API Key">
                 <div class="api-key-buttons">
-                    <button id="save-api-key-button" class="config-button" type="button">Save Key</button>
-                    <button id="clear-api-key-button" class="config-button clear-button" type="button">Clear Key</button>
+                    <button id="save-api-key-button" class="button-base config-button" type="button">Save Key</button>
+                    <button id="clear-api-key-button" class="button-base config-button clear-button" type="button">Clear Key</button>
                 </div>
-                <p id="api-key-status" class="api-key-status-message" aria-live="polite">No API Key set. Key is stored in localStorage.</p>
-                <p class="api-key-security-note">Note: API keys saved here are stored in your browser's local storage. Avoid using on shared computers if the key is sensitive.</p>
-                <hr class="sidebar-divider">
+                <p id="api-key-status" class="api-key-status-message status-badge" aria-live="polite">Checking status...</p>
+                <p class="api-key-security-note">API keys are stored in your browser's local storage.</p>
             </div>
+
             <div class="input-group">
                 <h3 class="section-subtitle">Application Mode</h3>
                 <div id="app-mode-selector" role="radiogroup" aria-label="Select Application Mode">
@@ -66,261 +67,201 @@
             
             <div class="input-group">
                 <label for="initial-idea" id="initial-idea-label" class="model-select-label">HTML Idea:</label>
-                <textarea id="initial-idea" placeholder="E.g., a personal blog about cooking, a story about a dragon..." rows="5" aria-labelledby="initial-idea-label"></textarea>
+                <textarea id="initial-idea" class="input-base" placeholder="E.g., a personal blog about cooking..." rows="5"></textarea>
             </div>
             
             <div id="math-problem-image-input-container" class="input-group" style="display: none;">
                 <label for="math-problem-image-input" class="model-select-label">Upload Image (Optional):</label>
-                <input type="file" id="math-problem-image-input" class="file-input" accept="image/png, image/jpeg, image/webp">
-                <img id="math-problem-image-preview" src="#" alt="Image preview" style="display: none; max-width: 100%; height: auto; margin-top: 0.75rem; border-radius: var(--border-radius-small);"/>
+                <input type="file" id="math-problem-image-input" class="input-base file-input" accept="image/png, image/jpeg, image/webp">
+                <img id="math-problem-image-preview" src="#" alt="Image preview" style="display: none; max-width: 100%; height: auto;"/>
             </div>
 
             <div id="model-selection-container" class="input-group">
                 <label for="model-select" class="model-select-label">Select Model:</label>
-                <select id="model-select" class="model-select-dropdown" aria-label="Select Gemini Model">
+                <select id="model-select" class="input-base model-select-dropdown" aria-label="Select Gemini Model">
                     <option value="gemini-2.5-flash-preview-04-17">Gemini 2.5 Flash Preview 04-17</option>
-                    <!-- Do not remove these models, the application is called "Gemini Iterative Studio" and so it's important to experiemnt with newer models -->
                     <option value="gemini-2.5-pro"> Gemini 2.5 Pro </option>
                     <option value="gemini-2.5-flash"> Gemini 2.5 Flash </option>
                 </select>
             </div>
 
             <div id="temperature-selection-container" class="input-group">
-                <label class="pipeline-select-label model-select-label" id="pipeline-select-heading">Select Variants to Run (Temperature):</label>
+                <label class="model-select-label" id="pipeline-select-heading">Select Variants (Temperature):</label>
                 <div id="pipeline-selectors-container" class="pipeline-selectors-container" role="group" aria-labelledby="pipeline-select-heading">
                     <!-- Checkboxes will be dynamically inserted here -->
                 </div>
             </div>
 
-            <div class="config-management-section input-group">
-                <h3 class="section-subtitle">Configuration Management</h3>
+            <div class="input-group">
+                <h3 class="section-subtitle">Configuration</h3>
                 <div class="config-buttons-container">
-                    <button id="export-config-button" class="config-button" type="button">Export</button>
-                    <input type="file" id="import-config-input" accept=".json" style="display: none;" aria-labelledby="import-config-label-text">
-                    <label for="import-config-input" id="import-config-label" class="config-button" role="button" tabindex="0">
-                        <span id="import-config-label-text">Import</span>
+                    <button id="export-config-button" class="button-base config-button" type="button">Export</button>
+                    <input type="file" id="import-config-input" accept=".json" style="display: none;">
+                    <label for="import-config-input" id="import-config-label" class="button-base config-button" role="button" tabindex="0">
+                        <span>Import</span>
                     </label>
                 </div>
             </div>
             
             <div class="input-group">
-                 <button id="generate-button" type="button">Generate HTML</button>
-                 <div id="global-status" role="status" aria-live="polite">Ready.</div>
+                 <button id="generate-button" class="button-base" type="button">Generate HTML</button>
+                 <div id="global-status" class="status-badge" role="status" aria-live="polite">Ready.</div>
             </div>
 
-            <div id="custom-prompts-collapsible-container" class="custom-prompts-section input-group">
-                <div class="custom-prompts-header" role="button" tabindex="0" aria-expanded="true" aria-controls="custom-prompts-content-wrapper">
-                    <h3 class="section-subtitle" style="margin-bottom:0; border-bottom:0; padding-bottom:0;">Custom System Instructions & Prompts</h3>
+            <div id="custom-prompts-collapsible-container" class="input-group">
+                <div class="custom-prompts-header" role="button" tabindex="0" aria-expanded="false" aria-controls="custom-prompts-content-wrapper">
+                    <h3 class="section-subtitle">Custom Prompts</h3>
                     <span class="collapse-icon" aria-hidden="true">
-                        <!-- SVG will be updated by JS -->
+                        <svg viewBox="0 0 24 24" fill="currentColor" width="1.2em" height="1.2em"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"></path></svg>
                     </span>
                 </div>
-                <div id="custom-prompts-content-wrapper" class="custom-prompts-content">
+                <div id="custom-prompts-content-wrapper" class="custom-prompts-content-wrapper">
                     <p class="custom-prompts-description">
-                        Customize the system instructions and user prompt templates for each generation step.
-                        Placeholders vary by mode and step.
+                        Customize system instructions and user prompt templates for each generation step.
                     </p>
-
                     <div id="website-prompts-container">
-                        <!-- Group 1: Initial HTML Generation -->
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">1. Initial HTML Generation</h4>
                             <label for="sys-initial-gen" class="prompt-label">System Instruction:</label>
-                            <textarea id="sys-initial-gen" class="prompt-textarea" rows="5" aria-label="System Instruction for Initial HTML Generation"></textarea>
-                            <label for="user-initial-gen" class="prompt-label">User Prompt Template (Available: <code>{{initialIdea}}</code>):</label>
-                            <textarea id="user-initial-gen" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Initial HTML Generation"></textarea>
+                            <textarea id="sys-initial-gen" class="input-base prompt-textarea" rows="5"></textarea>
+                            <label for="user-initial-gen" class="prompt-label">User Prompt (<code>{{initialIdea}}</code>):</label>
+                            <textarea id="user-initial-gen" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
-                        <hr class="sub-divider-prompts">
-
-                        <!-- Group 2: Initial HTML Bug Fix & Polish -->
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">2. Initial HTML Bug Fix & Polish</h4>
                             <label for="sys-initial-bugfix" class="prompt-label">System Instruction:</label>
-                            <textarea id="sys-initial-bugfix" class="prompt-textarea" rows="5" aria-label="System Instruction for Initial HTML Bug Fix"></textarea>
-                            <label for="user-initial-bugfix" class="prompt-label">User Prompt Template (Available: <code>{{initialIdea}}</code>, <code>{{rawHtml}}</code>):</label>
-                            <textarea id="user-initial-bugfix" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Initial HTML Bug Fix"></textarea>
+                            <textarea id="sys-initial-bugfix" class="input-base prompt-textarea" rows="5"></textarea>
+                            <label for="user-initial-bugfix" class="prompt-label">User Prompt (<code>{{initialIdea}}</code>, <code>{{rawHtml}}</code>):</label>
+                            <textarea id="user-initial-bugfix" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
-                        <hr class="sub-divider-prompts">
-
-                        <!-- Group 3: Initial Feature Suggestion -->
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">3. Initial Feature Suggestion (HTML)</h4>
                             <label for="sys-initial-features" class="prompt-label">System Instruction:</label>
-                            <textarea id="sys-initial-features" class="prompt-textarea" rows="5" aria-label="System Instruction for Initial Feature Suggestion"></textarea>
-                            <label for="user-initial-features" class="prompt-label">User Prompt Template (Available: <code>{{initialIdea}}</code>, <code>{{currentHtml}}</code>):</label>
-                            <textarea id="user-initial-features" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Initial Feature Suggestion"></textarea>
+                            <textarea id="sys-initial-features" class="input-base prompt-textarea" rows="5"></textarea>
+                            <label for="user-initial-features" class="prompt-label">User Prompt (<code>{{initialIdea}}</code>, <code>{{currentHtml}}</code>):</label>
+                            <textarea id="user-initial-features" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
-                        <hr class="sub-divider-prompts">
-
-                        <!-- Group 4: Refinement - Stabilize & Implement Features -->
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">4. Refinement - Stabilize & Implement Features (HTML)</h4>
                             <label for="sys-refine-implement" class="prompt-label">System Instruction:</label>
-                            <textarea id="sys-refine-implement" class="prompt-textarea" rows="5" aria-label="System Instruction for Refinement Feature Implementation"></textarea>
-                            <label for="user-refine-implement" class="prompt-label">User Prompt Template (Available: <code>{{currentHtml}}</code>, <code>{{featuresToImplementStr}}</code>):</label>
-                            <textarea id="user-refine-implement" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Refinement Feature Implementation"></textarea>
+                            <textarea id="sys-refine-implement" class="input-base prompt-textarea" rows="5"></textarea>
+                            <label for="user-refine-implement" class="prompt-label">User Prompt (<code>{{currentHtml}}</code>, <code>{{featuresToImplementStr}}</code>):</label>
+                            <textarea id="user-refine-implement" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
-                        <hr class="sub-divider-prompts">
-
-                        <!-- Group 5: Refinement - Bug Fix & Completion -->
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">5. Refinement - Bug Fix & Completion (HTML)</h4>
                             <label for="sys-refine-bugfix" class="prompt-label">System Instruction:</label>
-                            <textarea id="sys-refine-bugfix" class="prompt-textarea" rows="5" aria-label="System Instruction for Refinement Bug Fix"></textarea>
-                            <label for="user-refine-bugfix" class="prompt-label">User Prompt Template (Available: <code>{{rawHtml}}</code>):</label>
-                            <textarea id="user-refine-bugfix" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Refinement Bug Fix"></textarea>
+                            <textarea id="sys-refine-bugfix" class="input-base prompt-textarea" rows="5"></textarea>
+                            <label for="user-refine-bugfix" class="prompt-label">User Prompt (<code>{{rawHtml}}</code>):</label>
+                            <textarea id="user-refine-bugfix" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
-                        <hr class="sub-divider-prompts">
-                        
-                        <!-- Group 6: Refinement - Feature Suggestion -->
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">6. Refinement - Feature Suggestion (HTML)</h4>
                             <label for="sys-refine-features" class="prompt-label">System Instruction:</label>
-                            <textarea id="sys-refine-features" class="prompt-textarea" rows="5" aria-label="System Instruction for Refinement Feature Suggestion"></textarea>
-                            <label for="user-refine-features" class="prompt-label">User Prompt Template (Available: <code>{{initialIdea}}</code>, <code>{{currentHtml}}</code>):</label>
-                            <textarea id="user-refine-features" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Refinement Feature Suggestion"></textarea>
+                            <textarea id="sys-refine-features" class="input-base prompt-textarea" rows="5"></textarea>
+                            <label for="user-refine-features" class="prompt-label">User Prompt (<code>{{initialIdea}}</code>, <code>{{currentHtml}}</code>):</label>
+                            <textarea id="user-refine-features" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
-                        <hr class="sub-divider-prompts">
-
-                        <!-- Group 7: Final Polish & Fix -->
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">7. Final Polish & Fix (HTML)</h4>
                             <label for="sys-final-polish" class="prompt-label">System Instruction:</label>
-                            <textarea id="sys-final-polish" class="prompt-textarea" rows="5" aria-label="System Instruction for Final Polish"></textarea>
-                            <label for="user-final-polish" class="prompt-label">User Prompt Template (Available: <code>{{currentHtml}}</code>):</label>
-                            <textarea id="user-final-polish" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Final Polish"></textarea>
+                            <textarea id="sys-final-polish" class="input-base prompt-textarea" rows="5"></textarea>
+                            <label for="user-final-polish" class="prompt-label">User Prompt (<code>{{currentHtml}}</code>):</label>
+                            <textarea id="user-final-polish" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
                     </div>
-
                     <div id="creative-prompts-container" style="display: none;">
-                        <!-- Group C1: Initial Draft Generation -->
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">1. Initial Draft Generation</h4>
                             <label for="sys-creative-initial-draft" class="prompt-label">System Instruction:</label>
-                            <textarea id="sys-creative-initial-draft" class="prompt-textarea" rows="5" aria-label="System Instruction for Initial Draft Generation"></textarea>
-                            <label for="user-creative-initial-draft" class="prompt-label">User Prompt Template (Available: <code>{{initialPremise}}</code>):</label>
-                            <textarea id="user-creative-initial-draft" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Initial Draft Generation"></textarea>
+                            <textarea id="sys-creative-initial-draft" class="input-base prompt-textarea" rows="5"></textarea>
+                            <label for="user-creative-initial-draft" class="prompt-label">User Prompt (<code>{{initialPremise}}</code>):</label>
+                            <textarea id="user-creative-initial-draft" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
-                        <hr class="sub-divider-prompts">
-
-                        <!-- Group C2: Initial Critique & Suggestion -->
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">2. Initial Critique & Suggestion</h4>
                             <label for="sys-creative-initial-critique" class="prompt-label">System Instruction:</label>
-                            <textarea id="sys-creative-initial-critique" class="prompt-textarea" rows="5" aria-label="System Instruction for Initial Critique & Suggestion"></textarea>
-                            <label for="user-creative-initial-critique" class="prompt-label">User Prompt Template (Available: <code>{{currentDraft}}</code>):</label>
-                            <textarea id="user-creative-initial-critique" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Initial Critique & Suggestion"></textarea>
+                            <textarea id="sys-creative-initial-critique" class="input-base prompt-textarea" rows="5"></textarea>
+                            <label for="user-creative-initial-critique" class="prompt-label">User Prompt (<code>{{currentDraft}}</code>):</label>
+                            <textarea id="user-creative-initial-critique" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
-                        <hr class="sub-divider-prompts">
-
-                        <!-- Group C3: Refinement - Revise Draft -->
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">3. Refinement - Revise Draft</h4>
                             <label for="sys-creative-refine-revise" class="prompt-label">System Instruction:</label>
-                            <textarea id="sys-creative-refine-revise" class="prompt-textarea" rows="5" aria-label="System Instruction for Refinement Draft Revision"></textarea>
-                            <label for="user-creative-refine-revise" class="prompt-label">User Prompt Template (Available: <code>{{currentDraft}}</code>, <code>{{critiqueToImplementStr}}</code>):</label>
-                            <textarea id="user-creative-refine-revise" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Refinement Draft Revision"></textarea>
+                            <textarea id="sys-creative-refine-revise" class="input-base prompt-textarea" rows="5"></textarea>
+                            <label for="user-creative-refine-revise" class="prompt-label">User Prompt (<code>{{currentDraft}}</code>, <code>{{critiqueToImplementStr}}</code>):</label>
+                            <textarea id="user-creative-refine-revise" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
-                        <hr class="sub-divider-prompts">
-
-                        <!-- Group C4: Refinement - New Critique & Suggestion -->
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">4. Refinement - New Critique & Suggestion</h4>
                             <label for="sys-creative-refine-critique" class="prompt-label">System Instruction:</label>
-                            <textarea id="sys-creative-refine-critique" class="prompt-textarea" rows="5" aria-label="System Instruction for Refinement New Critique"></textarea>
-                            <label for="user-creative-refine-critique" class="prompt-label">User Prompt Template (Available: <code>{{currentDraft}}</code>):</label>
-                            <textarea id="user-creative-refine-critique" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Refinement New Critique"></textarea>
+                            <textarea id="sys-creative-refine-critique" class="input-base prompt-textarea" rows="5"></textarea>
+                            <label for="user-creative-refine-critique" class="prompt-label">User Prompt (<code>{{currentDraft}}</code>):</label>
+                            <textarea id="user-creative-refine-critique" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
-                        <hr class="sub-divider-prompts">
-
-                        <!-- Group C5: Final Polish -->
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">5. Final Polish (Creative Writing)</h4>
                             <label for="sys-creative-final-polish" class="prompt-label">System Instruction:</label>
-                            <textarea id="sys-creative-final-polish" class="prompt-textarea" rows="5" aria-label="System Instruction for Creative Writing Final Polish"></textarea>
-                            <label for="user-creative-final-polish" class="prompt-label">User Prompt Template (Available: <code>{{currentDraft}}</code>):</label>
-                            <textarea id="user-creative-final-polish" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Creative Writing Final Polish"></textarea>
+                            <textarea id="sys-creative-final-polish" class="input-base prompt-textarea" rows="5"></textarea>
+                            <label for="user-creative-final-polish" class="prompt-label">User Prompt (<code>{{currentDraft}}</code>):</label>
+                            <textarea id="user-creative-final-polish" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
                     </div>
-
                     <div id="math-prompts-container" style="display: none;">
-                        <!-- Group M1: Initial Strategy Generation -->
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">1. Initial Strategy Generation</h4>
                             <label for="sys-math-initial-strategy" class="prompt-label">System Instruction:</label>
-                            <textarea id="sys-math-initial-strategy" class="prompt-textarea" rows="5" aria-label="System Instruction for Initial Math Strategy Generation"></textarea>
-                            <label for="user-math-initial-strategy" class="prompt-label">User Prompt Template (Available: <code>{{originalProblemText}}</code>, Image handled automatically if provided):</label>
-                            <textarea id="user-math-initial-strategy" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Initial Math Strategy Generation"></textarea>
+                            <textarea id="sys-math-initial-strategy" class="input-base prompt-textarea" rows="5"></textarea>
+                            <label for="user-math-initial-strategy" class="prompt-label">User Prompt (<code>{{originalProblemText}}</code>):</label>
+                            <textarea id="user-math-initial-strategy" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
-                        <hr class="sub-divider-prompts">
-                    
-                        <!-- Group M2: Sub-Strategy Generation -->
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">2. Sub-Strategy Generation</h4>
                             <label for="sys-math-sub-strategy" class="prompt-label">System Instruction:</label>
-                            <textarea id="sys-math-sub-strategy" class="prompt-textarea" rows="5" aria-label="System Instruction for Math Sub-Strategy Generation"></textarea>
-                            <label for="user-math-sub-strategy" class="prompt-label">User Prompt Template (Available: <code>{{originalProblemText}}</code>, <code>{{currentMainStrategy}}</code>, <code>{{otherMainStrategiesStr}}</code>, Image handled automatically):</label>
-                            <textarea id="user-math-sub-strategy" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Math Sub-Strategy Generation"></textarea>
+                            <textarea id="sys-math-sub-strategy" class="input-base prompt-textarea" rows="5"></textarea>
+                            <label for="user-math-sub-strategy" class="prompt-label">User Prompt (<code>...</code>):</label>
+                            <textarea id="user-math-sub-strategy" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
-                        <hr class="sub-divider-prompts">
-                    
-                        <!-- Group M3: Solution Attempt -->
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">3. Solution Attempt</h4>
                             <label for="sys-math-solution-attempt" class="prompt-label">System Instruction:</label>
-                            <textarea id="sys-math-solution-attempt" class="prompt-textarea" rows="5" aria-label="System Instruction for Math Solution Attempt"></textarea>
-                            <label for="user-math-solution-attempt" class="prompt-label">User Prompt Template (Available: <code>{{originalProblemText}}</code>, <code>{{currentSubStrategy}}</code>, Image handled automatically):</label>
-                            <textarea id="user-math-solution-attempt" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Math Solution Attempt"></textarea>
+                            <textarea id="sys-math-solution-attempt" class="input-base prompt-textarea" rows="5"></textarea>
+                            <label for="user-math-solution-attempt" class="prompt-label">User Prompt (<code>...</code>):</label>
+                            <textarea id="user-math-solution-attempt" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
                     </div>
-
                     <div id="agent-prompts-container" style="display: none;">
-                        <p class="custom-prompts-description">
-                           Configure the "Judge LLM" that designs the iterative process for your general request.
-                           It will analyze your initial request and generate specific prompts for each stage of the Agent's operation.
-                           Available placeholders for User Prompt: <code>{{initialRequest}}</code>, <code>{{NUM_AGENT_MAIN_REFINEMENT_LOOPS}}</code>.
-                        </p>
-                        <!-- Group A1: Judge LLM Configuration -->
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">Agent Mode: Judge LLM Configuration</h4>
                             <label for="sys-agent-judge-llm" class="prompt-label">System Instruction (for Judge LLM):</label>
-                            <textarea id="sys-agent-judge-llm" class="prompt-textarea" rows="8" aria-label="System Instruction for Agent Judge LLM"></textarea>
+                            <textarea id="sys-agent-judge-llm" class="input-base prompt-textarea" rows="8"></textarea>
                             <label for="user-agent-judge-llm" class="prompt-label">User Prompt Template (for Judge LLM):</label>
-                            <textarea id="user-agent-judge-llm" class="prompt-textarea" rows="3" aria-label="User Prompt Template for Agent Judge LLM"></textarea>
+                            <textarea id="user-agent-judge-llm" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
                     </div>
-
-                    <div id="react-prompts-container" style="display: none;"> <!-- Added for React mode -->
-                        <p class="custom-prompts-description">
-                           Configure the "Orchestrator Agent" for React Mode.
-                           It will analyze your React app request and generate a detailed plan (\`plan.txt\`)
-                           and specific prompts for 5 parallel worker LLMs that will build the React application components.
-                           Available placeholders for User Prompt: <code>{{user_request}}</code>.
-                        </p>
+                    <div id="react-prompts-container" style="display: none;">
                         <div class="prompt-group">
                             <h4 class="prompt-group-title">React Mode: Orchestrator Agent Configuration</h4>
                             <label for="sys-react-orchestrator" class="prompt-label">System Instruction (for Orchestrator Agent):</label>
-                            <textarea id="sys-react-orchestrator" class="prompt-textarea" rows="8" aria-label="System Instruction for React Orchestrator Agent"></textarea>
+                            <textarea id="sys-react-orchestrator" class="input-base prompt-textarea" rows="8"></textarea>
                             <label for="user-react-orchestrator" class="prompt-label">User Prompt Template (for Orchestrator Agent):</label>
-                            <textarea id="user-react-orchestrator" class="prompt-textarea" rows="3" aria-label="User Prompt Template for React Orchestrator Agent"></textarea>
+                            <textarea id="user-react-orchestrator" class="input-base prompt-textarea" rows="3"></textarea>
                         </div>
                     </div>
-
                 </div>
             </div>
         </aside>
 
         <main id="main-content" aria-labelledby="main-content-heading">
-             <h2 id="main-content-heading" class="sr-only">Generation Pipelines / Math Solver Output / Agent Process</h2>
-            <div id="tabs-nav-container" role="tablist" aria-label="Pipelines or Math Strategies or Agent Process Steps">
+             <h2 id="main-content-heading" class="sr-only">Generation Pipelines Output</h2>
+            <div id="tabs-nav-container" role="tablist" aria-label="Generation Variants">
                 <!-- Tab buttons will be dynamically inserted here -->
             </div>
             <div id="pipelines-content-container">
-                <!-- Pipeline content panes or Math Solver content will be dynamically inserted here -->
+                <!-- Pipeline content panes will be dynamically inserted here -->
             </div>
         </main>
     </div>
     <script type="module" src="index.tsx"></script>
-<script type="module" src="/index.tsx"></script>
 </body>
 </html>
