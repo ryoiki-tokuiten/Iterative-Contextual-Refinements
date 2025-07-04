@@ -407,6 +407,19 @@ hr.sidebar-divider {
 #api-key-input {
     font-family: var(--font-family-mono);
 }
+/* Style for browser autofill to match theme */
+#api-key-input:-webkit-autofill,
+#api-key-input:-webkit-autofill:hover,
+#api-key-input:-webkit-autofill:focus,
+#api-key-input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 40px var(--tertiary-surface-bg) inset !important;
+    box-shadow: 0 0 0 40px var(--tertiary-surface-bg) inset !important;
+    -webkit-text-fill-color: var(--text-color) !important;
+    caret-color: var(--text-color) !important;
+    font-family: var(--font-family-mono) !important;
+    transition: background-color 5000s ease-in-out 0s; /* Fix for delayed style application */
+}
+
 .api-key-buttons { display: flex; gap: var(--space-3); }
 .api-key-status-message {
     font-size: 0.85rem;
@@ -524,7 +537,7 @@ hr.sidebar-divider {
     box-shadow: var(--shadow-focus-ring);
 }
 
-#custom-prompts-collapsible-container.input-group {
+#custom-prompts-container {
     padding: 0;
     background-color: transparent;
     border: none;
@@ -567,30 +580,6 @@ hr.sidebar-divider {
 .custom-prompts-header .collapse-icon {
     transition: transform var(--transition-speed-base) var(--easing-standard);
     color: var(--text-secondary-color);
-}
-#custom-prompts-collapsible-container.is-open .custom-prompts-header {
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-    border-bottom-color: transparent;
-}
-.custom-prompts-content-wrapper {
-    max-height: 0;
-    overflow: hidden;
-    opacity: 0;
-    visibility: hidden;
-    background-color: var(--control-group-bg);
-    border: 1px solid var(--border-primary);
-    border-top: none;
-    border-bottom-left-radius: var(--radius-lg);
-    border-bottom-right-radius: var(--radius-lg);
-    transition: all var(--transition-speed-slow) var(--easing-standard);
-}
-#custom-prompts-collapsible-container.is-open .custom-prompts-content-wrapper {
-    max-height: 1000vh;
-    opacity: 1;
-    visibility: visible;
-    padding: var(--space-6);
-    border-top: 1px solid var(--border-secondary);
 }
 .custom-prompts-description {
     font-size: 0.875rem;
@@ -804,14 +793,6 @@ label#import-config-label { text-align: center; }
     background-color: color-mix(in srgb, var(--text-secondary-color) 10%, transparent);
     color: var(--text-secondary-color);
     border-color: color-mix(in srgb, var(--text-secondary-color) 25%, transparent);
-}
-
-#global-status {
-    padding: var(--space-3) var(--space-4);
-    font-size: 0.9rem;
-    line-height: 1.5;
-    box-shadow: var(--shadow-sm);
-    width: 100%;
 }
 
 
@@ -1177,7 +1158,100 @@ label#import-config-label { text-align: center; }
 }
 
 /* ==========================================================================
-   9. SCROLLBAR & MEDIA QUERIES
+   9. PROMPTS MODAL
+   - Full-screen modal for displaying and editing custom prompts.
+   - Includes backdrop blur effect and responsive behavior.
+   ========================================================================== */
+
+.prompts-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(4, 2, 10, 0.5); /* Semi-transparent dark bg */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 5000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: var(--space-8);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--transition-speed-base) var(--easing-standard), visibility 0s linear var(--transition-speed-base);
+}
+
+.prompts-modal-overlay.is-visible {
+    opacity: 1;
+    visibility: visible;
+    transition-delay: 0s;
+}
+
+.prompts-modal-content {
+    background: var(--primary-surface-bg);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-lg);
+    width: 100%;
+    max-width: 90vw;
+    height: 100%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+    transform: scale(0.95);
+    transition: transform var(--transition-speed-base) var(--easing-standard);
+}
+
+.prompts-modal-overlay.is-visible .prompts-modal-content {
+    transform: scale(1);
+}
+
+.prompts-modal-header {
+    padding: var(--space-5) var(--space-6);
+    border-bottom: 1px solid var(--border-secondary);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.prompts-modal-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--text-title-color);
+}
+
+.prompts-modal-close-button {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary-color);
+    font-size: 2.2rem;
+    font-weight: 300;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 var(--space-2);
+    transition: color var(--transition-speed-fast) ease-in-out, transform 0.1s ease-in-out;
+    border-radius: 50%;
+}
+
+.prompts-modal-close-button:hover {
+    color: var(--text-color);
+    transform: scale(1.1) rotate(90deg);
+    background-color: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+}
+
+.prompts-modal-body {
+    padding: var(--space-8);
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+
+/* ==========================================================================
+   10. SCROLLBAR & MEDIA QUERIES
    - Refined scrollbar for a more integrated look.
    - Updated media queries with the new spacing system for consistent responsiveness.
    ========================================================================== */
@@ -1210,6 +1284,10 @@ label#import-config-label { text-align: center; }
         max-height: none;
     }
     #controls-sidebar { max-height: 50vh; }
+    .prompts-modal-content {
+        max-width: 95vw;
+        max-height: 95vh;
+    }
 }
 
 @media (max-width: 768px) {
@@ -1225,4 +1303,8 @@ label#import-config-label { text-align: center; }
     .api-key-buttons { flex-direction: column; }
     #app-mode-selector { flex-wrap: wrap; }
     .radio-button-label { flex-basis: calc(50% - var(--space-1)); }
+
+    .prompts-modal-overlay { padding: var(--space-2); }
+    .prompts-modal-content { max-height: 100vh; max-width: 100vw; border-radius: 0; }
+    .prompts-modal-body { padding: var(--space-4); }
 }

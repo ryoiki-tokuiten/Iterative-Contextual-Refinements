@@ -220,7 +220,7 @@ export interface ReactPipelineState { // Exporting for potential use elsewhere
     orchestratorRawOutput?: string; // Full raw output from orchestrator (for debugging/inspection)
     stages: ReactModeStage[]; // Array of 5 worker agent stages
     finalAppendedCode?: string; // Combined code from all worker agents
-    status: 'idle' | 'orchestrating' | 'processing_workers' | 'completed' | 'error' | 'stopping' | 'stopped' | 'cancelled';
+    status: 'idle' | 'orchestrating' | 'processing_workers' | 'completed' | 'error' | 'stopping' | 'stopped' | 'cancelled' | 'orchestrating_retrying';
     error?: string;
     isStopRequested?: boolean;
     activeTabId?: string; // To track which of the 5 worker agent tabs is active in UI, e.g., "worker-0", "worker-1"
@@ -259,7 +259,8 @@ let isGenerating = false;
 let currentMode: ApplicationMode = 'website';
 let currentProblemImageBase64: string | null = null;
 let currentProblemImageMimeType: string | null = null;
-let isCustomPromptsOpen = false; // Default to closed/minimized
+// This variable is no longer used for the modal state but can be kept for config export/import
+let isCustomPromptsOpen = false;
 
 
 let customPromptsWebsiteState: CustomizablePromptsWebsite = JSON.parse(JSON.stringify(defaultCustomPromptsWebsite));
@@ -289,15 +290,18 @@ const pipelinesContentContainer = document.getElementById('pipelines-content-con
 const globalStatusDiv = document.getElementById('global-status') as HTMLElement;
 const pipelineSelectorsContainer = document.getElementById('pipeline-selectors-container') as HTMLElement;
 const appModeSelector = document.getElementById('app-mode-selector') as HTMLElement;
+
+// Prompts containers inside the modal
 const websitePromptsContainer = document.getElementById('website-prompts-container') as HTMLElement;
 const creativePromptsContainer = document.getElementById('creative-prompts-container') as HTMLElement;
 const mathPromptsContainer = document.getElementById('math-prompts-container') as HTMLElement;
 const agentPromptsContainer = document.getElementById('agent-prompts-container') as HTMLElement;
 const reactPromptsContainer = document.getElementById('react-prompts-container') as HTMLElement; // Added for React mode
 
-const customPromptsCollapsibleContainer = document.getElementById('custom-prompts-collapsible-container') as HTMLElement;
-const customPromptsHeader = customPromptsCollapsibleContainer.querySelector('.custom-prompts-header') as HTMLElement;
-const customPromptsContentWrapper = document.getElementById('custom-prompts-content-wrapper') as HTMLElement;
+// Custom Prompts Modal Elements
+const promptsModalOverlay = document.getElementById('prompts-modal-overlay') as HTMLElement;
+const promptsModalCloseButton = document.getElementById('prompts-modal-close-button') as HTMLButtonElement;
+const customPromptsHeader = document.querySelector('.custom-prompts-header') as HTMLElement;
 
 
 const exportConfigButton = document.getElementById('export-config-button') as HTMLButtonElement;
@@ -362,8 +366,6 @@ const exitFullscreenIconSvg = `
 <svg viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em" aria-hidden="true">
   <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
 </svg>`;
-const collapseIconSvgUp = `<svg viewBox="0 0 24 24" fill="currentColor" width="1.2em" height="1.2em"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path></svg>`;
-const collapseIconSvgDown = `<svg viewBox="0 0 24 24" fill="currentColor" width="1.2em" height="1.2em"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z"></path></svg>`;
 
 
 function initializeApiKey() {
@@ -401,8 +403,6 @@ function initializeApiKey() {
     if (keyToUse) {
         try {
             ai = new GoogleGenAI({ apiKey: keyToUse });
-            // globalStatusDiv.textContent = "API Client initialized. Ready."; // Avoid overriding other global statuses
-            // globalStatusDiv.className = 'status-completed';
             if (generateButton) generateButton.disabled = isGenerating; // Re-evaluate generateButton based on isGenerating
             return true;
         } catch (e: any) {
@@ -411,8 +411,6 @@ function initializeApiKey() {
                 apiKeyStatusElement.textContent = `Error initializing API with key: ${e.message}. Please check the key.`;
                 apiKeyStatusElement.className = 'api-key-status-message status-error';
             }
-            globalStatusDiv.textContent = `Error initializing API: ${e.message}`; // Show in global status too
-            globalStatusDiv.className = 'status-error';
             if (generateButton) generateButton.disabled = true;
             ai = null; // Ensure AI client is null if initialization fails
             return false;
@@ -512,35 +510,38 @@ function updateCustomPromptTextareasFromState() {
     }
 }
 
-function setCustomPromptsOpenState(newOpenState: boolean) {
-    isCustomPromptsOpen = newOpenState;
-
-    if (customPromptsCollapsibleContainer && customPromptsContentWrapper && customPromptsHeader) {
-        customPromptsContentWrapper.style.maxHeight = isCustomPromptsOpen ? '800vh' : '0'; // Use max-height for transition
-        customPromptsContentWrapper.style.opacity = isCustomPromptsOpen ? '1' : '0';
-        customPromptsContentWrapper.style.visibility = isCustomPromptsOpen ? 'visible' : 'hidden';
-        customPromptsContentWrapper.style.padding = isCustomPromptsOpen ? 'var(--space-md)' : '0 var(--space-md)';
-
-
-        const iconContainer = customPromptsHeader.querySelector('.collapse-icon');
-        if (iconContainer) {
-            iconContainer.innerHTML = isCustomPromptsOpen ? collapseIconSvgUp : collapseIconSvgDown;
+function setPromptsModalVisible(visible: boolean) {
+    if (promptsModalOverlay) {
+        if (visible) {
+            promptsModalOverlay.style.display = 'flex'; // Use flex to enable centering
+            // Delay adding class to allow transition to run
+            setTimeout(() => {
+                promptsModalOverlay.classList.add('is-visible');
+            }, 10); 
+        } else {
+            promptsModalOverlay.classList.remove('is-visible');
+             // Listen for transition end to set display none, prevents abrupt disappearance
+            promptsModalOverlay.addEventListener('transitionend', () => {
+                if (!promptsModalOverlay.classList.contains('is-visible')) {
+                    promptsModalOverlay.style.display = 'none';
+                }
+            }, { once: true });
         }
-        customPromptsCollapsibleContainer.setAttribute('aria-expanded', String(isCustomPromptsOpen));
-        customPromptsCollapsibleContainer.classList.toggle('is-open', isCustomPromptsOpen);
     }
 }
 
 function updateUIAfterModeChange() {
-    websitePromptsContainer.style.display = 'none';
-    creativePromptsContainer.style.display = 'none';
-    mathPromptsContainer.style.display = 'none';
-    agentPromptsContainer.style.display = 'none';
-    if (reactPromptsContainer) reactPromptsContainer.style.display = 'none'; // Added for React mode
+    // Hide all prompt containers initially
+    if(websitePromptsContainer) websitePromptsContainer.style.display = 'none';
+    if(creativePromptsContainer) creativePromptsContainer.style.display = 'none';
+    if(mathPromptsContainer) mathPromptsContainer.style.display = 'none';
+    if(agentPromptsContainer) agentPromptsContainer.style.display = 'none';
+    if(reactPromptsContainer) reactPromptsContainer.style.display = 'none';
 
-    mathProblemImageInputContainer.style.display = 'none';
-    modelSelectionContainer.style.display = 'block';
-    temperatureSelectionContainer.style.display = 'block';
+    // Default UI states
+    if(mathProblemImageInputContainer) mathProblemImageInputContainer.style.display = 'none';
+    if(modelSelectionContainer) modelSelectionContainer.style.display = 'block';
+    if(temperatureSelectionContainer) temperatureSelectionContainer.style.display = 'block';
 
     if (currentMode === 'website') {
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'HTML Idea:';
@@ -699,9 +700,12 @@ function updateControlsState() {
             }
         }
     }
-    if (customPromptsCollapsibleContainer) {
-        customPromptsCollapsibleContainer.classList.toggle('disabled-section', isGenerating);
-         if (customPromptsHeader) customPromptsHeader.style.pointerEvents = isGenerating ? 'none' : 'auto';
+    if (customPromptsHeader) {
+        const customPromptsContainer = document.getElementById('custom-prompts-container');
+        if (customPromptsContainer) {
+            customPromptsContainer.classList.toggle('disabled-section', isGenerating);
+        }
+        customPromptsHeader.style.pointerEvents = isGenerating ? 'none' : 'auto';
     }
 }
 
@@ -855,7 +859,7 @@ function renderPipelines() {
                 <h3 id="pipeline-heading-${pipeline.id}">${pipelineType} Variant ${pipeline.id + 1} (Temp: ${pipeline.temperature.toFixed(1)}, Model: ${pipeline.modelName})</h3>
                 <div class="pipeline-header-controls">
                     <span class="pipeline-status status-${pipeline.status}" id="pipeline-status-text-${pipeline.id}">${pipeline.status}</span>
-                    <button class="stop-pipeline-button action-button" id="stop-pipeline-btn-${pipeline.id}" title="Stop this ${pipelineType.toLowerCase()}" aria-label="Stop this ${pipelineType.toLowerCase()}" style="display: none;">Stop</button>
+                    <button class="stop-pipeline-button button-base action-button" id="stop-pipeline-btn-${pipeline.id}" title="Stop this ${pipelineType.toLowerCase()}" aria-label="Stop this ${pipelineType.toLowerCase()}" style="display: none;">Stop</button>
                 </div>
             </div>
             <ul class="iterations-list" id="iterations-list-${pipeline.id}">
@@ -944,8 +948,8 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
             generatedOutputHtml = `
                 <h4>Generated HTML Code (Stabilized/Polished):</h4>
                 <pre id="html-code-${pipelineId}-${iter.iterationNumber}" class="code-block language-html">${iter.generatedHtml ? escapeHtml(iter.generatedHtml) : (iter.status === 'cancelled' ? '<!-- HTML generation cancelled. -->' : '<!-- No valid HTML was generated or an error occurred. -->')}</pre>
-                <button id="download-html-${pipelineId}-${iter.iterationNumber}" class="download-html-button action-button" type="button" ${!iter.generatedHtml ? 'disabled' : ''}>Download HTML</button>
-                <button id="copy-html-${pipelineId}-${iter.iterationNumber}" class="copy-html-button action-button" type="button" ${!iter.generatedHtml ? 'disabled' : ''}>Copy HTML</button>
+                <button id="download-html-${pipelineId}-${iter.iterationNumber}" class="download-html-button button-base action-button" type="button" ${!iter.generatedHtml ? 'disabled' : ''}>Download HTML</button>
+                <button id="copy-html-${pipelineId}-${iter.iterationNumber}" class="copy-html-button button-base action-button" type="button" ${!iter.generatedHtml ? 'disabled' : ''}>Copy HTML</button>
             `;
         } else if (iter.status === 'pending') {
              generatedOutputHtml = '<p>No HTML generated for this iteration yet.</p>';
@@ -986,8 +990,8 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
             // Only add download/copy buttons if there's actual content to download/copy (not for iter 0 message)
             if (mainContentToDisplay && !(currentMode ==='agent' && iter.iterationNumber === 0)) {
                 generatedOutputHtml += `
-                <button id="download-text-${pipelineId}-${iter.iterationNumber}" class="download-text-button action-button" type="button" ${!mainContentToDisplay ? 'disabled' : ''}>Download Output</button>
-                <button id="copy-text-${pipelineId}-${iter.iterationNumber}" class="copy-text-button action-button" type="button" ${!mainContentToDisplay ? 'disabled' : ''}>Copy Output</button>
+                <button id="download-text-${pipelineId}-${iter.iterationNumber}" class="download-text-button button-base action-button" type="button" ${!mainContentToDisplay ? 'disabled' : ''}>Download Output</button>
+                <button id="copy-text-${pipelineId}-${iter.iterationNumber}" class="copy-text-button button-base action-button" type="button" ${!mainContentToDisplay ? 'disabled' : ''}>Copy Output</button>
                 `;
             }
         } else if (iter.status === 'pending') {
@@ -1017,12 +1021,12 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
         const fullscreenButtonId = `fullscreen-btn-${pipelineId}-${iter.iterationNumber}`;
 
         if (isEmptyGenHtml && (['pending', 'processing', 'retrying', 'error', 'cancelled'].includes(iter.status))) {
-            previewHtml = `<div class="preview-header"><h4>Live Preview:</h4><button id="${fullscreenButtonId}" class="fullscreen-toggle-button action-button" title="Toggle Fullscreen Preview" aria-label="Toggle Fullscreen Preview" disabled><span class="icon-fullscreen">${fullscreenIconSvg}</span><span class="icon-exit-fullscreen" style="display:none;">${exitFullscreenIconSvg}</span></button></div><div id="${previewContainerId}" class="html-preview-container no-preview-message-container"><p class="no-preview-message">${noPreviewMessage}</p></div>`;
+            previewHtml = `<div class="preview-header"><h4>Live Preview:</h4><button id="${fullscreenButtonId}" class="fullscreen-toggle-button button-base action-button" title="Toggle Fullscreen Preview" aria-label="Toggle Fullscreen Preview" disabled><span class="icon-fullscreen">${fullscreenIconSvg}</span><span class="icon-exit-fullscreen" style="display:none;">${exitFullscreenIconSvg}</span></button></div><div id="${previewContainerId}" class="html-preview-container no-preview-message-container"><p class="no-preview-message">${noPreviewMessage}</p></div>`;
         } else if (iter.generatedHtml && !isEmptyGenHtml) {
             const iframeSandboxOptions = "allow-scripts allow-same-origin allow-forms allow-popups";
-            previewHtml = `<div class="preview-header"><h4>Live Preview:</h4><button id="${fullscreenButtonId}" class="fullscreen-toggle-button action-button" title="Toggle Fullscreen Preview" aria-label="Toggle Fullscreen Preview"><span class="icon-fullscreen">${fullscreenIconSvg}</span><span class="icon-exit-fullscreen" style="display:none;">${exitFullscreenIconSvg}</span></button></div><div id="${previewContainerId}" class="html-preview-container"><iframe id="preview-iframe-${pipelineId}-${iter.iterationNumber}" srcdoc="${escapeHtml(iter.generatedHtml)}" sandbox="${iframeSandboxOptions}" title="HTML Preview for Iteration ${iter.iterationNumber} of Pipeline ${pipelineId+1}"></iframe></div>`;
+            previewHtml = `<div class="preview-header"><h4>Live Preview:</h4><button id="${fullscreenButtonId}" class="fullscreen-toggle-button button-base action-button" title="Toggle Fullscreen Preview" aria-label="Toggle Fullscreen Preview"><span class="icon-fullscreen">${fullscreenIconSvg}</span><span class="icon-exit-fullscreen" style="display:none;">${exitFullscreenIconSvg}</span></button></div><div id="${previewContainerId}" class="html-preview-container"><iframe id="preview-iframe-${pipelineId}-${iter.iterationNumber}" srcdoc="${escapeHtml(iter.generatedHtml)}" sandbox="${iframeSandboxOptions}" title="HTML Preview for Iteration ${iter.iterationNumber} of Pipeline ${pipelineId+1}"></iframe></div>`;
         } else if (['pending', 'processing', 'retrying', 'error', 'completed', 'cancelled'].includes(iter.status)) {
-            previewHtml = `<div class="preview-header"><h4>Live Preview:</h4><button id="${fullscreenButtonId}" class="fullscreen-toggle-button action-button" title="Toggle Fullscreen Preview" aria-label="Toggle Fullscreen Preview" disabled><span class="icon-fullscreen">${fullscreenIconSvg}</span><span class="icon-exit-fullscreen" style="display:none;">${exitFullscreenIconSvg}</span></button></div><div id="${previewContainerId}" class="html-preview-container no-preview-message-container"><p class="no-preview-message">${noPreviewMessage}</p></div>`;
+            previewHtml = `<div class="preview-header"><h4>Live Preview:</h4><button id="${fullscreenButtonId}" class="fullscreen-toggle-button button-base action-button" title="Toggle Fullscreen Preview" aria-label="Toggle Fullscreen Preview" disabled><span class="icon-fullscreen">${fullscreenIconSvg}</span><span class="icon-exit-fullscreen" style="display:none;">${exitFullscreenIconSvg}</span></button></div><div id="${previewContainerId}" class="html-preview-container no-preview-message-container"><p class="no-preview-message">${noPreviewMessage}</p></div>`;
         }
     }
 
@@ -1794,8 +1798,8 @@ function exportConfiguration() {
         activePipelineId: (currentMode !== 'math' && currentMode !== 'react') ? activePipelineId : null,
         activeMathProblemTabId: (currentMode === 'math' && activeMathPipeline) ? activeMathPipeline.activeTabId : undefined,
         // activeReactProblemTabId: (currentMode === 'react' && activeReactPipeline) ? activeReactPipeline.activeTabId : undefined, // For React worker tabs
-        globalStatusText: globalStatusDiv.textContent || "Ready.",
-        globalStatusClass: globalStatusDiv.className || "status-idle",
+        globalStatusText: "Ready.",
+        globalStatusClass: "status-idle",
         customPromptsWebsite: customPromptsWebsiteState,
         customPromptsCreative: customPromptsCreativeState,
         customPromptsMath: customPromptsMathState,
@@ -1805,8 +1809,6 @@ function exportConfiguration() {
     };
     const configJson = JSON.stringify(config, null, 2);
     downloadFile(configJson, `iterative_studio_config_${currentMode}.json`, 'application/json');
-    globalStatusDiv.textContent = "Configuration exported.";
-    globalStatusDiv.className = 'status-completed';
 }
 
 function handleImportConfiguration(event: Event) {
@@ -1940,23 +1942,18 @@ function handleImportConfiguration(event: Event) {
             
             updateCustomPromptTextareasFromState();
             
-            const importedOpenState = importedConfig.isCustomPromptsOpen === undefined ? false : importedConfig.isCustomPromptsOpen; // Default to false if not in config
-            setCustomPromptsOpenState(importedOpenState);
+            // Note: The prompts modal doesn't have a persistent open/closed state in the new design. It's always closed on load.
+            // const importedOpenState = importedConfig.isCustomPromptsOpen === undefined ? false : importedConfig.isCustomPromptsOpen;
+            // setPromptsModalVisible(importedOpenState);
             
-            globalStatusDiv.textContent = "Configuration imported successfully.";
-            globalStatusDiv.className = 'status-completed';
             updateControlsState();
         } catch (error: any) {
             console.error("Error importing configuration:", error);
-            globalStatusDiv.textContent = `Error importing: ${error.message}`;
-            globalStatusDiv.className = 'status-error';
         } finally {
             if (fileInputTarget) fileInputTarget.value = '';
         }
     };
     reader.onerror = () => {
-        globalStatusDiv.textContent = "Error reading import file.";
-        globalStatusDiv.className = 'status-error';
         if (fileInputTarget) fileInputTarget.value = '';
     };
     reader.readAsText(file);
@@ -1966,14 +1963,10 @@ function handleImportConfiguration(event: Event) {
 
 async function startMathSolvingProcess(problemText: string, imageBase64?: string | null, imageMimeType?: string | null) {
     if (!ai) {
-        globalStatusDiv.textContent = "API client not initialized.";
-        globalStatusDiv.className = 'status-error';
         return;
     }
     isGenerating = true;
     updateControlsState();
-    globalStatusDiv.textContent = "Initializing Math Solver...";
-    globalStatusDiv.className = 'status-processing';
 
     activeMathPipeline = {
         id: `math-process-${Date.now()}`,
@@ -2031,7 +2024,6 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
     };
 
     try {
-        globalStatusDiv.textContent = "Generating initial strategies...";
         const initialUserPrompt = renderPrompt(customPromptsMathState.user_math_initialStrategy, { originalProblemText: problemText });
         const initialPromptParts: Part[] = [{ text: initialUserPrompt }];
         if (imageBase64 && imageMimeType) {
@@ -2061,7 +2053,6 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
 
         if (currentProcess.isStopRequested) throw new PipelineStopRequestedError("Stopped after initial strategies.");
 
-        globalStatusDiv.textContent = "Generating sub-strategies...";
         await Promise.allSettled(currentProcess.initialStrategies.map(async (mainStrategy, mainIndex) => {
             if (currentProcess.isStopRequested) {
                 mainStrategy.status = 'cancelled';
@@ -2113,7 +2104,6 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
 
         if (currentProcess.isStopRequested) throw new PipelineStopRequestedError("Stopped after sub-strategies.");
 
-        globalStatusDiv.textContent = "Attempting solutions...";
         const solutionPromises: Promise<void>[] = [];
         currentProcess.initialStrategies.forEach((mainStrategy, mainIndex) => {
             mainStrategy.subStrategies.forEach(async (subStrategy, subIndex) => {
@@ -2162,24 +2152,16 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
         if (currentProcess.isStopRequested) throw new PipelineStopRequestedError("Stopped during solution attempts.");
 
         currentProcess.status = 'completed';
-        globalStatusDiv.textContent = "Math solving process completed.";
-        globalStatusDiv.className = 'status-completed';
 
     } catch (error: any) {
         if (currentProcess) {
             if (error instanceof PipelineStopRequestedError) {
                 currentProcess.status = 'stopped';
                 currentProcess.error = error.message;
-                globalStatusDiv.textContent = "Math solving process stopped by user.";
             } else {
                 currentProcess.status = 'error';
                 currentProcess.error = error.message || "An unknown error occurred in math solver.";
-                globalStatusDiv.textContent = `Error in Math Solver: ${currentProcess.error}`;
-                globalStatusDiv.className = 'status-error';
             }
-        } else {
-             globalStatusDiv.textContent = `Error: ${error.message}`;
-             globalStatusDiv.className = 'status-error';
         }
         console.error("Error in Math Solver process:", error);
     } finally {
@@ -2372,14 +2354,10 @@ function renderActiveMathPipeline() {
 
 async function startReactModeProcess(userRequest: string) {
     if (!ai) {
-        globalStatusDiv.textContent = "API client not initialized.";
-        globalStatusDiv.className = 'status-error';
         return;
     }
     isGenerating = true;
     updateControlsState();
-    globalStatusDiv.textContent = "Initializing React Mode Orchestrator...";
-    globalStatusDiv.className = 'status-processing';
 
     const orchestratorSysPrompt = customPromptsReactState.sys_orchestrator;
     const orchestratorUserPrompt = renderPrompt(customPromptsReactState.user_orchestrator, { user_request: userRequest });
@@ -2398,10 +2376,9 @@ async function startReactModeProcess(userRequest: string) {
         isStopRequested: false,
         activeTabId: 'worker-0', // Default to first worker tab
     };
-    // renderReactModePipeline(); // Call to render initial UI for React mode
+    renderReactModePipeline(); 
 
     try {
-        globalStatusDiv.textContent = "Orchestrator processing request...";
         activeReactPipeline.orchestratorRetryAttempt = 0;
 
         let orchestratorResponseText = "";
@@ -2410,16 +2387,11 @@ async function startReactModeProcess(userRequest: string) {
             activeReactPipeline.orchestratorRetryAttempt = attempt;
             activeReactPipeline.status = attempt > 0 ? 'orchestrating_retrying' : 'orchestrating'; // More specific status
             if (attempt > 0) {
-                globalStatusDiv.textContent = `Orchestrator retrying (${attempt}/${MAX_RETRIES})...`;
                 await new Promise(resolve => setTimeout(resolve, INITIAL_DELAY_MS * Math.pow(BACKOFF_FACTOR, attempt)));
             }
             renderReactModePipeline(); // Update UI to show retrying or initial processing state
 
             try {
-                // TODO: Determine appropriate temperature and model for orchestrator. For now, using fixed values.
-                // The orchestrator might benefit from a higher temperature if creative planning is needed,
-                // or lower if strict adherence to a complex output format is paramount.
-                // Model selection could also be a factor. Using the globally selected model for now.
                 const selectedModel = modelSelectElement.value || "gemini-2.5-pro"; // Fallback if not selected
 
                 const apiResponse = await callGemini(orchestratorUserPrompt, 1.0, selectedModel, orchestratorSysPrompt, true); // Expecting JSON output
@@ -2450,18 +2422,15 @@ async function startReactModeProcess(userRequest: string) {
                     const stage = activeReactPipeline.stages[index];
                     stage.title = agentPromptData.title || `Worker Agent ${index + 1}`;
                     stage.systemInstruction = agentPromptData.system_instruction;
-                    stage.userPrompt = agentPromptData.user_prompt_template; // Storing the template - TYPO FIX
-                    // Rendered user prompt will be done just before calling the worker agent
+                    stage.userPrompt = agentPromptData.user_prompt_template;
                 }
             });
 
             activeReactPipeline.status = 'processing_workers'; // Next status
-            globalStatusDiv.textContent = "Orchestrator completed. Preparing worker agents...";
-
-            // renderReactModePipeline(); // Update UI before starting workers
+            renderReactModePipeline();
 
             // Kick off worker agents in parallel
-            await runReactWorkerAgents(); // This will internally handle further status updates
+            await runReactWorkerAgents();
 
         } catch (parseError: any) {
             console.error("Failed to parse Orchestrator JSON response:", parseError, "Cleaned JSON string:", orchestratorJson, "Raw response:", orchestratorResponseText);
@@ -2474,25 +2443,18 @@ async function startReactModeProcess(userRequest: string) {
             if (error instanceof PipelineStopRequestedError) {
                 activeReactPipeline.status = 'stopped';
                 activeReactPipeline.error = error.message;
-                globalStatusDiv.textContent = "React Mode process stopped by user.";
             } else {
                 activeReactPipeline.status = 'failed';
                 if(!activeReactPipeline.error) activeReactPipeline.error = error.message || "An unknown error occurred in React Orchestrator.";
-                globalStatusDiv.textContent = `Error in React Orchestrator: ${activeReactPipeline.error}`;
-                globalStatusDiv.className = 'status-error';
             }
-        } else {
-            globalStatusDiv.textContent = `Error: ${error.message}`; // Should not happen if activeReactPipeline is always initialized
-            globalStatusDiv.className = 'status-error';
         }
         console.error("Error in React Mode Orchestration process:", error);
     } finally {
-        // isGenerating is handled by runReactWorkerAgents if successful, or here if orchestrator fails early
         if (activeReactPipeline && activeReactPipeline.status !== 'processing_workers' && activeReactPipeline.status !== 'orchestrating' && activeReactPipeline.status !== 'orchestrating_retrying' && activeReactPipeline.status !== 'stopping') {
             isGenerating = false;
         }
         updateControlsState();
-        renderReactModePipeline(); // Update UI with final orchestrator status/output
+        renderReactModePipeline();
     }
 }
 
@@ -2529,8 +2491,8 @@ function renderReactModePipeline() {
         <div class="pipeline-header">
              <h3>React App Orchestration</h3>
              <div class="pipeline-header-controls">
-                <span class="pipeline-status status-${pipeline.status}" id="react-orchestrator-status-text">${pipeline.status}</span>
-                <button class="stop-pipeline-button action-button" id="stop-react-pipeline-btn" title="Stop React App Generation" aria-label="Stop React App Generation" style="display: ${pipeline.status === 'orchestrating' || pipeline.status === 'processing_workers' ? 'inline-flex' : 'none'};">
+                <span class="pipeline-status status-${pipeline.status}" id="react-orchestrator-status-text">${pipeline.status.replace('_', ' ')}</span>
+                <button class="stop-pipeline-button button-base action-button" id="stop-react-pipeline-btn" title="Stop React App Generation" aria-label="Stop React App Generation" style="display: ${pipeline.status === 'orchestrating' || pipeline.status === 'processing_workers' ? 'inline-flex' : 'none'};">
                     ${pipeline.status === 'stopping' ? 'Stopping...' : 'Stop'}
                 </button>
             </div>
@@ -2630,7 +2592,7 @@ function renderReactModePipeline() {
                 <summary>Generated Code/Content</summary>
                 <div class="detail-content">
                     <pre class="code-block language-javascript" id="react-worker-${stage.id}-code-block">${escapeHtml(stage.generatedContent)}</pre>
-                     <button class="action-button copy-react-worker-code-btn" data-worker-id="${stage.id}">Copy Code</button>
+                     <button class="button-base action-button copy-react-worker-code-btn" data-worker-id="${stage.id}">Copy Code</button>
                 </div>
             </details>`;
         } else if (stage.status === 'completed' && !stage.generatedContent) {
@@ -2667,7 +2629,7 @@ function renderReactModePipeline() {
             <h3>Final Aggregated Application Code</h3>
             <p>The following is a concatenation of outputs from successful worker agents. File markers (e.g., // --- FILE: src/App.tsx ---) should indicate intended file paths.</p>
             <pre id="react-final-appended-code" class="code-block language-javascript">${escapeHtml(pipeline.finalAppendedCode)}</pre>
-            <button id="download-react-app-code" class="action-button" type="button">Download Full App Code</button>
+            <button id="download-react-app-code" class="button-base action-button" type="button">Download Full App Code</button>
         `;
         pipelinesContentContainer.appendChild(finalOutputPane);
 
@@ -2704,9 +2666,6 @@ async function runReactWorkerAgents() {
         console.error("RunReactWorkerAgents called in an invalid state.");
         return;
     }
-
-    globalStatusDiv.textContent = "Processing worker agent requests...";
-    globalStatusDiv.className = 'status-processing';
     renderReactModePipeline(); // Update UI to show workers starting
 
     const workerPromises = activeReactPipeline.stages.map(async (stage) => {
@@ -2740,6 +2699,8 @@ async function runReactWorkerAgents() {
                     throw new PipelineStopRequestedError(`Worker Agent ${stage.id} execution stopped by user.`);
                 }
                 stage.retryAttempt = attempt;
+                stage.status = attempt > 0 ? 'retrying' : 'processing';
+                
                 if (attempt > 0) {
                     await new Promise(resolve => setTimeout(resolve, INITIAL_DELAY_MS * Math.pow(BACKOFF_FACTOR, attempt)));
                 }
@@ -2747,21 +2708,21 @@ async function runReactWorkerAgents() {
 
                 try {
                     const selectedModel = modelSelectElement.value || "gemini-2.5-pro";
-                    const workerTemp = 0.7;
+                    const workerTemp = 0.7; // Moderate temperature for workers
 
                     const apiResponse = await callGemini(stage.renderedUserPrompt, workerTemp, selectedModel, stage.systemInstruction, false);
                     stageResponseText = apiResponse.text;
-                    stage.generatedContent = cleanOutputByType(stageResponseText, 'text');
+                    stage.generatedContent = cleanOutputByType(stageResponseText, 'text'); // Assuming text/code output
                     stage.status = 'completed';
                     stage.error = undefined;
                     renderReactModePipeline();
-                    break;
+                    break; // Exit retry loop on success
                 } catch (e: any) {
                     console.warn(`Worker Agent ${stage.id}, Attempt ${attempt + 1} failed: ${e.message}`);
                     stage.error = `Attempt ${attempt + 1} failed: ${e.message || 'Unknown API error'}`;
                     if (attempt === MAX_RETRIES) {
                         renderReactModePipeline();
-                        throw e;
+                        throw e; // Rethrow after final attempt fails
                     }
                 }
             }
@@ -2786,17 +2747,11 @@ async function runReactWorkerAgents() {
 
         if (activeReactPipeline.isStopRequested || allCancelled) {
             activeReactPipeline.status = 'stopped';
-            globalStatusDiv.textContent = "React Mode process stopped.";
         } else if (anyAgentFailed) {
             activeReactPipeline.status = 'failed';
-            globalStatusDiv.textContent = "React Mode completed with one or more worker agent errors.";
-            globalStatusDiv.className = 'status-error';
         } else {
             activeReactPipeline.status = 'completed';
-            globalStatusDiv.textContent = "React Mode process completed. Aggregating outputs...";
-            globalStatusDiv.className = 'status-completed';
             aggregateReactOutputs();
-            globalStatusDiv.textContent = "React Mode process completed. Outputs aggregated.";
         }
     }
 
@@ -2817,14 +2772,7 @@ function aggregateReactOutputs() {
 
     activeReactPipeline.stages.forEach(stage => {
         if (stage.status === 'completed' && stage.generatedContent) {
-            // Assuming orchestrator instructed agents to use a specific file marker format
-            // For now, we'll just take the title and the content.
-            // The plan.txt should ideally contain the file path for each agent's output.
-            // The agent's system prompt should instruct it to prefix its output with this file path.
-            // E.g. // --- FILE: src/components/MyComponent.tsx ---
             combinedCode += `/* --- Code from Agent ${stage.id + 1}: ${stage.title} --- */\n`;
-            // If the generatedContent itself already contains the file marker, that's even better.
-            // For now, this structure clearly separates agent outputs.
             combinedCode += `${stage.generatedContent.trim()}\n\n`;
         } else if (stage.status === 'error') {
             combinedCode += `/* --- Agent ${stage.id + 1}: ${stage.title} - FAILED --- */\n`;
@@ -2835,7 +2783,6 @@ function aggregateReactOutputs() {
     });
     activeReactPipeline.finalAppendedCode = combinedCode;
     console.log("Final appended code generated:", activeReactPipeline.finalAppendedCode.substring(0, 1000) + "...");
-    // UI will need to be updated here via renderReactModePipeline() to show the download button etc.
 }
 
 // ----- END REACT MODE SPECIFIC FUNCTIONS -----
@@ -2858,8 +2805,6 @@ function initializeUI() {
                 if(initializeApiKey()){ // Attempt to re-initialize with the new key
                     apiKeyStatusElement.textContent = "API Key saved and client initialized.";
                     apiKeyStatusElement.className = 'api-key-status-message status-ok';
-                    globalStatusDiv.textContent = "API Client ready."; // Update global status as well
-                    globalStatusDiv.className = 'status-completed';
                 } else {
                     // initializeApiKey will set its own error messages
                 }
@@ -2879,8 +2824,6 @@ function initializeUI() {
             apiKeyStatusElement.textContent = "API Key cleared from Local Storage. Enter a new key to use the API.";
             apiKeyStatusElement.className = 'api-key-status-message status-error';
             if (generateButton) generateButton.disabled = true; // Disable generation
-            globalStatusDiv.textContent = "API Key cleared. Operations requiring API will fail.";
-            globalStatusDiv.className = 'status-warning';
             initializeApiKey(); // Re-run to update status and button states based on fallback (if any)
         });
     }
@@ -2912,31 +2855,12 @@ function initializeUI() {
                     alert("Please select at least one variant (temperature) to run.");
                     return;
                 }
-                globalStatusDiv.textContent = "Processing... Some variants may take several minutes.";
-                globalStatusDiv.className = 'status-processing';
 
                 const runningPromises = pipelinesState.map(p => runPipeline(p.id, initialIdea));
                 
                 try {
                     await Promise.allSettled(runningPromises);
                 } finally {
-                    const allCompleted = pipelinesState.every(p => p.status === 'completed');
-                    const anyFailed = pipelinesState.some(p => p.status === 'failed');
-                    const anyStopped = pipelinesState.some(p => p.status === 'stopped');
-
-                    if (anyFailed) {
-                        globalStatusDiv.textContent = "One or more variants failed.";
-                        globalStatusDiv.className = 'status-error';
-                    } else if (anyStopped && !anyFailed) {
-                        globalStatusDiv.textContent = "One or more variants were stopped.";
-                        globalStatusDiv.className = 'status-stopped';
-                    } else if (allCompleted) {
-                        globalStatusDiv.textContent = "All variants completed successfully.";
-                        globalStatusDiv.className = 'status-completed';
-                    } else {
-                         globalStatusDiv.textContent = "Processing finished. Check variant statuses.";
-                         globalStatusDiv.className = 'status-idle'; 
-                    }
                     isGenerating = false;
                     updateControlsState();
                 }
@@ -2974,13 +2898,21 @@ function initializeUI() {
         });
     }
     
-    if (customPromptsHeader && customPromptsContentWrapper && customPromptsCollapsibleContainer) {
-        setCustomPromptsOpenState(isCustomPromptsOpen); // Initial UI setup for collapsible
-
-        customPromptsHeader.addEventListener('click', () => {
-            setCustomPromptsOpenState(!isCustomPromptsOpen); // Toggle and update UI
+    if (customPromptsHeader) {
+        customPromptsHeader.addEventListener('click', () => setPromptsModalVisible(true));
+    }
+    if (promptsModalCloseButton) {
+        promptsModalCloseButton.addEventListener('click', () => setPromptsModalVisible(false));
+    }
+    if (promptsModalOverlay) {
+        promptsModalOverlay.addEventListener('click', (e) => {
+            // Close if clicking on the overlay itself, not the content
+            if (e.target === promptsModalOverlay) {
+                setPromptsModalVisible(false);
+            }
         });
     }
+
 
     if (exportConfigButton) {
         exportConfigButton.addEventListener('click', exportConfiguration);
