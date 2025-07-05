@@ -1170,8 +1170,8 @@ label#import-config-label { text-align: center; }
     width: 100vw;
     height: 100vh;
     background-color: rgba(4, 2, 10, 0.5); /* Semi-transparent dark bg */
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     z-index: 5000;
     display: flex;
     justify-content: center;
