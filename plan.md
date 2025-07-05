@@ -1,137 +1,537 @@
-# **`plan.md`: Feature Enhancement Plan**
+**YOU MUST LIST "ALL" THE FILES FIRST AND READ "ALL" OF THEM BEFORE PROCEEDING. This is mandatory and failure to do so will be considered as failure of the entire task."
 
-This document outlines the implementation of four high-impact features for the Iterative Studio. The focus is on *what* these features are, what they will look like, and how a user will interact with them, rather than the specific code implementation.
+# **Enhanced Implementation Plan: Iterative Studio Feature Overhaul**
 
----
-
-### **1. Feature: Pipeline Graph Visualization**
-
-#### **1.1. Objective**
-
-To provide a clear, intuitive, and interactive graph-based visualization of the application's workflows. This will replace the simple text list with a powerful visual map, making it easier for researchers to understand complex, parallel, and tree-structured processes at a glance.
-
-#### **1.2. User Interaction & Layout**
-
-1.  **View Toggling:**
-    *   In the main content area, directly above the tabs for each pipeline variant, a new "View" toggle control will appear whenever a pipeline is active.
-    *   This control will feature two icon buttons: "List View" (the current default) and "Graph View". The active view's button will be highlighted.
-    *   Clicking the "Graph View" button will cause the current list of iterations to fade out and be replaced by the new interactive graph, which will automatically zoom to fit the entire workflow.
-
-2.  **Graph Interaction:**
-    *   Users can pan around the graph by clicking and dragging the background.
-    *   Users can zoom in and out using their mouse wheel or the provided on-screen zoom controls.
-    *   A mini-map will be visible in a corner of the screen, showing a high-level overview of the entire graph and the user's current position.
-    *   Hovering over a node in the graph will show a tooltip with more details. Clicking a node will select it, which can be used for future features like opening a detailed side-panel.
-
-#### **1.3. Design & Style**
-
-The graph visualization will be seamlessly integrated into the existing "Nebula Flow" theme.
-
-*   **Nodes (Workflow Steps):**
-    *   Each step in the pipeline (e.g., an iteration, a strategy, an agent task) will be represented as a rectangular node with rounded corners.
-    *   Nodes will use the `secondary-surface-bg` for their background, with a `border-primary` border. Selected nodes will have a `border-focus` colored border and a subtle glow.
-    *   Each node will contain a clear title (e.g., "Step 1: Initial Gen"), a short descriptive label (e.g., "Refine & Suggest"), and a status badge (e.g., `completed`, `running`, `error`) that uses the same colors and styles as the existing status badges.
-
-*   **Edges (Connections):**
-    *   Lines connecting the nodes will be colored to represent the status of the process:
-        *   **Green (`accent-secondary`):** Completed successfully.
-        *   **Yellow/Gold (`accent-tertiary`):** Currently running or processing. These lines will have a subtle animation, like a slow-moving pulse, to indicate live activity.
-        *   **Red (`accent-error`):** The process failed.
-        *   **Gray (`text-secondary-color`):** Pending or cancelled.
-    *   The edges will be slightly thick with rounded connections to the nodes, giving the graph a clean, modern feel.
-
-#### **1.4. Mode-Specific Graph Structures**
-
-The graph's structure will intelligently adapt to the selected application mode:
-
-*   **Website / Creative / Agent Modes:** The graph will be a clear, top-to-bottom **linear chain**. It will start with a root node representing the "Variant" (e.g., "Variant 1, Temp: 0.7") and flow downwards through each iteration step, showing the simple, sequential nature of the process.
-
-*   **Math Mode:** The graph will be a **tree structure**, perfectly visualizing the problem-solving strategy.
-    *   **Root:** A single node at the top representing the "Original Problem".
-    *   **Main Branches:** Branching out from the root will be nodes for each "Initial Strategy". This immediately shows the different high-level approaches being taken.
-    *   **Sub-Branches:** Each "Initial Strategy" node will then branch out into its "Sub-Strategies", creating a second level of the tree.
-    *   **Leaves:** The final nodes on each path will be the "Solution Attempts". This layout makes it instantly obvious which strategic paths were explored and which were successful, dead-ends, or errored out.
-
-*   **React Mode:** The graph will be a **hub-and-spoke (or star) diagram**, illustrating the parallel agent architecture.
-    *   **Center Hub:** A central "Orchestrator Agent" node.
-    *   **Spokes:** Five "Worker Agent" nodes will be arranged around the orchestrator, with lines connecting from the center hub to each worker. This visualizes that the orchestrator initiates all parallel tasks.
-    *   **Collector Node:** A final "Aggregated Output" node will appear at the bottom, with lines converging into it from all five worker agents, showing how their individual outputs combine to form the final result.
+This document provides a detailed, file-by-file implementation plan for the features outlined in the original proposal. It is designed to be used by an AI developer to perform the required updates across the entire codebase, ensuring a consistent and high-quality implementation.
 
 ---
 
-### **2. Feature: Side-by-Side Diff Viewer**
+### **1. Feature: Collapsible Sidebar Sections**
 
-#### **2.1. Objective**
+**Objective:** To improve UI/UX by making sidebar configuration groups collapsible, reducing visual clutter and allowing users to focus. This will be implemented using the native `<details>` and `<summary>` HTML elements for simplicity, accessibility, and performance.
 
-To allow researchers to directly compare the output of any two generation steps, making it easy to see the exact changes and analyze the impact of different prompts or parameters.
+**Affected Files:**
+- `index.html`
+- `index.css`
+- `index.tsx` (for state persistence)
 
-#### **2.2. User Interaction & Layout**
+#### **1.1. `index.html` Modifications**
 
-1.  **Initiating a Comparison:**
-    *   Inside the details of any completed iteration that has generated content (HTML, text, or code), a new "Compare" button will be added next to the existing "Download" and "Copy" buttons.
-    *   Clicking this "Compare" button will open a large, full-screen modal window, similar to the "Custom Prompts" editor. The item clicked will be designated as the "Source" for the comparison.
+The structure of the controls sidebar will be refactored. Each `.input-group` that acts as a self-contained section will be converted into a `<details>` element.
 
-2.  **The Diff Modal Layout:**
-    *   The modal will be divided into two main panels:
-        *   **Left Panel (Selector):** A narrow panel (approx. 25% of the width) will display a collapsible tree view of all other available outputs from all pipeline variants. The user can navigate this tree and click on any other iteration to select it as the "Comparison Target". Items that are the source or have no content will be disabled.
-        *   **Right Panel (Viewer):** This larger panel will initially be empty. Once the user selects a "Comparison Target" from the left panel, this area will populate with the side-by-side diff.
+**Action:**
+1.  Locate the `<aside id="controls-sidebar">`.
+2.  For each of the following sections, replace the wrapping `<div class="input-group">` with `<details class="input-group" id="section-ID">`, and the inner `<h3 class="section-subtitle">` with `<summary class="section-subtitle">`. Add a chevron icon for visual feedback.
+    *   **API Key Configuration:** `id="section-api-key"`
+    *   **Application Mode:** `id="section-app-mode"`
+    *   **Main Input (Idea/Premise/Problem):** `id="section-main-input"` (The div containing `initial-idea-label` and `initial-idea`)
+    *   **Math Image Upload:** `id="math-problem-image-input-container"` (This is already a div, convert it to `<details>`)
+    *   **Model Selection:** `id="model-selection-container"` (Convert to `<details>`)
+    *   **Temperature Selection:** `id="temperature-selection-container"` (Convert to `<details>`)
+    *   **Configuration Import/Export:** `id="section-config-management"` (The div containing `config-buttons-container`)
+    *   **Custom Prompts:** The existing `div#custom-prompts-container` should be converted to `<details class="input-group" id="section-custom-prompts">`. The inner `.custom-prompts-header` becomes the `<summary>`.
 
-3.  **Viewing the Diff:**
-    *   The right panel will show the two text blocks side-by-side. Lines that were removed from the source will be highlighted in red, and lines that were added in the target will be highlighted in green. Unchanged lines will have a neutral background.
-    *   The user can scroll through the diff to examine all changes.
+**Example Transformation:**
+*   **Current:**
+    ```html
+    <div class="input-group">
+        <h3 class="section-subtitle">Application Mode</h3>
+        <!-- content -->
+    </div>
+    ```
+*   **New Structure:**
+    ```html
+    <details class="input-group" id="section-app-mode" open>
+        <summary class="section-subtitle">
+            <span>Application Mode</span>
+            <svg class="collapse-chevron" xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" fill="currentColor"><path d="m12 15.4l-6-6L7.4 8l4.6 4.6L16.6 8L18 9.4z"></path></svg>
+        </summary>
+        <!-- content -->
+    </details>
+    ```
+3.  Apply this pattern consistently to all designated sidebar sections. Use the `open` attribute to have them expanded by default on first load.
 
-#### **2.3. Design & Style**
+#### **1.2. `index.css` Modifications**
 
-*   The modal will use the same blurred backdrop and panel styles as the "Custom Prompts" modal for a consistent user experience.
-*   The diff highlighting will use translucent versions of the theme's accent colors:
-    *   **Additions:** A light green background (e.g., `accent-secondary` at 20% opacity).
-    *   **Deletions:** A light red background (e.g., `accent-error` at 20% opacity).
-*   The text inside the diff viewer will use the theme's monospace font (`Fira Code`) for clear alignment and readability of code and text.
+Add new CSS rules to style the `<details>` and `<summary>` elements correctly within our theme.
+
+**Action:**
+1.  Add a new section in `index.css`, perhaps within "4. LAYOUT & PANELS" or a new "Sidebar Enhancements" section.
+2.  Add the following styles:
+    ```css
+    /* Sidebar Collapsible Sections */
+    #controls-sidebar details.input-group {
+        padding: 0; /* Padding will be on summary and content now */
+    }
+
+    #controls-sidebar summary.section-subtitle {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        list-style: none; /* Remove default marker */
+        padding: var(--space-4) var(--space-6);
+        transition: background-color var(--transition-speed-fast) ease-in-out;
+        border-radius: var(--radius-lg);
+    }
+
+    #controls-sidebar summary.section-subtitle::-webkit-details-marker {
+        display: none; /* Hide marker for Safari */
+    }
+
+    #controls-sidebar summary.section-subtitle:hover {
+        background-color: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+    }
+
+    #controls-sidebar .collapse-chevron {
+        transition: transform 0.2s var(--easing-standard);
+        color: var(--text-secondary-color);
+    }
+
+    #controls-sidebar details[open] > summary .collapse-chevron {
+        transform: rotate(180deg);
+    }
+
+    /* Add padding back to the content inside the details element */
+    #controls-sidebar details > *:not(summary) {
+        padding: 0 var(--space-6) var(--space-5) var(--space-6);
+    }
+
+    /* For sections with nested content, ensure proper structure */
+    #controls-sidebar details .api-key-buttons,
+    #controls-sidebar details #app-mode-selector {
+        margin-top: var(--space-4);
+    }
+    ```
+
+#### **1.3. `index.tsx` (State Persistence Enhancement)**
+
+To improve user experience, the open/closed state of each sidebar section will be saved to `localStorage`.
+
+**Action:**
+1.  Create a new function `initializeSidebarState()`.
+2.  Inside this function, retrieve a JSON object from `localStorage` (e.g., key `sidebarState`).
+3.  Iterate over all `<details>` elements in the sidebar. For each one, if its `id` exists as a key in the stored state, set its `open` property accordingly.
+4.  Create a function `saveSidebarState(detailsElement)`.
+5.  This function will be called by an event listener. It gets the current state from `localStorage`, updates the key corresponding to the `detailsElement.id` with its new `open` status, and saves it back.
+6.  In the main `DOMContentLoaded` or `initializeUI` function, add event listeners to all sidebar `<details>` elements. On a `toggle` event, call `saveSidebarState(event.target)`.
+7.  Call `initializeSidebarState()` once at startup.
+
+```typescript
+// Add this inside index.tsx
+
+function initializeSidebarStatePersistence() {
+    const sidebar = document.getElementById('controls-sidebar');
+    if (!sidebar) return;
+
+    const detailsElements = sidebar.querySelectorAll<HTMLDetailsElement>('details.input-group');
+    const storageKey = 'sidebarSectionState';
+
+    // Load state on startup
+    try {
+        const savedState = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        detailsElements.forEach(el => {
+            if (el.id && savedState[el.id] !== undefined) {
+                el.open = savedState[el.id];
+            }
+        });
+    } catch (e) {
+        console.error("Could not load sidebar state:", e);
+    }
+
+    // Save state on toggle
+    detailsElements.forEach(el => {
+        el.addEventListener('toggle', () => {
+            if (!el.id) return;
+            try {
+                const currentState = JSON.parse(localStorage.getItem(storageKey) || '{}');
+                currentState[el.id] = el.open;
+                localStorage.setItem(storageKey, JSON.stringify(currentState));
+            } catch (e) {
+                console.error("Could not save sidebar state:", e);
+            }
+        });
+    });
+}
+
+// Call this function within initializeUI()
+// initializeUI() {
+//   ...
+//   initializeSidebarStatePersistence();
+//   ...
+// }
+```
 
 ---
 
-### **3. Feature: Collapsible Sidebar Sections**
+### **2. Feature: Pipeline Graph Visualization**
 
-#### **3.1. Objective**
+**Objective:** To provide an intuitive, interactive graph-based visualization of application workflows, dynamically adapting to the selected mode.
 
-To streamline the main controls sidebar by making configuration groups collapsible, reducing visual clutter and allowing the user to focus on the most relevant settings.
+**Dependencies:**
+-   Add the **Mermaid.js** library for rendering graphs.
 
-#### **3.2. User Interaction & Layout**
+#### **2.1. `package.json` Modifications**
 
-*   The main configuration groups in the sidebar ("API Key Configuration", "Application Mode", "Model Selection", etc.) will be converted into collapsible sections.
-*   The title of each section will now be a clickable header.
-*   By default, all sections will be open when the application loads.
-*   When a user clicks on a section's header, the content within that section will smoothly animate, collapsing upwards to hide it. The header will remain visible.
-*   Clicking the header again will expand the section to reveal its content.
+**Action:**
+-   Add `mermaid` to the `dependencies`.
+    ```json
+    "dependencies": {
+      "@google/genai": "^1.4.0",
+      "mermaid": "^10.9.1"
+    },
+    ```
+-   Run `npm install` to update `package-lock.json`.
 
-#### **3.3. Design & Style**
+#### **2.2. `index.html` Modifications**
 
-*   A small, animated chevron icon (`▶`) will be placed to the right of each section title.
-*   When a section is collapsed, the chevron will point to the right.
-*   When a section is expanded, the chevron will rotate smoothly to point downwards (`▼`).
-*   The section headers will have a subtle background color change on hover to indicate they are clickable, consistent with other interactive elements in the app.
+**Action:**
+1.  Add a view-toggle container above the tabs in `#main-content`.
+2.  Add a dedicated container for the graph view within `#pipelines-content-container`.
+
+```html
+<!-- Inside <main id="main-content"> -->
+<div class="main-content-header">
+    <div id="view-toggle-container" class="view-toggle">
+        <button id="view-toggle-list" class="view-toggle-btn active" aria-label="Switch to List View">List</button>
+        <button id="view-toggle-graph" class="view-toggle-btn" aria-label="Switch to Graph View">Graph</button>
+    </div>
+    <div id="tabs-nav-container" role="tablist" aria-label="Generation Variants">
+    </div>
+</div>
+<div id="pipelines-content-container">
+    <!-- Existing .pipeline-content divs will be here -->
+    <div id="graph-view-container" style="display: none;"></div>
+</div>
+```
+
+#### **2.3. `index.css` Modifications**
+
+**Action:** Add styles for the toggle, graph container, and Mermaid nodes/edges.
+
+```css
+/* Add to Section 8: MAIN CONTENT AREA */
+.main-content-header {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid var(--border-secondary);
+    padding: 0 var(--space-6);
+}
+
+#tabs-nav-container {
+    flex-grow: 1;
+    border-bottom: none;
+    padding: 0;
+}
+
+.view-toggle {
+    display: flex;
+    gap: var(--space-2);
+    padding: var(--space-2) 0;
+    margin-right: var(--space-6);
+}
+
+.view-toggle-btn {
+    padding: var(--space-2) var(--space-4);
+    font-size: 0.85rem;
+    font-weight: 500;
+    border: 1px solid var(--border-primary);
+    background-color: var(--secondary-surface-bg);
+    color: var(--text-secondary-color);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.view-toggle-btn:hover {
+    background-color: var(--tertiary-surface-bg);
+    color: var(--text-color);
+}
+
+.view-toggle-btn.active {
+    background-color: var(--accent-primary);
+    color: var(--text-title-color);
+    font-weight: 600;
+    border-color: var(--accent-primary);
+}
+
+#graph-view-container {
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    padding: var(--space-8);
+}
+
+/* Mermaid.js Theme Styles */
+.mermaid-node-default {
+    fill: var(--secondary-surface-bg) !important;
+    stroke: var(--border-primary) !important;
+    color: var(--text-color) !important;
+}
+.mermaid-node-running {
+    fill: color-mix(in srgb, var(--accent-tertiary) 15%, transparent) !important;
+    stroke: var(--accent-tertiary) !important;
+    color: var(--accent-tertiary) !important;
+}
+.mermaid-node-completed {
+    fill: color-mix(in srgb, var(--accent-secondary) 15%, transparent) !important;
+    stroke: var(--accent-secondary) !important;
+    color: var(--accent-secondary) !important;
+}
+.mermaid-node-error {
+    fill: color-mix(in srgb, var(--accent-error) 15%, transparent) !important;
+    stroke: var(--accent-error) !important;
+    color: var(--accent-error) !important;
+}
+.mermaid-edge {
+    stroke: var(--text-secondary-color) !important;
+}
+.mermaid-edge-running {
+    stroke: var(--accent-tertiary) !important;
+}
+.mermaid-edge-completed {
+    stroke: var(--accent-secondary) !important;
+}
+.mermaid-edge-error {
+    stroke: var(--accent-error) !important;
+}
+.edge-label {
+    background-color: var(--primary-surface-bg) !important;
+}
+```
+
+#### **2.4. `index.tsx` Modifications**
+
+**Action:**
+1.  Import Mermaid.js: `import mermaid from 'mermaid';`
+2.  Initialize Mermaid in `initializeUI`:
+    ```typescript
+    mermaid.initialize({
+        startOnLoad: false,
+        theme: 'base',
+        themeVariables: {
+            // Use CSS variables for theming
+            background: 'var(--primary-surface-bg)',
+            primaryColor: 'var(--secondary-surface-bg)',
+            primaryTextColor: 'var(--text-color)',
+            primaryBorderColor: 'var(--border-primary)',
+            lineColor: 'var(--text-secondary-color)',
+            textColor: 'var(--text-secondary-color)',
+            // ... add more if needed
+        }
+    });
+    ```
+3.  Add logic for the view toggle buttons to show/hide `#graph-view-container` vs. the standard content panes.
+4.  Create a function `generateGraphDefinition(): string`. This function will check `currentMode` and call mode-specific helper functions (`generateWebsiteGraph`, `generateMathGraph`, `generateReactGraph`).
+5.  Implement the mode-specific graph generation functions. They will iterate through the relevant state (`pipelinesState`, `activeMathPipeline`, `activeReactPipeline`) and build a Mermaid syntax string.
+    -   **Website/Creative/Agent:** Will generate a `graph TD;` (top-down) linear chain. Nodes should be styled based on status.
+    -   **Math:** Will generate a `graph TD;` tree structure. Root is the problem, branches are strategies, sub-branches are sub-strategies, leaves are solutions.
+    -   **React:** Will generate a `graph TD;` hub-and-spoke diagram. Orchestrator at the top, spokes to 5 workers, which then all connect to a final "Aggregated Output" node.
+6.  Create an `async function renderGraphView()` that gets the definition from `generateGraphDefinition`, inserts it into the `#graph-view-container` inside a `<pre class="mermaid">` tag, and then calls `await mermaid.run();`.
+7.  Call `renderGraphView()` whenever the view is switched to "Graph" and whenever pipeline state is updated significantly.
+
+---
+
+### **3. Feature: Side-by-Side Diff Viewer**
+
+**Objective:** To enable direct comparison of text/code outputs between any two steps in the process via a side-by-side diff view in a modal.
+
+**Dependencies:**
+-   Add the **`diff`** library for calculating differences.
+
+#### **3.1. `package.json` Modifications**
+
+**Action:**
+-   Add `diff` to the `dependencies` and `@types/diff` to `devDependencies`.
+    ```json
+    "dependencies": {
+        // ... existing
+        "diff": "^5.2.0"
+    },
+    "devDependencies": {
+        // ... existing
+        "@types/diff": "^5.2.1"
+    }
+    ```
+-   Run `npm install`.
+
+#### **3.2. `index.html` Modifications**
+
+**Action:**
+1.  Add the HTML structure for the diff modal at the bottom of `<body>`, similar to the prompts modal.
+
+    ```html
+    <!-- Diff Viewer Modal -->
+    <div id="diff-modal-overlay" class="prompts-modal-overlay">
+        <div class="prompts-modal-content" role="dialog" aria-modal="true" aria-labelledby="diff-modal-title">
+            <div class="prompts-modal-header">
+                <h2 id="diff-modal-title" class="prompts-modal-title">Compare Outputs</h2>
+                <button id="diff-modal-close-button" class="prompts-modal-close-button" aria-label="Close Diff Viewer">×</button>
+            </div>
+            <div id="diff-modal-body" class="diff-modal-body">
+                <div id="diff-selector-panel">
+                    <div id="diff-source-display">
+                        <h4>Source (A)</h4>
+                        <p id="diff-source-label">None selected</p>
+                    </div>
+                    <hr/>
+                    <h4>Select Target (B)</h4>
+                    <div id="diff-target-tree"></div>
+                </div>
+                <div id="diff-viewer-panel">
+                    <div class="diff-no-selection">
+                        <p>Select a source and target to view differences.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    ```
+
+#### **3.3. `index.css` Modifications**
+
+**Action:** Add styles for the diff modal and its contents.
+
+```css
+/* Add to end of CSS file or new Section */
+/* Diff Modal */
+.diff-modal-body {
+    display: flex;
+    gap: var(--space-6);
+    padding: 0;
+    height: 100%;
+}
+
+#diff-selector-panel {
+    width: 320px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border-secondary);
+    padding: var(--space-6);
+    overflow-y: auto;
+}
+
+#diff-viewer-panel {
+    flex-grow: 1;
+    overflow: auto;
+    font-family: var(--font-family-mono);
+    font-size: 0.9rem;
+    padding: var(--space-6);
+}
+
+#diff-source-display p {
+    background-color: var(--tertiary-surface-bg);
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-primary);
+}
+
+#diff-target-tree .tree-item {
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+#diff-target-tree .tree-item:hover {
+    background-color: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+}
+#diff-target-tree .tree-item.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: transparent;
+}
+
+.diff-view {
+    white-space: pre;
+}
+.diff-view span {
+    display: block;
+    padding: 0.1em 0.5em;
+}
+.diff-view .diff-added {
+    background-color: color-mix(in srgb, var(--accent-secondary) 20%, transparent);
+}
+.diff-view .diff-removed {
+    background-color: color-mix(in srgb, var(--accent-error) 20%, transparent);
+}
+.diff-view .diff-neutral {
+    color: var(--text-secondary-color);
+}
+```
+
+#### **3.4. `index.tsx` Modifications**
+
+**Action:**
+1.  Import `diff`: `import * as Diff from 'diff';`
+2.  In `renderIteration`, add a "Compare" button to generated content sections (HTML, text). Give it `data-*` attributes for `pipelineId` and `iterationNumber`.
+3.  Add logic to open the modal, populating the source and the target tree.
+4.  Implement a `renderDiff(sourceText, targetText)` function that uses `Diff.diffLines()`, then iterates the result to build an HTML string with `<span>`s and the appropriate classes (`diff-added`, `diff-removed`, `diff-neutral`), and injects it into `#diff-viewer-panel`.
+5.  Hook up all the event listeners for opening the modal and selecting targets.
 
 ---
 
 ### **4. Feature: "Download & Run" Package for React Mode**
 
-#### **4.1. Objective**
+**Objective:** To package the React mode output into a complete, downloadable, and instantly runnable Vite + React project as a `.zip` file.
 
-To elevate the React Mode's output from a single text file of concatenated code into a fully structured, instantly runnable Vite + React project, downloadable as a single `.zip` file.
+**Dependencies:**
+-   Add the **`jszip`** library for creating zip files on the client.
 
-#### **4.2. User Interaction & Layout**
+#### **4.1. `package.json` Modifications**
 
-*   The user interaction for this feature is very straightforward and requires minimal UI change.
-*   In the React Mode's final output view, where the aggregated code is displayed, the existing download button will be updated.
-*   Its text will change from "Download Full App Code" to **"Download Runnable Project (.zip)"**.
-*   When the user clicks this button, their browser will initiate the download of a single file (e.g., `my-react-app.zip`).
+**Action:**
+-   Add `jszip` to `dependencies` and `@types/jszip` to `devDependencies`.
+    ```json
+    "dependencies": {
+        // ... existing
+        "jszip": "^3.10.1"
+    },
+    "devDependencies": {
+        // ... existing
+        "@types/jszip": "^3.4.1"
+    }
+    ```
+-   Run `npm install`.
 
-#### **4.3. What the User Gets**
+#### **4.2. `prompts.ts` Modifications**
 
-*   Upon unzipping the downloaded file, the user will find a standard, complete React project folder structure, exactly as defined by the orchestrator agent's `plan.txt`. This includes:
-    *   `package.json` (with all necessary dependencies like React, Vite, etc.)
-    *   `vite.config.ts`
-    *   `index.html` (the root HTML file)
-    *   `.gitignore`
-    *   A `src/` directory containing all the components, services, styles, and other files generated by the five worker agents, placed in their correct sub-folders (e.g., `src/components/`, `src/store/`).
-*   The user can then immediately navigate to this folder in their terminal, run `npm install` to install dependencies, and then `npm run dev` to start the local development server and view their generated application in the browser.
+**Action:**
+-   Enhance the `sys_orchestrator` prompt in `defaultCustomPromptsReact`. Instruct the orchestrator that one agent (e.g., Agent 5) should be responsible for generating project boilerplate files like `package.json`, `vite.config.ts`, and `index.html`. This makes the AI responsible for the project setup.
+
+    **Example addition to `sys_orchestrator`'s Agent 5 description:**
+    > "...Agent 5 is responsible for creating the root-level project files required for a Vite + React + TypeScript application. This INCLUDES generating a complete `package.json` with all necessary dependencies (e.g., react, react-dom, vite, typescript, etc.), a functional `vite.config.ts`, and the root `public/index.html` file..."
+
+#### **4.3. `index.tsx` Modifications**
+
+**Action:**
+1.  Import JSZip: `import JSZip from 'jszip';`
+2.  Modify the event listener for the `#download-react-app-code` button (which should be renamed/re-labeled in `renderReactModePipeline` to "Download Runnable Project (.zip)").
+3.  Create an `async function createAndDownloadReactProjectZip()` to be called by the listener.
+4.  Inside this function:
+    a.  Check if `activeReactPipeline` and `activeReactPipeline.finalAppendedCode` exist.
+    b.  Instantiate JSZip: `const zip = new JSZip();`
+    c.  **Parse the aggregated code:** Create a robust parser function that splits `finalAppendedCode` by the `// --- FILE: ... ---` markers into an array of `{ path: string, content: string }` objects.
+    d.  **Add files to zip:** Loop through the parsed file objects and use `zip.file(file.path, file.content)` to add them to the zip archive, creating the correct directory structure.
+    e.  **Generate and download:**
+        ```typescript
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        downloadFile(zipBlob, `react-app-${activeReactPipeline.id}.zip`, 'application/zip');
+        ```
+    f.  The `downloadFile` function needs to be updated to handle a `Blob` as input, not just a string.
+
+**Updated `downloadFile` function:**
+```typescript
+// Modify the existing downloadFile function in index.tsx
+function downloadFile(content: string | Blob, fileName: string, contentType: string) {
+    const a = document.createElement("a");
+    const file = (content instanceof Blob) ? content : new Blob([content], { type: contentType });
+    a.href = URL.createObjectURL(file);
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(a.href);
+    document.body.removeChild(a);
+}
+```
+
+
+-------------------------
