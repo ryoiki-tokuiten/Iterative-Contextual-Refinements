@@ -3154,16 +3154,27 @@ function initializeUI() {
     }
 
     // Initialize Mermaid.js
+    const computedStyles = getComputedStyle(document.body);
     mermaid.initialize({
         startOnLoad: false,
-        theme: 'base',
+        theme: 'base', // Using 'base' and overriding specific variables
         themeVariables: {
-            background: 'var(--primary-surface-bg)',
-            primaryColor: 'var(--secondary-surface-bg)',
-            primaryTextColor: 'var(--text-color)',
-            primaryBorderColor: 'var(--border-primary)',
-            lineColor: 'var(--text-secondary-color)',
-            textColor: 'var(--text-secondary-color)',
+            background: computedStyles.getPropertyValue('--primary-surface-bg').trim() || '#0c0916', // Fallback if CSS var is not found
+            primaryColor: computedStyles.getPropertyValue('--secondary-surface-bg').trim() || '#120f1e', // Fallback
+            primaryTextColor: computedStyles.getPropertyValue('--text-color').trim() || '#D0D0DA', // Fallback
+            primaryBorderColor: computedStyles.getPropertyValue('--border-primary').trim() || '#463c783f', // Fallback
+            lineColor: computedStyles.getPropertyValue('--text-secondary-color').trim() || '#8890A8', // Fallback
+            textColor: computedStyles.getPropertyValue('--text-secondary-color').trim() || '#8890A8', // Fallback
+            // Node specific fallbacks based on CSS
+            nodeBorder: computedStyles.getPropertyValue('--border-primary').trim() || '#463c783f',
+            mainBkg: computedStyles.getPropertyValue('--secondary-surface-bg').trim() || '#120f1e', // for default nodes
+            errorBkgColor: computedStyles.getPropertyValue('--accent-error').trim() || '#7A3B3B', // for error nodes (background)
+            errorTextColor: '#FFFFFF', // Make sure text is visible on error background
+            // Add other specific variables if Mermaid's styling still looks off
+            // For example, for specific node types if you use them:
+            // 'node-running-fill': computedStyles.getPropertyValue('--accent-tertiary').trim() || '#705A2F',
+            // 'node-completed-fill': computedStyles.getPropertyValue('--accent-secondary').trim() || '#3A5F4F',
+            // 'node-error-fill': computedStyles.getPropertyValue('--accent-error').trim() || '#7A3B3B', // Already have errorBkgColor
         }
     });
 
