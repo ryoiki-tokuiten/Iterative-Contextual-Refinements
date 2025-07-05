@@ -14,6 +14,7 @@ import {
     systemInstructionJsonOutputOnly, // Same as above
     systemInstructionTextOutputOnly   // Same as above
 } from './prompts.js';
+import mermaid from 'mermaid';
 
 
 const API_KEY = process.env.API_KEY;
@@ -186,6 +187,7 @@ interface ExportedConfig {
     selectedOriginalTemperatureIndices: number[]; // For website/creative/agent
     pipelinesState: PipelineState[]; // For website/creative/agent
     activeMathPipeline: MathPipelineState | null; // For math
+    activeReactPipeline: ReactPipelineState | null; // Added for React mode
     activePipelineId: number | null; // For website/creative/agent
     activeMathProblemTabId?: string; // For math UI
     globalStatusText: string;
@@ -543,16 +545,21 @@ function updateUIAfterModeChange() {
     if(modelSelectionContainer) modelSelectionContainer.style.display = 'block';
     if(temperatureSelectionContainer) temperatureSelectionContainer.style.display = 'block';
 
+    // Update main input label based on mode
+    const mainInputSummarySpan = document.querySelector('#section-main-input summary span');
+
     if (currentMode === 'website') {
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'HTML Idea:';
         if (initialIdeaInput) initialIdeaInput.placeholder = 'E.g., a personal blog about cooking, a portfolio...';
         if (generateButton) generateButton.textContent = 'Generate HTML';
         if (websitePromptsContainer) websitePromptsContainer.style.display = 'block';
+        if (mainInputSummarySpan) mainInputSummarySpan.textContent = 'HTML Idea';
     } else if (currentMode === 'creative') {
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'Writing Premise:';
         if (initialIdeaInput) initialIdeaInput.placeholder = 'E.g., a short story about a time traveler, a poem...';
         if (generateButton) generateButton.textContent = 'Refine Writing';
         if (creativePromptsContainer) creativePromptsContainer.style.display = 'block';
+        if (mainInputSummarySpan) mainInputSummarySpan.textContent = 'Writing Premise';
     } else if (currentMode === 'math') {
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'Math Problem:';
         if (initialIdeaInput) initialIdeaInput.placeholder = 'E.g., "Solve for x: 2x + 5 = 11" or describe...';
@@ -561,11 +568,13 @@ function updateUIAfterModeChange() {
         if (mathProblemImageInputContainer) mathProblemImageInputContainer.style.display = 'block';
         if (modelSelectionContainer) modelSelectionContainer.style.display = 'none';
         if (temperatureSelectionContainer) temperatureSelectionContainer.style.display = 'none';
+        if (mainInputSummarySpan) mainInputSummarySpan.textContent = 'Math Problem';
     } else if (currentMode === 'agent') {
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'Your Request:';
         if (initialIdeaInput) initialIdeaInput.placeholder = 'E.g., "Python snake game", "Analyze iPhone sales data"...';
         if (generateButton) generateButton.textContent = 'Start Agent Process';
         if (agentPromptsContainer) agentPromptsContainer.style.display = 'block';
+        if (mainInputSummarySpan) mainInputSummarySpan.textContent = 'Agent Request';
     } else if (currentMode === 'react') { // Added for React mode
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'React App Request:';
         if (initialIdeaInput) initialIdeaInput.placeholder = 'E.g., "A simple to-do list app with local storage persistence", "A weather dashboard using OpenWeatherMap API"...';
@@ -575,6 +584,7 @@ function updateUIAfterModeChange() {
         if (modelSelectionContainer) modelSelectionContainer.style.display = 'block';
         if (temperatureSelectionContainer) temperatureSelectionContainer.style.display = 'block';
         if (mathProblemImageInputContainer) mathProblemImageInputContainer.style.display = 'none';
+        if (mainInputSummarySpan) mainInputSummarySpan.textContent = 'React App Request';
     }
 
 
@@ -587,6 +597,11 @@ function updateUIAfterModeChange() {
         renderReactModePipeline();
     }
     updateControlsState();
+     // If graph view is active, re-render it
+    const viewToggleGraphButton = document.getElementById('view-toggle-graph') as HTMLButtonElement;
+    if (viewToggleGraphButton && viewToggleGraphButton.classList.contains('active')) {
+        renderGraphView();
+    }
 }
 
 
@@ -702,10 +717,23 @@ function updateControlsState() {
     }
     if (customPromptsHeader) {
         const customPromptsContainer = document.getElementById('custom-prompts-container');
-        if (customPromptsContainer) {
-            customPromptsContainer.classList.toggle('disabled-section', isGenerating);
+        // The custom prompts section is now a <details> element itself.
+        // We need to handle its 'disabled' state slightly differently if it's a details element.
+        const customPromptsDetailsElement = document.getElementById('section-custom-prompts') as HTMLDetailsElement | null;
+        if (customPromptsDetailsElement) {
+            // Disabling a details element is tricky. We can disable its summary or add a class.
+            // For now, let's rely on the global isGenerating checks for textareas inside.
+            // The visual cue of the header itself might need to be handled too.
+            const summary = customPromptsDetailsElement.querySelector('summary');
+            if (summary) summary.style.pointerEvents = isGenerating ? 'none' : 'auto';
+            customPromptsDetailsElement.classList.toggle('disabled-section', isGenerating);
+
+        } else if (customPromptsContainer) { // Fallback for old structure if any part remains
+             customPromptsContainer.classList.toggle('disabled-section', isGenerating);
         }
-        customPromptsHeader.style.pointerEvents = isGenerating ? 'none' : 'auto';
+        // The customPromptsHeader (which is now a summary for the details element)
+        // should have its pointer events managed if it's part of a details element.
+        // If it's the summary of section-custom-prompts, its style.pointerEvents is handled above.
     }
 }
 
@@ -821,17 +849,21 @@ function activateTab(pipelineIdOrMathTabId: number | string) {
 
 
 function renderPipelines() { 
-    if (currentMode === 'math' || currentMode === 'react') { // React mode also has its own renderer
+    if (currentMode === 'math' || currentMode === 'react') {
         tabsNavContainer.innerHTML = ''; 
-        pipelinesContentContainer.innerHTML = '';
+        // Clear only standard pipeline content, not graph view or React-specific static panes
+        document.querySelectorAll('.pipeline-content:not(#graph-view-container)').forEach(el => el.innerHTML = '');
         return;
     }
     tabsNavContainer.innerHTML = '';
-    pipelinesContentContainer.innerHTML = '';
+    document.querySelectorAll('.pipeline-content:not(#graph-view-container)').forEach(el => el.remove()); // Remove old pipeline content
 
-    if (pipelinesState.length === 0) {
+    if (pipelinesState.length === 0 && currentMode !== 'math' && currentMode !== 'react') {
         tabsNavContainer.innerHTML = '<p class="no-pipelines-message" style="padding: 1rem; color: var(--text-secondary-color);">No variants selected. Please choose at least one variant or import a configuration.</p>';
-        pipelinesContentContainer.innerHTML = '';
+        // Ensure pipelinesContentContainer is also cleared if it was used for these messages
+        if (pipelinesContentContainer.querySelector('.no-pipelines-message')) {
+            pipelinesContentContainer.innerHTML = ''; // Clear if it had the message
+        }
         return;
     }
 
@@ -847,7 +879,7 @@ function renderPipelines() {
         pipeline.tabButtonElement = tabButton;
 
         const pipelineContentDiv = document.createElement('div');
-        pipelineContentDiv.className = 'pipeline-content';
+        pipelineContentDiv.className = 'pipeline-content'; // This will be hidden/shown by view toggle too
         pipelineContentDiv.setAttribute('id', `pipeline-content-${pipeline.id}`);
         pipelineContentDiv.setAttribute('role', 'tabpanel');
         pipelineContentDiv.setAttribute('aria-labelledby', `pipeline-tab-${pipeline.id}`);
@@ -901,6 +933,15 @@ function renderPipelines() {
             attachIterationActionButtons(pipeline.id, iter.iterationNumber);
         });
     });
+     // Ensure correct display if list view is active
+    const viewToggleListButton = document.getElementById('view-toggle-list') as HTMLButtonElement;
+    if (viewToggleListButton && viewToggleListButton.classList.contains('active')) {
+        if (activePipelineId !== null) {
+            document.querySelectorAll('.pipeline-content').forEach(pc => {
+                (pc as HTMLElement).style.display = pc.id === `pipeline-content-${activePipelineId}` ? 'block' : 'none';
+            });
+        }
+    }
 }
 
 function renderIteration(pipelineId: number, iter: IterationData): string {
@@ -1193,6 +1234,11 @@ function updateIterationUI(pipelineId: number, iterationNumber: number) {
         }
         attachIterationActionButtons(pipelineId, iterationNumber);
     }
+    // If graph view is active, re-render it
+    const viewToggleGraphButton = document.getElementById('view-toggle-graph') as HTMLButtonElement;
+    if (viewToggleGraphButton && viewToggleGraphButton.classList.contains('active')) {
+        renderGraphView();
+    }
 }
 
 
@@ -1227,6 +1273,11 @@ function updatePipelineStatusUI(pipelineId: number, status: PipelineState['statu
         }
     }
     updateControlsState(); 
+    // If graph view is active, re-render it
+    const viewToggleGraphButton = document.getElementById('view-toggle-graph') as HTMLButtonElement;
+    if (viewToggleGraphButton && viewToggleGraphButton.classList.contains('active')) {
+        renderGraphView();
+    }
 }
 
 async function callGemini(promptOrParts: string | Part[], temperature: number, modelToUse: string, systemInstruction?: string, isJsonOutput: boolean = false): Promise<GenerateContentResponse> {
@@ -1921,10 +1972,10 @@ function handleImportConfiguration(event: Event) {
                     // activeTabId will be handled by renderReactModePipeline based on its own state
                 } : null;
                 activePipelineId = null;
-                // renderReactModePipeline(); // Will be called when implemented
-                // if (activeReactPipeline && activeReactPipeline.activeTabId) {
-                //    activateTab(activeReactPipeline.activeTabId); // This activateTab will need updates for React tabs
-                // }
+                renderReactModePipeline();
+                if (activeReactPipeline && activeReactPipeline.activeTabId) {
+                   activateTab(activeReactPipeline.activeTabId);
+                }
             }
 
 
@@ -2177,22 +2228,23 @@ function renderActiveMathPipeline() {
     if (currentMode !== 'math' || !pipelinesContentContainer || !tabsNavContainer) {
         if (currentMode !== 'math') { 
              tabsNavContainer.innerHTML = '';
-             pipelinesContentContainer.innerHTML = '';
+             // Clear only math-specific content, not graph-view or other mode's content
+             document.querySelectorAll('.math-pipeline-content-pane').forEach(el => el.remove());
         }
         return;
     }
     if (!activeMathPipeline) {
         tabsNavContainer.innerHTML = '<p class="no-pipelines-message" style="padding: 1rem; color: var(--text-secondary-color);">Enter a math problem and click "Solve Problem".</p>';
-        pipelinesContentContainer.innerHTML = '';
+        document.querySelectorAll('.math-pipeline-content-pane').forEach(el => el.remove());
         return;
     }
 
     const mathProcess = activeMathPipeline;
     tabsNavContainer.innerHTML = ''; 
-    pipelinesContentContainer.innerHTML = ''; 
+    document.querySelectorAll('.math-pipeline-content-pane').forEach(el => el.remove()); // Clear previous math panes
 
     const problemTabButton = document.createElement('button');
-    problemTabButton.className = 'tab-button';
+    problemTabButton.className = 'tab-button math-mode-tab'; // Added math-mode-tab
     problemTabButton.id = `math-tab-problem-details`;
     problemTabButton.textContent = 'Problem Details';
     problemTabButton.setAttribute('role', 'tab');
@@ -2231,7 +2283,7 @@ function renderActiveMathPipeline() {
 
     mathProcess.initialStrategies.forEach((mainStrategy, index) => {
         const tabButton = document.createElement('button');
-        tabButton.className = 'tab-button';
+        tabButton.className = 'tab-button math-mode-tab'; // Added math-mode-tab
         tabButton.id = `math-tab-strategy-${index}`;
         tabButton.textContent = `Strategy ${index + 1}`;
         if (mainStrategy.status === 'error') tabButton.classList.add('status-math-error');
@@ -2346,6 +2398,11 @@ function renderActiveMathPipeline() {
         activateTab('problem-details'); // Default to problem details
     }
     updateControlsState();
+     // If graph view is active, re-render it
+    const viewToggleGraphButton = document.getElementById('view-toggle-graph') as HTMLButtonElement;
+    if (viewToggleGraphButton && viewToggleGraphButton.classList.contains('active')) {
+        renderGraphView();
+    }
 }
 
 // ----- END MATH MODE SPECIFIC FUNCTIONS -----
@@ -2460,39 +2517,45 @@ async function startReactModeProcess(userRequest: string) {
 
 function renderReactModePipeline() {
     if (currentMode !== 'react' || !tabsNavContainer || !pipelinesContentContainer) {
-        if (currentMode !== 'react' && tabsNavContainer && pipelinesContentContainer) { // Clear if not in react mode but called
+        if (currentMode !== 'react' && tabsNavContainer && pipelinesContentContainer) {
             tabsNavContainer.innerHTML = '';
-            pipelinesContentContainer.innerHTML = '';
+             // Clear only react-specific content
+            document.querySelectorAll('.react-orchestrator-pane, .react-worker-content-pane, .react-final-output-pane').forEach(el => el.remove());
         }
         return;
     }
 
     if (!activeReactPipeline) {
         tabsNavContainer.innerHTML = '<p class="no-pipelines-message" style="padding: 1rem; color: var(--text-secondary-color);">Enter a React App Request and click "Generate React App".</p>';
-        pipelinesContentContainer.innerHTML = '';
+        document.querySelectorAll('.react-orchestrator-pane, .react-worker-content-pane, .react-final-output-pane').forEach(el => el.remove());
         return;
     }
 
     const pipeline = activeReactPipeline;
-    // Preserve current scroll positions
     const scrollPositions: { [id: string]: { top: number, left: number } } = {};
     document.querySelectorAll('.react-details-section details[open], .code-block, .prompt-block, .react-final-output-pane pre').forEach(el => {
         scrollPositions[el.id || (el.parentElement?.id + '-child-' + Array.from(el.parentElement?.children || []).indexOf(el))] = { top: el.scrollTop, left: el.scrollLeft };
     });
 
+    tabsNavContainer.innerHTML = '';
+    // Clear only react worker panes, keep orchestrator and final output if they exist and should be shown
+    document.querySelectorAll('.react-worker-content-pane').forEach(el => el.remove());
 
-    tabsNavContainer.innerHTML = ''; // Clear previous tabs
-    pipelinesContentContainer.innerHTML = ''; // Clear previous content
 
-    // Orchestrator Display Area (Above Tabs)
-    const orchestratorPane = document.createElement('div');
-    orchestratorPane.className = 'react-orchestrator-pane';
+    let orchestratorPane = document.querySelector('.react-orchestrator-pane') as HTMLElement;
+    if (!orchestratorPane) {
+        orchestratorPane = document.createElement('div');
+        orchestratorPane.className = 'react-orchestrator-pane';
+        // Prepend it to pipelinesContentContainer so it appears above tabs/worker panes
+        pipelinesContentContainer.prepend(orchestratorPane);
+    }
+
     let orchestratorHtml = `
         <div class="pipeline-header">
              <h3>React App Orchestration</h3>
              <div class="pipeline-header-controls">
                 <span class="pipeline-status status-${pipeline.status}" id="react-orchestrator-status-text">${pipeline.status.replace('_', ' ')}</span>
-                <button class="stop-pipeline-button button-base action-button" id="stop-react-pipeline-btn" title="Stop React App Generation" aria-label="Stop React App Generation" style="display: ${pipeline.status === 'orchestrating' || pipeline.status === 'processing_workers' ? 'inline-flex' : 'none'};">
+                <button class="stop-pipeline-button button-base action-button" id="stop-react-pipeline-btn" title="Stop React App Generation" aria-label="Stop React App Generation" style="display: ${pipeline.status === 'orchestrating' || pipeline.status === 'orchestrating_retrying' || pipeline.status === 'processing_workers' ? 'inline-flex' : 'none'};">
                     ${pipeline.status === 'stopping' ? 'Stopping...' : 'Stop'}
                 </button>
             </div>
@@ -2524,22 +2587,23 @@ function renderReactModePipeline() {
             </div>
         </details>`;
     }
-     if (pipeline.error && (pipeline.status === 'failed' || pipeline.status === 'error' && pipeline.stages.every(s => s.status === 'pending'))) { // Show overall error if orchestration failed
+     if (pipeline.error && (pipeline.status === 'failed' || pipeline.status === 'error' && pipeline.stages.every(s => s.status === 'pending'))) {
         orchestratorHtml += `<div class="error-message"><strong>Orchestration Error:</strong> <pre>${escapeHtml(pipeline.error)}</pre></div>`;
     }
     orchestratorPane.innerHTML = orchestratorHtml;
-    pipelinesContentContainer.appendChild(orchestratorPane);
 
     const stopReactButton = document.getElementById('stop-react-pipeline-btn');
     if (stopReactButton) {
-        stopReactButton.onclick = () => {
-            if (activeReactPipeline && (activeReactPipeline.status === 'orchestrating' || activeReactPipeline.status === 'processing_workers')) {
+        const newStopButton = stopReactButton.cloneNode(true) as HTMLButtonElement; // Clone to remove old listeners
+        stopReactButton.parentNode?.replaceChild(newStopButton, stopReactButton);
+        newStopButton.onclick = () => {
+            if (activeReactPipeline && (activeReactPipeline.status === 'orchestrating' || activeReactPipeline.status === 'orchestrating_retrying' || activeReactPipeline.status === 'processing_workers')) {
                 activeReactPipeline.isStopRequested = true;
                 activeReactPipeline.status = 'stopping';
                 renderReactModePipeline();
             }
         };
-        (stopReactButton as HTMLButtonElement).disabled = pipeline.status === 'stopping' || pipeline.status === 'stopped' || pipeline.status === 'failed' || pipeline.status === 'completed';
+        newStopButton.disabled = pipeline.status === 'stopping' || pipeline.status === 'stopped' || pipeline.status === 'failed' || pipeline.status === 'completed';
     }
 
 
@@ -2559,7 +2623,7 @@ function renderReactModePipeline() {
 
         const workerContentPane = document.createElement('div');
         workerContentPane.id = contentPaneId;
-        workerContentPane.className = 'react-worker-content-pane pipeline-content';
+        workerContentPane.className = 'react-worker-content-pane pipeline-content'; // pipeline-content for general styling, react-worker-content-pane for specific
         workerContentPane.setAttribute('role', 'tabpanel');
         workerContentPane.setAttribute('aria-labelledby', tabButton.id);
 
@@ -2599,7 +2663,14 @@ function renderReactModePipeline() {
              workerDetailsHtml += `<p>Agent completed but generated no content.</p>`;
         }
         workerContentPane.innerHTML = workerDetailsHtml;
-        pipelinesContentContainer.appendChild(workerContentPane);
+        // Insert worker panes after the orchestrator pane and before the final output pane (if it exists)
+        const finalOutputPaneExisting = pipelinesContentContainer.querySelector('.react-final-output-pane');
+        if (finalOutputPaneExisting) {
+            pipelinesContentContainer.insertBefore(workerContentPane, finalOutputPaneExisting);
+        } else {
+            pipelinesContentContainer.appendChild(workerContentPane);
+        }
+
 
         const promptsDetailsElement = workerContentPane.querySelector<HTMLDetailsElement>(`#react-worker-${stage.id}-prompts-details`);
         if (promptsDetailsElement) {
@@ -2611,7 +2682,9 @@ function renderReactModePipeline() {
 
         const copyBtn = workerContentPane.querySelector('.copy-react-worker-code-btn');
         if (copyBtn) {
-            copyBtn.addEventListener('click', (e) => {
+            const newCopyBtn = copyBtn.cloneNode(true) as HTMLButtonElement;
+            copyBtn.parentNode?.replaceChild(newCopyBtn, copyBtn);
+            newCopyBtn.addEventListener('click', (e) => {
                 const workerId = parseInt((e.target as HTMLElement).dataset.workerId || "-1", 10);
                 const contentToCopy = activeReactPipeline?.stages.find(s => s.id === workerId)?.generatedContent;
                 if (contentToCopy) {
@@ -2621,29 +2694,36 @@ function renderReactModePipeline() {
         }
     });
 
-    // Final Aggregated Code Display
+    let finalOutputPane = document.querySelector('.react-final-output-pane') as HTMLElement | null;
     if (pipeline.finalAppendedCode) {
-        const finalOutputPane = document.createElement('div');
-        finalOutputPane.className = 'react-final-output-pane';
+        if (!finalOutputPane) {
+            finalOutputPane = document.createElement('div');
+            finalOutputPane.className = 'react-final-output-pane';
+            pipelinesContentContainer.appendChild(finalOutputPane);
+        }
         finalOutputPane.innerHTML = `
             <h3>Final Aggregated Application Code</h3>
             <p>The following is a concatenation of outputs from successful worker agents. File markers (e.g., // --- FILE: src/App.tsx ---) should indicate intended file paths.</p>
             <pre id="react-final-appended-code" class="code-block language-javascript">${escapeHtml(pipeline.finalAppendedCode)}</pre>
             <button id="download-react-app-code" class="button-base action-button" type="button">Download Full App Code</button>
         `;
-        pipelinesContentContainer.appendChild(finalOutputPane);
 
-        const downloadAppButton = document.getElementById('download-react-app-code');
-        if (downloadAppButton && pipeline.finalAppendedCode) { // Check finalAppendedCode again
-            downloadAppButton.addEventListener('click', () => {
+        const downloadAppButton = finalOutputPane.querySelector('#download-react-app-code');
+        if (downloadAppButton && pipeline.finalAppendedCode) {
+            const newDownloadAppButton = downloadAppButton.cloneNode(true) as HTMLButtonElement;
+            downloadAppButton.parentNode?.replaceChild(newDownloadAppButton, downloadAppButton);
+            newDownloadAppButton.addEventListener('click', () => {
                  if (activeReactPipeline?.finalAppendedCode) {
                     downloadFile(activeReactPipeline.finalAppendedCode, `react_app_${pipeline.id}.txt`, 'text/plain');
                  }
             });
         }
+        finalOutputPane.style.display = 'block';
+    } else if (finalOutputPane) {
+        finalOutputPane.style.display = 'none'; // Hide if no final code
     }
 
-    // Restore scroll positions
+
     for (const id in scrollPositions) {
         const element = document.getElementById(id);
         if (element) {
@@ -2658,6 +2738,11 @@ function renderReactModePipeline() {
         activateTab(`worker-${pipeline.stages[0].id}`);
     }
     updateControlsState();
+    // If graph view is active, re-render it
+    const viewToggleGraphButton = document.getElementById('view-toggle-graph') as HTMLButtonElement;
+    if (viewToggleGraphButton && viewToggleGraphButton.classList.contains('active')) {
+        renderGraphView();
+    }
 }
 
 
@@ -2666,7 +2751,7 @@ async function runReactWorkerAgents() {
         console.error("RunReactWorkerAgents called in an invalid state.");
         return;
     }
-    renderReactModePipeline(); // Update UI to show workers starting
+    renderReactModePipeline();
 
     const workerPromises = activeReactPipeline.stages.map(async (stage) => {
         if (!activeReactPipeline || activeReactPipeline.isStopRequested) {
@@ -2708,21 +2793,21 @@ async function runReactWorkerAgents() {
 
                 try {
                     const selectedModel = modelSelectElement.value || "gemini-2.5-pro";
-                    const workerTemp = 0.7; // Moderate temperature for workers
+                    const workerTemp = 0.7;
 
                     const apiResponse = await callGemini(stage.renderedUserPrompt, workerTemp, selectedModel, stage.systemInstruction, false);
                     stageResponseText = apiResponse.text;
-                    stage.generatedContent = cleanOutputByType(stageResponseText, 'text'); // Assuming text/code output
+                    stage.generatedContent = cleanOutputByType(stageResponseText, 'text');
                     stage.status = 'completed';
                     stage.error = undefined;
                     renderReactModePipeline();
-                    break; // Exit retry loop on success
+                    break;
                 } catch (e: any) {
                     console.warn(`Worker Agent ${stage.id}, Attempt ${attempt + 1} failed: ${e.message}`);
                     stage.error = `Attempt ${attempt + 1} failed: ${e.message || 'Unknown API error'}`;
                     if (attempt === MAX_RETRIES) {
                         renderReactModePipeline();
-                        throw e; // Rethrow after final attempt fails
+                        throw e;
                     }
                 }
             }
@@ -2787,11 +2872,158 @@ function aggregateReactOutputs() {
 
 // ----- END REACT MODE SPECIFIC FUNCTIONS -----
 
+// ---------- GRAPH VISUALIZATION FUNCTIONS ----------
+function getMermaidNodeStyle(status: string): string {
+    const statusMap: { [key: string]: string } = {
+        idle: 'idle', pending: 'pending', running: 'running', processing: 'running',
+        retrying: 'retrying', orchestrating: 'orchestrating', orchestrating_retrying: 'orchestrating_retrying',
+        processing_workers: 'processing_workers', completed: 'completed', math_completed: 'completed',
+        error: 'error', math_error: 'error', failed: 'error', stopping: 'stopping',
+        stopped: 'stopped', cancelled: 'cancelled',
+    };
+    return statusMap[status] || 'default';
+}
+
+function generateWebsiteGraph(pipeline: PipelineState): string {
+    let mermaidStr = `subgraph "Variant ${pipeline.id + 1} (T: ${pipeline.temperature.toFixed(1)}) - ${pipeline.status}"\n`;
+    pipeline.iterations.forEach((iter, index) => {
+        const nodeId = `P${pipeline.id}_Iter${index}`;
+        const nodeLabel = `${iter.iterationNumber + 1}. ${iter.title.replace(/"/g, '#quot;').replace(/\(/g, '#lpar;').replace(/\)/g, '#rpar;')}`;
+        mermaidStr += `    ${nodeId}["${nodeLabel}"]:::${getMermaidNodeStyle(iter.status)};\n`;
+        if (index > 0) {
+            mermaidStr += `    P${pipeline.id}_Iter${index - 1} --> ${nodeId};\n`;
+        }
+    });
+    mermaidStr += `end\n`;
+    return mermaidStr;
+}
+
+function generateCreativeGraph(pipeline: PipelineState): string { return generateWebsiteGraph(pipeline); }
+function generateAgentGraph(pipeline: PipelineState): string { return generateWebsiteGraph(pipeline); }
+
+function generateMathGraph(): string {
+    if (!activeMathPipeline) return '    Empty["No Math Problem Active"];\n';
+    let mermaidStr = '';
+    const problemNodeId = `MathProblem_${activeMathPipeline.id.replace(/-/g, '')}`;
+    const problemTitle = activeMathPipeline.problemText.substring(0, 50).replace(/"/g, '#quot;').replace(/\(/g, '#lpar;').replace(/\)/g, '#rpar;');
+
+    mermaidStr += `subgraph "Math Problem: ${problemTitle}..."\n`;
+    mermaidStr += `    ${problemNodeId}["Problem (${activeMathPipeline.status})"]:::${getMermaidNodeStyle(activeMathPipeline.status)};\n`;
+    activeMathPipeline.initialStrategies.forEach((mainStrategy, msIndex) => {
+        const msNodeId = `${problemNodeId}_MS${msIndex}`;
+        const msTitle = mainStrategy.strategyText.substring(0, 30).replace(/"/g, '#quot;').replace(/\(/g, '#lpar;').replace(/\)/g, '#rpar;');
+        mermaidStr += `    ${msNodeId}["MS ${msIndex + 1}: ${msTitle}.. (${mainStrategy.status})"]:::${getMermaidNodeStyle(mainStrategy.status)};\n`;
+        mermaidStr += `    ${problemNodeId} --> ${msNodeId};\n`;
+        mainStrategy.subStrategies.forEach((subStrategy, ssIndex) => {
+            const ssNodeId = `${msNodeId}_SS${ssIndex}`;
+            const ssTitle = subStrategy.subStrategyText.substring(0, 25).replace(/"/g, '#quot;').replace(/\(/g, '#lpar;').replace(/\)/g, '#rpar;');
+            mermaidStr += `    ${ssNodeId}["Sub ${msIndex + 1}.${ssIndex + 1}: ${ssTitle}.. (${subStrategy.status})"]:::${getMermaidNodeStyle(subStrategy.status)};\n`;
+            mermaidStr += `    ${msNodeId} --> ${ssNodeId};\n`;
+            if (subStrategy.solutionAttempt || ['processing', 'retrying', 'error', 'completed', 'cancelled'].includes(subStrategy.status)) {
+                const solNodeId = `${ssNodeId}_Sol`;
+                mermaidStr += `    ${solNodeId}{"Solution Attempt (${subStrategy.status})"}:::${getMermaidNodeStyle(subStrategy.status)};\n`;
+                mermaidStr += `    ${ssNodeId} --> ${solNodeId};\n`;
+            }
+        });
+    });
+    mermaidStr += `end\n`;
+    return mermaidStr;
+}
+
+function generateReactGraph(): string {
+    if (!activeReactPipeline) return '    Empty["No React Process Active"];\n';
+    let mermaidStr = '';
+    const orchestratorNodeId = `ReactOrchestrator_${activeReactPipeline.id.replace(/-/g, '')}`;
+    const finalOutputNodeId = `ReactFinalOutput_${activeReactPipeline.id.replace(/-/g, '')}`;
+    mermaidStr += `subgraph "React App Generation - ${activeReactPipeline.userRequest.substring(0,30).replace(/"/g, '#quot;') }..."\n`;
+    mermaidStr += `    direction TD;\n`;
+    mermaidStr += `    ${orchestratorNodeId}["Orchestrator (${activeReactPipeline.status.replace('_', ' ')})"]:::${getMermaidNodeStyle(activeReactPipeline.status)};\n`;
+    activeReactPipeline.stages.forEach((stage, index) => {
+        const workerNodeId = `${orchestratorNodeId}_Worker${index}`;
+        const workerTitle = stage.title.replace(/"/g, '#quot;').replace(/\(/g, '#lpar;').replace(/\)/g, '#rpar;');
+        mermaidStr += `    ${workerNodeId}["${workerTitle} (${stage.status})"]:::${getMermaidNodeStyle(stage.status)};\n`;
+        mermaidStr += `    ${orchestratorNodeId} -->|"Task ${index + 1}"| ${workerNodeId};\n`;
+        if (activeReactPipeline?.status === 'completed' && stage.status === 'completed') {
+            mermaidStr += `    ${workerNodeId} --> ${finalOutputNodeId};\n`;
+        }
+    });
+    if (activeReactPipeline?.status === 'completed') {
+        mermaidStr += `    ${finalOutputNodeId}["Aggregated Output"]:::completed;\n`;
+    }
+    mermaidStr += `end\n`;
+    return mermaidStr;
+}
+
+function generateGraphDefinition(): string {
+    let fullMermaidStr = 'graph TD;\n';
+    fullMermaidStr += '    classDef default fill:var(--secondary-surface-bg),stroke:var(--border-primary),color:var(--text-color);\n';
+    fullMermaidStr += '    classDef running fill:color-mix(in srgb, var(--accent-tertiary) 15%, transparent),stroke:var(--accent-tertiary),color:var(--accent-tertiary);\n';
+    fullMermaidStr += '    classDef completed fill:color-mix(in srgb, var(--accent-secondary) 15%, transparent),stroke:var(--accent-secondary),color:var(--accent-secondary);\n';
+    fullMermaidStr += '    classDef error fill:color-mix(in srgb, var(--accent-error) 15%, transparent),stroke:var(--accent-error),color:var(--accent-error);\n';
+    fullMermaidStr += '    classDef pending fill:color-mix(in srgb, var(--accent-primary) 10%, transparent),stroke:var(--accent-primary),color:var(--accent-primary);\n';
+    fullMermaidStr += '    classDef idle class pending;\n';
+    fullMermaidStr += '    classDef retrying class running;\n';
+    fullMermaidStr += '    classDef orchestrating class running;\n';
+    fullMermaidStr += '    classDef orchestrating_retrying class running;\n';
+    fullMermaidStr += '    classDef processing_workers class running;\n';
+    fullMermaidStr += '    classDef stopping fill:color-mix(in srgb, var(--accent-stopping) 12%, transparent),stroke:var(--accent-stopping),color:var(--accent-stopping);\n';
+    fullMermaidStr += '    classDef stopped fill:color-mix(in srgb, var(--text-secondary-color) 10%, transparent),stroke:var(--text-secondary-color),color:var(--text-secondary-color);\n';
+    fullMermaidStr += '    classDef cancelled class stopped;\n';
+
+    let contentGenerated = false;
+    switch (currentMode) {
+        case 'website': case 'creative': case 'agent':
+            if (pipelinesState.length > 0) {
+                pipelinesState.forEach(pipeline => {
+                    if (pipeline.status !== 'idle' || pipeline.iterations.some(it => it.status !== 'pending')) {
+                        fullMermaidStr += (currentMode === 'website' ? generateWebsiteGraph(pipeline) : currentMode === 'creative' ? generateCreativeGraph(pipeline) : generateAgentGraph(pipeline));
+                        contentGenerated = true;
+                    }
+                });
+                if (!contentGenerated && pipelinesState.length > 0) fullMermaidStr += '    Empty["No active generation pipelines."];\n';
+                else if (!contentGenerated) fullMermaidStr += '    Empty["No pipelines defined."];\n';
+
+            } else fullMermaidStr += '    Empty["No pipelines defined."];\n';
+            break;
+        case 'math':
+            if (activeMathPipeline) { fullMermaidStr += generateMathGraph(); contentGenerated = true; }
+            else fullMermaidStr += '    Empty["No Math Problem Active."];\n';
+            break;
+        case 'react':
+            if (activeReactPipeline) { fullMermaidStr += generateReactGraph(); contentGenerated = true; }
+            else fullMermaidStr += '    Empty["No React Process Active."];\n';
+            break;
+        default: fullMermaidStr += '    Empty["Graph not available for this mode."];\n';
+    }
+    return fullMermaidStr;
+}
+
+async function renderGraphView() {
+    const graphContainer = document.getElementById('graph-view-container');
+    if (!graphContainer || graphContainer.style.display === 'none') return;
+    const definition = generateGraphDefinition();
+    let mermaidPreElement = graphContainer.querySelector<HTMLPreElement>('pre.mermaid');
+    if (!mermaidPreElement) {
+        graphContainer.innerHTML = '';
+        mermaidPreElement = document.createElement('pre');
+        mermaidPreElement.className = 'mermaid';
+        graphContainer.appendChild(mermaidPreElement);
+    }
+    mermaidPreElement.innerHTML = escapeHtml(definition); // Use innerHTML for Mermaid to parse entities correctly.
+    try {
+        mermaidPreElement.removeAttribute('data-processed'); // Force re-render
+        await mermaid.run({ nodes: [mermaidPreElement] });
+    } catch (e: any) {
+        console.error("Error rendering Mermaid graph:", e);
+        graphContainer.innerHTML = `<div class="error-message">Error rendering graph: ${e.message}<pre>${escapeHtml(definition)}</pre></div>`;
+    }
+}
+// ----- END GRAPH VISUALIZATION FUNCTIONS -----
+
 
 function initializeUI() {
     if (!initializeApiKey()) {
-        // If API key init fails, message is already shown by initializeApiKey().
-        // Controls will be disabled.
+        // API key init failure handling is inside initializeApiKey()
     }
 
     if (saveApiKeyButton && apiKeyInput && apiKeyStatusElement) {
@@ -2799,14 +3031,12 @@ function initializeUI() {
             const newApiKey = apiKeyInput.value.trim();
             if (newApiKey) {
                 localStorage.setItem('geminiApiKey', newApiKey);
-                apiKeyInput.value = ''; // Clear field for security
+                apiKeyInput.value = '';
                 apiKeyStatusElement.textContent = "API Key saved to Local Storage. Initializing...";
                 apiKeyStatusElement.className = 'api-key-status-message status-processing';
-                if(initializeApiKey()){ // Attempt to re-initialize with the new key
+                if(initializeApiKey()){
                     apiKeyStatusElement.textContent = "API Key saved and client initialized.";
                     apiKeyStatusElement.className = 'api-key-status-message status-ok';
-                } else {
-                    // initializeApiKey will set its own error messages
                 }
             } else {
                 apiKeyStatusElement.textContent = "Please enter an API Key to save.";
@@ -2820,23 +3050,23 @@ function initializeUI() {
             localStorage.removeItem('geminiApiKey');
             apiKeyInput.value = '';
             apiKeyInput.placeholder = 'Enter your API Key';
-            ai = null; // De-initialize the AI client
+            ai = null;
             apiKeyStatusElement.textContent = "API Key cleared from Local Storage. Enter a new key to use the API.";
             apiKeyStatusElement.className = 'api-key-status-message status-error';
-            if (generateButton) generateButton.disabled = true; // Disable generation
-            initializeApiKey(); // Re-run to update status and button states based on fallback (if any)
+            if (generateButton) generateButton.disabled = true;
+            initializeApiKey();
         });
     }
 
     renderPipelineSelectors();
     initializeCustomPromptTextareas();
-    updateUIAfterModeChange(); // Called early to set up initial UI based on default mode
+    // updateUIAfterModeChange(); // Called later in DOMContentLoaded
 
     if (generateButton) {
         generateButton.addEventListener('click', async () => {
-            if (!ai) { // Double check if API client is not initialized
+            if (!ai) {
                 alert("API Key is not configured or failed to initialize. Please set your API Key.");
-                initializeApiKey(); // Try to re-initialize or prompt user
+                initializeApiKey();
                 return;
             }
             const initialIdea = initialIdeaInput.value.trim();
@@ -2844,20 +3074,24 @@ function initializeUI() {
                 alert("Please enter an idea, premise, math problem, or request.");
                 return;
             }
+            // Reset graph view to list view before starting generation
+            const viewToggleListButton = document.getElementById('view-toggle-list') as HTMLButtonElement;
+            if (viewToggleListButton && !viewToggleListButton.classList.contains('active')) {
+                 viewToggleListButton.click(); // Switch to list view
+            }
+
 
             if (currentMode === 'math') {
                 await startMathSolvingProcess(initialIdea, currentProblemImageBase64, currentProblemImageMimeType);
             } else if (currentMode === 'react') {
                 await startReactModeProcess(initialIdea);
-            } else { // Website, Creative, Agent modes
+            } else {
                 initPipelines();
                 if (pipelinesState.length === 0) {
                     alert("Please select at least one variant (temperature) to run.");
                     return;
                 }
-
                 const runningPromises = pipelinesState.map(p => runPipeline(p.id, initialIdea));
-                
                 try {
                     await Promise.allSettled(runningPromises);
                 } finally {
@@ -2883,7 +3117,7 @@ function initializeUI() {
             if (file) {
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    currentProblemImageBase64 = (e.target?.result as string).split(',')[1]; // Get base64 part
+                    currentProblemImageBase64 = (e.target?.result as string).split(',')[1];
                     currentProblemImageMimeType = file.type;
                     mathProblemImagePreview.src = e.target?.result as string;
                     mathProblemImagePreview.style.display = 'block';
@@ -2906,13 +3140,11 @@ function initializeUI() {
     }
     if (promptsModalOverlay) {
         promptsModalOverlay.addEventListener('click', (e) => {
-            // Close if clicking on the overlay itself, not the content
             if (e.target === promptsModalOverlay) {
                 setPromptsModalVisible(false);
             }
         });
     }
-
 
     if (exportConfigButton) {
         exportConfigButton.addEventListener('click', exportConfiguration);
@@ -2921,18 +3153,153 @@ function initializeUI() {
         importConfigInput.addEventListener('change', handleImportConfiguration);
     }
 
+    // Initialize Mermaid.js
+    mermaid.initialize({
+        startOnLoad: false,
+        theme: 'base',
+        themeVariables: {
+            background: 'var(--primary-surface-bg)',
+            primaryColor: 'var(--secondary-surface-bg)',
+            primaryTextColor: 'var(--text-color)',
+            primaryBorderColor: 'var(--border-primary)',
+            lineColor: 'var(--text-secondary-color)',
+            textColor: 'var(--text-secondary-color)',
+        }
+    });
+
+    // View Toggle Logic
+    const viewToggleListButton = document.getElementById('view-toggle-list') as HTMLButtonElement;
+    const viewToggleGraphButton = document.getElementById('view-toggle-graph') as HTMLButtonElement;
+    const graphViewContainer = document.getElementById('graph-view-container') as HTMLElement;
+
+    if (viewToggleListButton && viewToggleGraphButton && graphViewContainer && pipelinesContentContainer) {
+        viewToggleListButton.addEventListener('click', () => {
+            graphViewContainer.style.display = 'none';
+            // Show list view elements based on current mode and active states
+            document.querySelectorAll('#pipelines-content-container > :not(#graph-view-container)').forEach(el => {
+                const htmlEl = el as HTMLElement;
+                let shouldDisplay = false;
+                if (currentMode === 'math' && activeMathPipeline && activeMathPipeline.activeTabId) {
+                    const mathProblemPane = document.getElementById(`math-content-problem-details`);
+                    if (mathProblemPane) mathProblemPane.style.display = activeMathPipeline.activeTabId === 'problem-details' ? 'block' : 'none';
+
+                    activeMathPipeline.initialStrategies.forEach((_, index) => {
+                        const strategyPane = document.getElementById(`math-content-strategy-${index}`);
+                        if (strategyPane) strategyPane.style.display = activeMathPipeline.activeTabId === `strategy-${index}` ? 'block' : 'none';
+                    });
+                     // The above logic should correctly set display for active math panes.
+                    // This additional check is to ensure other non-active math panes are hidden.
+                    if(htmlEl.classList.contains('math-pipeline-content-pane') && htmlEl.classList.contains('active')) {
+                        // This should already be handled by activateTab and specific display logic above.
+                    } else if (htmlEl.classList.contains('math-pipeline-content-pane')) {
+                        htmlEl.style.display = 'none';
+                    }
+
+
+                } else if (currentMode === 'react' && activeReactPipeline) {
+                    const orchestratorPane = pipelinesContentContainer.querySelector('.react-orchestrator-pane') as HTMLElement;
+                    if (orchestratorPane) orchestratorPane.style.display = 'block';
+                    const finalOutputPane = pipelinesContentContainer.querySelector('.react-final-output-pane') as HTMLElement;
+                    if (finalOutputPane && activeReactPipeline.finalAppendedCode) finalOutputPane.style.display = 'block';
+                    else if (finalOutputPane) finalOutputPane.style.display = 'none';
+
+                    document.querySelectorAll('.react-worker-content-pane').forEach(p => (p as HTMLElement).style.display = 'none');
+                    if (activeReactPipeline.activeTabId) {
+                        const activeReactWorkerPane = document.getElementById(`react-worker-content-${activeReactPipeline.activeTabId}`);
+                        if (activeReactWorkerPane) activeReactWorkerPane.style.display = 'block';
+                    }
+
+                } else if (['website', 'creative', 'agent'].includes(currentMode) && activePipelineId !== null) {
+                     document.querySelectorAll('.pipeline-content').forEach(p => (p as HTMLElement).style.display = 'none');
+                    const activeContentPane = document.getElementById(`pipeline-content-${activePipelineId}`);
+                    if (activeContentPane) activeContentPane.style.display = 'block';
+                }
+
+                // Fallback for elements not covered or to ensure non-active elements are hidden
+                if (el.id !== 'graph-view-container') {
+                    if (currentMode === 'react') {
+                        if (!el.classList.contains('react-orchestrator-pane') &&
+                            !el.classList.contains('react-final-output-pane') &&
+                            !(el.classList.contains('react-worker-content-pane') && el.classList.contains('active'))) {
+                            (el as HTMLElement).style.display = 'none';
+                        }
+                    } else if (currentMode === 'math') {
+                         if (!(el.classList.contains('math-pipeline-content-pane') && el.classList.contains('active'))) {
+                             (el as HTMLElement).style.display = 'none';
+                         }
+                    } else if (['website', 'creative', 'agent'].includes(currentMode)){
+                         if (!(el.classList.contains('pipeline-content') && el.classList.contains('active'))) {
+                             (el as HTMLElement).style.display = 'none';
+                         }
+                    }
+                }
+
+
+            });
+            viewToggleListButton.classList.add('active');
+            viewToggleGraphButton.classList.remove('active');
+        });
+
+        viewToggleGraphButton.addEventListener('click', async () => {
+            Array.from(pipelinesContentContainer.children).forEach(child => {
+                if (child.id !== 'graph-view-container') {
+                    (child as HTMLElement).style.display = 'none';
+                }
+            });
+            graphViewContainer.style.display = 'block';
+            viewToggleGraphButton.classList.add('active');
+            viewToggleListButton.classList.remove('active');
+            await renderGraphView();
+        });
+    }
+
     updateControlsState();
 }
 
+function initializeSidebarStatePersistence() {
+    const sidebar = document.getElementById('controls-sidebar');
+    if (!sidebar) return;
+
+    const detailsElements = sidebar.querySelectorAll<HTMLDetailsElement>('details.input-group');
+    const storageKey = 'sidebarSectionState';
+
+    // Load state on startup
+    try {
+        const savedState = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        detailsElements.forEach(el => {
+            if (el.id && savedState[el.id] !== undefined) {
+                el.open = savedState[el.id];
+            }
+        });
+    } catch (e) {
+        console.error("Could not load sidebar state:", e);
+    }
+
+    // Save state on toggle
+    detailsElements.forEach(el => {
+        el.addEventListener('toggle', () => {
+            if (!el.id) return;
+            try {
+                const currentState = JSON.parse(localStorage.getItem(storageKey) || '{}');
+                currentState[el.id] = el.open;
+                localStorage.setItem(storageKey, JSON.stringify(currentState));
+            } catch (e) {
+                console.error("Could not save sidebar state:", e);
+            }
+        });
+    });
+}
+
+
 document.addEventListener('DOMContentLoaded', () => {
     initializeUI();
+    initializeSidebarStatePersistence();
 
-    // Default to first mode if none specifically checked (e.g. after import or on fresh load)
     const appModeRadios = document.querySelectorAll('input[name="appMode"]');
     let modeIsAlreadySet = false;
     appModeRadios.forEach(radio => {
         if ((radio as HTMLInputElement).checked) {
-            currentMode = (radio as HTMLInputElement).value as ApplicationMode; // Ensure currentMode reflects HTML state
+            currentMode = (radio as HTMLInputElement).value as ApplicationMode;
             modeIsAlreadySet = true;
         }
     });
@@ -2944,7 +3311,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentMode = firstModeRadio.value as ApplicationMode;
          }
     }
-    updateUIAfterModeChange(); // Ensure UI fully reflects the active mode after DOM is ready & mode is finalized.
+    updateUIAfterModeChange();
 
     const preloader = document.getElementById('preloader');
     const sidebar = document.getElementById('controls-sidebar');
@@ -2952,13 +3319,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (preloader) {
         preloader.classList.add('hidden');
-        // Delay adding 'is-visible' for a smoother entrance animation after preloader fades
         setTimeout(() => {
             if (sidebar) sidebar.classList.add('is-visible');
             if (mainContent) mainContent.classList.add('is-visible');
-        }, 150); // Adjust delay as needed, should be less than preloader fade time but enough for it to start
+        }, 150);
     } else {
-        // Fallback if preloader isn't found, show content immediately
         if (sidebar) sidebar.classList.add('is-visible');
         if (mainContent) mainContent.classList.add('is-visible');
     }
