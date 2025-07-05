@@ -14,7 +14,7 @@ import {
     systemInstructionJsonOutputOnly, // Same as above
     systemInstructionTextOutputOnly   // Same as above
 } from './prompts.js';
-import mermaid from 'mermaid/dist/mermaid.esm.min.js';
+import mermaid from 'mermaid';
 
 
 const API_KEY = process.env.API_KEY;
