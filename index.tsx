@@ -15,6 +15,8 @@ import {
     systemInstructionTextOutputOnly   // Same as above
 } from './prompts.js';
 import mermaid from 'mermaid';
+import * as Diff from 'diff'; // Added for Diff Viewer
+import JSZip from 'jszip'; // Added for React Download Package
 
 
 const API_KEY = process.env.API_KEY;
@@ -271,6 +273,10 @@ let customPromptsMathState: CustomizablePromptsMath = createDefaultCustomPrompts
 let customPromptsAgentState: CustomizablePromptsAgent = createDefaultCustomPromptsAgent(NUM_AGENT_MAIN_REFINEMENT_LOOPS);
 let customPromptsReactState: CustomizablePromptsReact = JSON.parse(JSON.stringify(defaultCustomPromptsReact)); // Added for React mode
 
+// Diff Modal State
+let diffSourceContent: string | null = null;
+let diffSourceLabel: string | null = null;
+let diffSourceIdentifier: string | null = null; // e.g. "pipeline-0-iter-1" or "math-main0-sub1"
 
 const apiKeyInput = document.getElementById('api-key-input') as HTMLInputElement;
 const saveApiKeyButton = document.getElementById('save-api-key-button') as HTMLButtonElement;
@@ -304,6 +310,13 @@ const reactPromptsContainer = document.getElementById('react-prompts-container')
 const promptsModalOverlay = document.getElementById('prompts-modal-overlay') as HTMLElement;
 const promptsModalCloseButton = document.getElementById('prompts-modal-close-button') as HTMLButtonElement;
 const customPromptsHeader = document.querySelector('.custom-prompts-header') as HTMLElement;
+
+// Diff Modal Elements
+const diffModalOverlay = document.getElementById('diff-modal-overlay') as HTMLElement;
+const diffModalCloseButton = document.getElementById('diff-modal-close-button') as HTMLButtonElement;
+const diffSourceLabelElement = document.getElementById('diff-source-label') as HTMLParagraphElement;
+const diffTargetTreeElement = document.getElementById('diff-target-tree') as HTMLElement;
+const diffViewerPanelElement = document.getElementById('diff-viewer-panel') as HTMLElement;
 
 
 const exportConfigButton = document.getElementById('export-config-button') as HTMLButtonElement;
@@ -991,6 +1004,12 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
                 <pre id="html-code-${pipelineId}-${iter.iterationNumber}" class="code-block language-html">${iter.generatedHtml ? escapeHtml(iter.generatedHtml) : (iter.status === 'cancelled' ? '<!-- HTML generation cancelled. -->' : '<!-- No valid HTML was generated or an error occurred. -->')}</pre>
                 <button id="download-html-${pipelineId}-${iter.iterationNumber}" class="download-html-button button-base action-button" type="button" ${!iter.generatedHtml ? 'disabled' : ''}>Download HTML</button>
                 <button id="copy-html-${pipelineId}-${iter.iterationNumber}" class="copy-html-button button-base action-button" type="button" ${!iter.generatedHtml ? 'disabled' : ''}>Copy HTML</button>
+                <button class="compare-output-button button-base action-button" type="button"
+                    data-pipeline-id="${pipelineId}"
+                    data-iteration-number="${iter.iterationNumber}"
+                    data-content-type="html"
+                    data-content-key="generatedHtml"
+                    ${!iter.generatedHtml ? 'disabled' : ''}>Compare</button>
             `;
         } else if (iter.status === 'pending') {
              generatedOutputHtml = '<p>No HTML generated for this iteration yet.</p>';
@@ -998,26 +1017,34 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
     } else if (currentMode === 'creative' || currentMode === 'agent') {
         let mainContentToDisplay = iter.generatedOrRevisedText; // Creative
         let mainContentLabel = "Generated/Revised Text:";
+        let contentKeyForDiff = 'generatedOrRevisedText';
+
 
         if (currentMode === 'agent') {
             mainContentToDisplay = iter.generatedMainContent;
+            contentKeyForDiff = 'generatedMainContent';
             
             if (iter.iterationNumber === 0 && iter.agentGeneratedPrompts) { // Judge LLM prompt design
                  mainContentToDisplay = "Dynamically designed prompts from Judge LLM are shown above in the 'Prompts' section. No direct content output for this setup step.";
                  mainContentLabel = "Setup Information:";
-            } else if (iter.generatedSubStep_Content && iter.iterationNumber > 2 && iter.iterationNumber < TOTAL_STEPS_AGENT -1) { // Agent loop: Implement (sub-step) then Refine/Suggest (main content)
-                 // iter.generatedSubStep_Content is the output of the "Implement" part of the loop
-                 // iter.generatedMainContent is the output of the "Refine/Suggest" part of the loop
+                 contentKeyForDiff = 'agentGeneratedPrompts'; // Special case for diffing the JSON
+            } else if (iter.generatedSubStep_Content && iter.iterationNumber > 2 && iter.iterationNumber < TOTAL_STEPS_AGENT -1) {
                  generatedOutputHtml += `
                     <h4>Content After Suggestion Implementation (Loop Sub-Step):</h4>
                     <pre id="agent-substep-content-${pipelineId}-${iter.iterationNumber}" class="text-block generated-text-block language-${outputContentType}">${iter.generatedSubStep_Content ? escapeHtml(iter.generatedSubStep_Content) : 'No content from implementation sub-step.'}</pre>
+                     <button class="compare-output-button button-base action-button" type="button"
+                        data-pipeline-id="${pipelineId}"
+                        data-iteration-number="${iter.iterationNumber}"
+                        data-content-type="agent-substep"
+                        data-content-key="generatedSubStep_Content"
+                        ${!iter.generatedSubStep_Content ? 'disabled' : ''}>Compare Sub-Step</button>
                     <hr class="sub-divider">`;
                  mainContentLabel = "Refined Content After Suggestions (Loop Main Step):";
-            } else if (iter.iterationNumber === 1) { // Initial Generation
+            } else if (iter.iterationNumber === 1) {
                 mainContentLabel = "Initial Generated Content:";
-            } else if (iter.iterationNumber === 2) { // Initial Refine/Suggest
+            } else if (iter.iterationNumber === 2) {
                 mainContentLabel = "Refined Content (After Initial Suggestions):";
-            } else if (iter.iterationNumber === TOTAL_STEPS_AGENT -1) { // Final Polish
+            } else if (iter.iterationNumber === TOTAL_STEPS_AGENT -1) {
                 mainContentLabel = "Final Polished Content:";
             } else {
                  mainContentLabel = "Generated/Refined Output:";
@@ -1027,14 +1054,31 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
         if (mainContentToDisplay || ['completed', 'error', 'retrying', 'processing', 'cancelled'].includes(iter.status)) {
              generatedOutputHtml += `
                 <h4>${mainContentLabel}</h4>
-                <pre id="text-block-${pipelineId}-${iter.iterationNumber}" class="text-block generated-text-block language-${outputContentType}">${mainContentToDisplay ? escapeHtml(mainContentToDisplay) : (iter.status === 'cancelled' ? 'Generation cancelled.' : 'No output was generated or an error occurred.')}</pre>`;
-            // Only add download/copy buttons if there's actual content to download/copy (not for iter 0 message)
-            if (mainContentToDisplay && !(currentMode ==='agent' && iter.iterationNumber === 0)) {
+                <pre id="text-block-${pipelineId}-${iter.iterationNumber}" class="text-block generated-text-block language-${outputContentType}">${mainContentToDisplay ? (typeof mainContentToDisplay === 'string' ? escapeHtml(mainContentToDisplay) : escapeHtml(JSON.stringify(mainContentToDisplay, null, 2)) ) : (iter.status === 'cancelled' ? 'Generation cancelled.' : 'No output was generated or an error occurred.')}</pre>`;
+
+            if (mainContentToDisplay && !(currentMode ==='agent' && iter.iterationNumber === 0 && contentKeyForDiff === 'agentGeneratedPrompts')) { // Don't add download/copy for the setup step's prompt JSON via this block
                 generatedOutputHtml += `
                 <button id="download-text-${pipelineId}-${iter.iterationNumber}" class="download-text-button button-base action-button" type="button" ${!mainContentToDisplay ? 'disabled' : ''}>Download Output</button>
                 <button id="copy-text-${pipelineId}-${iter.iterationNumber}" class="copy-text-button button-base action-button" type="button" ${!mainContentToDisplay ? 'disabled' : ''}>Copy Output</button>
+                <button class="compare-output-button button-base action-button" type="button"
+                    data-pipeline-id="${pipelineId}"
+                    data-iteration-number="${iter.iterationNumber}"
+                    data-content-type="${currentMode === 'creative' ? 'text' : 'agent'}"
+                    data-content-key="${contentKeyForDiff}"
+                    ${!mainContentToDisplay ? 'disabled' : ''}>Compare</button>
                 `;
+            } else if (currentMode === 'agent' && iter.iterationNumber === 0 && contentKeyForDiff === 'agentGeneratedPrompts' && mainContentToDisplay) {
+                 // Add compare for the agentGeneratedPrompts JSON itself
+                 generatedOutputHtml += `
+                 <button class="compare-output-button button-base action-button" type="button"
+                    data-pipeline-id="${pipelineId}"
+                    data-iteration-number="${iter.iterationNumber}"
+                    data-content-type="agent-prompt-json"
+                    data-content-key="agentGeneratedPrompts"
+                    ${!mainContentToDisplay ? 'disabled' : ''}>Compare Prompt JSON</button>`;
             }
+
+
         } else if (iter.status === 'pending') {
             generatedOutputHtml = `<p>No output generated for this iteration yet.</p>`;
         }
@@ -1132,7 +1176,7 @@ function attachIterationActionButtons(pipelineId: number, iterationNumber: numbe
             const newDownloadButton = downloadButton.cloneNode(true) as HTMLButtonElement;
             downloadButton.parentNode?.replaceChild(newDownloadButton, downloadButton);
             newDownloadButton.addEventListener('click', () => {
-                if (iter.generatedHtml) { // Guard again, though canDownloadOrCopyHtml covers it
+                if (iter.generatedHtml) {
                     downloadFile(iter.generatedHtml, `website_pipeline-${pipelineId + 1}_iter-${iter.iterationNumber}_temp-${pipeline.temperature}.html`, 'text/html');
                 }
             });
@@ -1162,10 +1206,31 @@ function attachIterationActionButtons(pipelineId: number, iterationNumber: numbe
             });
             newFullscreenButton.disabled = !canDownloadOrCopyHtml;
         }
+
+        const compareButton = document.querySelector<HTMLButtonElement>(`#iter-details-${pipelineId}-${iterationNumber} .compare-output-button[data-content-type="html"]`);
+        if (compareButton) {
+            const newCompareButton = compareButton.cloneNode(true) as HTMLButtonElement;
+            compareButton.parentNode?.replaceChild(newCompareButton, compareButton);
+            newCompareButton.addEventListener('click', () => {
+                if (iter.generatedHtml) {
+                    openDiffModal('website', `variant-${pipelineId}-iter-${iterationNumber}-html`, iter.generatedHtml, `Variant ${pipelineId + 1}, Iter ${iterationNumber + 1} HTML`);
+                }
+            });
+            newCompareButton.disabled = !canDownloadOrCopyHtml;
+        }
+
+
     } else if (currentMode === 'creative' || currentMode === 'agent') {
         const textContentForActions = currentMode === 'creative' ? iter.generatedOrRevisedText : iter.generatedMainContent;
         const isAgentSetupStep = currentMode === 'agent' && iter.iterationNumber === 0;
         const canDownloadOrCopyText = !!textContentForActions && !isAgentSetupStep;
+        const contentKey = currentMode === 'creative' ? 'generatedOrRevisedText' :
+                           (iter.iterationNumber === 0 && iter.agentGeneratedPrompts) ? 'agentGeneratedPrompts' :
+                           (iter.generatedSubStep_Content && iter.iterationNumber > 2 && iter.iterationNumber < TOTAL_STEPS_AGENT -1) ? 'generatedSubStep_Content' : 'generatedMainContent';
+        const contentTypeForDiff = currentMode === 'creative' ? 'text' :
+                                   (iter.iterationNumber === 0 && iter.agentGeneratedPrompts) ? 'agent-prompt-json' :
+                                   (iter.generatedSubStep_Content && iter.iterationNumber > 2 && iter.iterationNumber < TOTAL_STEPS_AGENT -1) ? 'agent-substep' : 'agent';
+
 
         const defaultFileName = currentMode === 'creative' ? 
             `creative_pipeline-${pipelineId + 1}_iter-${iter.iterationNumber}_temp-${pipeline.temperature}.txt` : 
@@ -1177,7 +1242,7 @@ function attachIterationActionButtons(pipelineId: number, iterationNumber: numbe
             const newDownloadButton = downloadButton.cloneNode(true) as HTMLButtonElement;
             downloadButton.parentNode?.replaceChild(newDownloadButton, downloadButton);
             newDownloadButton.addEventListener('click', () => {
-                if (canDownloadOrCopyText && textContentForActions) {
+                if (canDownloadOrCopyText && textContentForActions && typeof textContentForActions === 'string') {
                     downloadFile(textContentForActions, defaultFileName, contentType);
                 }
             });
@@ -1191,10 +1256,40 @@ function attachIterationActionButtons(pipelineId: number, iterationNumber: numbe
             copyButton.parentNode?.replaceChild(newCopyButton, copyButton);
             newCopyButton.dataset.hasContent = String(canDownloadOrCopyText);
             newCopyButton.addEventListener('click', () => {
-                if (canDownloadOrCopyText && textContentForActions) copyToClipboard(textContentForActions, newCopyButton);
+                if (canDownloadOrCopyText && textContentForActions && typeof textContentForActions === 'string') copyToClipboard(textContentForActions, newCopyButton);
             });
             newCopyButton.disabled = !canDownloadOrCopyText;
             newCopyButton.style.display = isAgentSetupStep ? 'none' : 'inline-flex';
+        }
+
+        const compareButton = document.querySelector<HTMLButtonElement>(`#iter-details-${pipelineId}-${iterationNumber} .compare-output-button[data-content-key="${contentKey}"]`);
+         if (compareButton) {
+            const newCompareButton = compareButton.cloneNode(true) as HTMLButtonElement;
+            compareButton.parentNode?.replaceChild(newCompareButton, compareButton);
+            newCompareButton.addEventListener('click', () => {
+                let contentToDiff = "";
+                let labelPrefix = "";
+                if (contentTypeForDiff === 'agent-prompt-json' && iter.agentGeneratedPrompts) {
+                    contentToDiff = JSON.stringify(iter.agentGeneratedPrompts, null, 2);
+                    labelPrefix = "Prompt JSON";
+                } else if (contentTypeForDiff === 'agent-substep' && iter.generatedSubStep_Content) {
+                    contentToDiff = iter.generatedSubStep_Content;
+                    labelPrefix = "Sub-Step Content";
+                } else if (textContentForActions && typeof textContentForActions === 'string') {
+                    contentToDiff = textContentForActions;
+                    labelPrefix = "Output";
+                }
+
+                if (contentToDiff) {
+                    openDiffModal(
+                        contentTypeForDiff,
+                        `variant-${pipelineId}-iter-${iterationNumber}-${contentKey}`,
+                        contentToDiff,
+                        `Variant ${pipelineId + 1}, Iter ${iterationNumber + 1} ${labelPrefix}`
+                    );
+                }
+            });
+            newCompareButton.disabled = !textContentForActions;
         }
     }
 }
@@ -1786,9 +1881,9 @@ function escapeHtml(unsafe: string): string {
     return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
-function downloadFile(content: string, fileName: string, contentType: string) {
+function downloadFile(content: string | Blob, fileName: string, contentType: string) { // Modified to accept Blob
     const a = document.createElement("a");
-    const file = new Blob([content], { type: contentType });
+    const file = (content instanceof Blob) ? content : new Blob([content], { type: contentType });
     a.href = URL.createObjectURL(file);
     a.download = fileName;
     document.body.appendChild(a);
@@ -2345,10 +2440,18 @@ function renderActiveMathPipeline() {
                 if (subStrategy.status === 'retrying' && subStrategy.retryAttempt !== undefined) {
                     contentHtml += `<p class="iteration-status status-retrying">Retrying solution attempt (${subStrategy.retryAttempt}/${MAX_RETRIES})...</p>`;
                 } else if (subStrategy.solutionAttempt) {
+                    const solutionContent = subStrategy.solutionAttempt || 'No solution attempt available.';
+                    const canCompare = !!subStrategy.solutionAttempt;
                     contentHtml += `
                         <div class="math-detail-group">
                             <h4>Solution Attempt:</h4>
-                            <pre class="text-block solution-attempt-block">${escapeHtml(subStrategy.solutionAttempt)}</pre>
+                            <pre class="text-block solution-attempt-block">${escapeHtml(solutionContent)}</pre>
+                             <button class="compare-output-button button-base action-button" type="button"
+                                data-math-problem-id="${mathProcess.id}"
+                                data-main-strategy-id="${mainStrategy.id}"
+                                data-sub-strategy-id="${subStrategy.id}"
+                                data-content-type="mathSolution"
+                                ${!canCompare ? 'disabled' : ''}>Compare</button>
                         </div>`;
                 } else if (subStrategy.status === 'error' && subStrategy.error) {
                      contentHtml += `<div class="error-message"><strong>Error in solution attempt:</strong> <pre>${escapeHtml(subStrategy.error)}</pre></div>`;
@@ -2387,6 +2490,19 @@ function renderActiveMathPipeline() {
                    const ms = activeMathPipeline?.initialStrategies.find(s => s.id === mainStrategy.id);
                    const ss = ms?.subStrategies.find(s_ => s_.id === subS.id);
                    if (ss) ss.isDetailsOpen = subStrategyDetails.open;
+                });
+            }
+            const compareButton = contentPane.querySelector<HTMLButtonElement>(`.compare-output-button[data-sub-strategy-id="${subS.id}"]`);
+            if (compareButton) {
+                compareButton.addEventListener('click', () => {
+                    if (subS.solutionAttempt) {
+                        openDiffModal(
+                            'mathSolution',
+                            `${mathProcess.id}-${mainStrategy.id}-${subS.id}`,
+                            subS.solutionAttempt,
+                            `Math Problem: ${mathProcess.problemText.substring(0,20)}... > MS ${mainStrategy.id.replace('main','')} > Sub ${subS.id.split('-sub')[1]} Solution`
+                        );
+                    }
                 });
             }
         });
@@ -2651,12 +2767,18 @@ function renderReactModePipeline() {
         </details>`;
 
         if (stage.generatedContent) {
+            const canCompare = !!stage.generatedContent;
             workerDetailsHtml += `
             <details class="react-details-section" id="react-worker-${stage.id}-code-details" open>
                 <summary>Generated Code/Content</summary>
                 <div class="detail-content">
                     <pre class="code-block language-javascript" id="react-worker-${stage.id}-code-block">${escapeHtml(stage.generatedContent)}</pre>
                      <button class="button-base action-button copy-react-worker-code-btn" data-worker-id="${stage.id}">Copy Code</button>
+                     <button class="compare-output-button button-base action-button" type="button"
+                        data-react-pipeline-id="${pipeline.id}"
+                        data-worker-id="${stage.id}"
+                        data-content-type="reactWorkerOutput"
+                        ${!canCompare ? 'disabled' : ''}>Compare</button>
                 </div>
             </details>`;
         } else if (stage.status === 'completed' && !stage.generatedContent) {
@@ -2680,7 +2802,7 @@ function renderReactModePipeline() {
             });
         }
 
-        const copyBtn = workerContentPane.querySelector('.copy-react-worker-code-btn');
+        const copyBtn = workerContentPane.querySelector<HTMLButtonElement>('.copy-react-worker-code-btn');
         if (copyBtn) {
             const newCopyBtn = copyBtn.cloneNode(true) as HTMLButtonElement;
             copyBtn.parentNode?.replaceChild(newCopyBtn, copyBtn);
@@ -2689,6 +2811,16 @@ function renderReactModePipeline() {
                 const contentToCopy = activeReactPipeline?.stages.find(s => s.id === workerId)?.generatedContent;
                 if (contentToCopy) {
                     copyToClipboard(contentToCopy, e.target as HTMLButtonElement);
+                }
+            });
+        }
+        const compareBtn = workerContentPane.querySelector<HTMLButtonElement>('.compare-output-button');
+        if(compareBtn) {
+            const newCompareBtn = compareBtn.cloneNode(true) as HTMLButtonElement;
+            compareBtn.parentNode?.replaceChild(newCompareBtn, compareBtn);
+            newCompareBtn.addEventListener('click', () => {
+                if(stage.generatedContent){
+                    openDiffModal('reactWorkerOutput', `${pipeline.id}-worker-${stage.id}`, stage.generatedContent, `React App: ${pipeline.userRequest.substring(0,20)}... > Worker ${stage.id + 1} Output`);
                 }
             });
         }
@@ -2701,23 +2833,37 @@ function renderReactModePipeline() {
             finalOutputPane.className = 'react-final-output-pane';
             pipelinesContentContainer.appendChild(finalOutputPane);
         }
+        const canCompareFinal = !!pipeline.finalAppendedCode;
         finalOutputPane.innerHTML = `
             <h3>Final Aggregated Application Code</h3>
             <p>The following is a concatenation of outputs from successful worker agents. File markers (e.g., // --- FILE: src/App.tsx ---) should indicate intended file paths.</p>
             <pre id="react-final-appended-code" class="code-block language-javascript">${escapeHtml(pipeline.finalAppendedCode)}</pre>
-            <button id="download-react-app-code" class="button-base action-button" type="button">Download Full App Code</button>
+            <button id="download-react-project-zip-button" class="button-base action-button" type="button">Download Runnable Project (.zip)</button>
+            <button class="compare-output-button button-base action-button" type="button"
+                data-react-pipeline-id="${pipeline.id}"
+                data-content-type="reactFinalAggregatedCode"
+                ${!canCompareFinal ? 'disabled' : ''}>Compare Final Code</button>
         `;
 
-        const downloadAppButton = finalOutputPane.querySelector('#download-react-app-code');
-        if (downloadAppButton && pipeline.finalAppendedCode) {
-            const newDownloadAppButton = downloadAppButton.cloneNode(true) as HTMLButtonElement;
-            downloadAppButton.parentNode?.replaceChild(newDownloadAppButton, downloadAppButton);
-            newDownloadAppButton.addEventListener('click', () => {
-                 if (activeReactPipeline?.finalAppendedCode) {
-                    downloadFile(activeReactPipeline.finalAppendedCode, `react_app_${pipeline.id}.txt`, 'text/plain');
-                 }
-            });
+        const downloadZipButton = finalOutputPane.querySelector('#download-react-project-zip-button');
+        if (downloadZipButton) {
+            const newDownloadZipButton = downloadZipButton.cloneNode(true) as HTMLButtonElement;
+            downloadZipButton.parentNode?.replaceChild(newDownloadZipButton, downloadZipButton);
+            newDownloadZipButton.addEventListener('click', createAndDownloadReactProjectZip);
         }
+
+        const compareFinalButton = finalOutputPane.querySelector<HTMLButtonElement>('.compare-output-button');
+        if (compareFinalButton) {
+            const newCompareFinalButton = compareFinalButton.cloneNode(true) as HTMLButtonElement;
+            compareFinalButton.parentNode?.replaceChild(newCompareFinalButton, compareFinalButton);
+            newCompareFinalButton.addEventListener('click', () => {
+                if (pipeline.finalAppendedCode) {
+                    openDiffModal('reactFinalAggregatedCode', `${pipeline.id}-final`, pipeline.finalAppendedCode, `React App: ${pipeline.userRequest.substring(0,20)}... > Final Aggregated Code`);
+                }
+            });
+            newCompareFinalButton.disabled = !canCompareFinal;
+        }
+
         finalOutputPane.style.display = 'block';
     } else if (finalOutputPane) {
         finalOutputPane.style.display = 'none'; // Hide if no final code
@@ -2870,6 +3016,7 @@ function aggregateReactOutputs() {
     console.log("Final appended code generated:", activeReactPipeline.finalAppendedCode.substring(0, 1000) + "...");
 }
 
+
 // ----- END REACT MODE SPECIFIC FUNCTIONS -----
 
 // ---------- GRAPH VISUALIZATION FUNCTIONS ----------
@@ -2956,19 +3103,8 @@ function generateReactGraph(): string {
 
 function generateGraphDefinition(): string {
     let fullMermaidStr = 'graph TD;\n';
-    fullMermaidStr += '    classDef default fill:var(--secondary-surface-bg),stroke:var(--border-primary),color:var(--text-color);\n';
-    fullMermaidStr += '    classDef running fill:color-mix(in srgb, var(--accent-tertiary) 15%, transparent),stroke:var(--accent-tertiary),color:var(--accent-tertiary);\n';
-    fullMermaidStr += '    classDef completed fill:color-mix(in srgb, var(--accent-secondary) 15%, transparent),stroke:var(--accent-secondary),color:var(--accent-secondary);\n';
-    fullMermaidStr += '    classDef error fill:color-mix(in srgb, var(--accent-error) 15%, transparent),stroke:var(--accent-error),color:var(--accent-error);\n';
-    fullMermaidStr += '    classDef pending fill:color-mix(in srgb, var(--accent-primary) 10%, transparent),stroke:var(--accent-primary),color:var(--accent-primary);\n';
-    fullMermaidStr += '    classDef idle class pending;\n';
-    fullMermaidStr += '    classDef retrying class running;\n';
-    fullMermaidStr += '    classDef orchestrating class running;\n';
-    fullMermaidStr += '    classDef orchestrating_retrying class running;\n';
-    fullMermaidStr += '    classDef processing_workers class running;\n';
-    fullMermaidStr += '    classDef stopping fill:color-mix(in srgb, var(--accent-stopping) 12%, transparent),stroke:var(--accent-stopping),color:var(--accent-stopping);\n';
-    fullMermaidStr += '    classDef stopped fill:color-mix(in srgb, var(--text-secondary-color) 10%, transparent),stroke:var(--text-secondary-color),color:var(--text-secondary-color);\n';
-    fullMermaidStr += '    classDef cancelled class stopped;\n';
+    // classDef styles are now expected to be handled by external CSS in index.css
+    // applied via :::className syntax in node definitions.
 
     let contentGenerated = false;
     switch (currentMode) {
@@ -3019,6 +3155,164 @@ async function renderGraphView() {
     }
 }
 // ----- END GRAPH VISUALIZATION FUNCTIONS -----
+
+// ---------- DIFF VIEWER FUNCTIONS ----------
+function setDiffModalVisible(visible: boolean) {
+    if (diffModalOverlay) {
+        if (visible) {
+            diffModalOverlay.style.display = 'flex';
+            setTimeout(() => diffModalOverlay.classList.add('is-visible'), 10);
+        } else {
+            diffModalOverlay.classList.remove('is-visible');
+            diffModalOverlay.addEventListener('transitionend', () => {
+                if (!diffModalOverlay.classList.contains('is-visible')) {
+                    diffModalOverlay.style.display = 'none';
+                }
+            }, { once: true });
+        }
+    }
+}
+
+function renderDiffView(sourceText: string, targetText: string) {
+    if (!diffViewerPanelElement) return;
+    const diffResult = Diff.diffLines(sourceText, targetText);
+    let diffHtml = '<div class="diff-view">';
+    diffResult.forEach(part => {
+        const type = part.added ? 'diff-added' : part.removed ? 'diff-removed' : 'diff-neutral';
+        // Escape HTML entities in the value to prevent XSS
+        const escapedValue = escapeHtml(part.value);
+        diffHtml += `<span class="${type}">${escapedValue}</span>`;
+    });
+    diffHtml += '</div>';
+    diffViewerPanelElement.innerHTML = diffHtml;
+}
+
+function populateDiffTargetTree() {
+    if (!diffTargetTreeElement) return;
+    diffTargetTreeElement.innerHTML = ''; // Clear previous targets
+
+    const createTargetItem = (labelText: string, contentFetcher: () => string | undefined | null, identifier: string) => {
+        const item = document.createElement('div');
+        item.className = 'tree-item';
+        item.textContent = labelText;
+        if (identifier === diffSourceIdentifier) {
+            item.classList.add('disabled');
+            item.title = "This is the current source";
+        } else {
+            item.addEventListener('click', () => {
+                if (diffSourceContent === null) {
+                    diffViewerPanelElement.innerHTML = '<div class="diff-no-selection"><p>Source content is missing.</p></div>';
+                    return;
+                }
+                const targetContent = contentFetcher();
+                if (targetContent !== null && targetContent !== undefined) {
+                    renderDiffView(diffSourceContent, targetContent);
+                } else {
+                    diffViewerPanelElement.innerHTML = '<div class="diff-no-selection"><p>Selected target content is not available.</p></div>';
+                }
+            });
+        }
+        diffTargetTreeElement.appendChild(item);
+    };
+
+    // Populate with Website/Creative/Agent pipeline iterations
+    pipelinesState.forEach(pipeline => {
+        pipeline.iterations.forEach(iter => {
+            const commonIdPart = `variant-${pipeline.id}-iter-${iter.iterationNumber}`;
+            if (iter.generatedHtml) {
+                createTargetItem(
+                    `Variant ${pipeline.id + 1}, Iter ${iter.iterationNumber + 1} HTML`,
+                    () => iter.generatedHtml,
+                    `${commonIdPart}-html`
+                );
+            }
+            if (iter.generatedOrRevisedText) {
+                 createTargetItem(
+                    `Variant ${pipeline.id + 1}, Iter ${iter.iterationNumber + 1} Text (Creative)`,
+                    () => iter.generatedOrRevisedText,
+                    `${commonIdPart}-creativeText`
+                );
+            }
+            if (iter.generatedMainContent) {
+                 createTargetItem(
+                    `Variant ${pipeline.id + 1}, Iter ${iter.iterationNumber + 1} Content (Agent)`,
+                    () => iter.generatedMainContent,
+                    `${commonIdPart}-agentMain`
+                );
+            }
+             if (iter.generatedSubStep_Content) {
+                 createTargetItem(
+                    `Variant ${pipeline.id + 1}, Iter ${iter.iterationNumber + 1} Sub-Step Content (Agent)`,
+                    () => iter.generatedSubStep_Content,
+                    `${commonIdPart}-agentSubStep`
+                );
+            }
+            if (iter.agentGeneratedPrompts && iter.iterationNumber === 0) {
+                 createTargetItem(
+                    `Variant ${pipeline.id + 1}, Iter ${iter.iterationNumber + 1} Prompt JSON (Agent Setup)`,
+                    () => JSON.stringify(iter.agentGeneratedPrompts, null, 2),
+                    `${commonIdPart}-agentPromptJson`
+                );
+            }
+        });
+    });
+
+    // Populate with Math pipeline solutions
+    if (activeMathPipeline) {
+        const mathProblemId = activeMathPipeline.id;
+        activeMathPipeline.initialStrategies.forEach(mainStrategy => {
+            mainStrategy.subStrategies.forEach(subStrategy => {
+                if (subStrategy.solutionAttempt) {
+                    createTargetItem(
+                        `Math: MS ${mainStrategy.id.replace('main','')}, Sub ${subStrategy.id.split('-sub')[1]} Solution`,
+                        () => subStrategy.solutionAttempt,
+                        `${mathProblemId}-${mainStrategy.id}-${subStrategy.id}`
+                    );
+                }
+            });
+        });
+    }
+
+    // Populate with React pipeline worker outputs and final code
+    if (activeReactPipeline) {
+        const reactPipelineId = activeReactPipeline.id;
+        activeReactPipeline.stages.forEach(stage => {
+            if (stage.generatedContent) {
+                 createTargetItem(
+                    `React: Worker ${stage.id + 1} (${stage.title}) Output`,
+                    () => stage.generatedContent,
+                    `${reactPipelineId}-worker-${stage.id}`
+                );
+            }
+        });
+        if (activeReactPipeline.finalAppendedCode) {
+             createTargetItem(
+                `React: Final Aggregated Code`,
+                () => activeReactPipeline.finalAppendedCode,
+                `${reactPipelineId}-final`
+            );
+        }
+    }
+     if(diffTargetTreeElement.children.length === 0) {
+        diffTargetTreeElement.innerHTML = '<p>No other outputs available to compare with.</p>';
+    }
+}
+
+
+function openDiffModal(sourceType: string, identifier: string, content: string, label: string) {
+    if (!diffModalOverlay || !diffSourceLabelElement || !diffViewerPanelElement) return;
+
+    diffSourceContent = content;
+    diffSourceLabel = label;
+    diffSourceIdentifier = identifier;
+
+    diffSourceLabelElement.textContent = label;
+    diffViewerPanelElement.innerHTML = '<div class="diff-no-selection"><p>Select a target output from the list to view differences.</p></div>'; // Reset viewer
+
+    populateDiffTargetTree();
+    setDiffModalVisible(true);
+}
+// ----- END DIFF VIEWER FUNCTIONS -----
 
 
 function initializeUI() {
@@ -3146,6 +3440,16 @@ function initializeUI() {
         });
     }
 
+    if (diffModalCloseButton && diffModalOverlay) { // Diff modal listeners
+        diffModalCloseButton.addEventListener('click', () => setDiffModalVisible(false));
+        diffModalOverlay.addEventListener('click', (e) => {
+            if (e.target === diffModalOverlay) {
+                setDiffModalVisible(false);
+            }
+        });
+    }
+
+
     if (exportConfigButton) {
         exportConfigButton.addEventListener('click', exportConfiguration);
     }
@@ -3154,28 +3458,9 @@ function initializeUI() {
     }
 
     // Initialize Mermaid.js
-    const computedStyles = getComputedStyle(document.body);
     mermaid.initialize({
         startOnLoad: false,
-        theme: 'base', // Using 'base' and overriding specific variables
-        themeVariables: {
-            background: computedStyles.getPropertyValue('--primary-surface-bg').trim() || '#0c0916', // Fallback if CSS var is not found
-            primaryColor: computedStyles.getPropertyValue('--secondary-surface-bg').trim() || '#120f1e', // Fallback
-            primaryTextColor: computedStyles.getPropertyValue('--text-color').trim() || '#D0D0DA', // Fallback
-            primaryBorderColor: computedStyles.getPropertyValue('--border-primary').trim() || '#463c783f', // Fallback
-            lineColor: computedStyles.getPropertyValue('--text-secondary-color').trim() || '#8890A8', // Fallback
-            textColor: computedStyles.getPropertyValue('--text-secondary-color').trim() || '#8890A8', // Fallback
-            // Node specific fallbacks based on CSS
-            nodeBorder: computedStyles.getPropertyValue('--border-primary').trim() || '#463c783f',
-            mainBkg: computedStyles.getPropertyValue('--secondary-surface-bg').trim() || '#120f1e', // for default nodes
-            errorBkgColor: computedStyles.getPropertyValue('--accent-error').trim() || '#7A3B3B', // for error nodes (background)
-            errorTextColor: '#FFFFFF', // Make sure text is visible on error background
-            // Add other specific variables if Mermaid's styling still looks off
-            // For example, for specific node types if you use them:
-            // 'node-running-fill': computedStyles.getPropertyValue('--accent-tertiary').trim() || '#705A2F',
-            // 'node-completed-fill': computedStyles.getPropertyValue('--accent-secondary').trim() || '#3A5F4F',
-            // 'node-error-fill': computedStyles.getPropertyValue('--accent-error').trim() || '#7A3B3B', // Already have errorBkgColor
-        }
+        theme: null,
     });
 
     // View Toggle Logic
@@ -3186,7 +3471,6 @@ function initializeUI() {
     if (viewToggleListButton && viewToggleGraphButton && graphViewContainer && pipelinesContentContainer) {
         viewToggleListButton.addEventListener('click', () => {
             graphViewContainer.style.display = 'none';
-            // Show list view elements based on current mode and active states
             document.querySelectorAll('#pipelines-content-container > :not(#graph-view-container)').forEach(el => {
                 const htmlEl = el as HTMLElement;
                 let shouldDisplay = false;
@@ -3198,15 +3482,11 @@ function initializeUI() {
                         const strategyPane = document.getElementById(`math-content-strategy-${index}`);
                         if (strategyPane) strategyPane.style.display = activeMathPipeline.activeTabId === `strategy-${index}` ? 'block' : 'none';
                     });
-                     // The above logic should correctly set display for active math panes.
-                    // This additional check is to ensure other non-active math panes are hidden.
                     if(htmlEl.classList.contains('math-pipeline-content-pane') && htmlEl.classList.contains('active')) {
-                        // This should already be handled by activateTab and specific display logic above.
+                        // already handled
                     } else if (htmlEl.classList.contains('math-pipeline-content-pane')) {
                         htmlEl.style.display = 'none';
                     }
-
-
                 } else if (currentMode === 'react' && activeReactPipeline) {
                     const orchestratorPane = pipelinesContentContainer.querySelector('.react-orchestrator-pane') as HTMLElement;
                     if (orchestratorPane) orchestratorPane.style.display = 'block';
@@ -3219,14 +3499,12 @@ function initializeUI() {
                         const activeReactWorkerPane = document.getElementById(`react-worker-content-${activeReactPipeline.activeTabId}`);
                         if (activeReactWorkerPane) activeReactWorkerPane.style.display = 'block';
                     }
-
                 } else if (['website', 'creative', 'agent'].includes(currentMode) && activePipelineId !== null) {
                      document.querySelectorAll('.pipeline-content').forEach(p => (p as HTMLElement).style.display = 'none');
                     const activeContentPane = document.getElementById(`pipeline-content-${activePipelineId}`);
                     if (activeContentPane) activeContentPane.style.display = 'block';
                 }
 
-                // Fallback for elements not covered or to ensure non-active elements are hidden
                 if (el.id !== 'graph-view-container') {
                     if (currentMode === 'react') {
                         if (!el.classList.contains('react-orchestrator-pane') &&
@@ -3244,8 +3522,6 @@ function initializeUI() {
                          }
                     }
                 }
-
-
             });
             viewToggleListButton.classList.add('active');
             viewToggleGraphButton.classList.remove('active');
@@ -3339,3 +3615,5 @@ document.addEventListener('DOMContentLoaded', () => {
         if (mainContent) mainContent.classList.add('is-visible');
     }
 });
+
+[end of index.tsx]
