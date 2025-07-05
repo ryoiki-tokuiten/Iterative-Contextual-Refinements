@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import * as Diff from 'diff';
 import { GoogleGenAI, GenerateContentResponse, Part } from "@google/genai";
 import { 
     defaultCustomPromptsWebsite, 
@@ -303,6 +304,12 @@ const promptsModalOverlay = document.getElementById('prompts-modal-overlay') as 
 const promptsModalCloseButton = document.getElementById('prompts-modal-close-button') as HTMLButtonElement;
 const customPromptsHeader = document.querySelector('.custom-prompts-header') as HTMLElement;
 
+// Diff Modal Elements
+const diffModalOverlay = document.getElementById('diff-modal-overlay') as HTMLElement;
+const diffModalCloseButton = document.getElementById('diff-modal-close-button') as HTMLButtonElement;
+const diffSourceLabel = document.getElementById('diff-source-label') as HTMLParagraphElement;
+const diffTargetTreeContainer = document.getElementById('diff-target-tree') as HTMLElement;
+const diffViewerPanel = document.getElementById('diff-viewer-panel') as HTMLElement;
 
 const exportConfigButton = document.getElementById('export-config-button') as HTMLButtonElement;
 const importConfigInput = document.getElementById('import-config-input') as HTMLInputElement;
@@ -950,6 +957,7 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
                 <pre id="html-code-${pipelineId}-${iter.iterationNumber}" class="code-block language-html">${iter.generatedHtml ? escapeHtml(iter.generatedHtml) : (iter.status === 'cancelled' ? '<!-- HTML generation cancelled. -->' : '<!-- No valid HTML was generated or an error occurred. -->')}</pre>
                 <button id="download-html-${pipelineId}-${iter.iterationNumber}" class="download-html-button button-base action-button" type="button" ${!iter.generatedHtml ? 'disabled' : ''}>Download HTML</button>
                 <button id="copy-html-${pipelineId}-${iter.iterationNumber}" class="copy-html-button button-base action-button" type="button" ${!iter.generatedHtml ? 'disabled' : ''}>Copy HTML</button>
+                <button class="compare-output-button button-base action-button" data-pipeline-id="${pipelineId}" data-iteration-number="${iter.iterationNumber}" data-content-type="html" type="button" ${!iter.generatedHtml ? 'disabled' : ''}>Compare</button>
             `;
         } else if (iter.status === 'pending') {
              generatedOutputHtml = '<p>No HTML generated for this iteration yet.</p>';
@@ -992,6 +1000,7 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
                 generatedOutputHtml += `
                 <button id="download-text-${pipelineId}-${iter.iterationNumber}" class="download-text-button button-base action-button" type="button" ${!mainContentToDisplay ? 'disabled' : ''}>Download Output</button>
                 <button id="copy-text-${pipelineId}-${iter.iterationNumber}" class="copy-text-button button-base action-button" type="button" ${!mainContentToDisplay ? 'disabled' : ''}>Copy Output</button>
+                <button class="compare-output-button button-base action-button" data-pipeline-id="${pipelineId}" data-iteration-number="${iter.iterationNumber}" data-content-type="text" type="button" ${!mainContentToDisplay ? 'disabled' : ''}>Compare</button>
                 `;
             }
         } else if (iter.status === 'pending') {
@@ -2921,8 +2930,135 @@ function initializeUI() {
         importConfigInput.addEventListener('change', handleImportConfiguration);
     }
 
+    // Diff Modal Listeners
+    if (diffModalCloseButton) {
+        diffModalCloseButton.addEventListener('click', closeDiffModal);
+    }
+    if (diffModalOverlay) {
+        diffModalOverlay.addEventListener('click', (e) => {
+            if (e.target === diffModalOverlay) {
+                closeDiffModal();
+            }
+        });
+    }
+    // Event delegation for dynamically created "Compare" buttons
+    if (pipelinesContentContainer) {
+        pipelinesContentContainer.addEventListener('click', (event) => {
+            const target = event.target as HTMLElement;
+            if (target.classList.contains('compare-output-button')) {
+                const pipelineId = parseInt(target.dataset.pipelineId || "-1", 10);
+                const iterationNumber = parseInt(target.dataset.iterationNumber || "-1", 10);
+                const contentType = target.dataset.contentType as ('html' | 'text');
+                if (pipelineId !== -1 && iterationNumber !== -1 && (contentType === 'html' || contentType === 'text')) {
+                    openDiffModal(pipelineId, iterationNumber, contentType);
+                }
+            }
+        });
+    }
+
     updateControlsState();
 }
+
+// ---------- DIFF MODAL FUNCTIONS ----------
+
+let diffSourceData: { pipelineId: number, iterationNumber: number, contentType: 'html' | 'text', content: string, title: string } | null = null;
+
+function renderDiff(sourceText: string, targetText: string) {
+    if (!diffViewerPanel) return;
+    const differences = Diff.diffLines(sourceText, targetText, { newlineIsToken: true });
+    let html = '<div class="diff-view">';
+    differences.forEach(part => {
+        const colorClass = part.added ? 'diff-added' : part.removed ? 'diff-removed' : 'diff-neutral';
+        html += `<span class="${colorClass}">${escapeHtml(part.value)}</span>`;
+    });
+    html += '</div>';
+    diffViewerPanel.innerHTML = html;
+}
+
+function populateDiffTargetTree() {
+    if (!diffTargetTreeContainer || !diffSourceData) return;
+    diffTargetTreeContainer.innerHTML = ''; // Clear previous tree
+
+    pipelinesState.forEach(pipeline => {
+        const pipelineTitle = document.createElement('h5');
+        pipelineTitle.textContent = `Variant ${pipeline.id + 1} (T: ${pipeline.temperature.toFixed(1)})`;
+        diffTargetTreeContainer.appendChild(pipelineTitle);
+
+        pipeline.iterations.forEach(iter => {
+            const isSource = pipeline.id === diffSourceData!.pipelineId && iter.iterationNumber === diffSourceData!.iterationNumber;
+            let targetContent: string | undefined = undefined;
+            if (diffSourceData!.contentType === 'html') {
+                targetContent = iter.generatedHtml;
+            } else { // text
+                targetContent = iter.generatedOrRevisedText || iter.generatedMainContent;
+            }
+
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'tree-item';
+            itemDiv.textContent = iter.title;
+            if (isSource || !targetContent) {
+                itemDiv.classList.add('disabled');
+                if (isSource) itemDiv.textContent += ' (Source A)';
+                else itemDiv.textContent += ' (No content)';
+            } else {
+                itemDiv.addEventListener('click', () => {
+                    if (targetContent) { // Should always be true if not disabled
+                        renderDiff(diffSourceData!.content, targetContent);
+                        // Optionally highlight selected target
+                        diffTargetTreeContainer.querySelectorAll('.tree-item.selected').forEach(el => el.classList.remove('selected'));
+                        itemDiv.classList.add('selected');
+                    }
+                });
+            }
+            diffTargetTreeContainer.appendChild(itemDiv);
+        });
+    });
+}
+
+
+function openDiffModal(pipelineId: number, iterationNumber: number, contentType: 'html' | 'text') {
+    const pipeline = pipelinesState.find(p => p.id === pipelineId);
+    if (!pipeline) return;
+    const iteration = pipeline.iterations.find(iter => iter.iterationNumber === iterationNumber);
+    if (!iteration) return;
+
+    let content: string | undefined;
+    if (contentType === 'html') {
+        content = iteration.generatedHtml;
+    } else { // text
+        content = iteration.generatedOrRevisedText || iteration.generatedMainContent;
+    }
+
+    if (!content) {
+        alert("Source content is not available for comparison.");
+        return;
+    }
+
+    diffSourceData = { pipelineId, iterationNumber, contentType, content, title: iteration.title };
+
+    if (diffSourceLabel) diffSourceLabel.textContent = `Variant ${pipelineId + 1} - ${iteration.title}`;
+    if (diffViewerPanel) diffViewerPanel.innerHTML = '<div class="diff-no-selection"><p>Select a target (B) from the list to view differences.</p></div>'; // Reset viewer
+
+    populateDiffTargetTree();
+    if (diffModalOverlay) {
+        diffModalOverlay.style.display = 'flex';
+        setTimeout(() => diffModalOverlay.classList.add('is-visible'), 10);
+    }
+}
+
+function closeDiffModal() {
+    if (diffModalOverlay) {
+        diffModalOverlay.classList.remove('is-visible');
+        diffModalOverlay.addEventListener('transitionend', () => {
+            if (!diffModalOverlay.classList.contains('is-visible')) {
+                diffModalOverlay.style.display = 'none';
+            }
+        }, { once: true });
+    }
+    diffSourceData = null; // Clear source data when closing
+}
+
+// ---------- END DIFF MODAL FUNCTIONS ----------
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeUI();

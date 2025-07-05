@@ -270,4 +270,30 @@
     </div>
 
     <script type="module" src="index.tsx"></script>
+
+    <!-- Diff Viewer Modal -->
+    <div id="diff-modal-overlay" class="prompts-modal-overlay">
+        <div class="prompts-modal-content" role="dialog" aria-modal="true" aria-labelledby="diff-modal-title">
+            <div class="prompts-modal-header">
+                <h2 id="diff-modal-title" class="prompts-modal-title">Compare Outputs</h2>
+                <button id="diff-modal-close-button" class="prompts-modal-close-button" aria-label="Close Diff Viewer">×</button>
+            </div>
+            <div id="diff-modal-body" class="diff-modal-body">
+                <div id="diff-selector-panel">
+                    <div id="diff-source-display">
+                        <h4>Source (A)</h4>
+                        <p id="diff-source-label">None selected</p>
+                    </div>
+                    <hr/>
+                    <h4>Select Target (B)</h4>
+                    <div id="diff-target-tree"></div>
+                </div>
+                <div id="diff-viewer-panel">
+                    <div class="diff-no-selection">
+                        <p>Select a source and target to view differences.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>

@@ -1308,3 +1308,66 @@ label#import-config-label { text-align: center; }
     .prompts-modal-content { max-height: 100vh; max-width: 100vw; border-radius: 0; }
     .prompts-modal-body { padding: var(--space-4); }
 }
+
+/* Diff Modal */
+.diff-modal-body {
+    display: flex;
+    gap: var(--space-6);
+    padding: 0;
+    height: 100%;
+}
+
+#diff-selector-panel {
+    width: 320px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border-secondary);
+    padding: var(--space-6);
+    overflow-y: auto;
+}
+
+#diff-viewer-panel {
+    flex-grow: 1;
+    overflow: auto;
+    font-family: var(--font-family-mono);
+    font-size: 0.9rem;
+    padding: var(--space-6);
+}
+
+#diff-source-display p {
+    background-color: var(--tertiary-surface-bg);
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-primary);
+}
+
+#diff-target-tree .tree-item {
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+#diff-target-tree .tree-item:hover {
+    background-color: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+}
+#diff-target-tree .tree-item.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: transparent;
+}
+
+.diff-view {
+    white-space: pre;
+}
+.diff-view span {
+    display: block;
+    padding: 0.1em 0.5em;
+}
+.diff-view .diff-added {
+    background-color: color-mix(in srgb, var(--accent-secondary) 20%, transparent);
+}
+.diff-view .diff-removed {
+    background-color: color-mix(in srgb, var(--accent-error) 20%, transparent);
+}
+.diff-view .diff-neutral {
+    color: var(--text-secondary-color);
+}
