@@ -1,0 +1,2104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sorting Algorithms in C</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&amp;family=Roboto+Mono:wght@400&amp;display=swap" rel="stylesheet">
+    <!-- Prism.js CSS for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-okaidia.min.css" rel="stylesheet" />
+    <!-- Prism.js Line Numbers plugin CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css" rel="stylesheet" />
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
+            --background-color: #f8f9fa;
+            --text-color: #343a40;
+            --heading-color: #0056b3;
+            --code-background: #212529;
+            --code-text: #f8f9fa;
+            --code-comment: #6c757d;
+            --code-keyword: #007bff;
+            --code-string: #28a745;
+            --code-number: #ffc107;
+            --border-color: #dee2e6;
+            --nav-width: 250px;
+            --complexity-bg: #e9ecef;
+            --footer-bg: #343a40;
+            --footer-text: #f8f9fa;
+            --visualization-bg: #ffffff; /* White background for visualization */
+            --bar-color: var(--primary-color);
+            --bar-comparing: #ffc107; /* Yellow */
+            --bar-swapping: #dc3545; /* Red */
+            --bar-sorted: #28a745; /* Green */
+            --bar-min: #17a2b8; /* Cyan for min element in selection sort */
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            line-height: 1.7;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+            display: grid;
+            grid-template-columns: var(--nav-width) 1fr;
+            gap: 40px;
+            flex-grow: 1;
+        }
+
+        h1, h2, h3 {
+            color: var(--heading-color);
+            margin-top: 1.5em;
+            margin-bottom: 0.8em;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            text-align: center;
+            margin-top: 40px;
+            margin-bottom: 30px;
+            color: var(--primary-color);
+            grid-column: 1 / -1;
+        }
+
+        h2 {
+            font-size: 1.8em;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 5px;
+        }
+
+        h3 {
+            font-size: 1.4em;
+            margin-top: 1.5em;
+            margin-bottom: 0.5em;
+            color: var(--text-color);
+        }
+
+        p {
+            margin-bottom: 1em;
+        }
+
+        section {
+            margin-bottom: 40px; /* Add space between sections */
+            padding-bottom: 20px; /* Add padding at the bottom of sections */
+            border-bottom: 1px solid var(--border-color); /* Optional: Add a subtle separator */
+        }
+
+        section:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .complexity {
+            font-style: italic;
+            background-color: var(--complexity-bg);
+            padding: 10px 15px;
+            border-left: 4px solid var(--primary-color);
+            margin-bottom: 1.5em;
+            border-radius: 0 5px 5px 0;
+        }
+
+        nav {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+            position: sticky;
+            top: 20px;
+            align-self: start;
+            height: fit-content;
+            margin-bottom: 0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        nav h2 {
+            margin-top: 0;
+            border-bottom: none;
+            padding-bottom: 0;
+            font-size: 1.5em;
+            color: var(--text-color);
+            margin-bottom: 10px;
+        }
+
+        nav ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        nav ul li {
+            display: block;
+        }
+
+        nav ul li a {
+            text-decoration: none;
+            color: var(--primary-color);
+            padding: 8px 10px;
+            border-radius: 3px;
+            transition: background-color 0.3s ease, color 0.3s ease;
+            display: block;
+            text-align: left;
+            outline-color: var(--primary-color);
+        }
+
+        nav ul li a:hover,
+        nav ul li a:focus {
+            background-color: var(--primary-color);
+            color: var(--background-color);
+            outline: 2px solid var(--primary-color);
+            outline-offset: 2px;
+        }
+
+        .main-content {
+            grid-column: 2 / 3;
+        }
+
+        /* Adjust pre padding for line numbers */
+        pre.line-numbers {
+            position: relative;
+            padding-left: 3.8em; /* Space for line numbers */
+            margin-bottom: 20px;
+            border: 1px solid #343a40;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        /* Adjust code padding within pre */
+        pre code {
+             padding: 0 !important;
+             background: none !important;
+        }
+
+        code {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+
+        a {
+            color: var(--primary-color);
+            text-decoration: none;
+            outline-color: var(--primary-color);
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        a:focus {
+             outline: 2px solid var(--primary-color);
+             outline-offset: 2px;
+        }
+
+        footer {
+            background-color: var(--footer-bg);
+            color: var(--footer-text);
+            text-align: center;
+            padding: 20px;
+            margin-top: 40px;
+        }
+
+        /* New Styles for Comparison Table */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 2em;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            text-align: left;
+        }
+
+        .comparison-table th {
+            background-color: var(--primary-color);
+            color: var(--background-color);
+            font-weight: bold;
+        }
+
+        .comparison-table tbody tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .comparison-table tbody tr:hover {
+            background-color: #e9ecef;
+        }
+
+        /* Styles for Visualization Area */
+        .visualization-area {
+            background-color: var(--visualization-bg);
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            min-height: 250px; /* Give it a minimum height */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); /* Added shadow */
+        }
+
+        .array-container {
+            display: flex;
+            align-items: flex-end; /* Align bars to the bottom */
+            height: 150px; /* Fixed height for the visualization area */
+            width: 100%;
+            max-width: 600px; /* Limit max width */
+            margin: 0 auto;
+            border-bottom: 1px solid var(--text-color); /* Base line */
+            padding-bottom: 5px; /* Space below bars */
+            box-sizing: border-box;
+        }
+
+        .array-bar {
+            flex-grow: 1; /* Bars take equal width */
+            margin: 0 1px; /* Small gap between bars */
+            background-color: var(--bar-color);
+            transition: height 0.2s ease, background-color 0.2s ease; /* Smooth transitions */
+            width: auto; /* Let flexbox handle width */
+            position: relative; /* For value display */
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* Align text to top */
+            font-size: 0.7em;
+            color: var(--code-background); /* Dark text on light bar */
+            font-weight: bold;
+            padding-top: 3px;
+        }
+
+        .array-bar span {
+             position: absolute;
+             bottom: -1.2em; /* Position value below the bar */
+             left: 50%;
+             transform: translateX(-50%);
+             color: var(--text-color); /* Text color for value */
+             font-family: 'Roboto Mono', monospace;
+             font-size: 0.8em;
+        }
+
+
+        .array-bar.comparing {
+            background-color: var(--bar-comparing);
+        }
+
+        .array-bar.swapping {
+            background-color: var(--bar-swapping);
+        }
+
+        .array-bar.sorted {
+            background-color: var(--bar-sorted);
+        }
+
+         .array-bar.min-element {
+            background-color: var(--bar-min);
+        }
+
+        .visualization-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .visualization-controls button,
+        .visualization-controls input[type="range"] {
+            padding: 8px 15px;
+            background-color: var(--primary-color);
+            color: var(--background-color);
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.3s ease;
+        }
+
+        .visualization-controls button:hover {
+            background-color: var(--heading-color);
+        }
+
+        .visualization-controls input[type="range"] {
+            background: none;
+            padding: 0;
+            cursor: grab;
+        }
+
+        .visualization-controls label {
+            font-size: 0.9em;
+            color: var(--text-color);
+        }
+
+        .visualization-step-info {
+            margin-top: 10px;
+            font-style: italic;
+            min-height: 1.2em; /* Reserve space */
+            text-align: center;
+        }
+
+
+        /* Styles for Test Area */
+        .test-area {
+            background-color: #f2f2f2; /* Light grey background */
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); /* Added shadow */
+        }
+
+        .test-area label {
+            display: block; /* Label on its own line */
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: var(--text-color);
+        }
+
+        .array-input {
+            width: calc(100% - 120px); /* Adjust width */
+            padding: 8px;
+            margin-right: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 0.95em;
+            box-sizing: border-box; /* Include padding and border in element's total width */
+        }
+
+        .sort-button {
+            padding: 8px 15px;
+            background-color: var(--primary-color);
+            color: var(--background-color);
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background-color 0.3s ease;
+            vertical-align: top; /* Align with input */
+        }
+
+        .sort-button:hover {
+            background-color: var(--heading-color);
+        }
+
+        .output-area {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #e9ecef; /* Slightly darker than test-area background */
+            border: 1px dashed var(--secondary-color);
+            border-radius: 3px;
+            min-height: 1.5em; /* Ensure it has some height even when empty */
+            font-family: 'Roboto Mono', monospace;
+            font-size: 0.95em;
+            color: var(--text-color);
+            word-break: break-all; /* Prevent overflow for long outputs */
+        }
+
+        /* Styles for Visualization Placeholder (for algorithms not yet implemented) */
+        .visualization-placeholder {
+            background-color: var(--visualization-bg);
+            border: 1px dashed var(--secondary-color);
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+            color: var(--secondary-color);
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05); /* Added subtle shadow */
+        }
+
+
+        /* Responsive adjustments */
+        @media (max-width: 992px) {
+            .container {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            h1 {
+                 grid-column: 1 / 2;
+            }
+
+            nav {
+                position: static;
+                width: auto;
+                margin-bottom: 20px;
+                grid-column: 1 / 2;
+                box-shadow: none;
+            }
+
+            nav ul {
+                flex-direction: row;
+                flex-wrap: wrap;
+                gap: 10px;
+            }
+
+            nav ul li {
+                display: inline-block;
+            }
+
+            nav ul li a {
+                display: inline-block;
+                padding: 5px 10px;
+                text-align: center;
+                border: 1px solid var(--primary-color);
+            }
+
+             nav ul li a:hover,
+             nav ul li a:focus {
+                background-color: var(--primary-color);
+                color: var(--background-color);
+                text-decoration: none;
+             }
+
+            .main-content {
+                grid-column: 1 / 2;
+            }
+
+            .comparison-table th,
+            .comparison-table td {
+                padding: 8px;
+            }
+
+            section {
+                margin-bottom: 30px;
+                padding-bottom: 15px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px auto;
+                padding: 0 15px;
+            }
+
+            h1 {
+                font-size: 2em;
+                margin-top: 20px;
+                margin-bottom: 20px;
+            }
+
+            h2 {
+                font-size: 1.5em;
+            }
+
+            h3 {
+                font-size: 1.2em;
+            }
+
+             .comparison-table {
+                 display: block;
+                 overflow-x: auto;
+                 width: 100%;
+             }
+             .comparison-table thead, .comparison-table tbody, .comparison-table tr {
+                 display: table-row-group;
+             }
+             .comparison-table th, .comparison-table td {
+                 display: table-cell;
+             }
+
+             pre.line-numbers {
+                 padding-left: 3em;
+             }
+
+             section {
+                margin-bottom: 20px;
+                padding-bottom: 10px;
+            }
+
+            .array-input {
+                width: 100%; /* Full width on smaller screens */
+                margin-right: 0;
+                margin-bottom: 10px; /* Add space below input */
+                display: block; /* Make input a block element */
+            }
+
+            .sort-button {
+                width: 100%; /* Full width button */
+                display: block; /* Make button a block element */
+            }
+
+            .array-bar span {
+                font-size: 0.7em; /* Smaller font for values on small screens */
+            }
+        }
+
+        /* Prism.js Copy to Clipboard Button Styling */
+        div.code-toolbar > .toolbar.toolbar-item > button {
+            background: var(--primary-color);
+            color: var(--background-color);
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: background-color 0.2s ease;
+            opacity: 0.9;
+        }
+
+        div.code-toolbar > .toolbar.toolbar-item > button:hover {
+            background: var(--heading-color);
+            opacity: 1;
+        }
+
+        div.code-toolbar > .toolbar {
+            top: 0.5em;
+            right: 0.5em;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Sorting Algorithms in C</h1>
+
+        <nav aria-label="Table of Contents">
+            <h2>Table of Contents</h2>
+            <ul>
+                <li><a href="#comparison">Comparison Table</a></li>
+                <li><a href="#bubble-sort">Bubble Sort</a></li>
+                <li><a href="#selection-sort">Selection Sort</a></li>
+                <li><a href="#insertion-sort">Insertion Sort</a></li>
+                <li><a href="#quick-sort">Quick Sort</a></li>
+                <li><a href="#merge-sort">Merge Sort</a></li>
+                <li><a href="#heap-sort">Heap Sort</a></li>
+                <li><a href="#radix-sort">Radix Sort</a></li>
+                <li><a href="#bucket-sort">Bucket Sort</a></li>
+                <li><a href="#compile-run">How to Compile and Run</a></li>
+            </ul>
+        </nav>
+
+        <div class="main-content">
+
+            <section id="comparison">
+                <h2>Algorithm Comparison</h2>
+                <p>Here's a summary of the key characteristics of the sorting algorithms discussed.</p>
+                <table class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th>Algorithm</th>
+                            <th>Time Complexity (Best)</th>
+                            <th>Time Complexity (Average)</th>
+                            <th>Time Complexity (Worst)</th>
+                            <th>Space Complexity</th>
+                            <th>Stability</th>
+                            <th>In-place</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Bubble Sort</td>
+                            <td>O(n)</td>
+                            <td>O(n^2)</td>
+                            <td>O(n^2)</td>
+                            <td>O(1)</td>
+                            <td>Yes</td>
+                            <td>Yes</td>
+                        </tr>
+                        <tr>
+                            <td>Selection Sort</td>
+                            <td>O(n^2)</td>
+                            <td>O(n^2)</td>
+                            <td>O(n^2)</td>
+                            <td>O(1)</td>
+                            <td>No</td>
+                            <td>Yes</td>
+                        </tr>
+                        <tr>
+                            <td>Insertion Sort</td>
+                            <td>O(n)</td>
+                            <td>O(n^2)</td>
+                            <td>O(n^2)</td>
+                            <td>O(1)</td>
+                            <td>Yes</td>
+                            <td>Yes</td>
+                        </tr>
+                        <tr>
+                            <td>Quick Sort</td>
+                            <td>O(n log n)</td>
+                            <td>O(n log n)</td>
+                            <td>O(n^2)</td>
+                            <td>O(log n)</td>
+                            <td>No</td>
+                            <td>Yes</td>
+                        </tr>
+                        <tr>
+                            <td>Merge Sort</td>
+                            <td>O(n log n)</td>
+                            <td>O(n log n)</td>
+                            <td>O(n log n)</td>
+                            <td>O(n)</td>
+                            <td>Yes</td>
+                            <td>No</td>
+                        </tr>
+                        <tr>
+                            <td>Heap Sort</td>
+                            <td>O(n log n)</td>
+                            <td>O(n log n)</td>
+                            <td>O(n log n)</td>
+                            <td>O(1)</td>
+                            <td>No</td>
+                            <td>Yes</td>
+                        </tr>
+                        <tr>
+                            <td>Radix Sort</td>
+                            <td>O(nk)</td>
+                            <td>O(nk)</td>
+                            <td>O(nk)</td>
+                            <td>O(n+k)</td>
+                            <td>Yes</td>
+                            <td>No (typically)</td>
+                        </tr>
+                        <tr>
+                            <td>Bucket Sort</td>
+                            <td>O(n+k)</td>
+                            <td>O(n+k)</td>
+                            <td>O(n^2)</td>
+                            <td>O(n+k)</td>
+                            <td>Yes</td>
+                            <td>No (typically)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section id="bubble-sort">
+                <h2>Bubble Sort</h2>
+                <p>A simple comparison sort algorithm.</p>
+                <p class="complexity">Complexity: Time O(n^2), Space O(1)</p>
+
+                <p>See the sorting process step-by-step:</p>
+                <h3>Interactive Visualization</h3>
+                <div class="visualization-area" id="bubble-sort-visualization">
+                    <div class="array-container" id="bubble-sort-array-container">
+                        <!-- Array bars will be drawn here by JavaScript -->
+                    </div>
+                    <div class="visualization-controls">
+                        <button class="viz-control-button" data-algorithm="bubble-sort" data-action="play">Play</button>
+                        <button class="viz-control-button" data-algorithm="bubble-sort" data-action="pause">Pause</button>
+                        <button class="viz-control-button" data-algorithm="bubble-sort" data-action="prev">Prev</button>
+                        <button class="viz-control-button" data-algorithm="bubble-sort" data-action="next">Next</button>
+                        <label for="bubble-sort-speed">Speed:</label>
+                        <input type="range" id="bubble-sort-speed" min="50" max="2000" value="500">
+                    </div>
+                     <div class="visualization-step-info" id="bubble-sort-step-info">
+                        Ready to visualize.
+                    </div>
+                </div>
+
+                <p>Test the algorithm with your own input:</p>
+                <h3>Test It</h3>
+                <div class="test-area">
+                    <label for="bubble-sort-input">Enter array (comma-separated numbers):</label>
+                    <input type="text" id="bubble-sort-input" class="array-input" value="64, 34, 25, 12, 22, 11, 90">
+                    <button class="sort-button" data-algorithm="bubble-sort">Sort Array</button>
+                    <div class="output-area" id="bubble-sort-output">
+                        <p>Sorted array will appear here.</p>
+                    </div>
+                </div>
+
+                <h3>C Code Implementation</h3>
+                <pre class="line-numbers"><code class="language-c">
+#include &lt;stdio.h&gt;
+
+void bubbleSort(int arr[], int n) {
+    int i, j;
+    for (i = 0; i &lt; n - 1; i++) {
+        for (j = 0; j &lt; n - i - 1; j++) {
+            if (arr[j] &gt; arr[j + 1]) {
+                int temp = arr[j];
+                arr[j] = arr[j + 1];
+                arr[j + 1] = temp;
+            }
+        }
+    }
+}
+
+int main() {
+    int arr[] = {64, 34, 25, 12, 22, 11, 90};
+    int n = sizeof(arr) / sizeof(arr[0]);
+    bubbleSort(arr, n);
+    printf("Sorted array: \n");
+    for (int i = 0; i &lt; n; i++)
+        printf("%d ", arr[i]);
+    printf("\n");
+    return 0;
+}
+                </code></pre>
+            </section>
+
+            <section id="selection-sort">
+                <h2>Selection Sort</h2>
+                <p>Finds the minimum element from unsorted part and puts it at the beginning.</p>
+                <p class="complexity">Complexity: Time O(n^2), Space O(1)</p>
+
+                <p>See the sorting process step-by-step:</p>
+                <h3>Interactive Visualization</h3>
+                <div class="visualization-area" id="selection-sort-visualization">
+                     <div class="array-container" id="selection-sort-array-container">
+                        <!-- Array bars will be drawn here by JavaScript -->
+                    </div>
+                    <div class="visualization-controls">
+                        <button class="viz-control-button" data-algorithm="selection-sort" data-action="play">Play</button>
+                        <button class="viz-control-button" data-algorithm="selection-sort" data-action="pause">Pause</button>
+                        <button class="viz-control-button" data-algorithm="selection-sort" data-action="prev">Prev</button>
+                        <button class="viz-control-button" data-algorithm="selection-sort" data-action="next">Next</button>
+                         <label for="selection-sort-speed">Speed:</label>
+                        <input type="range" id="selection-sort-speed" min="50" max="2000" value="500">
+                    </div>
+                    <div class="visualization-step-info" id="selection-sort-step-info">
+                        Ready to visualize.
+                    </div>
+                </div>
+
+                <p>Test the algorithm with your own input:</p>
+                <h3>Test It</h3>
+                <div class="test-area">
+                    <label for="selection-sort-input">Enter array (comma-separated numbers):</label>
+                    <input type="text" id="selection-sort-input" class="array-input" value="64, 25, 12, 22, 11">
+                    <button class="sort-button" data-algorithm="selection-sort">Sort Array</button>
+                    <div class="output-area" id="selection-sort-output">
+                        <p>Sorted array will appear here.</p>
+                    </div>
+                </div>
+
+                <h3>C Code Implementation</h3>
+                <pre class="line-numbers"><code class="language-c">
+#include &lt;stdio.h&gt;
+
+void selectionSort(int arr[], int n) {
+    int i, j, min_idx;
+    for (i = 0; i &lt; n - 1; i++) {
+        min_idx = i;
+        for (j = i + 1; j &lt; n; j++) {
+            if (arr[j] &lt; arr[min_idx]) {
+                min_idx = j;
+            }
+        }
+        int temp = arr[min_idx];
+        arr[min_idx] = arr[i];
+        arr[i] = temp;
+    }
+}
+
+int main() {
+    int arr[] = {64, 25, 12, 22, 11};
+    int n = sizeof(arr) / sizeof(arr[0]);
+    selectionSort(arr, n);
+    printf("Sorted array: \n");
+    for (int i = 0; i &lt; n; i++)
+        printf("%d ", arr[i]);
+    printf("\n");
+    return 0;
+}
+                </code></pre>
+            </section>
+
+            <section id="insertion-sort">
+                <h2>Insertion Sort</h2>
+                <p>Builds the final sorted array one item at a time.</p>
+                <p class="complexity">Complexity: Time O(n^2) (worst/average), O(n) (best), Space O(1)</p>
+
+                <p>See the sorting process step-by-step:</p>
+                <h3>Interactive Visualization</h3>
+                <div class="visualization-area" id="insertion-sort-visualization">
+                    <p>Visualization for Insertion Sort is not yet implemented.</p>
+                    <p><em>(Requires JavaScript implementation to show step-by-step sorting)</em></p>
+                </div>
+
+                <p>Test the algorithm with your own input:</p>
+                <h3>Test It</h3>
+                <div class="test-area">
+                    <label for="insertion-sort-input">Enter array (comma-separated numbers):</label>
+                    <input type="text" id="insertion-sort-input" class="array-input" value="12, 11, 13, 5, 6">
+                    <button class="sort-button" data-algorithm="insertion-sort">Sort Array</button>
+                    <div class="output-area" id="insertion-sort-output">
+                        <p>Sorted array will appear here.</p>
+                    </div>
+                </div>
+
+                <h3>C Code Implementation</h3>
+                <pre class="line-numbers"><code class="language-c">
+#include &lt;stdio.h&gt;
+
+void insertionSort(int arr[], int n) {
+    int i, key, j;
+    for (i = 1; i &lt; n; i++) {
+        key = arr[i];
+        j = i - 1;
+        while (j &gt;= 0 &amp;&amp; arr[j] &gt; key) {
+            arr[j + 1] = arr[j];
+            j = j - 1;
+        }
+        arr[j + 1] = key;
+    }
+}
+
+int main() {
+    int arr[] = {12, 11, 13, 5, 6};
+    int n = sizeof(arr) / sizeof(arr[0]);
+    insertionSort(arr, n);
+    printf("Sorted array: \n");
+    for (int i = 0; i &lt; n; i++)
+        printf("%d ", arr[i]);
+    printf("\n");
+    return 0;
+}
+                </code></pre>
+            </section>
+
+            <section id="quick-sort">
+                <h2>Quick Sort</h2>
+                <p>A divide and conquer algorithm that picks an element as pivot and partitions the given array around the picked pivot.</p>
+                <p class="complexity">Complexity: Time O(n log n) (average), O(n^2) (worst), Space O(log n) (average), O(n) (worst)</p>
+
+                <p>See the sorting process step-by-step:</p>
+                <h3>Interactive Visualization</h3>
+                <div class="visualization-area" id="quick-sort-visualization">
+                    <p>Visualization for Quick Sort is not yet implemented.</p>
+                    <p><em>(Requires JavaScript implementation to show step-by-step sorting)</em></p>
+                </div>
+
+                <p>Test the algorithm with your own input:</p>
+                <h3>Test It</h3>
+                <div class="test-area">
+                    <label for="quick-sort-input">Enter array (comma-separated numbers):</label>
+                    <input type="text" id="quick-sort-input" class="array-input" value="10, 7, 8, 9, 1, 5">
+                    <button class="sort-button" data-algorithm="quick-sort">Sort Array</button>
+                    <div class="output-area" id="quick-sort-output">
+                        <p>Sorted array will appear here.</p>
+                    </div>
+                </div>
+
+                <h3>C Code Implementation</h3>
+                <pre class="line-numbers"><code class="language-c">
+#include &lt;stdio.h&gt;
+
+void swap(int* a, int* b) {
+    int t = *a;
+    *a = *b;
+    *b = t;
+}
+
+int partition (int arr[], int low, int high) {
+    int pivot = arr[high];
+    int i = (low - 1);
+
+    for (int j = low; j &lt;= high - 1; j++) {
+        if (arr[j] &lt; pivot) {
+            i++;
+            swap(&amp;arr[i], &amp;arr[j]);
+        }
+    }
+    swap(&amp;arr[i + 1], &amp;arr[high]);
+    return (i + 1);
+}
+
+void quickSort(int arr[], int low, int high) {
+    if (low &lt; high) {
+        int pi = partition(arr, low, high);
+        quickSort(arr, low, pi - 1);
+        quickSort(arr, pi + 1, high);
+    }
+}
+
+int main() {
+    int arr[] = {10, 7, 8, 9, 1, 5};
+    int n = sizeof(arr) / sizeof(arr[0]);
+    quickSort(arr, 0, n - 1);
+    printf("Sorted array: \n");
+    for (int i = 0; i &lt; n; i++)
+        printf("%d ", arr[i]);
+    printf("\n");
+    return 0;
+}
+                </code></pre>
+            </section>
+
+            <section id="merge-sort">
+                <h2>Merge Sort</h2>
+                <p>A divide and conquer algorithm that divides the input array into two halves, calls itself for the two halves, and then merges the two sorted halves.</p>
+                <p class="complexity">Complexity: Time O(n log n), Space O(n)</p>
+
+                <p>See the sorting process step-by-step:</p>
+                <h3>Interactive Visualization</h3>
+                <div class="visualization-area" id="merge-sort-visualization">
+                    <p>Visualization for Merge Sort is not yet implemented.</p>
+                    <p><em>(Requires JavaScript implementation to show step-by-step sorting)</em></p>
+                </div>
+
+                <p>Test the algorithm with your own input:</p>
+                <h3>Test It</h3>
+                <div class="test-area">
+                    <label for="merge-sort-input">Enter array (comma-separated numbers):</label>
+                    <input type="text" id="merge-sort-input" class="array-input" value="12, 11, 13, 5, 6, 7">
+                    <button class="sort-button" data-algorithm="merge-sort">Sort Array</button>
+                    <div class="output-area" id="merge-sort-output">
+                        <p>Sorted array will appear here.</p>
+                    </div>
+                </div>
+
+                <h3>C Code Implementation</h3>
+                <pre class="line-numbers"><code class="language-c">
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+void merge(int arr[], int l, int m, int r) {
+    int i, j, k;
+    int n1 = m - l + 1;
+    int n2 = r - m;
+
+    int L[n1], R[n2];
+
+    for (i = 0; i &lt; n1; i++)
+        L[i] = arr[l + i];
+    for (j = 0; j &lt; n2; j++)
+        R[j] = arr[m + 1 + j];
+
+    i = 0;
+    j = 0;
+    k = l;
+    while (i &lt; n1 &amp;&amp; j &lt; n2) {
+        if (L[i] &lt;= R[j]) {
+            arr[k] = L[i];
+            i++;
+        } else {
+            arr[k] = R[j];
+            j++;
+        }
+        k++;
+    }
+
+    while (i &lt; n1) {
+        arr[k] = L[i];
+        i++;
+        k++;
+    }
+
+    while (j &lt; n2) {
+        arr[k] = R[j];
+        j++;
+        k++;
+    }
+}
+
+void mergeSort(int arr[], int l, int r) {
+    if (l &lt; r) {
+        int m = l + (r - l) / 2;
+        mergeSort(arr, l, m);
+        mergeSort(arr, m + 1, r);
+        merge(arr, l, m, r);
+    }
+}
+
+int main() {
+    int arr[] = {12, 11, 13, 5, 6, 7};
+    int arr_size = sizeof(arr) / sizeof(arr[0]);
+    mergeSort(arr, 0, arr_size - 1);
+    printf("Sorted array: \n");
+    for (int i = 0; i &lt; arr_size; i++)
+        printf("%d ", arr[i]);
+    printf("\n");
+    return 0;
+}
+                </code></pre>
+            </section>
+
+            <section id="heap-sort">
+                <h2>Heap Sort</h2>
+                <p>A comparison-based sorting technique based on Binary Heap data structure.</p>
+                <p class="complexity">Complexity: Time O(n log n), Space O(1)</p>
+
+                <p>See the sorting process step-by-step:</p>
+                <h3>Interactive Visualization</h3>
+                <div class="visualization-area" id="heap-sort-visualization">
+                    <p>Visualization for Heap Sort is not yet implemented.</p>
+                    <p><em>(Requires JavaScript implementation to show step-by-step sorting)</em></p>
+                </div>
+
+                <p>Test the algorithm with your own input:</p>
+                <h3>Test It</h3>
+                <div class="test-area">
+                    <label for="heap-sort-input">Enter array (comma-separated numbers):</label>
+                    <input type="text" id="heap-sort-input" class="array-input" value="12, 11, 13, 5, 6, 7">
+                    <button class="sort-button" data-algorithm="heap-sort">Sort Array</button>
+                    <div class="output-area" id="heap-sort-output">
+                        <p>Sorted array will appear here.</p>
+                    </div>
+                </div>
+
+                <h3>C Code Implementation</h3>
+                <pre class="line-numbers"><code class="language-c">
+#include &lt;stdio.h&gt;
+
+void swap(int* a, int* b) {
+    int t = *a;
+    *a = *b;
+    *b = t;
+}
+
+void heapify(int arr[], int n, int i) {
+    int largest = i;
+    int left = 2 * i + 1;
+    int right = 2 * i + 2;
+
+    if (left &lt; n &amp;&amp; arr[left] &gt; arr[largest])
+        largest = left;
+
+    if (right &lt; n &amp;&amp; arr[right] &gt; arr[largest])
+        largest = right;
+
+    if (largest != i) {
+        swap(&amp;arr[i], &amp;arr[largest]);
+        heapify(arr, n, largest);
+    }
+}
+
+void heapSort(int arr[], int n) {
+    for (int i = n / 2 - 1; i &gt;= 0; i--)
+        heapify(arr, n, i);
+
+    for (int i = n - 1; i &gt; 0; i--) {
+        swap(&amp;arr[0], &amp;arr[i]);
+        heapify(arr, i, 0);
+    }
+}
+
+int main() {
+    int arr[] = {12, 11, 13, 5, 6, 7};
+    int n = sizeof(arr) / sizeof(arr[0]);
+    heapSort(arr, n);
+    printf("Sorted array is \n");
+    for (int i = 0; i &lt; n; i++)
+        printf("%d ", arr[i]);
+    printf("\n");
+    return 0;
+}
+                </code></pre>
+            </section>
+
+            <section id="radix-sort">
+                <h2>Radix Sort</h2>
+                <p>A non-comparative integer sorting algorithm that sorts data with integer keys by grouping keys by the individual digits which share the same significant position and value.</p>
+                <p class="complexity">Complexity: Time O(nk) where k is the number of digits, Space O(n+k)</p>
+
+                <p>See the sorting process step-by-step:</p>
+                <h3>Interactive Visualization</h3>
+                <div class="visualization-area" id="radix-sort-visualization">
+                    <p>Visualization for Radix Sort is not yet implemented.</p>
+                    <p><em>(Requires JavaScript implementation to show step-by-step sorting)</em></p>
+                </div>
+
+                <p>Test the algorithm with your own input:</p>
+                <h3>Test It</h3>
+                <div class="test-area">
+                    <label for="radix-sort-input">Enter array (comma-separated numbers):</label>
+                    <input type="text" id="radix-sort-input" class="array-input" value="170, 45, 75, 90, 802, 24, 2, 66">
+                    <button class="sort-button" data-algorithm="radix-sort">Sort Array</button>
+                    <div class="output-area" id="radix-sort-output">
+                        <p>Sorted array will appear here.</p>
+                    </div>
+                </div>
+
+                <h3>C Code Implementation</h3>
+                <pre class="line-numbers"><code class="language-c">
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+int getMax(int arr[], int n) {
+    int mx = arr[0];
+    for (int i = 1; i &lt; n; i++)
+        if (arr[i] &gt; mx)
+            mx = arr[i];
+    return mx;
+}
+
+void countSort(int arr[], int n, int exp) {
+    int output[n];
+    int i, count[10] = {0};
+
+    for (i = 0; i &lt; n; i++)
+        count[(arr[i] / exp) % 10]++;
+
+    for (i = 1; i &lt; 10; i++)
+        count[i] += count[i - 1];
+
+    for (i = n - 1; i &gt;= 0; i--) {
+        output[count[(arr[i] / exp) % 10] - 1] = arr[i];
+        count[(arr[i] / exp) % 10]--;
+    }
+
+    for (i = 0; i &lt; n; i++)
+        arr[i] = output[i];
+}
+
+void radixSort(int arr[], int n) {
+    int m = getMax(arr, n);
+    for (int exp = 1; m / exp &gt; 0; exp *= 10)
+        countSort(arr, n, exp);
+}
+
+int main() {
+    int arr[] = {170, 45, 75, 90, 802, 24, 2, 66};
+    int n = sizeof(arr) / sizeof(arr[0]);
+    radixSort(arr, n);
+    printf("Sorted array: \n");
+    for (int i = 0; i &lt; n; i++)
+        printf("%d ", arr[i]);
+    printf("\n");
+    return 0;
+}
+                </code></pre>
+            </section>
+
+            <section id="bucket-sort">
+                <h2>Bucket Sort</h2>
+                <p>A non-comparative sorting algorithm that distributes elements into a number of buckets. Each bucket is then sorted individually, either using a different sorting algorithm, or by recursively applying the bucket sort algorithm.</p>
+                <p class="complexity">Complexity: Time O(n+k) (average), O(n^2) (worst), Space O(n+k)</p>
+
+                <p>See the sorting process step-by-step:</p>
+                <h3>Interactive Visualization</h3>
+                <div class="visualization-area" id="bucket-sort-visualization">
+                    <p>Visualization for Bucket Sort is not yet implemented.</p>
+                    <p><em>(Requires JavaScript implementation to show step-by-step sorting)</em></p>
+                </div>
+
+                <p>Test the algorithm with your own input:</p>
+                <h3>Test It</h3>
+                <div class="test-area">
+                    <label for="bucket-sort-input">Enter array (comma-separated numbers):</label>
+                    <input type="text" id="bucket-sort-input" class="array-input" value="64, 34, 25, 12, 22, 11, 90">
+                    <button class="sort-button" data-algorithm="bucket-sort">Sort Array</button>
+                    <div class="output-area" id="bucket-sort-output">
+                        <p>Sorted array will appear here.</p>
+                    </div>
+                </div>
+
+                <h3>C Code Implementation</h3>
+                <pre class="line-numbers"><code class="language-c">
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+struct Node {
+    int data;
+    struct Node* next;
+};
+
+void insert(struct Node** head, int data) {
+    struct Node* newNode = (struct Node*)malloc(sizeof(struct Node));
+    newNode-&gt;data = data;
+    newNode-&gt;next = NULL;
+
+    if (*head == NULL || (*head)-&gt;data &gt;= newNode-&gt;data) {
+        newNode-&gt;next = *head;
+        *head = newNode;
+    } else {
+        struct Node* current = *head;
+        while (current-&gt;next != NULL &amp;&amp; current-&gt;next-&gt;data &lt; newNode-&gt;data) {
+            current = current-&gt;next;
+        }
+        newNode-&gt;next = current-&gt;next;
+        current-&gt;next = newNode;
+    }
+}
+
+int getMax(int arr[], int n) {
+    int max_val = arr[0];
+    for (int i = 1; i &lt; n; i++) {
+        if (arr[i] &gt; max_val) {
+            max_val = arr[i];
+        }
+    }
+    return max_val;
+}
+
+void bucketSort(int arr[], int n) {
+    int max_val = getMax(arr, n);
+
+    struct Node* buckets[n];
+    for (int i = 0; i &lt; n; i++) {
+        buckets[i] = NULL;
+    }
+
+    for (int i = 0; i &lt; n; i++) {
+        int bucket_index = (arr[i] * n) / (max_val + 1);
+        insert(&amp;buckets[bucket_index], arr[i]);
+    }
+
+    int index = 0;
+    for (int i = 0; i &lt; n; i++) {
+        struct Node* current = buckets[i];
+        while (current != NULL) {
+            arr[index++] = current-&gt;data;
+            struct Node* temp = current;
+            current = current-&gt;next;
+            free(temp);
+        }
+    }
+}
+
+int main() {
+    int arr[] = {64, 34, 25, 12, 22, 11, 90};
+    int n = sizeof(arr) / sizeof(arr[0]);
+    bucketSort(arr, n);
+    printf("Sorted array: \n");
+    for (int i = 0; i &lt; n; i++) {
+        printf("%d ", arr[i]);
+    }
+    printf("\n");
+    return 0;
+}
+                </code></pre>
+            </section>
+
+            <section id="compile-run">
+                <h2>How to Compile and Run</h2>
+                <p>To compile and run these C code snippets, you will need a standard C compiler like GCC (GNU Compiler Collection).</p>
+                <p>1. Save the code for the desired algorithm into a file, for example, <code>sort.c</code>.</p>
+                <p>2. Open a terminal or command prompt and navigate to the directory where you saved the file.</p>
+                <p>3. Compile the code using GCC:</p>
+                <pre class="line-numbers"><code class="language-bash">
+gcc sort.c -o sort
+                </code></pre>
+                <p>This command compiles <code>sort.c</code> and creates an executable file named <code>sort</code> (or <code>sort.exe</code> on Windows).</p>
+                <p>4. Run the executable:</p>
+                <pre class="line-numbers"><code class="language-bash">
+./sort
+                </code></pre>
+                <p>On Windows, you might just type <code>sort</code> or <code>sort.exe</code>.</p>
+            </section>
+        </div> <!-- End main-content -->
+
+    </div> <!-- End container -->
+
+    <footer>
+        <p>&copy; 2023 Sorting Algorithms Guide. All rights reserved.</p>
+    </footer>
+
+    <!-- Prism.js script -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <!-- Load C language component -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+    <!-- Load Bash language component for compile/run section -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+    <!-- Prism.js Line Numbers plugin JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
+    <!-- Prism.js Copy to Clipboard plugin JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/copy-to-clipboard/prism-copy-to-clipboard.min.js"></script>
+    <script>
+        // --- Utility Functions ---
+        /**
+         * Parses a comma-separated string of numbers into an array of integers.
+         * Filters out non-numeric values and throws an error for invalid input format.
+         * @param {string} inputString - The string to parse.
+         * @returns {number[]} An array of integers.
+         * @throws {Error} If the input format is invalid.
+         */
+        function parseInput(inputString) {
+            const numbers = inputString.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+            // Check if the original string had non-whitespace content but resulted in an empty array after parsing
+            if (numbers.length === 0 && inputString.trim() !== '') {
+                 throw new Error("Invalid input. Please enter comma-separated numbers.");
+            }
+            return numbers;
+        }
+
+        /**
+         * Displays the sorted array in the specified output element.
+         * @param {HTMLElement} outputElement - The element to display the output in.
+         * @param {number[]} array - The sorted array.
+         */
+        function displayOutput(outputElement, array) {
+            outputElement.innerHTML = `<p>Sorted array: [${array.join(', ')}]</p>`;
+        }
+
+        /**
+         * Swaps two elements in an array.
+         * @param {number[]} arr - The array.
+         * @param {number} i - Index of the first element.
+         * @param {number} j - Index of the second element.
+         */
+        function swap(arr, i, j) {
+            const temp = arr[i];
+            arr[i] = arr[j];
+            arr[j] = temp;
+        }
+
+        // --- JavaScript Sorting Algorithm Implementations (for Test It feature) ---
+        // These are standard implementations, not modified for visualization steps.
+        // They operate on a copy of the input array.
+
+        function bubbleSortJS(arr) {
+            const n = arr.length;
+            const arrayCopy = [...arr]; // Work on a copy
+            for (let i = 0; i < n - 1; i++) {
+                let swapped = false; // Optimization: if no swaps occur, array is sorted
+                for (let j = 0; j < n - i - 1; j++) {
+                    if (arrayCopy[j] > arrayCopy[j + 1]) {
+                        swap(arrayCopy, j, j + 1);
+                        swapped = true;
+                    }
+                }
+                if (!swapped) break;
+            }
+            return arrayCopy;
+        }
+
+        function selectionSortJS(arr) {
+            const n = arr.length;
+            const arrayCopy = [...arr];
+            for (let i = 0; i < n - 1; i++) {
+                let min_idx = i;
+                for (let j = i + 1; j < n; j++) {
+                    if (arrayCopy[j] < arrayCopy[min_idx]) {
+                        min_idx = j;
+                    }
+                }
+                // Swap the found minimum element with the first element of the unsorted part
+                if (min_idx !== i) {
+                    swap(arrayCopy, min_idx, i);
+                }
+            }
+            return arrayCopy;
+        }
+
+        function insertionSortJS(arr) {
+            const n = arr.length;
+            const arrayCopy = [...arr];
+            for (let i = 1; i < n; i++) {
+                let key = arrayCopy[i];
+                let j = i - 1;
+                /* Move elements of arr[0..i-1], that are greater than key,
+                   to one position ahead of their current position */
+                while (j >= 0 && arrayCopy[j] > key) {
+                    arrayCopy[j + 1] = arrayCopy[j];
+                    j = j - 1;
+                }
+                arrayCopy[j + 1] = key;
+            }
+            return arrayCopy;
+        }
+
+        function quickSortJS(arr) {
+             // Wrapper for recursive function
+             const arrayCopy = [...arr];
+             quickSortRecursiveJS(arrayCopy, 0, arrayCopy.length - 1);
+             return arrayCopy;
+        }
+
+        function quickSortRecursiveJS(arr, low, high) {
+            if (low < high) {
+                /* pi is partitioning index, arr[pi] is now at right place */
+                let pi = partitionJS(arr, low, high);
+                // Separately sort elements before partition and after partition
+                quickSortRecursiveJS(arr, low, pi - 1);
+                quickSortRecursiveJS(arr, pi + 1, high);
+            }
+        }
+
+        function partitionJS(arr, low, high) {
+            let pivot = arr[high]; // Pivot element
+            let i = (low - 1); // Index of smaller element
+
+            for (let j = low; j <= high - 1; j++) {
+                // If current element is smaller than the pivot
+                if (arr[j] < pivot) {
+                    i++; // increment index of smaller element
+                    swap(arr, i, j);
+                }
+            }
+            swap(arr, i + 1, high);
+            return (i + 1);
+        }
+
+        function mergeSortJS(arr) {
+             const arrayCopy = [...arr];
+             mergeSortRecursiveJS(arrayCopy, 0, arrayCopy.length - 1);
+             return arrayCopy;
+        }
+
+        function mergeSortRecursiveJS(arr, l, r) {
+            if (l < r) {
+                // Same as (l+r)/2, but avoids overflow for large l and r
+                let m = l + Math.floor((r - l) / 2);
+                // Sort first and second halves
+                mergeSortRecursiveJS(arr, l, m);
+                mergeSortRecursiveJS(arr, m + 1, r);
+                // Merge the sorted halves
+                mergeJS(arr, l, m, r);
+            }
+        }
+
+        function mergeJS(arr, l, m, r) {
+            let i, j, k;
+            let n1 = m - l + 1;
+            let n2 = r - m;
+
+            /* create temp arrays */
+            let L = new Array(n1);
+            let R = new Array(n2);
+
+            /* Copy data to temp arrays L[] and R[] */
+            for (i = 0; i < n1; i++) L[i] = arr[l + i];
+            for (j = 0; j < n2; j++) R[j] = arr[m + 1 + j];
+
+            /* Merge the temp arrays back into arr[l..r]*/
+            i = 0; // Initial index of first subarray
+            j = 0; // Initial index of second subarray
+            k = l; // Initial index of merged subarray
+            while (i < n1 && j < n2) {
+                if (L[i] <= R[j]) {
+                    arr[k] = L[i];
+                    i++;
+                } else {
+                    arr[k] = R[j];
+                    j++;
+                }
+                k++;
+            }
+
+            /* Copy the remaining elements of L[], if there are any */
+            while (i < n1) {
+                arr[k] = L[i];
+                i++;
+                k++;
+            }
+
+            /* Copy the remaining elements of R[], if there are any */
+            while (j < n2) {
+                arr[k] = R[j];
+                j++;
+                k++;
+            }
+        }
+
+        function heapSortJS(arr) {
+            const n = arr.length;
+            const arrayCopy = [...arr];
+
+            // Build heap (rearrange array)
+            for (let i = Math.floor(n / 2) - 1; i >= 0; i--)
+                heapifyJS(arrayCopy, n, i);
+
+            // One by one extract elements from heap
+            for (let i = n - 1; i > 0; i--) {
+                // Move current root to end
+                swap(arrayCopy, 0, i);
+                // call max heapify on the reduced heap
+                heapifyJS(arrayCopy, i, 0);
+            }
+            return arrayCopy;
+        }
+
+        // To heapify a subtree rooted with node i which is an index in arr[]. n is size of heap
+        function heapifyJS(arr, n, i) {
+            let largest = i; // Initialize largest as root
+            let left = 2 * i + 1; // left child index
+            let right = 2 * i + 2; // right child index
+
+            // If left child is larger than root
+            if (left < n && arr[left] > arr[largest])
+                largest = left;
+
+            // If right child is larger than largest so far
+            if (right < n && arr[right] > arr[largest])
+                largest = right;
+
+            // If largest is not root
+            if (largest != i) {
+                swap(arr, i, largest);
+                // Recursively heapify the affected sub-tree
+                heapifyJS(arr, n, largest);
+            }
+        }
+
+        function radixSortJS(arr) {
+             const arrayCopy = [...arr];
+             if (arrayCopy.length === 0) return [];
+             // Find the maximum number to know number of digits
+             const max = Math.max(...arrayCopy);
+
+             // Do counting sort for every digit. Note that instead
+             // of passing digit number, exp is passed. exp is 10^i
+             // where i is current digit number
+             for (let exp = 1; Math.floor(max / exp) > 0; exp *= 10) {
+                 countSortJS(arrayCopy, exp);
+             }
+             return arrayCopy;
+        }
+
+        // A function to do counting sort of arr[] according to
+        // the digit represented by exp.
+        function countSortJS(arr, exp) {
+            const n = arr.length;
+            const output = new Array(n); // output array
+            const count = new Array(10).fill(0); // initialize count array as 0
+
+            // Store count of occurrences in count[]
+            for (let i = 0; i < n; i++) {
+                count[Math.floor(arr[i] / exp) % 10]++;
+            }
+
+            // Change count[i] so that count[i] now contains actual
+            // position of this digit in output[]
+            for (let i = 1; i < 10; i++) {
+                count[i] += count[i - 1];
+            }
+
+            // Build the output array
+            for (let i = n - 1; i >= 0; i--) {
+                output[count[Math.floor(arr[i] / exp) % 10] - 1] = arr[i];
+                count[Math.floor(arr[i] / exp) % 10]--;
+            }
+
+            // Copy the output array to arr[], so that arr[] now
+            // contains sorted numbers according to current digit
+            for (let i = 0; i < n; i++) {
+                arr[i] = output[i];
+            }
+        }
+
+        function bucketSortJS(arr) {
+            const n = arr.length;
+            const arrayCopy = [...arr];
+            if (n === 0) return [];
+
+            const max = Math.max(...arrayCopy);
+            const min = Math.min(...arrayCopy);
+            const range = max - min;
+
+            if (range === 0) return arrayCopy; // All elements are the same
+
+            const numBuckets = n; // Typically number of buckets = number of elements
+            const buckets = Array.from({ length: numBuckets }, () => []);
+
+            // Put array elements into buckets
+            for (let i = 0; i < n; i++) {
+                // Calculate bucket index, handle max value edge case
+                // Scale value to range [0, numBuckets-1]
+                let bucketIndex = Math.floor(((arrayCopy[i] - min) / range) * (numBuckets - 1));
+                 if (bucketIndex < 0) bucketIndex = 0; // Ensure index is not negative
+                 if (bucketIndex >= numBuckets) bucketIndex = numBuckets - 1; // Ensure index is within bounds
+                buckets[bucketIndex].push(arrayCopy[i]);
+            }
+
+            // Sort each bucket (using insertion sort for simplicity)
+            for (let i = 0; i < numBuckets; i++) {
+                // Using the standard insertionSortJS here
+                buckets[i] = insertionSortJS(buckets[i]);
+            }
+
+            // Concatenate buckets
+            let index = 0;
+            for (let i = 0; i < numBuckets; i++) {
+                for (let j = 0; j < buckets[i].length; j++) {
+                    arrayCopy[index++] = buckets[i][j];
+                }
+            }
+            return arrayCopy;
+        }
+
+
+        // Map algorithm names to JS functions for the Test It feature
+        const sortingAlgorithmsJS = {
+            'bubble-sort': bubbleSortJS,
+            'selection-sort': selectionSortJS,
+            'insertion-sort': insertionSortJS,
+            'quick-sort': quickSortJS,
+            'merge-sort': mergeSortJS,
+            'heap-sort': heapSortJS,
+            'radix-sort': radixSortJS,
+            'bucket-sort': bucketSortJS,
+        };
+
+        // --- Visualization Logic (Implemented for Bubble and Selection Sort) ---
+
+        const visualizationStates = {}; // Stores steps for each algorithm
+        const visualizationIntervals = {}; // Stores setInterval IDs
+        const visualizationStepIndex = {}; // Stores current step index
+
+        /**
+         * Creates the initial bar visualization for an array.
+         * @param {number[]} array - The array to visualize.
+         * @param {string} containerElementId - The ID of the container div.
+         */
+        function createVisualization(array, containerElementId) {
+            const container = document.getElementById(containerElementId);
+            if (!container) return;
+
+            container.innerHTML = ''; // Clear previous visualization
+            if (array.length === 0) {
+                 // Optionally display a message for empty array
+                 // container.innerHTML = '<p style="text-align: center; margin-top: 50px;">Empty array</p>';
+                 return; // Don't draw bars for empty array
+            }
+
+            const maxValue = Math.max(...array);
+            const containerHeight = container.clientHeight; // Use container's actual height
+
+            array.forEach((value, index) => {
+                const bar = document.createElement('div');
+                bar.classList.add('array-bar');
+                // Calculate height based on value relative to max value
+                // Ensure height is at least 1px for visibility if max > 0
+                const barHeight = maxValue > 0 ? Math.max(1, (value / maxValue) * (containerHeight - 10)) : 1; // Subtract 10 for padding/base line
+                bar.style.height = `${barHeight}px`;
+                bar.dataset.value = value; // Store value in data attribute
+
+                const valueSpan = document.createElement('span');
+                valueSpan.textContent = value;
+                bar.appendChild(valueSpan);
+
+                container.appendChild(bar);
+            });
+        }
+
+        /**
+         * Updates the visualization to a specific step.
+         * @param {string} algorithmName - The name of the algorithm.
+         * @param {number} stepIndex - The index of the step to display.
+         */
+        function updateVisualization(algorithmName, stepIndex) {
+            const steps = visualizationStates[algorithmName];
+            if (!steps || steps.length === 0) return; // No steps to update
+            if (stepIndex < 0 || stepIndex >= steps.length) {
+                console.error(`Invalid step index ${stepIndex} for ${algorithmName}`);
+                return;
+            }
+
+            const step = steps[stepIndex];
+            const containerId = `${algorithmName}-array-container`;
+            const container = document.getElementById(containerId);
+            const stepInfoElement = document.getElementById(`${algorithmName}-step-info`);
+
+            if (!container) return;
+
+            const bars = container.querySelectorAll('.array-bar');
+            const array = step.array;
+            const highlights = step.highlights || {};
+            const description = step.description || '';
+
+            const maxValue = Math.max(...array);
+            const containerHeight = container.clientHeight;
+
+            bars.forEach((bar, i) => {
+                const barHeight = maxValue > 0 ? Math.max(1, (array[i] / maxValue) * (containerHeight - 10)) : 1;
+                bar.style.height = `${barHeight}px`;
+                bar.dataset.value = array[i];
+                bar.querySelector('span').textContent = array[i];
+
+                // Remove all highlight classes
+                bar.classList.remove('comparing', 'swapping', 'sorted', 'min-element');
+
+                // Apply current step highlights
+                if (highlights.comparing && highlights.comparing.includes(i)) {
+                    bar.classList.add('comparing');
+                }
+                if (highlights.swapping && highlights.swapping.includes(i)) {
+                    bar.classList.add('swapping');
+                 }
+                 // Apply sorted class if applicable (e.g., last elements in Bubble/Selection)
+                 if (highlights.sorted && highlights.sorted.includes(i)) {
+                     bar.classList.add('sorted');
+                 }
+                 if (highlights.minElement !== undefined && highlights.minElement === i) {
+                     bar.classList.add('min-element');
+                 }
+            });
+
+            if (stepInfoElement) {
+                 stepInfoElement.textContent = `Step ${stepIndex + 1}/${steps.length}: ${description}`;
+            }
+
+            visualizationStepIndex[algorithmName] = stepIndex;
+        }
+
+        /**
+         * Records a step in the visualization history for an algorithm.
+         * @param {string} algorithmName - The name of the algorithm.
+         * @param {number[]} array - The current state of the array.
+         * @param {object} [highlights={}] - Object specifying indices to highlight (e.g., { comparing: [i, j], swapping: [k, l], sorted: [m, n], minElement: p }).
+         * @param {string} [description=''] - A description of the current step.
+         */
+        function recordStep(algorithmName, array, highlights = {}, description = '') {
+            if (!visualizationStates[algorithmName]) {
+                visualizationStates[algorithmName] = [];
+            }
+            visualizationStates[algorithmName].push({
+                array: [...array], // Record a copy of the array state
+                highlights: highlights,
+                description: description
+            });
+        }
+
+        /**
+         * Starts or resumes the visualization animation for an algorithm.
+         * @param {string} algorithmName - The name of the algorithm.
+         */
+        function runVisualization(algorithmName) {
+            const steps = visualizationStates[algorithmName];
+            if (!steps || steps.length === 0) {
+                console.warn(`No visualization steps recorded for ${algorithmName}`);
+                const stepInfoElement = document.getElementById(`${algorithmName}-step-info`);
+                if (stepInfoElement) stepInfoElement.textContent = 'No steps to visualize. Enter an array and click "Sort Array" first.';
+                return;
+            }
+
+            // If already at the end, reset to start
+            if (visualizationStepIndex[algorithmName] >= steps.length - 1) {
+                 visualizationStepIndex[algorithmName] = 0;
+            }
+
+            const speedInput = document.getElementById(`${algorithmName}-speed`);
+            // Speed is inverse of delay (higher value on slider means faster, so lower delay)
+            // Max slider value (2000) -> min delay (50ms)
+            // Min slider value (50) -> max delay (2000ms)
+            // Formula: delay = max_slider_value + min_slider_value - current_slider_value
+            // Example: 2000 + 50 - 50 = 2000ms; 2000 + 50 - 2000 = 50ms
+            const maxSlider = 2000;
+            const minSlider = 50;
+            let delay = speedInput ? (maxSlider + minSlider - parseInt(speedInput.value)) : 500; // Default delay
+
+            // Clear any existing interval
+            clearInterval(visualizationIntervals[algorithmName]);
+
+            let currentStep = visualizationStepIndex[algorithmName] || 0;
+
+            const interval = setInterval(() => {
+                if (currentStep < steps.length) {
+                    updateVisualization(algorithmName, currentStep);
+                    currentStep++;
+                } else {
+                    clearInterval(visualizationIntervals[algorithmName]);
+                    visualizationIntervals[algorithmName] = null; // Clear interval ID
+                    // Ensure the final state is shown and marked sorted
+                    updateVisualization(algorithmName, steps.length - 1);
+                     const stepInfoElement = document.getElementById(`${algorithmName}-step-info`);
+                     if (stepInfoElement) {
+                         stepInfoElement.textContent = `Sorting complete.`;
+                     }
+                }
+            }, delay);
+
+            visualizationIntervals[algorithmName] = interval; // Store interval ID
+        }
+
+        /**
+         * Pauses the visualization animation for an algorithm.
+         * @param {string} algorithmName - The name of the algorithm.
+         */
+        function pauseVisualization(algorithmName) {
+            clearInterval(visualizationIntervals[algorithmName]);
+            visualizationIntervals[algorithmName] = null; // Clear interval ID
+        }
+
+        /**
+         * Steps the visualization forward or backward by one step.
+         * @param {string} algorithmName - The name of the algorithm.
+         * @param {'next'|'prev'} direction - The direction to step.
+         */
+        function stepVisualization(algorithmName, direction) {
+             pauseVisualization(algorithmName); // Pause before stepping
+             const steps = visualizationStates[algorithmName];
+             if (!steps || steps.length === 0) {
+                 const stepInfoElement = document.getElementById(`${algorithmName}-step-info`);
+                 if (stepInfoElement) stepInfoElement.textContent = 'No steps to visualize.';
+                 return;
+             }
+
+             let currentStep = visualizationStepIndex[algorithmName] || 0;
+
+             if (direction === 'next') {
+                 if (currentStep < steps.length - 1) {
+                     currentStep++;
+                 } else {
+                     // Optionally loop back to start or stay at end
+                     // currentStep = 0; // Loop back
+                     // Stay at the end
+                 }
+             } else if (direction === 'prev') {
+                 if (currentStep > 0) {
+                     currentStep--;
+                 } else {
+                     // Optionally loop to end or stay at start
+                     // currentStep = steps.length - 1; // Loop back
+                     // Stay at the start
+                 }
+             }
+             updateVisualization(algorithmName, currentStep);
+        }
+
+        // Modified Bubble Sort to record steps for visualization
+        function bubbleSortViz(arr) {
+            const n = arr.length;
+            const arrayCopy = [...arr];
+            visualizationStates['bubble-sort'] = []; // Reset steps
+            visualizationStepIndex['bubble-sort'] = 0; // Reset step index
+            pauseVisualization('bubble-sort'); // Ensure any running viz is stopped
+
+            if (n === 0) {
+                 recordStep('bubble-sort', arrayCopy, {}, 'Empty array.');
+                 return arrayCopy;
+            }
+
+            recordStep('bubble-sort', arrayCopy, {}, 'Initial state');
+
+            for (let i = 0; i < n - 1; i++) {
+                let swapped = false;
+                for (let j = 0; j < n - i - 1; j++) {
+                    // Highlight elements being compared
+                    recordStep('bubble-sort', arrayCopy, { comparing: [j, j + 1], sorted: Array.from({length: i}).map((_, k) => n - 1 - k) }, `Comparing ${arrayCopy[j]} and ${arrayCopy[j+1]}`);
+                    if (arrayCopy[j] > arrayCopy[j + 1]) {
+                        swap(arrayCopy, j, j + 1);
+                        swapped = true;
+                        // Highlight elements being swapped
+                        recordStep('bubble-sort', arrayCopy, { swapping: [j, j + 1], sorted: Array.from({length: i}).map((_, k) => n - 1 - k) }, `Swapping ${arrayCopy[j+1]} and ${arrayCopy[j]}`);
+                    }
+                }
+                // After each pass, the largest unsorted element is in its final place
+                 recordStep('bubble-sort', arrayCopy, { sorted: Array.from({length: i + 1}).map((_, k) => n - 1 - k) }, `Pass ${i+1} complete. Element ${arrayCopy[n-1-i]} is sorted.`);
+
+                if (!swapped) {
+                    // If no two elements were swapped by inner loop, then break
+                    // Mark remaining elements as sorted
+                    const alreadySortedCount = i + 1;
+                    recordStep('bubble-sort', arrayCopy, { sorted: Array.from({length: n}).map((_, k) => k) }, 'Array is already sorted.');
+                    break;
+                }
+            }
+             // Ensure all elements are marked sorted at the very end if loop finishes
+             if (visualizationStates['bubble-sort'].length > 0 && visualizationStates['bubble-sort'][visualizationStates['bubble-sort'].length - 1].highlights.sorted.length < n) {
+                  recordStep('bubble-sort', arrayCopy, { sorted: Array.from({length: n}).map((_, k) => k) }, 'Sorting complete.');
+             } else if (visualizationStates['bubble-sort'].length === 1 && n > 0) {
+                 // Handle case where array is already sorted and loop breaks immediately
+                 recordStep('bubble-sort', arrayCopy, { sorted: Array.from({length: n}).map((_, k) => k) }, 'Array is already sorted.');
+             }
+
+
+            return arrayCopy; // Return sorted array for the test output
+        }
+
+        // Modified Selection Sort to record steps for visualization
+        function selectionSortViz(arr) {
+            const n = arr.length;
+            const arrayCopy = [...arr];
+            visualizationStates['selection-sort'] = []; // Reset steps
+            visualizationStepIndex['selection-sort'] = 0; // Reset step index
+            pauseVisualization('selection-sort'); // Ensure any running viz is stopped
+
+            if (n === 0) {
+                 recordStep('selection-sort', arrayCopy, {}, 'Empty array.');
+                 return arrayCopy;
+            }
+
+            recordStep('selection-sort', arrayCopy, {}, 'Initial state');
+
+            for (let i = 0; i < n - 1; i++) {
+                let min_idx = i;
+                // Highlight the current position and assumed minimum
+                recordStep('selection-sort', arrayCopy, { comparing: [i], minElement: i, sorted: Array.from({length: i}).map((_, k) => k) }, `Assuming ${arrayCopy[i]} is minimum in unsorted part.`);
+                for (let j = i + 1; j < n; j++) {
+                    // Highlight elements being compared with the current minimum
+                    recordStep('selection-sort', arrayCopy, { comparing: [j], minElement: min_idx, sorted: Array.from({length: i}).map((_, k) => k) }, `Comparing ${arrayCopy[j]} with current minimum ${arrayCopy[min_idx]}`);
+                    if (arrayCopy[j] < arrayCopy[min_idx]) {
+                        min_idx = j;
+                         // Highlight the new minimum
+                         recordStep('selection-sort', arrayCopy, { comparing: [j], minElement: min_idx, sorted: Array.from({length: i}).map((_, k) => k) }, `${arrayCopy[min_idx]} is the new minimum.`);
+                    }
+                }
+                if (min_idx !== i) {
+                    // Highlight elements being swapped
+                    recordStep('selection-sort', arrayCopy, { swapping: [min_idx, i], sorted: Array.from({length: i}).map((_, k) => k) }, `Swapping ${arrayCopy[min_idx]} and ${arrayCopy[i]}`);
+                    swap(arrayCopy, min_idx, i);
+                }
+                 // Mark the element at position i as sorted
+                 recordStep('selection-sort', arrayCopy, { sorted: Array.from({length: i + 1}).map((_, k) => k) }, `Element ${arrayCopy[i]} is placed in its correct position.`);
+            }
+             // Mark the last element as sorted (loop finishes when n-1 elements are sorted)
+             recordStep('selection-sort', arrayCopy, { sorted: Array.from({length: n}).map((_, k) => k) }, 'Sorting complete.');
+
+            return arrayCopy; // Return sorted array for the test output
+        }
+
+
+        // --- Event Listeners and Initialization ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize visualizations for Bubble and Selection Sort with default input
+            const bubbleSortInput = document.getElementById('bubble-sort-input');
+            if (bubbleSortInput) {
+                const initialArray = parseInput(bubbleSortInput.value);
+                createVisualization(initialArray, 'bubble-sort-array-container');
+                bubbleSortViz(initialArray); // Generate steps
+                updateVisualization('bubble-sort', 0); // Show initial state
+            }
+
+            const selectionSortInput = document.getElementById('selection-sort-input');
+             if (selectionSortInput) {
+                const initialArray = parseInput(selectionSortInput.value);
+                createVisualization(initialArray, 'selection-sort-array-container');
+                selectionSortViz(initialArray); // Generate steps
+                updateVisualization('selection-sort', 0); // Show initial state
+            }
+
+
+            // Add event listeners for Test It buttons
+            document.querySelectorAll('.sort-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    const algorithm = button.dataset.algorithm;
+                    const inputId = `${algorithm}-input`;
+                    const outputId = `${algorithm}-output`;
+                    const inputElement = document.getElementById(inputId);
+                    const outputElement = document.getElementById(outputId);
+                    const sortFunction = sortingAlgorithmsJS[algorithm];
+
+                    if (!inputElement || !outputElement || !sortFunction) {
+                         console.error(`Elements or function not found for algorithm: ${algorithm}`);
+                         return;
+                    }
+
+                    try {
+                        const inputArray = parseInput(inputElement.value);
+
+                        // Clear previous output and visualization state
+                        outputElement.innerHTML = `<p>Sorting...</p>`;
+                        const vizContainerId = `${algorithm}-array-container`;
+                        const vizContainer = document.getElementById(vizContainerId);
+                        const stepInfoElement = document.getElementById(`${algorithm}-step-info`);
+                        pauseVisualization(algorithm); // Stop any running viz
+                        visualizationStates[algorithm] = []; // Clear steps
+                        visualizationStepIndex[algorithm] = 0; // Reset step index
+                        if (vizContainer) vizContainer.innerHTML = ''; // Clear visualization bars
+                        if (stepInfoElement) stepInfoElement.textContent = 'Processing input...';
+
+
+                        if (inputArray.length === 0 && inputElement.value.trim() !== '') {
+                             outputElement.innerHTML = `<p style="color: red;">Error: Invalid input. Please enter comma-separated numbers.</p>`;
+                             if (stepInfoElement) stepInfoElement.textContent = 'Invalid input.';
+                             return;
+                        }
+                         if (inputArray.length > 50) { // Add a limit for performance/visualization
+                             outputElement.innerHTML = `<p style="color: orange;">Warning: Input array size limited to 50 for performance/visualization. Only the first 50 numbers will be sorted.</p>`;
+                             inputArray.length = 50; // Truncate the array
+                         }
+
+
+                        // For algorithms with visualization, prepare the visualization steps
+                        if (algorithm === 'bubble-sort' || algorithm === 'selection-sort') {
+                            if (vizContainer) {
+                                createVisualization(inputArray, vizContainerId); // Draw initial state
+                                // Generate visualization steps using the Viz version of the sort
+                                if (algorithm === 'bubble-sort') bubbleSortViz(inputArray);
+                                else if (algorithm === 'selection-sort') selectionSortViz(inputArray);
+
+                                if (visualizationStates[algorithm].length > 0) {
+                                     updateVisualization(algorithm, 0); // Show first step
+                                     if (stepInfoElement) stepInfoElement.textContent = 'Ready to visualize. Click Play.';
+                                } else {
+                                     if (stepInfoElement) stepInfoElement.textContent = 'No steps generated (e.g., empty array).';
+                                }
+                            }
+                        } else { // For algorithms without visualization yet
+                             const vizAreaId = `${algorithm}-visualization`;
+                             const vizArea = document.getElementById(vizAreaId);
+                             if (vizArea) {
+                                 // Restore placeholder message if it was cleared
+                                 if (!vizArea.querySelector('p')) {
+                                     vizArea.innerHTML = '<p>Visualization for ' + algorithm.replace('-', ' ') + ' is not yet implemented.</p><p><em>(Requires JavaScript implementation to show step-by-step sorting)</em></p>';
+                                 }
+                             }
+                        }
+
+                        // Run the sorting algorithm for the output display
+                        const sortedArray = sortFunction([...inputArray]); // Use a fresh copy for the sort function
+                        displayOutput(outputElement, sortedArray);
+
+                    } catch (error) {
+                        outputElement.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+                        console.error(error);
+                         // Clear visualization if error occurs
+                         const vizContainerId = `${algorithm}-array-container`;
+                         const vizContainer = document.getElementById(vizContainerId);
+                         if (vizContainer) vizContainer.innerHTML = '';
+                         const stepInfoElement = document.getElementById(`${algorithm}-step-info`);
+                         if (stepInfoElement) stepInfoElement.textContent = 'Error processing input.';
+                         pauseVisualization(algorithm);
+                         visualizationStates[algorithm] = []; // Clear steps
+                         visualizationStepIndex[algorithm] = 0;
+                    }
+                });
+            });
+
+            // Add event listeners for Visualization controls
+            document.querySelectorAll('.viz-control-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    const algorithm = button.dataset.algorithm;
+                    const action = button.dataset.action;
+
+                    // Only allow controls for algorithms with implemented visualization
+                    if (algorithm !== 'bubble-sort' && algorithm !== 'selection-sort') {
+                        console.warn(`Visualization not implemented for ${algorithm}`);
+                        return;
+                    }
+
+                    // Check if steps exist before allowing actions
+                    if (!visualizationStates[algorithm] || visualizationStates[algorithm].length === 0) {
+                         const stepInfoElement = document.getElementById(`${algorithm}-step-info`);
+                         if (stepInfoElement) stepInfoElement.textContent = 'No steps to visualize. Enter an array and click "Sort Array" first.';
+                         return;
+                    }
+
+
+                    switch (action) {
+                        case 'play':
+                            runVisualization(algorithm);
+                            break;
+                        case 'pause':
+                            pauseVisualization(algorithm);
+                            break;
+                        case 'next':
+                            stepVisualization(algorithm, 'next');
+                            break;
+                        case 'prev':
+                            stepVisualization(algorithm, 'prev');
+                            break;
+                    }
+                });
+            });
+
+             // Add event listeners for speed controls
+             document.querySelectorAll('.visualization-controls input[type="range"]').forEach(input => {
+                 input.addEventListener('input', () => {
+                     // If visualization is running, restart it with the new speed
+                     const algorithm = input.id.replace('-speed', '');
+                     if (visualizationIntervals[algorithm]) {
+                         pauseVisualization(algorithm);
+                         runVisualization(algorithm); // Auto-play on speed change
+                     }
+                 });
+             });
+
+        });
+
+        // Manually highlight after content is loaded, if needed
+        // Prism.highlightAll(); // This is often done automatically, but can be called explicitly
+    </script>
+</body>
+</html>
