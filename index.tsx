@@ -4,6 +4,7 @@
  */
 
 import * as Diff from 'diff';
+import JSZip from 'jszip';
 import { GoogleGenAI, GenerateContentResponse, Part } from "@google/genai";
 import { 
     defaultCustomPromptsWebsite, 
@@ -1744,9 +1745,9 @@ function escapeHtml(unsafe: string): string {
     return unsafe.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
 
-function downloadFile(content: string, fileName: string, contentType: string) {
+function downloadFile(content: string | Blob, fileName: string, contentType: string) {
     const a = document.createElement("a");
-    const file = new Blob([content], { type: contentType });
+    const file = (content instanceof Blob) ? content : new Blob([content], { type: contentType });
     a.href = URL.createObjectURL(file);
     a.download = fileName;
     document.body.appendChild(a);
@@ -1754,6 +1755,66 @@ function downloadFile(content: string, fileName: string, contentType: string) {
     URL.revokeObjectURL(a.href);
     document.body.removeChild(a);
 }
+
+async function createAndDownloadReactProjectZip() {
+    if (!activeReactPipeline || !activeReactPipeline.finalAppendedCode) {
+        alert("No React project code available to download.");
+        return;
+    }
+
+    const zip = new JSZip();
+    const finalCode = activeReactPipeline.finalAppendedCode;
+    const fileMarkerRegex = /^\/\/\s*---\s*FILE:\s*(.*?)\s*---\s*$/gm;
+    let match;
+    let lastIndex = 0;
+    const files: { path: string, content: string }[] = [];
+
+    // First pass to find all file markers and their start indices
+    const markers: { path: string, startIndex: number }[] = [];
+    while ((match = fileMarkerRegex.exec(finalCode)) !== null) {
+        markers.push({ path: match[1].trim(), startIndex: match.index + match[0].length });
+    }
+
+    // Second pass to extract content based on markers
+    for (let i = 0; i < markers.length; i++) {
+        const currentMarker = markers[i];
+        const nextMarker = markers[i + 1];
+        const contentEndIndex = nextMarker ? nextMarker.startIndex - (finalCode.substring(0, nextMarker.startIndex).match(/\/\/\s*---\s*FILE:\s*.*?\s*---\s*$/m)?.[0].length || 0) : finalCode.length;
+
+        let content = finalCode.substring(currentMarker.startIndex, contentEndIndex).trim();
+
+        // Remove the matched marker line from the *next* iteration's content start if it was captured
+        if (nextMarker) {
+            const nextMarkerLineInContentRegex = /^\/\/\s*---\s*FILE:\s*.*?\s*---\s*\n?/m;
+            content = content.replace(nextMarkerLineInContentRegex, '');
+        }
+
+        files.push({ path: currentMarker.path, content: content.trimStart() }); // trimStart to remove leading newline after marker
+    }
+
+    if (files.length === 0 && finalCode.length > 0) {
+        // If no markers found, but there is code, assume it's a single file (e.g. App.tsx or similar)
+        // This is a fallback, the orchestrator should ensure markers are present.
+        console.warn("No file markers found in the aggregated code. Assuming single file 'src/App.tsx'.");
+        files.push({ path: "src/App.tsx", content: finalCode });
+    }
+
+
+    files.forEach(file => {
+        // Ensure paths are relative and don't start with /
+        const correctedPath = file.path.startsWith('/') ? file.path.substring(1) : file.path;
+        zip.file(correctedPath, file.content);
+    });
+
+    try {
+        const zipBlob = await zip.generateAsync({ type: 'blob' });
+        downloadFile(zipBlob, `react-app-${activeReactPipeline.id}.zip`, 'application/zip');
+    } catch (error) {
+        console.error("Error generating React project zip:", error);
+        alert("Failed to generate zip file. See console for details.");
+    }
+}
+
 
 function handleGlobalFullscreenChange() {
     const isCurrentlyFullscreen = !!document.fullscreenElement;
@@ -2638,17 +2699,13 @@ function renderReactModePipeline() {
             <h3>Final Aggregated Application Code</h3>
             <p>The following is a concatenation of outputs from successful worker agents. File markers (e.g., // --- FILE: src/App.tsx ---) should indicate intended file paths.</p>
             <pre id="react-final-appended-code" class="code-block language-javascript">${escapeHtml(pipeline.finalAppendedCode)}</pre>
-            <button id="download-react-app-code" class="button-base action-button" type="button">Download Full App Code</button>
+            <button id="download-react-runnable-project" class="button-base action-button" type="button">Download Runnable Project (.zip)</button>
         `;
         pipelinesContentContainer.appendChild(finalOutputPane);
 
-        const downloadAppButton = document.getElementById('download-react-app-code');
-        if (downloadAppButton && pipeline.finalAppendedCode) { // Check finalAppendedCode again
-            downloadAppButton.addEventListener('click', () => {
-                 if (activeReactPipeline?.finalAppendedCode) {
-                    downloadFile(activeReactPipeline.finalAppendedCode, `react_app_${pipeline.id}.txt`, 'text/plain');
-                 }
-            });
+        const downloadRunnableProjectButton = document.getElementById('download-react-runnable-project');
+        if (downloadRunnableProjectButton && pipeline.finalAppendedCode) {
+            downloadRunnableProjectButton.addEventListener('click', createAndDownloadReactProjectZip);
         }
     }
 
