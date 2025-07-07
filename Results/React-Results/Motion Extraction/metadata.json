@@ -1,0 +1,8 @@
+{
+  "name": "Advanced Motion Extraction",
+  "description": "An advanced tool to extract motion from video, apply effects, and record the output.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "prompt": ""
+}

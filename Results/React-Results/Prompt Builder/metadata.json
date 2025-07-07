@@ -1,0 +1,6 @@
+{
+  "name": "[New Styles] Prompt Organizer",
+  "description": "An application to manage, organize, and edit prompts, including system instructions and project-specific rules. Supports bold text formatting within prompts.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}

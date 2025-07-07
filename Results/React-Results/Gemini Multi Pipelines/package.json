@@ -1,0 +1,27 @@
+{
+  "name": "[safe]-gemini-multi-chat-&-config-tester",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@google/genai": "^1.4.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-markdown": "^9.0.0",
+    "react-syntax-highlighter": "^15.6.1",
+    "rehype-katex": "^7.0.0",
+    "remark-gfm": "^4.0.0",
+    "remark-math": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "typescript": "~5.7.2",
+    "vite": "^6.2.0"
+  }
+}

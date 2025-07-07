@@ -1,0 +1,6 @@
+{
+  "name": "[Safe] Gemini Multi-Chat & Config Tester",
+  "description": "An application to chat with multiple Gemini model personas in parallel and test different model configurations (temperature, topP) with custom prompts and image uploads.",
+  "requestFramePermissions": [],
+  "prompt": ""
+}

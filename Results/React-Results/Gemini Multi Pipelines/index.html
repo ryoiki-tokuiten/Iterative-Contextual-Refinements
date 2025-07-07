@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Multi-Chat & Config Tester</title>
+    <link rel="stylesheet" href="index.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Using a common font available on Google Fonts that resembles SF Pro Rounded -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- KaTeX CSS for LaTeX rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css" integrity="sha384-wcPFxkAOVufaSMhEltRuFSEGSpPmHWMBwK2sGbvmZg9b_DHWvCq_h_AfFv1z07t_">
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.1.0",
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.4.0",
+    "react-markdown": "https://esm.sh/react-markdown@^9.0.0",
+    "remark-gfm": "https://esm.sh/remark-gfm@^4.0.0",
+    "remark-math": "https://esm.sh/remark-math@^6.0.0",
+    "rehype-katex": "https://esm.sh/rehype-katex@^7.0.0",
+    "react-syntax-highlighter": "https://esm.sh/react-syntax-highlighter@15.5.0",
+    "react-syntax-highlighter/dist/esm/styles/prism": "https://esm.sh/react-syntax-highlighter@15.5.0/dist/esm/styles/prism",
+    "react-syntax-highlighter/": "https://esm.sh/react-syntax-highlighter@^15.6.1/"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <div id="preloader">
+        <div class="spinner"></div>
+    </div>
+    <div class="background-container">
+        <div class="background-gradient"></div>
+        <div class="background-noise"></div>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="index.tsx"></script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
