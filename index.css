@@ -1,14 +1,3 @@
-/* [OVERHAUL] index.css */
-
-/* ==========================================================================
-   1. ROOT & THEME VARIABLES
-   - Refined and organized variables for a cohesive design system.
-   - Kept the original color palette as requested.
-   - Introduced a systematic spacing scale.
-   - Simplified border and shadow definitions.
-   - Standardized transitions and easing.
-   ========================================================================== */
-
 :root {
     /* "Nebula Flow" Theme - Retained Original Palette */
     --bg-color: #04020A;
