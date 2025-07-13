@@ -6,13 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Iterative Studio</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
     <link rel="stylesheet" href="index.css">
     <script type="importmap">
 {
   "imports": {
     "@google/genai": "https://esm.sh/@google/genai@^1.4.0",
     "diff": "https://esm.sh/diff@^8.0.2",
-    "jszip": "https://esm.sh/jszip@^3.10.1"
+    "jszip": "https://esm.sh/jszip@^3.10.1",
+    "marked": "https://esm.sh/marked@4.3.0",
+    "dompurify": "https://esm.sh/dompurify@3.1.6",
+    "highlight.js": "https://esm.sh/highlight.js@11.9.0"
   }
 }
 </script>
@@ -147,6 +151,7 @@
                 <button id="prompts-modal-close-button" class="modal-close-button" aria-label="Close Custom Prompts"><span class="material-symbols-outlined">close</span></button>
             </header>
             <div id="prompts-modal-body" class="modal-body">
+
                 <div id="prompts-modal-layout" class="prompts-modal-layout">
                     <nav id="prompts-modal-nav" class="prompts-nav custom-scrollbar"></nav>
                     <div id="prompts-modal-content" class="prompts-content custom-scrollbar">

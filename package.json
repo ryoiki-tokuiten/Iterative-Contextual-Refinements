@@ -1,5 +1,5 @@
 {
-  "name": "contextual-iterative-refinement-studio",
+  "name": "copy-of-actually-nice-design----contextual-iterative-refinement-studio",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -10,12 +10,14 @@
   },
   "dependencies": {
     "@google/genai": "^1.4.0",
-    "diff": "^5.2.0",
-    "jszip": "^3.10.1"
+    "diff": "^8.0.2",
+    "jszip": "^3.10.1",
+    "marked": "4.3.0",
+    "dompurify": "3.1.6",
+    "highlight.js": "11.9.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
-    "@types/diff": "^5.2.1",
     "typescript": "~5.7.2",
     "vite": "^6.2.0"
   }

@@ -6,6 +6,9 @@
 import * as Diff from 'diff';
 import JSZip from 'jszip';
 import { GoogleGenAI, GenerateContentResponse, Part } from "@google/genai";
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
+import hljs from 'highlight.js';
 import { 
     defaultCustomPromptsWebsite, 
     defaultCustomPromptsCreative, 
@@ -959,6 +962,12 @@ function getEmptyStateMessage(status: IterationData['status'], contentType: stri
     }
 }
 
+function renderMarkdown(content: string | undefined): string {
+    if (typeof content !== 'string') return '';
+    // Use DOMPurify to prevent XSS attacks after rendering markdown.
+    return DOMPurify.sanitize(marked.parse(content));
+}
+
 function renderIteration(pipelineId: number, iter: IterationData): string {
     const pipeline = pipelinesState.find(p => p.id === pipelineId);
     if (!pipeline) return '';
@@ -971,27 +980,27 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
 
     let promptsContent = '';
     if (currentMode === 'website') {
-        if (iter.requestPromptHtml_InitialGenerate) promptsContent += `<h6 class="prompt-title">Initial HTML Generation Prompt:</h6><pre>${escapeHtml(iter.requestPromptHtml_InitialGenerate)}</pre>`;
-        if (iter.requestPromptHtml_FeatureImplement) promptsContent += `<h6 class="prompt-title">Feature Implementation & Stabilization Prompt:</h6><pre>${escapeHtml(iter.requestPromptHtml_FeatureImplement)}</pre>`;
-        if (iter.requestPromptHtml_BugFix) promptsContent += `<h6 class="prompt-title">HTML Bug Fix/Polish & Completion Prompt:</h6><pre>${escapeHtml(iter.requestPromptHtml_BugFix)}</pre>`;
-        if (iter.requestPromptFeatures_Suggest) promptsContent += `<h6 class="prompt-title">Feature Suggestion Prompt:</h6><pre>${escapeHtml(iter.requestPromptFeatures_Suggest)}</pre>`;
+        if (iter.requestPromptHtml_InitialGenerate) promptsContent += `<h6 class="prompt-title">Initial HTML Generation Prompt:</h6><div class="markdown-content">${renderMarkdown(iter.requestPromptHtml_InitialGenerate)}</div>`;
+        if (iter.requestPromptHtml_FeatureImplement) promptsContent += `<h6 class="prompt-title">Feature Implementation & Stabilization Prompt:</h6><div class="markdown-content">${renderMarkdown(iter.requestPromptHtml_FeatureImplement)}</div>`;
+        if (iter.requestPromptHtml_BugFix) promptsContent += `<h6 class="prompt-title">HTML Bug Fix/Polish & Completion Prompt:</h6><div class="markdown-content">${renderMarkdown(iter.requestPromptHtml_BugFix)}</div>`;
+        if (iter.requestPromptFeatures_Suggest) promptsContent += `<h6 class="prompt-title">Feature Suggestion Prompt:</h6><div class="markdown-content">${renderMarkdown(iter.requestPromptFeatures_Suggest)}</div>`;
     } else if (currentMode === 'creative') {
-        if (iter.requestPromptText_GenerateDraft) promptsContent += `<h6 class="prompt-title">Draft Generation Prompt:</h6><pre>${escapeHtml(iter.requestPromptText_GenerateDraft)}</pre>`;
-        if (iter.requestPromptText_Critique) promptsContent += `<h6 class="prompt-title">Critique Prompt:</h6><pre>${escapeHtml(iter.requestPromptText_Critique)}</pre>`;
-        if (iter.requestPromptText_Revise) promptsContent += `<h6 class="prompt-title">Revision Prompt:</h6><pre>${escapeHtml(iter.requestPromptText_Revise)}</pre>`;
-        if (iter.requestPromptText_Polish) promptsContent += `<h6 class="prompt-title">Polish Prompt:</h6><pre>${escapeHtml(iter.requestPromptText_Polish)}</pre>`;
+        if (iter.requestPromptText_GenerateDraft) promptsContent += `<h6 class="prompt-title">Draft Generation Prompt:</h6><div class="markdown-content">${renderMarkdown(iter.requestPromptText_GenerateDraft)}</div>`;
+        if (iter.requestPromptText_Critique) promptsContent += `<h6 class="prompt-title">Critique Prompt:</h6><div class="markdown-content">${renderMarkdown(iter.requestPromptText_Critique)}</div>`;
+        if (iter.requestPromptText_Revise) promptsContent += `<h6 class="prompt-title">Revision Prompt:</h6><div class="markdown-content">${renderMarkdown(iter.requestPromptText_Revise)}</div>`;
+        if (iter.requestPromptText_Polish) promptsContent += `<h6 class="prompt-title">Polish Prompt:</h6><div class="markdown-content">${renderMarkdown(iter.requestPromptText_Polish)}</div>`;
     } else if (currentMode === 'agent') {
-        if (iter.agentJudgeLLM_InitialRequest) promptsContent += `<h6 class="prompt-title">Judge LLM - Initial Request to Design Prompts:</h6><pre>${escapeHtml(iter.agentJudgeLLM_InitialRequest)}</pre>`;
+        if (iter.agentJudgeLLM_InitialRequest) promptsContent += `<h6 class="prompt-title">Judge LLM - Initial Request to Design Prompts:</h6><div class="markdown-content">${renderMarkdown(iter.agentJudgeLLM_InitialRequest)}</div>`;
         if (iter.agentGeneratedPrompts && iter.iterationNumber === 0) {
              promptsContent += `<h6 class="prompt-title">Judge LLM - Generated Prompt Design:</h6><pre>${escapeHtml(JSON.stringify(iter.agentGeneratedPrompts, null, 2))}</pre>`;
         }
-        if (iter.requestPrompt_SysInstruction) promptsContent += `<h6 class="prompt-title">System Instruction (Main Step):</h6><pre>${escapeHtml(iter.requestPrompt_SysInstruction)}</pre>`;
-        if (iter.requestPrompt_UserTemplate) promptsContent += `<h6 class="prompt-title">User Prompt Template (Main Step):</h6><pre>${escapeHtml(iter.requestPrompt_UserTemplate)}</pre>`;
-        if (iter.requestPrompt_Rendered) promptsContent += `<h6 class="prompt-title">Rendered User Prompt (Main Step - Sent to API):</h6><pre>${escapeHtml(iter.requestPrompt_Rendered)}</pre>`;
+        if (iter.requestPrompt_SysInstruction) promptsContent += `<h6 class="prompt-title">System Instruction (Main Step):</h6><div class="markdown-content">${renderMarkdown(iter.requestPrompt_SysInstruction)}</div>`;
+        if (iter.requestPrompt_UserTemplate) promptsContent += `<h6 class="prompt-title">User Prompt Template (Main Step):</h6><div class="markdown-content">${renderMarkdown(iter.requestPrompt_UserTemplate)}</div>`;
+        if (iter.requestPrompt_Rendered) promptsContent += `<h6 class="prompt-title">Rendered User Prompt (Main Step - Sent to API):</h6><div class="markdown-content">${renderMarkdown(iter.requestPrompt_Rendered)}</div>`;
         
-        if (iter.requestPrompt_SubStep_SysInstruction) promptsContent += `<hr class="sub-divider"><h6 class="prompt-title">System Instruction (Loop Sub-Step - Refine/Suggest):</h6><pre>${escapeHtml(iter.requestPrompt_SubStep_SysInstruction)}</pre>`;
-        if (iter.requestPrompt_SubStep_UserTemplate) promptsContent += `<h6 class="prompt-title">User Prompt Template (Loop Sub-Step - Refine/Suggest):</h6><pre>${escapeHtml(iter.requestPrompt_SubStep_UserTemplate)}</pre>`;
-        if (iter.requestPrompt_SubStep_Rendered) promptsContent += `<h6 class="prompt-title">Rendered User Prompt (Loop Sub-Step - Refine/Suggest - Sent to API):</h6><pre>${escapeHtml(iter.requestPrompt_SubStep_Rendered)}</pre>`;
+        if (iter.requestPrompt_SubStep_SysInstruction) promptsContent += `<hr class="sub-divider"><h6 class="prompt-title">System Instruction (Loop Sub-Step - Refine/Suggest):</h6><div class="markdown-content">${renderMarkdown(iter.requestPrompt_SubStep_SysInstruction)}</div>`;
+        if (iter.requestPrompt_SubStep_UserTemplate) promptsContent += `<h6 class="prompt-title">User Prompt Template (Loop Sub-Step - Refine/Suggest):</h6><div class="markdown-content">${renderMarkdown(iter.requestPrompt_SubStep_UserTemplate)}</div>`;
+        if (iter.requestPrompt_SubStep_Rendered) promptsContent += `<h6 class="prompt-title">Rendered User Prompt (Loop Sub-Step - Refine/Suggest - Sent to API):</h6><div class="markdown-content">${renderMarkdown(iter.requestPrompt_SubStep_Rendered)}</div>`;
     }
     const promptsHtml = promptsContent ? `
         <details class="model-detail-section collapsible-section">
@@ -1010,7 +1019,8 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
             const hasContent = !!iter.generatedHtml && !isEmptyOrPlaceholderHtml(iter.generatedHtml);
             let htmlContent;
             if (hasContent) {
-                htmlContent = `<pre id="html-code-${pipelineId}-${iter.iterationNumber}" class="language-html">${escapeHtml(iter.generatedHtml!)}</pre>`;
+                const contentToRender = `\`\`\`html\n${iter.generatedHtml!}\n\`\`\``;
+                htmlContent = renderMarkdown(contentToRender);
             } else {
                 htmlContent = `<div class="empty-state-message">${getEmptyStateMessage(iter.status, 'HTML')}</div>`;
             }
@@ -1032,6 +1042,9 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
         let mainContentToDisplay = iter.generatedOrRevisedText; // Creative
         let mainContentLabel = "Generated/Revised Text";
         let subStepHtml = '';
+        const agentContentType = (currentMode === 'agent' && iter.agentGeneratedPrompts) ? iter.agentGeneratedPrompts.expected_output_content_type : 
+                               (currentMode === 'agent' && pipelinesState.find(p=>p.id === pipelineId)?.iterations[0]?.agentGeneratedPrompts) ? pipelinesState.find(p=>p.id === pipelineId)?.iterations[0]?.agentGeneratedPrompts?.expected_output_content_type : 'markdown';
+
 
         if (currentMode === 'agent') {
             mainContentToDisplay = iter.generatedMainContent;
@@ -1039,11 +1052,15 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
                  mainContentToDisplay = "Dynamically designed prompts from Judge LLM are shown in the 'Prompts' section. No direct content output for this setup step.";
                  mainContentLabel = "Setup Information";
             } else if (iter.generatedSubStep_Content && iter.iterationNumber > 2 && iter.iterationNumber < TOTAL_STEPS_AGENT -1) {
+                 let subStepContentToRender = iter.generatedSubStep_Content || '';
+                 if (agentContentType !== 'markdown' && agentContentType !== 'text/markdown' && agentContentType !== 'text' && agentContentType !== 'text/plain') {
+                    subStepContentToRender = `\`\`\`${agentContentType}\n${iter.generatedSubStep_Content}\n\`\`\``;
+                 }
                  subStepHtml = `<div class="model-detail-section">
                      <div class="code-block-header">
                          <span class="model-section-title">Content After Suggestion Implementation (Sub-Step)</span>
                      </div>
-                     <div class="code-block-wrapper scrollable-content-area custom-scrollbar"><pre id="agent-substep-content-${pipelineId}-${iter.iterationNumber}" class="language-${outputContentType}">${iter.generatedSubStep_Content ? escapeHtml(iter.generatedSubStep_Content) : ''}</pre></div>
+                     <div class="code-block-wrapper scrollable-content-area custom-scrollbar"><div id="agent-substep-content-${pipelineId}-${iter.iterationNumber}" class="markdown-content">${renderMarkdown(subStepContentToRender)}</div></div>
                  </div>`;
                  mainContentLabel = "Refined Content After Suggestions";
             } else if (iter.iterationNumber === 1) { mainContentLabel = "Initial Generated Content"; } 
@@ -1056,7 +1073,11 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
             const hasContent = !!mainContentToDisplay && !(currentMode === 'agent' && iter.iterationNumber === 0);
             let contentBlock;
             if (hasContent) {
-                contentBlock = `<pre id="text-block-${pipelineId}-${iter.iterationNumber}" class="language-${outputContentType}">${escapeHtml(mainContentToDisplay!)}</pre>`;
+                let contentToRender = mainContentToDisplay!;
+                if (currentMode === 'agent' && agentContentType !== 'markdown' && agentContentType !== 'text/markdown' && agentContentType !== 'text' && agentContentType !== 'text/plain') {
+                    contentToRender = `\`\`\`${agentContentType}\n${mainContentToDisplay}\n\`\`\``;
+                }
+                contentBlock = `<div id="text-block-${pipelineId}-${iter.iterationNumber}" class="markdown-content">${renderMarkdown(contentToRender)}</div>`;
             } else {
                 contentBlock = `<div class="empty-state-message">${getEmptyStateMessage(iter.status, 'output')}</div>`;
             }
@@ -2399,7 +2420,8 @@ function renderActiveMathPipeline() {
             mainStrategy.subStrategies.forEach((subStrategy, subIndex) => {
                  let solutionContent;
                  if (subStrategy.solutionAttempt) {
-                     solutionContent = `<pre id="math-solution-${subStrategy.id}">${escapeHtml(subStrategy.solutionAttempt)}</pre>`;
+                     const contentToRender = `\`\`\`tex\n${subStrategy.solutionAttempt}\n\`\`\``;
+                     solutionContent = renderMarkdown(contentToRender);
                  } else {
                      solutionContent = `<div class="empty-state-message">${getEmptyStateMessage(subStrategy.status, 'solution')}</div>`;
                  }
@@ -2691,7 +2713,8 @@ function renderReactModePipeline() {
         const hasContent = !!stage.generatedContent;
         let contentBlock;
         if (hasContent) {
-            contentBlock = `<pre id="react-worker-${stage.id}-code-block" class="language-tsx">${escapeHtml(stage.generatedContent!)}</pre>`;
+            const contentToRender = `\`\`\`tsx\n${stage.generatedContent!}\n\`\`\``;
+            contentBlock = renderMarkdown(contentToRender);
         } else {
             contentBlock = `<div class="empty-state-message">${getEmptyStateMessage(stage.status, 'code')}</div>`;
         }
@@ -2761,8 +2784,8 @@ function renderReactModePipeline() {
 
     if (pipeline.finalAppendedCode) {
         const finalOutputPane = document.createElement('div');
-        // This element is a wrapper. It should not have the 'pipeline-content' class,
-        // as that would cause it to be hidden by tab visibility logic.
+        const finalCodeHtml = renderMarkdown(`\`\`\`tsx\n${pipeline.finalAppendedCode}\n\`\`\``);
+
         finalOutputPane.innerHTML = `
             <div class="react-final-output-pane model-detail-card">
                 <div class="model-detail-header">
@@ -2772,7 +2795,7 @@ function renderReactModePipeline() {
                     </div>
                 </div>
                 <p>The following is a concatenation of outputs from successful worker agents. File markers (e.g., // --- FILE: src/App.tsx ---) should indicate intended file paths.</p>
-                <div class="code-block-wrapper scrollable-content-area custom-scrollbar" style="max-height: 60vh;"><pre id="react-final-appended-code" class="language-tsx">${escapeHtml(pipeline.finalAppendedCode)}</pre></div>
+                <div class="code-block-wrapper scrollable-content-area custom-scrollbar" style="max-height: 60vh;">${finalCodeHtml}</div>
             </div>
         `;
         // Find the orchestrator pane and insert this after it.
@@ -2923,6 +2946,15 @@ function aggregateReactOutputs() {
 
 function initializeUI() {
     initializeApiKey();
+
+    marked.use({
+        gfm: true,
+        breaks: true,
+        highlight: function (code, lang) {
+            const language = hljs.getLanguage(lang) ? lang : 'plaintext';
+            return hljs.highlight(code, { language }).value;
+        },
+    });
 
     renderPipelineSelectors();
     initializeCustomPromptTextareas();
