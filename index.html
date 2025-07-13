@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Studio</title>
+    <title>Iterative Studio</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
     <link rel="stylesheet" href="index.css">
     <script type="importmap">
 {
@@ -15,7 +16,6 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
 <body>
     <div id="preloader">
@@ -30,13 +30,12 @@
         <div id="app-container">
             <aside id="controls-sidebar" class="inspector-panel custom-scrollbar" aria-labelledby="controls-sidebar-heading">
                 <header class="sidebar-header">
-                    <h1 id="controls-sidebar-heading">Gemini Studio</h1>
                     <p id="api-key-status" class="api-key-status-message status-badge" aria-live="polite">Initializing...</p>
                     <div id="api-key-form-container" style="display: none; margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.75rem;">
                         <input type="password" id="api-key-input" class="input-base" placeholder="Enter API Key">
                         <div style="display: flex; gap: 0.5rem; justify-content: flex-end;">
-                            <button id="save-api-key-button" class="button">Save Key</button>
-                            <button id="clear-api-key-button" class="button">Clear Key</button>
+                            <button id="save-api-key-button" class="button"><span class="material-symbols-outlined">save</span><span class="button-text">Save Key</span></button>
+                            <button id="clear-api-key-button" class="button"><span class="material-symbols-outlined">delete</span><span class="button-text">Clear Key</span></button>
                         </div>
                     </div>
                 </header>
@@ -48,8 +47,12 @@
                     </div>
         
                     <div id="math-problem-image-input-container" class="input-group" style="display: none;">
-                        <label for="math-problem-image-input" class="input-label">Upload Image (Optional):</label>
-                        <input type="file" id="math-problem-image-input" class="input-base file-input" accept="image/png, image/jpeg, image/webp">
+                        <label class="input-label">Upload Image (Optional):</label>
+                        <label for="math-problem-image-input" class="file-drop-area">
+                            <span class="material-symbols-outlined file-drop-icon">upload_file</span>
+                            <span class="file-drop-message">Drag &amp; drop an image here, or click to select a file</span>
+                            <input type="file" id="math-problem-image-input" class="sr-only" accept="image/png, image/jpeg, image/webp">
+                        </label>
                         <img id="math-problem-image-preview" src="#" alt="Image preview" style="display: none; max-width: 100%; height: auto; border-radius: var(--border-radius-md); margin-top: 1rem;"/>
                     </div>
         
@@ -102,10 +105,10 @@
                         <summary class="sidebar-section-header">Configuration</summary>
                         <div class="sidebar-section-content">
                             <div class="config-buttons-container" style="display: flex; gap: 1rem;">
-                                <button id="export-config-button" class="button" type="button">Export</button>
+                                <button id="export-config-button" class="button" type="button"><span class="material-symbols-outlined">upload</span><span class="button-text">Export</span></button>
                                 <input type="file" id="import-config-input" class="sr-only" accept=".json">
                                 <label for="import-config-input" id="import-config-label" class="button" role="button" tabindex="0">
-                                    <span>Import</span>
+                                    <span class="material-symbols-outlined">download</span><span class="button-text">Import</span>
                                 </label>
                             </div>
                         </div>
@@ -120,7 +123,7 @@
                 </div>
 
                 <footer class="sidebar-footer">
-                    <button id="generate-button" class="button primary-action" type="button">Generate</button>
+                    <button id="generate-button" class="button primary-action" type="button"><span class="button-text">Generate</span></button>
                 </footer>
             </aside>
     
@@ -136,114 +139,262 @@
         </div>
     </div>
     
-    <!-- Prompts Modal -->
+       <!-- Prompts Modal -->
     <div id="prompts-modal-overlay" class="modal-overlay">
         <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="prompts-modal-title">
             <header class="modal-header">
                 <h2 id="prompts-modal-title" class="modal-title">Customize Prompts</h2>
-                <button id="prompts-modal-close-button" class="modal-close-button" aria-label="Close Custom Prompts">&times;</button>
+                <button id="prompts-modal-close-button" class="modal-close-button" aria-label="Close Custom Prompts"><span class="material-symbols-outlined">close</span></button>
             </header>
             <div id="prompts-modal-body" class="modal-body">
-                <p class="custom-prompts-description">
-                    Customize system instructions and user prompt templates for each generation step of the selected application mode.
-                </p>
                 <div id="prompts-modal-layout" class="prompts-modal-layout">
                     <nav id="prompts-modal-nav" class="prompts-nav custom-scrollbar"></nav>
                     <div id="prompts-modal-content" class="prompts-content custom-scrollbar">
                         <!-- Website Prompts -->
                         <div id="website-prompts-container" class="prompts-mode-container">
                             <div class="prompt-content-pane" data-prompt-key="initial-gen">
-                                <h4 class="prompt-pane-title">1. Initial HTML Generation</h4>
-                                <div class="input-group-tight"><label for="sys-initial-gen" class="prompt-label">System Instruction:</label><textarea id="sys-initial-gen" class="input-base prompt-textarea" rows="5"></textarea></div>
-                                <div class="input-group-tight"><label for="user-initial-gen" class="prompt-label">User Prompt (<code>{{initialIdea}}</code>):</label><textarea id="user-initial-gen" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <h4 class="prompt-pane-title">Initial HTML Generation</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-initial-gen" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{initialIdea}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-initial-gen" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                              <div class="prompt-content-pane" data-prompt-key="initial-bugfix">
-                                <h4 class="prompt-pane-title">2. Initial HTML Bug Fix & Polish</h4>
-                                <div class="input-group-tight"><label for="sys-initial-bugfix" class="prompt-label">System Instruction:</label><textarea id="sys-initial-bugfix" class="input-base prompt-textarea" rows="5"></textarea></div>
-                                <div class="input-group-tight"><label for="user-initial-bugfix" class="prompt-label">User Prompt (<code>{{initialIdea}}</code>, <code>{{rawHtml}}</code>):</label><textarea id="user-initial-bugfix" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <h4 class="prompt-pane-title">Initial HTML Bug Fix & Polish</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-initial-bugfix" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{initialIdea}}</code>, <code>{{rawHtml}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-initial-bugfix" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                             <div class="prompt-content-pane" data-prompt-key="initial-features">
-                                <h4 class="prompt-pane-title">3. Initial Feature Suggestion (HTML)</h4>
-                                <div class="input-group-tight"><label for="sys-initial-features" class="prompt-label">System Instruction:</label><textarea id="sys-initial-features" class="input-base prompt-textarea" rows="5"></textarea></div>
-                                <div class="input-group-tight"><label for="user-initial-features" class="prompt-label">User Prompt (<code>{{initialIdea}}</code>, <code>{{currentHtml}}</code>):</label><textarea id="user-initial-features" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <h4 class="prompt-pane-title">Initial Feature Suggestion (HTML)</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-initial-features" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{initialIdea}}</code>, <code>{{currentHtml}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-initial-features" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                             <div class="prompt-content-pane" data-prompt-key="refine-implement">
-                                <h4 class="prompt-pane-title">4. Refinement - Stabilize & Implement</h4>
-                                <div class="input-group-tight"><label for="sys-refine-implement" class="prompt-label">System Instruction:</label><textarea id="sys-refine-implement" class="input-base prompt-textarea" rows="5"></textarea></div>
-                                <div class="input-group-tight"><label for="user-refine-implement" class="prompt-label">User Prompt (<code>{{currentHtml}}</code>, <code>{{featuresToImplementStr}}</code>):</label><textarea id="user-refine-implement" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <h4 class="prompt-pane-title">Refinement - Stabilize & Implement</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-refine-implement" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{currentHtml}}</code>, <code>{{featuresToImplementStr}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-refine-implement" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                             <div class="prompt-content-pane" data-prompt-key="refine-bugfix">
-                                <h4 class="prompt-pane-title">5. Refinement - Bug Fix & Completion</h4>
-                                <div class="input-group-tight"><label for="sys-refine-bugfix" class="prompt-label">System Instruction:</label><textarea id="sys-refine-bugfix" class="input-base prompt-textarea" rows="5"></textarea></div>
-                                <div class="input-group-tight"><label for="user-refine-bugfix" class="prompt-label">User Prompt (<code>{{rawHtml}}</code>):</label><textarea id="user-refine-bugfix" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <h4 class="prompt-pane-title">Refinement - Bug Fix & Completion</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-refine-bugfix" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{rawHtml}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-refine-bugfix" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                             <div class="prompt-content-pane" data-prompt-key="refine-features">
-                                <h4 class="prompt-pane-title">6. Refinement - Feature Suggestion</h4>
-                                <div class="input-group-tight"><label for="sys-refine-features" class="prompt-label">System Instruction:</label><textarea id="sys-refine-features" class="input-base prompt-textarea" rows="5"></textarea></div>
-                                <div class="input-group-tight"><label for="user-refine-features" class="prompt-label">User Prompt (<code>{{initialIdea}}</code>, <code>{{currentHtml}}</code>):</label><textarea id="user-refine-features" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <h4 class="prompt-pane-title">Refinement - Feature Suggestion</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-refine-features" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{initialIdea}}</code>, <code>{{currentHtml}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-refine-features" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                             <div class="prompt-content-pane" data-prompt-key="final-polish">
-                                <h4 class="prompt-pane-title">7. Final Polish (HTML)</h4>
-                                <div class="input-group-tight"><label for="sys-final-polish" class="prompt-label">System Instruction:</label><textarea id="sys-final-polish" class="input-base prompt-textarea" rows="5"></textarea></div>
-                                <div class="input-group-tight"><label for="user-final-polish" class="prompt-label">User Prompt (<code>{{currentHtml}}</code>):</label><textarea id="user-final-polish" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <h4 class="prompt-pane-title">Final Polish (HTML)</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-final-polish" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{currentHtml}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-final-polish" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                         </div>
                         <div id="creative-prompts-container" class="prompts-mode-container">
                             <div class="prompt-content-pane" data-prompt-key="creative-initial-draft">
-                                <h4 class="prompt-pane-title">1. Initial Draft Generation</h4>
-                                <div class="input-group-tight"><label for="sys-creative-initial-draft" class="prompt-label">System Instruction:</label><textarea id="sys-creative-initial-draft" class="input-base prompt-textarea" rows="5"></textarea></div>
-                                <div class="input-group-tight"><label for="user-creative-initial-draft" class="prompt-label">User Prompt (<code>{{initialPremise}}</code>):</label><textarea id="user-creative-initial-draft" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <h4 class="prompt-pane-title">Initial Draft Generation</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-creative-initial-draft" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{initialPremise}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-creative-initial-draft" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                             <div class="prompt-content-pane" data-prompt-key="creative-initial-critique">
-                                <h4 class="prompt-pane-title">2. Initial Critique & Suggestion</h4>
-                                <div class="input-group-tight"><label for="sys-creative-initial-critique" class="prompt-label">System Instruction:</label><textarea id="sys-creative-initial-critique" class="input-base prompt-textarea" rows="5"></textarea></div>
-                                <div class="input-group-tight"><label for="user-creative-initial-critique" class="prompt-label">User Prompt (<code>{{currentDraft}}</code>):</label><textarea id="user-creative-initial-critique" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <h4 class="prompt-pane-title">Initial Critique & Suggestion</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-creative-initial-critique" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{currentDraft}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-creative-initial-critique" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                             <div class="prompt-content-pane" data-prompt-key="creative-refine-revise">
-                                <h4 class="prompt-pane-title">3. Refinement - Revise Draft</h4>
-                                <div class="input-group-tight"><label for="sys-creative-refine-revise" class="prompt-label">System Instruction:</label><textarea id="sys-creative-refine-revise" class="input-base prompt-textarea" rows="5"></textarea></div>
-                                <div class="input-group-tight"><label for="user-creative-refine-revise" class="prompt-label">User Prompt (<code>{{currentDraft}}</code>, <code>{{critiqueToImplementStr}}</code>):</label><textarea id="user-creative-refine-revise" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <h4 class="prompt-pane-title">Refinement - Revise Draft</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-creative-refine-revise" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{currentDraft}}</code>, <code>{{critiqueToImplementStr}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-creative-refine-revise" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                             <div class="prompt-content-pane" data-prompt-key="creative-refine-critique">
-                                <h4 class="prompt-pane-title">4. Refinement - New Critique</h4>
-                                <div class="input-group-tight"><label for="sys-creative-refine-critique" class="prompt-label">System Instruction:</label><textarea id="sys-creative-refine-critique" class="input-base prompt-textarea" rows="5"></textarea></div>
-                                <div class="input-group-tight"><label for="user-creative-refine-critique" class="prompt-label">User Prompt (<code>{{currentDraft}}</code>):</label><textarea id="user-creative-refine-critique" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <h4 class="prompt-pane-title">Refinement - New Critique</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-creative-refine-critique" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{currentDraft}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-creative-refine-critique" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                             <div class="prompt-content-pane" data-prompt-key="creative-final-polish">
-                                <h4 class="prompt-pane-title">5. Final Polish (Creative Writing)</h4>
-                                <div class="input-group-tight"><label for="sys-creative-final-polish" class="prompt-label">System Instruction:</label><textarea id="sys-creative-final-polish" class="input-base prompt-textarea" rows="5"></textarea></div>
-                                <div class="input-group-tight"><label for="user-creative-final-polish" class="prompt-label">User Prompt (<code>{{currentDraft}}</code>):</label><textarea id="user-creative-final-polish" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <h4 class="prompt-pane-title">Final Polish (Creative Writing)</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-creative-final-polish" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{currentDraft}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-creative-final-polish" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                         </div>
                         <div id="math-prompts-container" class="prompts-mode-container">
                             <div class="prompt-content-pane" data-prompt-key="math-initial-strategy">
-                                <h4 class="prompt-pane-title">1. Initial Strategy Generation</h4>
-                                <div class="input-group-tight"><label for="sys-math-initial-strategy" class="prompt-label">System Instruction:</label><textarea id="sys-math-initial-strategy" class="input-base prompt-textarea" rows="5"></textarea></div>
-                                <div class="input-group-tight"><label for="user-math-initial-strategy" class="prompt-label">User Prompt (<code>{{originalProblemText}}</code>):</label><textarea id="user-math-initial-strategy" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <h4 class="prompt-pane-title">Initial Strategy Generation</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-math-initial-strategy" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{originalProblemText}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-math-initial-strategy" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                             <div class="prompt-content-pane" data-prompt-key="math-sub-strategy">
-                                <h4 class="prompt-pane-title">2. Sub-Strategy Generation</h4>
-                                <div class="input-group-tight"><label for="sys-math-sub-strategy" class="prompt-label">System Instruction:</label><textarea id="sys-math-sub-strategy" class="input-base prompt-textarea" rows="5"></textarea></div>
-                                <div class="input-group-tight"><label for="user-math-sub-strategy" class="prompt-label">User Prompt (<code>...</code>):</label><textarea id="user-math-sub-strategy" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <h4 class="prompt-pane-title">Sub-Strategy Generation</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-math-sub-strategy" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>...</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-math-sub-strategy" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                             <div class="prompt-content-pane" data-prompt-key="math-solution-attempt">
-                                <h4 class="prompt-pane-title">3. Solution Attempt</h4>
-                                <div class="input-group-tight"><label for="sys-math-solution-attempt" class="prompt-label">System Instruction:</label><textarea id="sys-math-solution-attempt" class="input-base prompt-textarea" rows="5"></textarea></div>
-                                <div class="input-group-tight"><label for="user-math-solution-attempt" class="prompt-label">User Prompt (<code>...</code>):</label><textarea id="user-math-solution-attempt" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <h4 class="prompt-pane-title">Solution Attempt</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-math-solution-attempt" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>...</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-math-solution-attempt" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                         </div>
                         <div id="agent-prompts-container" class="prompts-mode-container">
                            <div class="prompt-content-pane" data-prompt-key="agent-judge-llm">
                                 <h4 class="prompt-pane-title">Agent Mode: Judge LLM Config</h4>
-                                <div class="input-group-tight"><label for="sys-agent-judge-llm" class="prompt-label">System Instruction (for Judge LLM):</label><textarea id="sys-agent-judge-llm" class="input-base prompt-textarea" rows="8"></textarea></div>
-                                <div class="input-group-tight"><label for="user-agent-judge-llm" class="prompt-label">User Prompt Template (for Judge LLM):</label><textarea id="user-agent-judge-llm" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction (for Judge LLM)</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-agent-judge-llm" class="prompt-textarea" rows="10"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template (for Judge LLM)</span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-agent-judge-llm" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                         </div>
                         <div id="react-prompts-container" class="prompts-mode-container">
                            <div class="prompt-content-pane" data-prompt-key="react-orchestrator">
                                 <h4 class="prompt-pane-title">React: Orchestrator Agent Config</h4>
-                                <div class="input-group-tight"><label for="sys-react-orchestrator" class="prompt-label">System Instruction (for Orchestrator):</label><textarea id="sys-react-orchestrator" class="input-base prompt-textarea" rows="8"></textarea></div>
-                                <div class="input-group-tight"><label for="user-react-orchestrator" class="prompt-label">User Prompt Template (for Orchestrator):</label><textarea id="user-react-orchestrator" class="input-base prompt-textarea" rows="3"></textarea></div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction (for Orchestrator)</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-react-orchestrator" class="prompt-textarea" rows="10"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template (for Orchestrator)</span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-react-orchestrator" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -259,22 +410,23 @@
         <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="diff-modal-title">
             <header class="modal-header">
                 <h2 id="diff-modal-title" class="modal-title">Compare Outputs</h2>
-                <button id="diff-modal-close-button" class="modal-close-button" aria-label="Close Diff Viewer">&times;</button>
+                <button id="diff-modal-close-button" class="modal-close-button" aria-label="Close Diff Viewer"><span class="material-symbols-outlined">close</span></button>
             </header>
-            <div id="diff-modal-body" class="diff-modal-body">
+            <div id="diff-modal-body">
                 <aside id="diff-selector-panel" class="inspector-panel custom-scrollbar">
-                    <div id="diff-source-display" class="input-group">
-                        <h4 class="model-section-title">Source (A)</h4>
-                        <p id="diff-source-label">None selected</p>
-                    </div>
-                    <hr class="modal-divider"/>
-                    <div class="input-group">
-                        <h4 class="model-section-title">Select Target (B)</h4>
-                        <div id="diff-target-tree"></div>
+                    <div class="sidebar-section-content">
+                        <div id="diff-source-display" class="input-group">
+                            <h4 class="model-section-title">Source (A)</h4>
+                            <p id="diff-source-label">None selected</p>
+                        </div>
+                        <div class="input-group">
+                            <h4 class="model-section-title">Select Target (B)</h4>
+                            <div id="diff-target-tree" class="custom-scrollbar" style="max-height: 40vh; overflow-y: auto; padding-right: 0.5rem;"></div>
+                        </div>
                     </div>
                 </aside>
-                <div id="diff-viewer-panel">
-                    <div class="diff-no-selection">
+                <div id="diff-viewer-panel" class="custom-scrollbar">
+                    <div class="diff-no-selection empty-state-message">
                         <p>Select a target from the list to view differences.</p>
                     </div>
                 </div>

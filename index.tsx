@@ -364,16 +364,6 @@ const customPromptTextareasReact: { [K in keyof CustomizablePromptsReact]: HTMLT
     user_orchestrator: document.getElementById('user-react-orchestrator') as HTMLTextAreaElement,
 };
 
-const fullscreenIconSvg = `
-<svg viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em" aria-hidden="true">
-  <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-</svg>`;
-const exitFullscreenIconSvg = `
-<svg viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em" aria-hidden="true">
-  <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
-</svg>`;
-
-
 function initializeApiKey() {
     let statusMessage = "";
     let isKeyAvailable = false;
@@ -524,6 +514,28 @@ function updateCustomPromptTextareasFromState() {
     }
 }
 
+const promptNavStructure = {
+    website: [
+        { groupTitle: "1. Initial Generation & Analysis", prompts: ["initial-gen", "initial-bugfix", "initial-features"] },
+        { groupTitle: "2. Refinement Cycle", prompts: ["refine-implement", "refine-bugfix", "refine-features"] },
+        { groupTitle: "3. Final Polish", prompts: ["final-polish"] }
+    ],
+    creative: [
+        { groupTitle: "1. Drafting & Critique", prompts: ["creative-initial-draft", "creative-initial-critique"] },
+        { groupTitle: "2. Revision Cycle", prompts: ["creative-refine-revise", "creative-refine-critique"] },
+        { groupTitle: "3. Final Polish", prompts: ["creative-final-polish"] }
+    ],
+    math: [
+        { groupTitle: "Strategy & Solution", prompts: ["math-initial-strategy", "math-sub-strategy", "math-solution-attempt"] }
+    ],
+    agent: [
+        { groupTitle: "Agent Configuration", prompts: ["agent-judge-llm"] }
+    ],
+    react: [
+        { groupTitle: "Orchestrator Agent", prompts: ["react-orchestrator"] }
+    ]
+};
+
 function initializePromptsModal() {
     const navContainer = document.getElementById('prompts-modal-nav');
     const contentContainer = document.getElementById('prompts-modal-content');
@@ -535,36 +547,57 @@ function initializePromptsModal() {
     contentContainer.querySelectorAll('.prompt-content-pane').forEach(el => el.classList.remove('active'));
     
     const activeModeContainer = document.getElementById(`${currentMode}-prompts-container`);
-    if (!activeModeContainer) return;
-
-    activeModeContainer.classList.add('active');
-    const panes = activeModeContainer.querySelectorAll<HTMLElement>('.prompt-content-pane');
+    if(!activeModeContainer) return;
     
-    panes.forEach((pane) => {
-        const titleElement = pane.querySelector<HTMLHeadingElement>('.prompt-pane-title');
-        const title = titleElement ? titleElement.textContent : 'Unnamed Section';
-        const key = pane.dataset.promptKey;
-        if (!key) return;
+    activeModeContainer.classList.add('active');
 
-        const navItem = document.createElement('div');
-        navItem.className = 'prompts-nav-item';
-        navItem.textContent = title;
-        navItem.dataset.targetPane = key;
-        navContainer.appendChild(navItem);
+    // Display current mode at the top of nav
+    const modeTitle = document.createElement('h4');
+    modeTitle.className = 'prompts-nav-mode-title';
+    modeTitle.textContent = `${currentMode.charAt(0).toUpperCase() + currentMode.slice(1)} Mode Prompts`;
+    navContainer.appendChild(modeTitle);
 
-        navItem.addEventListener('click', () => {
-            // Deactivate all nav items and panes first
-            navContainer.querySelectorAll('.prompts-nav-item').forEach(item => item.classList.remove('active'));
-            panes.forEach(p => p.classList.remove('active'));
-            
-            // Activate the clicked one
-            navItem.classList.add('active');
-            pane.classList.add('active');
+    const navStructure = promptNavStructure[currentMode as keyof typeof promptNavStructure];
+    if (!navStructure) return;
+
+    let firstNavItem: HTMLElement | null = null;
+
+    navStructure.forEach(group => {
+        const groupTitleEl = document.createElement('h5');
+        groupTitleEl.className = 'prompts-nav-group-title';
+        groupTitleEl.textContent = group.groupTitle;
+        navContainer.appendChild(groupTitleEl);
+
+        group.prompts.forEach(promptKey => {
+            const pane = activeModeContainer.querySelector<HTMLElement>(`.prompt-content-pane[data-prompt-key="${promptKey}"]`);
+            if (!pane) return;
+
+            const titleElement = pane.querySelector<HTMLHeadingElement>('.prompt-pane-title');
+            const title = titleElement ? titleElement.textContent : 'Unnamed Section';
+
+            const navItem = document.createElement('div');
+            navItem.className = 'prompts-nav-item';
+            navItem.textContent = title;
+            navItem.dataset.targetPane = promptKey;
+            navContainer.appendChild(navItem);
+
+            if (!firstNavItem) {
+                firstNavItem = navItem;
+            }
+
+            navItem.addEventListener('click', () => {
+                // Deactivate all nav items and panes first
+                navContainer.querySelectorAll('.prompts-nav-item').forEach(item => item.classList.remove('active'));
+                activeModeContainer.querySelectorAll('.prompt-content-pane').forEach(p => p.classList.remove('active'));
+                
+                // Activate the clicked one
+                navItem.classList.add('active');
+                pane.classList.add('active');
+            });
         });
     });
 
     // Activate the first one by default
-    const firstNavItem = navContainer.querySelector<HTMLElement>('.prompts-nav-item');
     if (firstNavItem) {
         firstNavItem.click();
     }
@@ -602,29 +635,31 @@ function updateUIAfterModeChange() {
     if(modelSelectionContainer) modelSelectionContainer.style.display = 'flex';
     if(temperatureSelectionContainer) temperatureSelectionContainer.style.display = 'block';
 
+    const generateButtonText = generateButton?.querySelector('.button-text');
+
     if (currentMode === 'website') {
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'HTML Idea:';
         if (initialIdeaInput) initialIdeaInput.placeholder = 'E.g., a personal blog about cooking, a portfolio...';
-        if (generateButton) generateButton.textContent = 'Generate HTML';
+        if (generateButtonText) generateButtonText.textContent = 'Generate HTML';
     } else if (currentMode === 'creative') {
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'Writing Premise:';
         if (initialIdeaInput) initialIdeaInput.placeholder = 'E.g., a short story about a time traveler, a poem...';
-        if (generateButton) generateButton.textContent = 'Refine Writing';
+        if (generateButtonText) generateButtonText.textContent = 'Refine Writing';
     } else if (currentMode === 'math') {
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'Math Problem:';
         if (initialIdeaInput) initialIdeaInput.placeholder = 'E.g., "Solve for x: 2x + 5 = 11" or describe...';
-        if (generateButton) generateButton.textContent = 'Solve Problem';
+        if (generateButtonText) generateButtonText.textContent = 'Solve Problem';
         if (mathProblemImageInputContainer) mathProblemImageInputContainer.style.display = 'flex';
         if (modelSelectionContainer) modelSelectionContainer.style.display = 'none';
         if (temperatureSelectionContainer) temperatureSelectionContainer.style.display = 'none';
     } else if (currentMode === 'agent') {
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'Your Request:';
         if (initialIdeaInput) initialIdeaInput.placeholder = 'E.g., "Python snake game", "Analyze iPhone sales data"...';
-        if (generateButton) generateButton.textContent = 'Start Agent Process';
+        if (generateButtonText) generateButtonText.textContent = 'Start Agent Process';
     } else if (currentMode === 'react') { // Added for React mode
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'React App Request:';
         if (initialIdeaInput) initialIdeaInput.placeholder = 'E.g., "A simple to-do list app with local storage persistence", "A weather dashboard using OpenWeatherMap API"...';
-        if (generateButton) generateButton.textContent = 'Generate React App';
+        if (generateButtonText) generateButtonText.textContent = 'Generate React App';
         // React mode uses standard model and temperature selection like website/creative/agent
         if (modelSelectionContainer) modelSelectionContainer.style.display = 'flex';
         if (temperatureSelectionContainer) temperatureSelectionContainer.style.display = 'block';
@@ -833,20 +868,20 @@ function activateTab(idToActivate: number | string) {
         activeMathPipeline.activeTabId = idToActivate as string;
         // Deactivate all math tabs and panes
         document.querySelectorAll('#tabs-nav-container .tab-button.math-mode-tab').forEach(btn => btn.classList.remove('active'));
-        document.querySelectorAll('#pipelines-content-container > .math-pipeline-content-pane').forEach(pane => pane.classList.remove('active'));
+        document.querySelectorAll('#pipelines-content-container > .pipeline-content').forEach(pane => pane.classList.remove('active'));
         // Activate the correct one
         const tabButton = document.getElementById(`math-tab-${idToActivate}`);
-        const contentPane = document.getElementById(`math-content-${idToActivate}`);
+        const contentPane = document.getElementById(`pipeline-content-${idToActivate}`);
         if (tabButton) tabButton.classList.add('active');
         if (contentPane) contentPane.classList.add('active');
 
     } else if (currentMode === 'react' && activeReactPipeline) {
         activeReactPipeline.activeTabId = idToActivate as string;
         document.querySelectorAll('#tabs-nav-container .tab-button.react-mode-tab').forEach(btn => btn.classList.remove('active'));
-        document.querySelectorAll('#pipelines-content-container > .react-worker-content-pane').forEach(pane => pane.classList.remove('active'));
+        document.querySelectorAll('#pipelines-content-container > .pipeline-content').forEach(pane => pane.classList.remove('active'));
 
-        const tabButton = document.getElementById(`react-pipeline-tab-${idToActivate}`);
-        const contentPane = document.getElementById(`react-worker-content-${idToActivate}`);
+        const tabButton = document.getElementById(`react-tab-${idToActivate}`);
+        const contentPane = document.getElementById(`pipeline-content-${idToActivate}`);
         if (tabButton) tabButton.classList.add('active');
         if (contentPane) contentPane.classList.add('active');
 
@@ -896,9 +931,8 @@ function renderPipelines() {
         pipelineContentDiv.setAttribute('aria-labelledby', `pipeline-tab-${pipeline.id}`);
 
         const pipelineType = currentMode === 'agent' ? "Agent Process" : "Pipeline";
-        // Header is now inside each iteration card, so we just need the list.
         pipelineContentDiv.innerHTML = `
-            <ul class="iterations-list" id="iterations-list-${pipeline.id}" style="list-style-type: none; padding: 0; display: flex; flex-direction: column; gap: 1.5rem;">
+            <ul class="iterations-list" id="iterations-list-${pipeline.id}">
                 ${pipeline.iterations.map(iter => renderIteration(pipeline.id, iter)).join('')}
             </ul>
         `;
@@ -935,34 +969,37 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
     } else if (iter.status === 'error') displayStatusText = 'Error';
     else if (iter.status === 'cancelled') displayStatusText = 'Cancelled';
 
-    let promptsHtml = '';
+    let promptsContent = '';
     if (currentMode === 'website') {
-        if (iter.requestPromptHtml_InitialGenerate) promptsHtml += `<h6 class="prompt-title">Initial HTML Generation Prompt:</h6><pre>${escapeHtml(iter.requestPromptHtml_InitialGenerate)}</pre>`;
-        if (iter.requestPromptHtml_FeatureImplement) promptsHtml += `<h6 class="prompt-title">Feature Implementation & Stabilization Prompt:</h6><pre>${escapeHtml(iter.requestPromptHtml_FeatureImplement)}</pre>`;
-        if (iter.requestPromptHtml_BugFix) promptsHtml += `<h6 class="prompt-title">HTML Bug Fix/Polish & Completion Prompt:</h6><pre>${escapeHtml(iter.requestPromptHtml_BugFix)}</pre>`;
-        if (iter.requestPromptFeatures_Suggest) promptsHtml += `<h6 class="prompt-title">Feature Suggestion Prompt:</h6><pre>${escapeHtml(iter.requestPromptFeatures_Suggest)}</pre>`;
+        if (iter.requestPromptHtml_InitialGenerate) promptsContent += `<h6 class="prompt-title">Initial HTML Generation Prompt:</h6><pre>${escapeHtml(iter.requestPromptHtml_InitialGenerate)}</pre>`;
+        if (iter.requestPromptHtml_FeatureImplement) promptsContent += `<h6 class="prompt-title">Feature Implementation & Stabilization Prompt:</h6><pre>${escapeHtml(iter.requestPromptHtml_FeatureImplement)}</pre>`;
+        if (iter.requestPromptHtml_BugFix) promptsContent += `<h6 class="prompt-title">HTML Bug Fix/Polish & Completion Prompt:</h6><pre>${escapeHtml(iter.requestPromptHtml_BugFix)}</pre>`;
+        if (iter.requestPromptFeatures_Suggest) promptsContent += `<h6 class="prompt-title">Feature Suggestion Prompt:</h6><pre>${escapeHtml(iter.requestPromptFeatures_Suggest)}</pre>`;
     } else if (currentMode === 'creative') {
-        if (iter.requestPromptText_GenerateDraft) promptsHtml += `<h6 class="prompt-title">Draft Generation Prompt:</h6><pre>${escapeHtml(iter.requestPromptText_GenerateDraft)}</pre>`;
-        if (iter.requestPromptText_Critique) promptsHtml += `<h6 class="prompt-title">Critique Prompt:</h6><pre>${escapeHtml(iter.requestPromptText_Critique)}</pre>`;
-        if (iter.requestPromptText_Revise) promptsHtml += `<h6 class="prompt-title">Revision Prompt:</h6><pre>${escapeHtml(iter.requestPromptText_Revise)}</pre>`;
-        if (iter.requestPromptText_Polish) promptsHtml += `<h6 class="prompt-title">Polish Prompt:</h6><pre>${escapeHtml(iter.requestPromptText_Polish)}</pre>`;
+        if (iter.requestPromptText_GenerateDraft) promptsContent += `<h6 class="prompt-title">Draft Generation Prompt:</h6><pre>${escapeHtml(iter.requestPromptText_GenerateDraft)}</pre>`;
+        if (iter.requestPromptText_Critique) promptsContent += `<h6 class="prompt-title">Critique Prompt:</h6><pre>${escapeHtml(iter.requestPromptText_Critique)}</pre>`;
+        if (iter.requestPromptText_Revise) promptsContent += `<h6 class="prompt-title">Revision Prompt:</h6><pre>${escapeHtml(iter.requestPromptText_Revise)}</pre>`;
+        if (iter.requestPromptText_Polish) promptsContent += `<h6 class="prompt-title">Polish Prompt:</h6><pre>${escapeHtml(iter.requestPromptText_Polish)}</pre>`;
     } else if (currentMode === 'agent') {
-        if (iter.agentJudgeLLM_InitialRequest) promptsHtml += `<h6 class="prompt-title">Judge LLM - Initial Request to Design Prompts:</h6><pre>${escapeHtml(iter.agentJudgeLLM_InitialRequest)}</pre>`;
+        if (iter.agentJudgeLLM_InitialRequest) promptsContent += `<h6 class="prompt-title">Judge LLM - Initial Request to Design Prompts:</h6><pre>${escapeHtml(iter.agentJudgeLLM_InitialRequest)}</pre>`;
         if (iter.agentGeneratedPrompts && iter.iterationNumber === 0) {
-             promptsHtml += `<h6 class="prompt-title">Judge LLM - Generated Prompt Design:</h6><pre>${escapeHtml(JSON.stringify(iter.agentGeneratedPrompts, null, 2))}</pre>`;
+             promptsContent += `<h6 class="prompt-title">Judge LLM - Generated Prompt Design:</h6><pre>${escapeHtml(JSON.stringify(iter.agentGeneratedPrompts, null, 2))}</pre>`;
         }
-        if (iter.requestPrompt_SysInstruction) promptsHtml += `<h6 class="prompt-title">System Instruction (Main Step):</h6><pre>${escapeHtml(iter.requestPrompt_SysInstruction)}</pre>`;
-        if (iter.requestPrompt_UserTemplate) promptsHtml += `<h6 class="prompt-title">User Prompt Template (Main Step):</h6><pre>${escapeHtml(iter.requestPrompt_UserTemplate)}</pre>`;
-        if (iter.requestPrompt_Rendered) promptsHtml += `<h6 class="prompt-title">Rendered User Prompt (Main Step - Sent to API):</h6><pre>${escapeHtml(iter.requestPrompt_Rendered)}</pre>`;
+        if (iter.requestPrompt_SysInstruction) promptsContent += `<h6 class="prompt-title">System Instruction (Main Step):</h6><pre>${escapeHtml(iter.requestPrompt_SysInstruction)}</pre>`;
+        if (iter.requestPrompt_UserTemplate) promptsContent += `<h6 class="prompt-title">User Prompt Template (Main Step):</h6><pre>${escapeHtml(iter.requestPrompt_UserTemplate)}</pre>`;
+        if (iter.requestPrompt_Rendered) promptsContent += `<h6 class="prompt-title">Rendered User Prompt (Main Step - Sent to API):</h6><pre>${escapeHtml(iter.requestPrompt_Rendered)}</pre>`;
         
-        if (iter.requestPrompt_SubStep_SysInstruction) promptsHtml += `<hr class="sub-divider"><h6 class="prompt-title">System Instruction (Loop Sub-Step - Refine/Suggest):</h6><pre>${escapeHtml(iter.requestPrompt_SubStep_SysInstruction)}</pre>`;
-        if (iter.requestPrompt_SubStep_UserTemplate) promptsHtml += `<h6 class="prompt-title">User Prompt Template (Loop Sub-Step - Refine/Suggest):</h6><pre>${escapeHtml(iter.requestPrompt_SubStep_UserTemplate)}</pre>`;
-        if (iter.requestPrompt_SubStep_Rendered) promptsHtml += `<h6 class="prompt-title">Rendered User Prompt (Loop Sub-Step - Refine/Suggest - Sent to API):</h6><pre>${escapeHtml(iter.requestPrompt_SubStep_Rendered)}</pre>`;
+        if (iter.requestPrompt_SubStep_SysInstruction) promptsContent += `<hr class="sub-divider"><h6 class="prompt-title">System Instruction (Loop Sub-Step - Refine/Suggest):</h6><pre>${escapeHtml(iter.requestPrompt_SubStep_SysInstruction)}</pre>`;
+        if (iter.requestPrompt_SubStep_UserTemplate) promptsContent += `<h6 class="prompt-title">User Prompt Template (Loop Sub-Step - Refine/Suggest):</h6><pre>${escapeHtml(iter.requestPrompt_SubStep_UserTemplate)}</pre>`;
+        if (iter.requestPrompt_SubStep_Rendered) promptsContent += `<h6 class="prompt-title">Rendered User Prompt (Loop Sub-Step - Refine/Suggest - Sent to API):</h6><pre>${escapeHtml(iter.requestPrompt_SubStep_Rendered)}</pre>`;
     }
-    if (promptsHtml) {
-        promptsHtml = `<div class="model-detail-section"><h5 class="model-section-title">Prompts</h5><div class="scrollable-content-area custom-scrollbar">${promptsHtml}</div></div>`;
-    }
-
+    const promptsHtml = promptsContent ? `
+        <details class="model-detail-section collapsible-section">
+            <summary class="model-section-title">Prompts Used</summary>
+            <div class="scrollable-content-area custom-scrollbar">${promptsContent}</div>
+        </details>
+    ` : '';
+    
     let generatedOutputHtml = '';
     const outputContentType = (currentMode === 'agent' && iter.agentGeneratedPrompts) ? iter.agentGeneratedPrompts.expected_output_content_type : 
                               (currentMode === 'agent' && pipelinesState.find(p=>p.id === pipelineId)?.iterations[0]?.agentGeneratedPrompts) ? pipelinesState.find(p=>p.id === pipelineId)?.iterations[0]?.agentGeneratedPrompts?.expected_output_content_type : 'text';
@@ -971,13 +1008,6 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
     if (currentMode === 'website') {
         if (iter.generatedHtml || ['completed', 'error', 'retrying', 'processing', 'pending', 'cancelled'].includes(iter.status)) {
             const hasContent = !!iter.generatedHtml && !isEmptyOrPlaceholderHtml(iter.generatedHtml);
-            const codeActionsHtml = hasContent ? `
-                <div class="code-actions">
-                    <button id="download-html-${pipelineId}-${iter.iterationNumber}" class="button" type="button">Download</button>
-                    <button id="copy-html-${pipelineId}-${iter.iterationNumber}" class="button" type="button">Copy</button>
-                    <button class="compare-output-button button" data-pipeline-id="${pipelineId}" data-iteration-number="${iter.iterationNumber}" data-content-type="html" type="button">Compare</button>
-                </div>` : '';
-            
             let htmlContent;
             if (hasContent) {
                 htmlContent = `<pre id="html-code-${pipelineId}-${iter.iterationNumber}" class="language-html">${escapeHtml(iter.generatedHtml!)}</pre>`;
@@ -986,41 +1016,44 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
             }
 
              generatedOutputHtml = `
-                <div class="code-block-wrapper">
-                  <div class="scrollable-content-area custom-scrollbar">${htmlContent}</div>
-                  ${codeActionsHtml}
-                </div>
-            `;
+                <div class="model-detail-section">
+                    <div class="code-block-header">
+                        <span class="model-section-title">Generated HTML</span>
+                        <div class="code-actions">
+                             <button class="compare-output-button button" data-pipeline-id="${pipelineId}" data-iteration-number="${iter.iterationNumber}" data-content-type="html" type="button" ${!hasContent ? 'disabled' : ''}><span class="material-symbols-outlined">compare_arrows</span><span class="button-text">Compare</span></button>
+                             <button id="copy-html-${pipelineId}-${iter.iterationNumber}" class="button" type="button" ${!hasContent ? 'disabled' : ''}><span class="material-symbols-outlined">content_copy</span><span class="button-text">Copy</span></button>
+                             <button id="download-html-${pipelineId}-${iter.iterationNumber}" class="button" type="button" ${!hasContent ? 'disabled' : ''}><span class="material-symbols-outlined">download</span><span class="button-text">Download</span></button>
+                        </div>
+                    </div>
+                    <div class="code-block-wrapper scrollable-content-area custom-scrollbar">${htmlContent}</div>
+                </div>`;
         }
     } else if (currentMode === 'creative' || currentMode === 'agent') {
         let mainContentToDisplay = iter.generatedOrRevisedText; // Creative
-        let mainContentLabel = "Generated/Revised Text:";
+        let mainContentLabel = "Generated/Revised Text";
         let subStepHtml = '';
 
         if (currentMode === 'agent') {
             mainContentToDisplay = iter.generatedMainContent;
-            
             if (iter.iterationNumber === 0 && iter.agentGeneratedPrompts) {
-                 mainContentToDisplay = "Dynamically designed prompts from Judge LLM are shown above in the 'Prompts' section. No direct content output for this setup step.";
-                 mainContentLabel = "Setup Information:";
+                 mainContentToDisplay = "Dynamically designed prompts from Judge LLM are shown in the 'Prompts' section. No direct content output for this setup step.";
+                 mainContentLabel = "Setup Information";
             } else if (iter.generatedSubStep_Content && iter.iterationNumber > 2 && iter.iterationNumber < TOTAL_STEPS_AGENT -1) {
-                 subStepHtml = `<h6 class="model-section-title">Content After Suggestion Implementation (Loop Sub-Step):</h6><div class="code-block-wrapper"><div class="scrollable-content-area custom-scrollbar"><pre id="agent-substep-content-${pipelineId}-${iter.iterationNumber}" class="language-${outputContentType}">${iter.generatedSubStep_Content ? escapeHtml(iter.generatedSubStep_Content) : ''}</pre></div></div>`;
-                 mainContentLabel = "Refined Content After Suggestions (Loop Main Step):";
-            } else if (iter.iterationNumber === 1) { mainContentLabel = "Initial Generated Content:"; } 
-            else if (iter.iterationNumber === 2) { mainContentLabel = "Refined Content (After Initial Suggestions):"; } 
-            else if (iter.iterationNumber === TOTAL_STEPS_AGENT -1) { mainContentLabel = "Final Polished Content:"; } 
-            else { mainContentLabel = "Generated/Refined Output:"; }
+                 subStepHtml = `<div class="model-detail-section">
+                     <div class="code-block-header">
+                         <span class="model-section-title">Content After Suggestion Implementation (Sub-Step)</span>
+                     </div>
+                     <div class="code-block-wrapper scrollable-content-area custom-scrollbar"><pre id="agent-substep-content-${pipelineId}-${iter.iterationNumber}" class="language-${outputContentType}">${iter.generatedSubStep_Content ? escapeHtml(iter.generatedSubStep_Content) : ''}</pre></div>
+                 </div>`;
+                 mainContentLabel = "Refined Content After Suggestions";
+            } else if (iter.iterationNumber === 1) { mainContentLabel = "Initial Generated Content"; } 
+            else if (iter.iterationNumber === 2) { mainContentLabel = "Refined Content (After Initial Suggestions)"; } 
+            else if (iter.iterationNumber === TOTAL_STEPS_AGENT -1) { mainContentLabel = "Final Polished Content"; } 
+            else { mainContentLabel = "Generated/Refined Output"; }
         }
         
         if (mainContentToDisplay || ['completed', 'error', 'retrying', 'processing', 'pending', 'cancelled'].includes(iter.status)) {
             const hasContent = !!mainContentToDisplay && !(currentMode === 'agent' && iter.iterationNumber === 0);
-            const codeActionsHtml = hasContent ? `
-              <div class="code-actions">
-                  <button id="download-text-${pipelineId}-${iter.iterationNumber}" class="button" type="button">Download</button>
-                  <button id="copy-text-${pipelineId}-${iter.iterationNumber}" class="button" type="button">Copy</button>
-                  <button class="compare-output-button button" data-pipeline-id="${pipelineId}" data-iteration-number="${iter.iterationNumber}" data-content-type="text" type="button">Compare</button>
-              </div>` : '';
-
             let contentBlock;
             if (hasContent) {
                 contentBlock = `<pre id="text-block-${pipelineId}-${iter.iterationNumber}" class="language-${outputContentType}">${escapeHtml(mainContentToDisplay!)}</pre>`;
@@ -1030,31 +1063,36 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
 
             generatedOutputHtml += `
                 ${subStepHtml}
-                <h6 class="model-section-title">${mainContentLabel}</h6>
-                <div class="code-block-wrapper">
-                  <div class="scrollable-content-area custom-scrollbar">${contentBlock}</div>
-                  ${codeActionsHtml}
+                <div class="model-detail-section">
+                    <div class="code-block-header">
+                        <span class="model-section-title">${mainContentLabel}</span>
+                        <div class="code-actions">
+                            <button class="compare-output-button button" data-pipeline-id="${pipelineId}" data-iteration-number="${iter.iterationNumber}" data-content-type="text" type="button" ${!hasContent ? 'disabled' : ''}><span class="material-symbols-outlined">compare_arrows</span><span class="button-text">Compare</span></button>
+                            <button id="copy-text-${pipelineId}-${iter.iterationNumber}" class="button" type="button" ${!hasContent ? 'disabled' : ''}><span class="material-symbols-outlined">content_copy</span><span class="button-text">Copy</span></button>
+                            <button id="download-text-${pipelineId}-${iter.iterationNumber}" class="button" type="button" ${!hasContent ? 'disabled' : ''}><span class="material-symbols-outlined">download</span><span class="button-text">Download</span></button>
+                        </div>
+                    </div>
+                    <div class="code-block-wrapper scrollable-content-area custom-scrollbar">${contentBlock}</div>
                 </div>`;
         }
     }
-    if (generatedOutputHtml) {
-        generatedOutputHtml = `<div class="model-detail-section">${generatedOutputHtml}</div>`;
-    }
-
+    
     let suggestionsHtml = '';
     const suggestionsToDisplay = currentMode === 'agent' ? iter.generatedSuggestions : iter.suggestedFeatures;
     const critiqueToDisplay = iter.critiqueSuggestions;
 
     if ((currentMode === 'website' || currentMode === 'agent') && suggestionsToDisplay && suggestionsToDisplay.length > 0) {
-        const title = currentMode === 'website' ? "Suggested Next Steps (HTML Features):" : "Suggested Next Steps:";
-        suggestionsHtml = `<h5 class="model-section-title">${title}</h5><ul class="suggestion-list">${suggestionsToDisplay.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>`;
+        const title = currentMode === 'website' ? "Suggested Next Steps" : "Suggested Next Steps";
+        suggestionsHtml = `<div class="model-detail-section">
+            <h5 class="model-section-title">${title}</h5>
+            <ul class="suggestion-list">${suggestionsToDisplay.map(f => `<li><p>${escapeHtml(f)}</p></li>`).join('')}</ul>
+        </div>`;
     } else if (currentMode === 'creative' && critiqueToDisplay && critiqueToDisplay.length > 0) {
-        suggestionsHtml = `<h5 class="model-section-title">Critique & Suggestions:</h5><ul class="suggestion-list">${critiqueToDisplay.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>`;
+        suggestionsHtml = `<div class="model-detail-section">
+            <h5 class="model-section-title">Critique & Suggestions</h5>
+            <ul class="suggestion-list">${critiqueToDisplay.map(s => `<li><p>${escapeHtml(s)}</p></li>`).join('')}</ul>
+        </div>`;
     }
-    if(suggestionsHtml) {
-        suggestionsHtml = `<div class="model-detail-section">${suggestionsHtml}</div>`;
-    }
-
 
     let previewHtml = '';
     if (currentMode === 'website') {
@@ -1062,18 +1100,6 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
         const previewContainerId = `preview-container-${pipelineId}-${iter.iterationNumber}`;
         const fullscreenButtonId = `fullscreen-btn-${pipelineId}-${iter.iterationNumber}`;
         const hasContentForPreview = iter.generatedHtml && !isEmptyGenHtml;
-
-        previewHtml = `
-        <div class="model-detail-header" style="border-bottom: none; margin-bottom: 0.75rem; padding-bottom: 0;">
-            <h5 class="model-section-title" style="border-bottom: none; margin-bottom: 0;">Live Preview</h5>
-            <div class="model-card-actions">
-                <button id="${fullscreenButtonId}" class="button fullscreen-toggle-button" type="button" ${!hasContentForPreview ? 'disabled' : ''} title="Toggle Fullscreen Preview" aria-label="Toggle Fullscreen Preview">
-                    <span class="icon-fullscreen">${fullscreenIconSvg}</span>
-                    <span class="icon-exit-fullscreen" style="display:none;">${exitFullscreenIconSvg}</span>
-                </button>
-            </div>
-        </div>`;
-        
         let previewContent;
         if (hasContentForPreview) {
             const iframeSandboxOptions = "allow-scripts allow-same-origin allow-forms allow-popups";
@@ -1082,12 +1108,21 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
             const noPreviewMessage = getEmptyStateMessage(iter.status, 'HTML preview');
             previewContent = `<div class="empty-state-message">${noPreviewMessage}</div>`;
         }
-        previewHtml += `<div id="${previewContainerId}" class="html-preview-container">${previewContent}</div>`;
 
+        previewHtml = `
+        <div class="model-detail-section preview-section">
+            <div class="model-section-header">
+                <h5 class="model-section-title">Live Preview</h5>
+                <button id="${fullscreenButtonId}" class="button button-icon" type="button" ${!hasContentForPreview ? 'disabled' : ''} title="Toggle Fullscreen Preview" aria-label="Toggle Fullscreen Preview">
+                    <span class="icon-fullscreen material-symbols-outlined">fullscreen</span>
+                    <span class="icon-exit-fullscreen material-symbols-outlined" style="display:none;">fullscreen_exit</span>
+                </button>
+            </div>
+            <div id="${previewContainerId}" class="html-preview-container">${previewContent}</div>
+        </div>`;
     }
-    if (previewHtml) {
-        previewHtml = `<div class="model-detail-section">${previewHtml}</div>`;
-    }
+
+    const gridLayoutClass = currentMode === 'website' ? 'iteration-grid-website' : 'iteration-grid-standard';
 
     return `
     <li id="iteration-${pipelineId}-${iter.iterationNumber}" class="model-detail-card">
@@ -1099,38 +1134,47 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
                 <span class="status-badge status-${iter.status}">${displayStatusText}</span>
             </div>
         </div>
-        <div class="iteration-details">
-            ${iter.error ? `<div class="status-message error"><pre>${escapeHtml(iter.error)}</pre></div>` : ''}
-            ${promptsHtml}
-            ${generatedOutputHtml}
-            ${suggestionsHtml}
-            ${previewHtml}
+        <div class="iteration-details ${gridLayoutClass}">
+            <div class="info-column">
+                ${iter.error ? `<div class="status-message error"><pre>${escapeHtml(iter.error)}</pre></div>` : ''}
+                ${generatedOutputHtml}
+                ${suggestionsHtml}
+                ${promptsHtml}
+            </div>
+            ${previewHtml ? `<div class="preview-column">${previewHtml}</div>` : ''}
         </div>
     </li>`;
 }
 
 async function copyToClipboard(text: string, buttonElement: HTMLButtonElement) {
-    if (buttonElement.disabled) return; // Defensive check
+    if (buttonElement.disabled) return;
+
+    const buttonTextElement = buttonElement.querySelector<HTMLSpanElement>('.button-text');
+    if (!buttonTextElement) {
+        console.error("Button is missing required '.button-text' span for status updates.", buttonElement);
+        return;
+    }
+
+    const originalText = buttonTextElement.textContent;
+    buttonElement.disabled = true;
 
     try {
         await navigator.clipboard.writeText(text);
-        const originalText = buttonElement.textContent;
-        buttonElement.textContent = 'Copied!';
+        buttonTextElement.textContent = 'Copied!';
         buttonElement.classList.add('copied');
-        buttonElement.disabled = true; // Temporarily disable while showing "Copied!"
         setTimeout(() => {
-            buttonElement.textContent = originalText;
+            buttonTextElement.textContent = originalText;
             buttonElement.classList.remove('copied');
-            buttonElement.disabled = false; // Re-enable the button
+            buttonElement.disabled = false;
         }, 2000);
     } catch (err) {
         console.error('Failed to copy text: ', err);
-        const originalText = buttonElement.textContent;
-        buttonElement.textContent = 'Copy Failed';
-        buttonElement.disabled = true; // Temporarily disable
+        buttonTextElement.textContent = 'Copy Failed';
+        buttonElement.classList.add('copy-failed');
         setTimeout(() => {
-            buttonElement.textContent = originalText;
-            buttonElement.disabled = false; // Re-enable even on fail
+            buttonTextElement.textContent = originalText;
+            buttonElement.classList.remove('copy-failed');
+            buttonElement.disabled = false;
         }, 2000);
     }
 }
@@ -1247,15 +1291,18 @@ function updatePipelineStatusUI(pipelineId: number, status: PipelineState['statu
     if (pipeline.stopButtonElement) {
         if (status === 'running') {
             pipeline.stopButtonElement.style.display = 'inline-flex';
-            pipeline.stopButtonElement.textContent = 'Stop';
+            const textEl = pipeline.stopButtonElement.querySelector('.button-text');
+            if (textEl) textEl.textContent = 'Stop';
             pipeline.stopButtonElement.disabled = false;
         } else if (status === 'stopping') {
             pipeline.stopButtonElement.style.display = 'inline-flex';
-            pipeline.stopButtonElement.textContent = 'Stopping...';
+            const textEl = pipeline.stopButtonElement.querySelector('.button-text');
+            if (textEl) textEl.textContent = 'Stopping...';
             pipeline.stopButtonElement.disabled = true;
         } else { 
             pipeline.stopButtonElement.style.display = 'none';
-            pipeline.stopButtonElement.textContent = 'Stop';
+            const textEl = pipeline.stopButtonElement.querySelector('.button-text');
+            if (textEl) textEl.textContent = 'Stop';
             pipeline.stopButtonElement.disabled = true; 
         }
     }
@@ -1787,41 +1834,30 @@ async function createAndDownloadReactProjectZip() {
 
     const zip = new JSZip();
     const finalCode = activeReactPipeline.finalAppendedCode;
-    const fileMarkerRegex = /^\/\/\s*---\s*FILE:\s*(.*?)\s*---\s*$/gm;
-    let match;
-    let lastIndex = 0;
+    const fileMarkerRegex = /^\/\/\s*---\s*FILE:\s*(.*?)\s*---\s*$/m;
     const files: { path: string, content: string }[] = [];
 
-    // First pass to find all file markers and their start indices
-    const markers: { path: string, startIndex: number }[] = [];
-    while ((match = fileMarkerRegex.exec(finalCode)) !== null) {
-        markers.push({ path: match[1].trim(), startIndex: match.index + match[0].length });
-    }
+    // Split the code by the file marker. This is a robust way to parse the aggregated string.
+    const parts = finalCode.split(fileMarkerRegex);
 
-    // Second pass to extract content based on markers
-    for (let i = 0; i < markers.length; i++) {
-        const currentMarker = markers[i];
-        const nextMarker = markers[i + 1];
-        const contentEndIndex = nextMarker ? nextMarker.startIndex - (finalCode.substring(0, nextMarker.startIndex).match(/\/\/\s*---\s*FILE:\s*.*?\s*---\s*$/m)?.[0].length || 0) : finalCode.length;
-
-        let content = finalCode.substring(currentMarker.startIndex, contentEndIndex).trim();
-
-        // Remove the matched marker line from the *next* iteration's content start if it was captured
-        if (nextMarker) {
-            const nextMarkerLineInContentRegex = /^\/\/\s*---\s*FILE:\s*.*?\s*---\s*\n?/m;
-            content = content.replace(nextMarkerLineInContentRegex, '');
+    if (parts.length > 1) {
+        // The first part is any text before the first marker. We start from the first captured path.
+        // We iterate in pairs: path (at odd indices), then content (at even indices).
+        for (let i = 1; i < parts.length; i += 2) {
+            const path = parts[i].trim();
+            const content = (parts[i + 1] || '').trim(); // Get the content for this path.
+            if (path && content) { // Ensure both path and content are not empty
+                files.push({ path, content });
+            }
         }
-
-        files.push({ path: currentMarker.path, content: content.trimStart() }); // trimStart to remove leading newline after marker
     }
+
 
     if (files.length === 0 && finalCode.length > 0) {
-        // If no markers found, but there is code, assume it's a single file (e.g. App.tsx or similar)
-        // This is a fallback, the orchestrator should ensure markers are present.
+        // Fallback for cases where no markers are present in the output.
         console.warn("No file markers found in the aggregated code. Assuming single file 'src/App.tsx'.");
         files.push({ path: "src/App.tsx", content: finalCode });
     }
-
 
     files.forEach(file => {
         // Ensure paths are relative and don't start with /
@@ -2264,9 +2300,9 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
 
 function renderActiveMathPipeline() {
     if (currentMode !== 'math' || !pipelinesContentContainer || !tabsNavContainer) {
-        if (currentMode !== 'math') { 
-             tabsNavContainer.innerHTML = '';
-             pipelinesContentContainer.innerHTML = '';
+        if (currentMode !== 'math' && tabsNavContainer && pipelinesContentContainer) {
+            tabsNavContainer.innerHTML = '';
+            pipelinesContentContainer.innerHTML = '';
         }
         return;
     }
@@ -2277,25 +2313,26 @@ function renderActiveMathPipeline() {
     }
 
     const mathProcess = activeMathPipeline;
-    tabsNavContainer.innerHTML = ''; 
-    pipelinesContentContainer.innerHTML = ''; 
+    tabsNavContainer.innerHTML = '';
+    pipelinesContentContainer.innerHTML = '';
 
     const problemTabButton = document.createElement('button');
     problemTabButton.className = 'tab-button math-mode-tab';
     problemTabButton.id = `math-tab-problem-details`;
     problemTabButton.textContent = 'Problem Details';
     problemTabButton.setAttribute('role', 'tab');
-    problemTabButton.setAttribute('aria-controls', `math-content-problem-details`);
+    problemTabButton.setAttribute('aria-controls', `pipeline-content-problem-details`);
     problemTabButton.addEventListener('click', () => activateTab('problem-details'));
     tabsNavContainer.appendChild(problemTabButton);
-
-    const problemContentPane = document.createElement('div');
-    problemContentPane.id = `math-content-problem-details`;
-    problemContentPane.className = 'math-pipeline-content-pane model-detail-card';
+    
+    let problemContentPane = document.createElement('div');
+    problemContentPane.id = `pipeline-content-problem-details`;
+    problemContentPane.className = 'pipeline-content';
     problemContentPane.setAttribute('role', 'tabpanel');
     problemContentPane.setAttribute('aria-labelledby', `math-tab-problem-details`);
+
     let problemDetailsHtml = `
-        <div class="math-problem-display">
+        <div class="math-problem-display model-detail-card">
             <h4 class="model-title">Original Problem</h4>
             <p class="problem-text">${escapeHtml(mathProcess.problemText)}</p>`;
     if (mathProcess.problemImageBase64 && mathProcess.problemImageMimeType) {
@@ -2303,20 +2340,19 @@ function renderActiveMathPipeline() {
     }
     if (mathProcess.requestPromptInitialStrategyGen) {
         problemDetailsHtml += `
-            <div class="model-detail-section">
-                <h5 class="model-section-title">Initial Strategy Generation User Prompt:</h5>
+            <details class="model-detail-section collapsible-section">
+                <summary class="model-section-title">Initial Strategy Generation Prompt</summary>
                 <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(mathProcess.requestPromptInitialStrategyGen)}</pre></div>
-            </div>`;
+            </details>`;
     }
-     if (mathProcess.status === 'retrying' && mathProcess.retryAttempt !== undefined && mathProcess.initialStrategies.length === 0) { 
+    if (mathProcess.status === 'retrying' && mathProcess.retryAttempt !== undefined && mathProcess.initialStrategies.length === 0) {
         problemDetailsHtml += `<p class="status-badge status-retrying">Retrying initial strategy generation (${mathProcess.retryAttempt}/${MAX_RETRIES})...</p>`;
-    } else if (mathProcess.error && mathProcess.initialStrategies.length === 0) { 
+    } else if (mathProcess.error && mathProcess.initialStrategies.length === 0) {
         problemDetailsHtml += `<div class="status-message error"><pre>${escapeHtml(mathProcess.error)}</pre></div>`;
     }
     problemDetailsHtml += `</div>`;
     problemContentPane.innerHTML = problemDetailsHtml;
     pipelinesContentContainer.appendChild(problemContentPane);
-
 
     mathProcess.initialStrategies.forEach((mainStrategy, index) => {
         const tabButton = document.createElement('button');
@@ -2326,44 +2362,40 @@ function renderActiveMathPipeline() {
         if (mainStrategy.status === 'error') tabButton.classList.add('status-math-error');
         else if (mainStrategy.status === 'processing' || mainStrategy.status === 'retrying') tabButton.classList.add('status-math-processing');
         else if (mainStrategy.subStrategies.every(s => s.status === 'completed')) tabButton.classList.add('status-math-completed');
-
         tabButton.setAttribute('role', 'tab');
-        tabButton.setAttribute('aria-controls', `math-content-strategy-${index}`);
+        tabButton.setAttribute('aria-controls', `pipeline-content-strategy-${index}`);
         tabButton.addEventListener('click', () => activateTab(`strategy-${index}`));
         tabsNavContainer.appendChild(tabButton);
-
+        
         const contentPane = document.createElement('div');
-        contentPane.id = `math-content-strategy-${index}`;
-        contentPane.className = 'math-pipeline-content-pane model-detail-card';
+        contentPane.id = `pipeline-content-strategy-${index}`;
+        contentPane.className = 'pipeline-content';
         contentPane.setAttribute('role', 'tabpanel');
         contentPane.setAttribute('aria-labelledby', `math-tab-strategy-${index}`);
-        
-        let contentHtml = `<div class="math-strategy-branch" id="math-branch-${mainStrategy.id}">
+
+        let contentHtml = `<div class="math-strategy-branch model-detail-card" id="math-branch-${mainStrategy.id}">
             <div class="model-detail-header">
                 <div class="model-title-area">
-                    <h4 class="model-title">Main Strategy ${index + 1}</h4>
+                    <p class="strategy-text">${escapeHtml(mainStrategy.strategyText)}</p>
                 </div>
                 <div class="model-card-actions">
                     <span class="status-badge status-${mainStrategy.status}" id="math-main-strat-status-${mainStrategy.id}">${mainStrategy.status}</span>
                 </div>
-            </div>
-            <div class="math-strategy-details">
-                <p class="strategy-text">${escapeHtml(mainStrategy.strategyText)}</p>`;
-        if (mainStrategy.requestPromptSubStrategyGen) {
-            contentHtml += `<div class="model-detail-section">
-                    <h5 class="model-section-title">Sub-strategy Generation User Prompt:</h5>
-                    <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(mainStrategy.requestPromptSubStrategyGen)}</pre></div>
-                </div>`;
-        }
+            </div>`;
         if (mainStrategy.status === 'retrying' && mainStrategy.retryAttempt !== undefined) {
              contentHtml += `<p class="status-badge status-retrying">Retrying sub-strategy generation (${mainStrategy.retryAttempt}/${MAX_RETRIES})...</p>`;
         } else if (mainStrategy.error) {
              contentHtml += `<div class="status-message error"><pre>${escapeHtml(mainStrategy.error)}</pre></div>`;
         }
-        contentHtml += `</div>`; // Close main strategy details
+        if (mainStrategy.requestPromptSubStrategyGen) {
+            contentHtml += `<details class="model-detail-section collapsible-section">
+                    <summary class="model-section-title">Sub-strategy Generation Prompt</summary>
+                    <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(mainStrategy.requestPromptSubStrategyGen)}</pre></div>
+                </details>`;
+        }
         
         if (mainStrategy.subStrategies.length > 0) {
-            contentHtml += `<ul class="math-sub-strategies-list" style="list-style-type: none; padding: 0;">`;
+            contentHtml += `<div class="math-sub-strategies-grid">`;
             mainStrategy.subStrategies.forEach((subStrategy, subIndex) => {
                  let solutionContent;
                  if (subStrategy.solutionAttempt) {
@@ -2373,64 +2405,63 @@ function renderActiveMathPipeline() {
                  }
 
                 contentHtml += `
-                    <li class="math-sub-strategy-item model-detail-section" id="math-sub-item-${subStrategy.id}">
-                        <h5 class="model-section-title">Sub-Strategy ${index + 1}.${subIndex + 1} <span class="status-badge status-${subStrategy.status}" id="math-sub-strat-status-${subStrategy.id}">${subStrategy.status}</span></h5>
-                        <div class="math-sub-strategy-details">
-                            <p class="sub-strategy-text">${escapeHtml(subStrategy.subStrategyText)}</p>`;
-                if (subStrategy.requestPromptSolutionAttempt) {
-                     contentHtml += `<div class="model-detail-section">
-                            <h6 class="prompt-title">Solution Attempt User Prompt:</h6>
-                            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(subStrategy.requestPromptSolutionAttempt)}</pre></div>
-                        </div>`;
-                }
+                    <div class="math-sub-strategy-card model-detail-section" id="math-sub-item-${subStrategy.id}">
+                        <div class="sub-strategy-header">
+                            <h5 class="sub-strategy-title">Sub-Strategy ${index + 1}.${subIndex + 1}</h5>
+                            <span class="status-badge status-${subStrategy.status}" id="math-sub-strat-status-${subStrategy.id}">${subStrategy.status}</span>
+                        </div>
+                        <p class="sub-strategy-text">${escapeHtml(subStrategy.subStrategyText)}</p>`;
                 if (subStrategy.status === 'retrying' && subStrategy.retryAttempt !== undefined) {
                     contentHtml += `<p class="status-badge status-retrying">Retrying solution attempt (${subStrategy.retryAttempt}/${MAX_RETRIES})...</p>`;
-                } else if (subStrategy.solutionAttempt || ['pending', 'processing', 'retrying', 'cancelled', 'error'].includes(subStrategy.status)) {
-                    contentHtml += `<div class="model-detail-section">
-                            <h6 class="prompt-title">Solution Attempt:</h6>
-                             <div class="code-block-wrapper">
-                                <div class="scrollable-content-area custom-scrollbar">${solutionContent}</div>
-                                ${subStrategy.solutionAttempt ? `
-                                <div class="code-actions">
-                                    <button class="button download-math-solution-btn" data-sub-strategy-id="${subStrategy.id}" title="Download Solution">Download</button>
-                                    <button class="button copy-math-solution-btn" data-sub-strategy-id="${subStrategy.id}" title="Copy Solution">Copy</button>
-                                </div>` : ''}
-                            </div>
-                        </div>`;
                 }
-                 if (subStrategy.error && subStrategy.status === 'error') {
+                if (subStrategy.error) {
                      contentHtml += `<div class="status-message error"><pre>${escapeHtml(subStrategy.error)}</pre></div>`;
-                 }
-                contentHtml += `</div></li>`; // Close sub-strategy item
+                }
+
+                if (subStrategy.solutionAttempt || ['pending', 'processing', 'retrying', 'cancelled', 'error'].includes(subStrategy.status)) {
+                    contentHtml += `<details class="collapsible-section solution-details">
+                        <summary class="model-section-title">Solution Attempt</summary>
+                        <div class="code-block-wrapper">
+                           <div class="scrollable-content-area custom-scrollbar">${solutionContent}</div>
+                           ${subStrategy.solutionAttempt ? `
+                           <div class="code-actions">
+                               <button class="button copy-math-solution-btn" data-sub-strategy-id="${subStrategy.id}" title="Copy Solution"><span class="material-symbols-outlined">content_copy</span><span class="button-text">Copy</span></button>
+                               <button class="button download-math-solution-btn" data-sub-strategy-id="${subStrategy.id}" title="Download Solution"><span class="material-symbols-outlined">download</span><span class="button-text">Download</span></button>
+                           </div>` : ''}
+                        </div>
+                    </details>`;
+                }
+                 if (subStrategy.requestPromptSolutionAttempt) {
+                     contentHtml += `<details class="collapsible-section prompt-details">
+                            <summary class="model-section-title">Solution Attempt Prompt</summary>
+                            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(subStrategy.requestPromptSolutionAttempt)}</pre></div>
+                        </details>`;
+                }
+                contentHtml += `</div>`; // Close card
             });
-            contentHtml += `</ul>`; // Close sub-strategies list
+            contentHtml += `</div>`; // Close grid
         } else if (mainStrategy.status === 'completed' && mainStrategy.subStrategies.length === 0) {
-             contentHtml += `<p class="no-details-message">No sub-strategies were generated for this main strategy.</p>`;
+             contentHtml += `<div class="empty-state-message">No sub-strategies were generated for this main strategy.</div>`;
         }
         
         contentHtml += `</div>`; // Close math-strategy-branch
         contentPane.innerHTML = contentHtml;
         pipelinesContentContainer.appendChild(contentPane);
 
-        // Attach listeners for copy buttons
+        // Attach listeners
         contentPane.querySelectorAll('.copy-math-solution-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const subStrategyId = (e.currentTarget as HTMLElement).dataset.subStrategyId;
                 const solutionText = mathProcess.initialStrategies.flatMap(ms => ms.subStrategies).find(ss => ss.id === subStrategyId)?.solutionAttempt;
-                if (solutionText) {
-                    copyToClipboard(solutionText, e.currentTarget as HTMLButtonElement);
-                }
+                if (solutionText) copyToClipboard(solutionText, e.currentTarget as HTMLButtonElement);
             });
         });
 
-        // Attach listeners for download buttons
         contentPane.querySelectorAll('.download-math-solution-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const subStrategyId = (e.currentTarget as HTMLElement).dataset.subStrategyId;
                 const subStrategy = mathProcess.initialStrategies.flatMap(ms => ms.subStrategies).find(ss => ss.id === subStrategyId);
-                if (subStrategy?.solutionAttempt) {
-                    downloadFile(subStrategy.solutionAttempt, `math_solution_${subStrategy.id}.txt`, 'text/plain');
-                }
+                if (subStrategy?.solutionAttempt) downloadFile(subStrategy.solutionAttempt, `math_solution_${subStrategy.id}.txt`, 'text/plain');
             });
         });
     });
@@ -2438,10 +2469,11 @@ function renderActiveMathPipeline() {
     if (mathProcess.activeTabId) {
         activateTab(mathProcess.activeTabId);
     } else {
-        activateTab('problem-details'); // Default to problem details
+        activateTab('problem-details');
     }
     updateControlsState();
 }
+
 
 // ----- END MATH MODE SPECIFIC FUNCTIONS -----
 
@@ -2469,7 +2501,7 @@ async function startReactModeProcess(userRequest: string) {
         })),
         status: 'orchestrating',
         isStopRequested: false,
-        activeTabId: 'worker-0', // Default to first worker tab
+        activeTabId: 'orchestrator', // Default to orchestrator tab
     };
     renderReactModePipeline(); 
 
@@ -2555,7 +2587,7 @@ async function startReactModeProcess(userRequest: string) {
 
 function renderReactModePipeline() {
     if (currentMode !== 'react' || !tabsNavContainer || !pipelinesContentContainer) {
-        if (currentMode !== 'react' && tabsNavContainer && pipelinesContentContainer) { // Clear if not in react mode but called
+        if (currentMode !== 'react' && tabsNavContainer && pipelinesContentContainer) {
             tabsNavContainer.innerHTML = '';
             pipelinesContentContainer.innerHTML = '';
         }
@@ -2563,7 +2595,6 @@ function renderReactModePipeline() {
     }
 
     if (!activeReactPipeline) {
-        tabsNavContainer.innerHTML = '<p class="no-pipelines-message">Enter a React App Request and click "Generate React App".</p>';
         pipelinesContentContainer.innerHTML = '';
         return;
     }
@@ -2573,44 +2604,52 @@ function renderReactModePipeline() {
     tabsNavContainer.innerHTML = ''; 
     pipelinesContentContainer.innerHTML = '';
 
+    // Orchestrator Tab
+    const orchestratorTab = document.createElement('button');
+    orchestratorTab.id = 'react-tab-orchestrator';
+    orchestratorTab.className = 'tab-button react-mode-tab';
+    orchestratorTab.textContent = 'Orchestrator';
+    orchestratorTab.setAttribute('role', 'tab');
+    orchestratorTab.setAttribute('aria-controls', 'pipeline-content-orchestrator');
+    orchestratorTab.addEventListener('click', () => activateTab('orchestrator'));
+    tabsNavContainer.appendChild(orchestratorTab);
+
+    // Orchestrator Pane
     const orchestratorPane = document.createElement('div');
-    orchestratorPane.className = 'react-orchestrator-pane model-detail-card';
-    let orchestratorHtml = `
+    orchestratorPane.id = 'pipeline-content-orchestrator';
+    orchestratorPane.className = 'pipeline-content';
+    let orchestratorHtml = `<div class="react-orchestrator-pane model-detail-card">
         <div class="model-detail-header">
              <div class="model-title-area">
                 <h4 class="model-title">React App Orchestration</h4>
              </div>
              <div class="model-card-actions">
-                <span class="status-badge status-${pipeline.status}" id="react-orchestrator-status-text">${pipeline.status.replace('_', ' ')}</span>
-                <button class="button pipeline-remove-button" id="stop-react-pipeline-btn" title="Stop React App Generation" aria-label="Stop React App Generation" style="display: ${pipeline.status === 'orchestrating' || pipeline.status === 'processing_workers' ? 'inline-flex' : 'none'};">
-                    ${pipeline.status === 'stopping' ? 'Stopping...' : 'Stop'}
+                <span class="status-badge status-${pipeline.status}" id="react-orchestrator-status-text">${pipeline.status.replace(/_/g, ' ')}</span>
+                <button class="button" id="stop-react-pipeline-btn" title="Stop React App Generation" aria-label="Stop React App Generation" style="display: ${pipeline.status === 'orchestrating' || pipeline.status === 'processing_workers' ? 'inline-flex' : 'none'};">
+                    <span class="material-symbols-outlined">stop_circle</span><span class="button-text">${pipeline.status === 'stopping' ? 'Stopping...' : 'Stop'}</span>
                 </button>
             </div>
         </div>
         <div class="model-detail-section">
-            <h5 class="model-section-title">User Request & Orchestrator Config</h5>
-            <p><strong>User Request:</strong> ${escapeHtml(pipeline.userRequest)}</p>
-            <h6 class="prompt-title">Orchestrator System Instruction:</h6>
-            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(pipeline.orchestratorSystemInstruction)}</pre></div>
-        </div>
-    `;
-    if (pipeline.orchestratorPlan) {
-        orchestratorHtml += `
-        <div class="model-detail-section">
-            <h5 class="model-section-title">Orchestrator's Plan (plan.txt)</h5>
-            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(pipeline.orchestratorPlan)}</pre></div>
+            <h5 class="model-section-title">User Request</h5>
+            <p><strong>Request:</strong> ${escapeHtml(pipeline.userRequest)}</p>
         </div>`;
-    }
-    if (pipeline.orchestratorRawOutput) {
-         orchestratorHtml += `
-        <div class="model-detail-section">
-            <h5 class="model-section-title">Orchestrator Raw Output (for debugging)</h5>
-            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(pipeline.orchestratorRawOutput)}</pre></div>
-        </div>`;
-    }
-     if (pipeline.error && (pipeline.status === 'failed' || pipeline.status === 'error' && pipeline.stages.every(s => s.status === 'pending'))) {
+    if (pipeline.error && (pipeline.status === 'failed' || (pipeline.status === 'error' && pipeline.stages.every(s => s.status === 'pending')))) {
         orchestratorHtml += `<div class="status-message error"><pre>${escapeHtml(pipeline.error)}</pre></div>`;
     }
+    if (pipeline.orchestratorPlan) {
+        orchestratorHtml += `<details class="model-detail-section collapsible-section" open>
+            <summary class="model-section-title">Orchestrator's Plan (plan.txt)</summary>
+            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(pipeline.orchestratorPlan)}</pre></div>
+        </details>`;
+    }
+    if (pipeline.orchestratorRawOutput) {
+         orchestratorHtml += `<details class="model-detail-section collapsible-section">
+            <summary class="model-section-title">Orchestrator Raw Output (Debug)</summary>
+            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(pipeline.orchestratorRawOutput)}</pre></div>
+        </details>`;
+    }
+    orchestratorHtml += `</div>`;
     orchestratorPane.innerHTML = orchestratorHtml;
     pipelinesContentContainer.appendChild(orchestratorPane);
 
@@ -2628,8 +2667,8 @@ function renderReactModePipeline() {
 
 
     pipeline.stages.forEach(stage => {
-        const tabButtonId = `react-pipeline-tab-worker-${stage.id}`;
-        const contentPaneId = `react-worker-content-worker-${stage.id}`;
+        const tabButtonId = `react-tab-worker-${stage.id}`;
+        const contentPaneId = `pipeline-content-worker-${stage.id}`;
 
         const tabButton = document.createElement('button');
         tabButton.id = tabButtonId;
@@ -2642,57 +2681,57 @@ function renderReactModePipeline() {
 
         const workerContentPane = document.createElement('div');
         workerContentPane.id = contentPaneId;
-        workerContentPane.className = 'react-worker-content-pane model-detail-card';
-        workerContentPane.setAttribute('role', 'tabpanel');
-        workerContentPane.setAttribute('aria-labelledby', tabButton.id);
-
+        workerContentPane.className = 'pipeline-content';
+        
         let displayStatusText = stage.status.charAt(0).toUpperCase() + stage.status.slice(1);
         if (stage.status === 'retrying' && stage.retryAttempt !== undefined) {
             displayStatusText = `Retrying (${stage.retryAttempt}/${MAX_RETRIES})...`;
         }
-
-        let workerDetailsHtml = `
-            <div class="model-detail-header">
-                <div class="model-title-area">
-                    <h4 class="model-title">${escapeHtml(stage.title)}</h4>
-                </div>
-                <div class="model-card-actions">
-                    <span class="status-badge status-${stage.status}">${displayStatusText}</span>
-                </div>
-            </div>`;
-        if (stage.error) {
-            workerDetailsHtml += `<div class="status-message error"><pre>${escapeHtml(stage.error)}</pre></div>`;
-        }
-        workerDetailsHtml += `<div class="model-detail-section">
-            <h5 class="model-section-title">Prompts for ${escapeHtml(stage.title)}</h5>
-            <h6 class="prompt-title">System Instruction:</h6>
-            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(stage.systemInstruction || "Not available.")}</pre></div>
-            <h6 class="prompt-title" style="margin-top: 1rem;">Rendered User Prompt:</h6>
-            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(stage.renderedUserPrompt || stage.userPrompt || "Not available.")}</pre></div>
-        </div>`;
         
         const hasContent = !!stage.generatedContent;
         let contentBlock;
         if (hasContent) {
-            contentBlock = `<pre id="react-worker-${stage.id}-code-block">${escapeHtml(stage.generatedContent!)}</pre>`;
+            contentBlock = `<pre id="react-worker-${stage.id}-code-block" class="language-tsx">${escapeHtml(stage.generatedContent!)}</pre>`;
         } else {
             contentBlock = `<div class="empty-state-message">${getEmptyStateMessage(stage.status, 'code')}</div>`;
         }
 
-        if (hasContent || ['pending', 'processing', 'retrying', 'error', 'cancelled'].includes(stage.status)) {
-            workerDetailsHtml += `
-            <div class="model-detail-section">
-                <h5 class="model-section-title">Generated Code/Content</h5>
-                <div class="code-block-wrapper">
-                    <div class="scrollable-content-area custom-scrollbar">${contentBlock}</div>
-                    ${hasContent ? `
-                     <div class="code-actions">
-                        <button class="button download-react-worker-code-btn" data-worker-id="${stage.id}" title="Download Code Snippet">Download</button>
-                        <button class="button copy-react-worker-code-btn" data-worker-id="${stage.id}" title="Copy Code Snippet">Copy</button>
-                     </div>` : ''}
+        let workerDetailsHtml = `
+            <div class="react-worker-content-pane model-detail-card">
+                 <div class="model-detail-header">
+                    <div class="model-title-area">
+                        <h4 class="model-title">${escapeHtml(stage.title)}</h4>
+                    </div>
+                    <div class="model-card-actions">
+                        <span class="status-badge status-${stage.status}">${displayStatusText}</span>
+                    </div>
+                </div>
+                <div class="worker-details-grid">
+                    <div class="info-column">
+                        ${stage.error ? `<div class="status-message error"><pre>${escapeHtml(stage.error)}</pre></div>` : ''}
+                        <details class="model-detail-section collapsible-section" open>
+                            <summary class="model-section-title">System Instruction</summary>
+                            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(stage.systemInstruction || "Not available.")}</pre></div>
+                        </details>
+                        <details class="model-detail-section collapsible-section">
+                            <summary class="model-section-title">Rendered User Prompt</summary>
+                            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(stage.renderedUserPrompt || stage.userPrompt || "Not available.")}</pre></div>
+                        </details>
+                    </div>
+                    <div class="code-column">
+                        <div class="model-detail-section">
+                            <div class="code-block-header">
+                                <span class="model-section-title">Generated Code/Content</span>
+                                <div class="code-actions">
+                                    <button class="button copy-react-worker-code-btn" data-worker-id="${stage.id}" title="Copy Code Snippet" ${!hasContent ? 'disabled' : ''}><span class="material-symbols-outlined">content_copy</span><span class="button-text">Copy</span></button>
+                                    <button class="button download-react-worker-code-btn" data-worker-id="${stage.id}" title="Download Code Snippet" ${!hasContent ? 'disabled' : ''}><span class="material-symbols-outlined">download</span><span class="button-text">Download</span></button>
+                                </div>
+                            </div>
+                            <div class="code-block-wrapper scrollable-content-area custom-scrollbar">${contentBlock}</div>
+                        </div>
+                    </div>
                 </div>
             </div>`;
-        }
         workerContentPane.innerHTML = workerDetailsHtml;
         pipelinesContentContainer.appendChild(workerContentPane);
 
@@ -2722,18 +2761,23 @@ function renderReactModePipeline() {
 
     if (pipeline.finalAppendedCode) {
         const finalOutputPane = document.createElement('div');
-        finalOutputPane.className = 'react-final-output-pane model-detail-card';
+        // This element is a wrapper. It should not have the 'pipeline-content' class,
+        // as that would cause it to be hidden by tab visibility logic.
         finalOutputPane.innerHTML = `
-            <div class="model-detail-header">
-                <h4 class="model-title">Final Aggregated Application Code</h4>
-                <div class="model-card-actions">
-                    <button id="download-react-runnable-project" class="button" type="button">Download Project (.zip)</button>
+            <div class="react-final-output-pane model-detail-card">
+                <div class="model-detail-header">
+                    <h4 class="model-title">Final Aggregated Application Code</h4>
+                    <div class="model-card-actions">
+                        <button id="download-react-runnable-project" class="button" type="button"><span class="material-symbols-outlined">archive</span><span class="button-text">Download Project (.zip)</span></button>
+                    </div>
                 </div>
+                <p>The following is a concatenation of outputs from successful worker agents. File markers (e.g., // --- FILE: src/App.tsx ---) should indicate intended file paths.</p>
+                <div class="code-block-wrapper scrollable-content-area custom-scrollbar" style="max-height: 60vh;"><pre id="react-final-appended-code" class="language-tsx">${escapeHtml(pipeline.finalAppendedCode)}</pre></div>
             </div>
-            <p>The following is a concatenation of outputs from successful worker agents. File markers (e.g., // --- FILE: src/App.tsx ---) should indicate intended file paths.</p>
-            <div class="scrollable-content-area custom-scrollbar"><pre id="react-final-appended-code">${escapeHtml(pipeline.finalAppendedCode)}</pre></div>
         `;
-        pipelinesContentContainer.appendChild(finalOutputPane);
+        // Find the orchestrator pane and insert this after it.
+        const orchestratorDiv = document.getElementById('pipeline-content-orchestrator');
+        orchestratorDiv?.appendChild(finalOutputPane);
 
         const downloadRunnableProjectButton = document.getElementById('download-react-runnable-project');
         if (downloadRunnableProjectButton && pipeline.finalAppendedCode) {
@@ -2743,8 +2787,8 @@ function renderReactModePipeline() {
 
     if (pipeline.activeTabId) {
         activateTab(pipeline.activeTabId);
-    } else if (pipeline.stages.length > 0) {
-        activateTab(`worker-${pipeline.stages[0].id}`);
+    } else {
+        activateTab(`orchestrator`);
     }
     updateControlsState();
 }
