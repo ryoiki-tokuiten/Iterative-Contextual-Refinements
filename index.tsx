@@ -18,8 +18,6 @@ import {
 } from './prompts.js';
 
 
-const API_KEY = process.env.API_KEY;
-
 // Constants for retry logic
 const MAX_RETRIES = 3; // Max number of retries for API errors
 const INITIAL_DELAY_MS = 2000; // Initial delay in milliseconds
@@ -188,6 +186,7 @@ interface ExportedConfig {
     selectedOriginalTemperatureIndices: number[]; // For website/creative/agent
     pipelinesState: PipelineState[]; // For website/creative/agent
     activeMathPipeline: MathPipelineState | null; // For math
+    activeReactPipeline: ReactPipelineState | null; // Added for React mode
     activePipelineId: number | null; // For website/creative/agent
     activeMathProblemTabId?: string; // For math UI
     globalStatusText: string;
@@ -222,7 +221,7 @@ export interface ReactPipelineState { // Exporting for potential use elsewhere
     orchestratorRawOutput?: string; // Full raw output from orchestrator (for debugging/inspection)
     stages: ReactModeStage[]; // Array of 5 worker agent stages
     finalAppendedCode?: string; // Combined code from all worker agents
-    status: 'idle' | 'orchestrating' | 'processing_workers' | 'completed' | 'error' | 'stopping' | 'stopped' | 'cancelled' | 'orchestrating_retrying';
+    status: 'idle' | 'orchestrating' | 'processing_workers' | 'completed' | 'error' | 'stopping' | 'stopped' | 'cancelled' | 'orchestrating_retrying' | 'failed';
     error?: string;
     isStopRequested?: boolean;
     activeTabId?: string; // To track which of the 5 worker agent tabs is active in UI, e.g., "worker-0", "worker-1"
@@ -272,11 +271,11 @@ let customPromptsAgentState: CustomizablePromptsAgent = createDefaultCustomPromp
 let customPromptsReactState: CustomizablePromptsReact = JSON.parse(JSON.stringify(defaultCustomPromptsReact)); // Added for React mode
 
 
+const apiKeyStatusElement = document.getElementById('api-key-status') as HTMLParagraphElement;
+const apiKeyFormContainer = document.getElementById('api-key-form-container') as HTMLElement;
 const apiKeyInput = document.getElementById('api-key-input') as HTMLInputElement;
 const saveApiKeyButton = document.getElementById('save-api-key-button') as HTMLButtonElement;
 const clearApiKeyButton = document.getElementById('clear-api-key-button') as HTMLButtonElement;
-const apiKeyStatusElement = document.getElementById('api-key-status') as HTMLParagraphElement;
-
 const initialIdeaInput = document.getElementById('initial-idea') as HTMLTextAreaElement;
 const initialIdeaLabel = document.getElementById('initial-idea-label') as HTMLLabelElement;
 const mathProblemImageInputContainer = document.getElementById('math-problem-image-input-container') as HTMLElement;
@@ -293,7 +292,7 @@ const globalStatusDiv = document.getElementById('global-status') as HTMLElement;
 const pipelineSelectorsContainer = document.getElementById('pipeline-selectors-container') as HTMLElement;
 const appModeSelector = document.getElementById('app-mode-selector') as HTMLElement;
 
-// Prompts containers inside the modal
+// Prompts containers (now inside the modal)
 const websitePromptsContainer = document.getElementById('website-prompts-container') as HTMLElement;
 const creativePromptsContainer = document.getElementById('creative-prompts-container') as HTMLElement;
 const mathPromptsContainer = document.getElementById('math-prompts-container') as HTMLElement;
@@ -303,7 +302,7 @@ const reactPromptsContainer = document.getElementById('react-prompts-container')
 // Custom Prompts Modal Elements
 const promptsModalOverlay = document.getElementById('prompts-modal-overlay') as HTMLElement;
 const promptsModalCloseButton = document.getElementById('prompts-modal-close-button') as HTMLButtonElement;
-const customPromptsHeader = document.querySelector('.custom-prompts-header') as HTMLElement;
+const customizePromptsTrigger = document.getElementById('customize-prompts-trigger') as HTMLElement;
 
 // Diff Modal Elements
 const diffModalOverlay = document.getElementById('diff-modal-overlay') as HTMLElement;
@@ -365,7 +364,6 @@ const customPromptTextareasReact: { [K in keyof CustomizablePromptsReact]: HTMLT
     user_orchestrator: document.getElementById('user-react-orchestrator') as HTMLTextAreaElement,
 };
 
-// SVG Icons
 const fullscreenIconSvg = `
 <svg viewBox="0 0 24 24" fill="currentColor" width="1em" height="1em" aria-hidden="true">
   <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
@@ -377,56 +375,64 @@ const exitFullscreenIconSvg = `
 
 
 function initializeApiKey() {
-    let userApiKey = localStorage.getItem('geminiApiKey');
-    let keyToUse: string | undefined = undefined;
     let statusMessage = "";
     let isKeyAvailable = false;
+    let currentApiKey: string | null = null;
 
-    if (userApiKey) {
-        keyToUse = userApiKey;
-        statusMessage = "API Key loaded from Local Storage.";
+    // Hide form elements by default
+    apiKeyFormContainer.style.display = 'none';
+    saveApiKeyButton.style.display = 'none';
+    clearApiKeyButton.style.display = 'none';
+    apiKeyInput.style.display = 'none';
+
+    const envKey = process.env.API_KEY;
+
+    if (envKey) {
+        statusMessage = "API Key loaded from environment.";
         isKeyAvailable = true;
-        if(apiKeyInput && !apiKeyInput.placeholder) apiKeyInput.placeholder = "Using key from Local Storage";
-    } else if (API_KEY) { // process.env.API_KEY
-        keyToUse = API_KEY;
-        statusMessage = "API Key loaded from build configuration (environment variable).";
-        isKeyAvailable = true;
-         if(apiKeyInput) apiKeyInput.placeholder = "Using key from build config";
+        currentApiKey = envKey;
+        apiKeyStatusElement.className = 'api-key-status-message status-badge status-ok';
     } else {
-        statusMessage = "Gemini API Key not set. Please enter your API key above and click 'Save Key'.";
-        isKeyAvailable = false;
-        if(apiKeyInput) apiKeyInput.placeholder = "Enter your API Key";
+        apiKeyFormContainer.style.display = 'flex'; // Show the container for input/buttons
+        const storedKey = localStorage.getItem('gemini-api-key');
+        if (storedKey) {
+            statusMessage = "Using API Key from local storage.";
+            isKeyAvailable = true;
+            currentApiKey = storedKey;
+            apiKeyStatusElement.className = 'api-key-status-message status-badge status-ok';
+            clearApiKeyButton.style.display = 'inline-flex'; // Show clear button
+        } else {
+            statusMessage = "API Key not found. Please provide one.";
+            isKeyAvailable = false;
+            apiKeyStatusElement.className = 'api-key-status-message status-badge status-error';
+            apiKeyInput.style.display = 'block'; // Show input field
+            saveApiKeyButton.style.display = 'inline-flex'; // Show save button
+        }
     }
 
     if (apiKeyStatusElement) {
         apiKeyStatusElement.textContent = statusMessage;
-        apiKeyStatusElement.className = isKeyAvailable ? 'api-key-status-message status-ok' : 'api-key-status-message status-error';
     }
 
-    if (generateButton) { // Ensure generate button exists
-        generateButton.disabled = !isKeyAvailable || isGenerating; // Also consider isGenerating
-    }
-
-
-    if (keyToUse) {
+    if (isKeyAvailable && currentApiKey) {
         try {
-            ai = new GoogleGenAI({ apiKey: keyToUse });
-            if (generateButton) generateButton.disabled = isGenerating; // Re-evaluate generateButton based on isGenerating
+            ai = new GoogleGenAI({ apiKey: currentApiKey });
+            if (generateButton) generateButton.disabled = isGenerating;
             return true;
         } catch (e: any) {
-            console.error("Failed to initialize GoogleGenAI with the provided key:", e);
+            console.error("Failed to initialize GoogleGenAI:", e);
             if (apiKeyStatusElement) {
-                apiKeyStatusElement.textContent = `Error initializing API with key: ${e.message}. Please check the key.`;
-                apiKeyStatusElement.className = 'api-key-status-message status-error';
+                apiKeyStatusElement.textContent = `API Init Error`;
+                apiKeyStatusElement.className = 'api-key-status-message status-badge status-error';
+                apiKeyStatusElement.title = `Error: ${e.message}`;
             }
             if (generateButton) generateButton.disabled = true;
-            ai = null; // Ensure AI client is null if initialization fails
+            ai = null;
             return false;
         }
     } else {
-        // This case is already handled by setting generateButton.disabled = true
-        // and the message in apiKeyStatusElement.
-        ai = null; // Ensure AI client is null
+        if (generateButton) generateButton.disabled = true;
+        ai = null;
         return false;
     }
 }
@@ -518,17 +524,63 @@ function updateCustomPromptTextareasFromState() {
     }
 }
 
+function initializePromptsModal() {
+    const navContainer = document.getElementById('prompts-modal-nav');
+    const contentContainer = document.getElementById('prompts-modal-content');
+    if (!navContainer || !contentContainer) return;
+
+    // Clear previous state
+    navContainer.innerHTML = '';
+    contentContainer.querySelectorAll('.prompts-mode-container').forEach(el => el.classList.remove('active'));
+    contentContainer.querySelectorAll('.prompt-content-pane').forEach(el => el.classList.remove('active'));
+    
+    const activeModeContainer = document.getElementById(`${currentMode}-prompts-container`);
+    if (!activeModeContainer) return;
+
+    activeModeContainer.classList.add('active');
+    const panes = activeModeContainer.querySelectorAll<HTMLElement>('.prompt-content-pane');
+    
+    panes.forEach((pane) => {
+        const titleElement = pane.querySelector<HTMLHeadingElement>('.prompt-pane-title');
+        const title = titleElement ? titleElement.textContent : 'Unnamed Section';
+        const key = pane.dataset.promptKey;
+        if (!key) return;
+
+        const navItem = document.createElement('div');
+        navItem.className = 'prompts-nav-item';
+        navItem.textContent = title;
+        navItem.dataset.targetPane = key;
+        navContainer.appendChild(navItem);
+
+        navItem.addEventListener('click', () => {
+            // Deactivate all nav items and panes first
+            navContainer.querySelectorAll('.prompts-nav-item').forEach(item => item.classList.remove('active'));
+            panes.forEach(p => p.classList.remove('active'));
+            
+            // Activate the clicked one
+            navItem.classList.add('active');
+            pane.classList.add('active');
+        });
+    });
+
+    // Activate the first one by default
+    const firstNavItem = navContainer.querySelector<HTMLElement>('.prompts-nav-item');
+    if (firstNavItem) {
+        firstNavItem.click();
+    }
+}
+
+
 function setPromptsModalVisible(visible: boolean) {
     if (promptsModalOverlay) {
         if (visible) {
-            promptsModalOverlay.style.display = 'flex'; // Use flex to enable centering
-            // Delay adding class to allow transition to run
+            initializePromptsModal(); // Re-initialize on open to reflect current mode
+            promptsModalOverlay.style.display = 'flex';
             setTimeout(() => {
                 promptsModalOverlay.classList.add('is-visible');
-            }, 10); 
+            }, 10);
         } else {
             promptsModalOverlay.classList.remove('is-visible');
-             // Listen for transition end to set display none, prevents abrupt disappearance
             promptsModalOverlay.addEventListener('transitionend', () => {
                 if (!promptsModalOverlay.classList.contains('is-visible')) {
                     promptsModalOverlay.style.display = 'none';
@@ -539,48 +591,42 @@ function setPromptsModalVisible(visible: boolean) {
 }
 
 function updateUIAfterModeChange() {
-    // Hide all prompt containers initially
-    if(websitePromptsContainer) websitePromptsContainer.style.display = 'none';
-    if(creativePromptsContainer) creativePromptsContainer.style.display = 'none';
-    if(mathPromptsContainer) mathPromptsContainer.style.display = 'none';
-    if(agentPromptsContainer) agentPromptsContainer.style.display = 'none';
-    if(reactPromptsContainer) reactPromptsContainer.style.display = 'none';
-
+    // Visibility of prompt containers is now handled by CSS classes and initializePromptsModal
+    const allPromptContainers = document.querySelectorAll('.prompts-mode-container');
+    allPromptContainers.forEach(container => container.classList.remove('active'));
+    const activeContainer = document.getElementById(`${currentMode}-prompts-container`);
+    if(activeContainer) activeContainer.classList.add('active');
+    
     // Default UI states
     if(mathProblemImageInputContainer) mathProblemImageInputContainer.style.display = 'none';
-    if(modelSelectionContainer) modelSelectionContainer.style.display = 'block';
+    if(modelSelectionContainer) modelSelectionContainer.style.display = 'flex';
     if(temperatureSelectionContainer) temperatureSelectionContainer.style.display = 'block';
 
     if (currentMode === 'website') {
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'HTML Idea:';
         if (initialIdeaInput) initialIdeaInput.placeholder = 'E.g., a personal blog about cooking, a portfolio...';
         if (generateButton) generateButton.textContent = 'Generate HTML';
-        if (websitePromptsContainer) websitePromptsContainer.style.display = 'block';
     } else if (currentMode === 'creative') {
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'Writing Premise:';
         if (initialIdeaInput) initialIdeaInput.placeholder = 'E.g., a short story about a time traveler, a poem...';
         if (generateButton) generateButton.textContent = 'Refine Writing';
-        if (creativePromptsContainer) creativePromptsContainer.style.display = 'block';
     } else if (currentMode === 'math') {
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'Math Problem:';
         if (initialIdeaInput) initialIdeaInput.placeholder = 'E.g., "Solve for x: 2x + 5 = 11" or describe...';
         if (generateButton) generateButton.textContent = 'Solve Problem';
-        if (mathPromptsContainer) mathPromptsContainer.style.display = 'block';
-        if (mathProblemImageInputContainer) mathProblemImageInputContainer.style.display = 'block';
+        if (mathProblemImageInputContainer) mathProblemImageInputContainer.style.display = 'flex';
         if (modelSelectionContainer) modelSelectionContainer.style.display = 'none';
         if (temperatureSelectionContainer) temperatureSelectionContainer.style.display = 'none';
     } else if (currentMode === 'agent') {
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'Your Request:';
         if (initialIdeaInput) initialIdeaInput.placeholder = 'E.g., "Python snake game", "Analyze iPhone sales data"...';
         if (generateButton) generateButton.textContent = 'Start Agent Process';
-        if (agentPromptsContainer) agentPromptsContainer.style.display = 'block';
     } else if (currentMode === 'react') { // Added for React mode
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'React App Request:';
         if (initialIdeaInput) initialIdeaInput.placeholder = 'E.g., "A simple to-do list app with local storage persistence", "A weather dashboard using OpenWeatherMap API"...';
         if (generateButton) generateButton.textContent = 'Generate React App';
-        if (reactPromptsContainer) reactPromptsContainer.style.display = 'block';
         // React mode uses standard model and temperature selection like website/creative/agent
-        if (modelSelectionContainer) modelSelectionContainer.style.display = 'block';
+        if (modelSelectionContainer) modelSelectionContainer.style.display = 'flex';
         if (temperatureSelectionContainer) temperatureSelectionContainer.style.display = 'block';
         if (mathProblemImageInputContainer) mathProblemImageInputContainer.style.display = 'none';
     }
@@ -658,62 +704,52 @@ function updateControlsState() {
     const reactPipelineRunningOrStopping = activeReactPipeline?.status === 'orchestrating' || activeReactPipeline?.status === 'processing_workers' || activeReactPipeline?.status === 'stopping'; // Added for React
     isGenerating = anyPipelineRunningOrStopping || mathPipelineRunningOrStopping || reactPipelineRunningOrStopping; // Added reactPipeline
 
+    const isApiKeyReady = !!ai;
+
     if (generateButton) {
-        if (currentMode === 'math') {
-             generateButton.disabled = isGenerating;
-        } else if (currentMode === 'react') { // React mode doesn't use temperature variants from selectors for its main generation button
-            generateButton.disabled = isGenerating;
-        } else { // website, creative, agent
-            const selectedTemps = getSelectedTemperatures();
-            generateButton.disabled = selectedTemps.length === 0 || isGenerating;
+        let disabled = isGenerating || !isApiKeyReady;
+        if (!disabled) {
+            if (currentMode === 'math') {
+                // Enabled if not generating
+            } else if (currentMode === 'react') {
+                // Enabled if not generating
+            } else { // website, creative, agent
+                const selectedTemps = getSelectedTemperatures();
+                disabled = selectedTemps.length === 0;
+            }
         }
+        generateButton.disabled = disabled;
     }
+    
     if (exportConfigButton) exportConfigButton.disabled = isGenerating;
     if (importConfigInput) importConfigInput.disabled = isGenerating;
     if (importConfigLabel) importConfigLabel.classList.toggle('disabled', isGenerating);
     if (initialIdeaInput) initialIdeaInput.disabled = isGenerating;
     if (mathProblemImageInput) mathProblemImageInput.disabled = isGenerating;
     
-    if (modelSelectElement) modelSelectElement.disabled = isGenerating || currentMode === 'math'; // Math uses fixed model, React uses selected
+    if (modelSelectElement) modelSelectElement.disabled = isGenerating || currentMode === 'math'; 
     if (pipelineSelectorsContainer) {
-        const disableSelectors = isGenerating || currentMode === 'math' || currentMode === 'react'; // React mode also disables these for now
+        const disableSelectors = isGenerating || currentMode === 'math' || currentMode === 'react';
         pipelineSelectorsContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => (cb as HTMLInputElement).disabled = disableSelectors);
-        const pipelineSelectLabel = document.getElementById('pipeline-select-heading');
-        if (pipelineSelectLabel) {
-             pipelineSelectLabel.textContent = (currentMode === 'math' || currentMode === 'react') ? `${currentMode.charAt(0).toUpperCase() + currentMode.slice(1)} mode uses a fixed configuration for this step.` : 'Select Variants to Run (Temperature):';
-             pipelineSelectLabel.style.color = disableSelectors ? 'var(--text-secondary-color)' : 'var(--text-color)';
-             pipelineSelectLabel.style.opacity = disableSelectors ? '0.6' : '1';
+        const pipelineSelectHeading = document.getElementById('pipeline-select-heading');
+        if (pipelineSelectHeading) {
+            const parentSection = pipelineSelectHeading.closest('.sidebar-section-content');
+            parentSection?.classList.toggle('disabled', disableSelectors);
         }
-
     }
-     if (currentMode === 'math') {
-        if(modelSelectElement) modelSelectElement.value = MATH_MODEL_NAME; // Force model for math
+    
+    if (currentMode === 'math' && modelSelectElement) {
+        modelSelectElement.value = MATH_MODEL_NAME;
     }
 
     if (appModeSelector) {
         appModeSelector.querySelectorAll('input[type="radio"]').forEach(rb => (rb as HTMLInputElement).disabled = isGenerating);
     }
-
-    const currentPromptTextareas = 
-        currentMode === 'website' ? customPromptTextareasWebsite :
-        currentMode === 'creative' ? customPromptTextareasCreative :
-        currentMode === 'math' ? customPromptTextareasMath :
-        currentMode === 'agent' ? customPromptTextareasAgent :
-        currentMode === 'react' ? customPromptTextareasReact : null; // Added for React
-
-    if (currentPromptTextareas) {
-        for (const textarea of Object.values(currentPromptTextareas)) {
-            if (textarea) { 
-                textarea.disabled = isGenerating;
-            }
-        }
-    }
-    if (customPromptsHeader) {
-        const customPromptsContainer = document.getElementById('custom-prompts-container');
-        if (customPromptsContainer) {
-            customPromptsContainer.classList.toggle('disabled-section', isGenerating);
-        }
-        customPromptsHeader.style.pointerEvents = isGenerating ? 'none' : 'auto';
+    
+    if (customizePromptsTrigger) {
+        const parentSection = customizePromptsTrigger.closest('.sidebar-section');
+        parentSection?.classList.toggle('disabled', isGenerating);
+        customizePromptsTrigger.style.pointerEvents = isGenerating ? 'none' : 'auto';
     }
 }
 
@@ -768,7 +804,7 @@ function initPipelines() {
                 iterationNumber: i,
                 title: title,
                 status: 'pending',
-                isDetailsOpen: i === 0, 
+                isDetailsOpen: true, // Always open with new design
             });
         }
         return {
@@ -785,44 +821,43 @@ function initPipelines() {
     if (pipelinesState.length > 0) {
         activateTab(pipelinesState[0].id);
     } else { 
-        tabsNavContainer.innerHTML = '<p class="no-pipelines-message" style="padding: 1rem; color: var(--text-secondary-color);">No variants selected to run.</p>';
+        tabsNavContainer.innerHTML = '<p class="no-pipelines-message">No variants selected to run.</p>';
         pipelinesContentContainer.innerHTML = '';
     }
     updateControlsState(); 
 }
 
 
-function activateTab(pipelineIdOrMathTabId: number | string) {
+function activateTab(idToActivate: number | string) {
     if (currentMode === 'math' && activeMathPipeline) {
-        activeMathPipeline.activeTabId = pipelineIdOrMathTabId as string;
-        document.querySelectorAll('#tabs-nav-container .tab-button.math-mode-tab').forEach(btn => {
-            btn.classList.toggle('active', btn.id === `math-tab-${pipelineIdOrMathTabId}`);
-            btn.setAttribute('aria-selected', (btn.id === `math-tab-${pipelineIdOrMathTabId}`).toString());
+        activeMathPipeline.activeTabId = idToActivate as string;
+        // Deactivate all math tabs and panes
+        document.querySelectorAll('#tabs-nav-container .tab-button.math-mode-tab').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('#pipelines-content-container > .math-pipeline-content-pane').forEach(pane => pane.classList.remove('active'));
+        // Activate the correct one
+        const tabButton = document.getElementById(`math-tab-${idToActivate}`);
+        const contentPane = document.getElementById(`math-content-${idToActivate}`);
+        if (tabButton) tabButton.classList.add('active');
+        if (contentPane) contentPane.classList.add('active');
+
+    } else if (currentMode === 'react' && activeReactPipeline) {
+        activeReactPipeline.activeTabId = idToActivate as string;
+        document.querySelectorAll('#tabs-nav-container .tab-button.react-mode-tab').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('#pipelines-content-container > .react-worker-content-pane').forEach(pane => pane.classList.remove('active'));
+
+        const tabButton = document.getElementById(`react-pipeline-tab-${idToActivate}`);
+        const contentPane = document.getElementById(`react-worker-content-${idToActivate}`);
+        if (tabButton) tabButton.classList.add('active');
+        if (contentPane) contentPane.classList.add('active');
+
+    } else if (currentMode !== 'math' && currentMode !== 'react') {
+        activePipelineId = idToActivate as number;
+        document.querySelectorAll('#tabs-nav-container .tab-button').forEach(btn => {
+            btn.classList.toggle('active', btn.id === `pipeline-tab-${activePipelineId}`);
+            btn.setAttribute('aria-selected', (btn.id === `pipeline-tab-${activePipelineId}`).toString());
         });
-        document.querySelectorAll('.math-pipeline-content-pane').forEach(pane => {
-            pane.classList.toggle('active', pane.id === `math-content-${pipelineIdOrMathTabId}`);
-        });
-    } else if (currentMode === 'react' && activeReactPipeline) { // Added for React mode
-        activeReactPipeline.activeTabId = pipelineIdOrMathTabId as string; // e.g., "worker-0"
-        document.querySelectorAll('#tabs-nav-container .tab-button.react-mode-tab').forEach(btn => {
-            const buttonReactTabId = btn.id.replace('react-pipeline-tab-', ''); // react-pipeline-tab-worker-0 -> worker-0
-            btn.classList.toggle('active', buttonReactTabId === activeReactPipeline.activeTabId);
-            btn.setAttribute('aria-selected', (buttonReactTabId === activeReactPipeline.activeTabId).toString());
-        });
-        document.querySelectorAll('.react-worker-content-pane').forEach(pane => {
-            const paneReactTabId = pane.id.replace('react-worker-content-', ''); // react-worker-content-worker-0 -> worker-0
-            pane.classList.toggle('active', paneReactTabId === activeReactPipeline.activeTabId);
-        });
-    } else if (currentMode !== 'math' && currentMode !== 'react') { // For website, creative, agent
-        activePipelineId = pipelineIdOrMathTabId as number;
-        pipelinesState.forEach(p => {
-            if (p.tabButtonElement) {
-                p.tabButtonElement.classList.toggle('active', p.id === activePipelineId);
-                p.tabButtonElement.setAttribute('aria-selected', (p.id === activePipelineId).toString());
-            }
-            if (p.contentElement) {
-                p.contentElement.classList.toggle('active', p.id === activePipelineId);
-            }
+        document.querySelectorAll('#pipelines-content-container > .pipeline-content').forEach(pane => {
+            pane.classList.toggle('active', pane.id === `pipeline-content-${activePipelineId}`);
         });
     }
 }
@@ -838,7 +873,7 @@ function renderPipelines() {
     pipelinesContentContainer.innerHTML = '';
 
     if (pipelinesState.length === 0) {
-        tabsNavContainer.innerHTML = '<p class="no-pipelines-message" style="padding: 1rem; color: var(--text-secondary-color);">No variants selected. Please choose at least one variant or import a configuration.</p>';
+        tabsNavContainer.innerHTML = '<p class="no-pipelines-message">No variants selected. Please choose at least one variant or import a configuration.</p>';
         pipelinesContentContainer.innerHTML = '';
         return;
     }
@@ -861,57 +896,39 @@ function renderPipelines() {
         pipelineContentDiv.setAttribute('aria-labelledby', `pipeline-tab-${pipeline.id}`);
 
         const pipelineType = currentMode === 'agent' ? "Agent Process" : "Pipeline";
-
+        // Header is now inside each iteration card, so we just need the list.
         pipelineContentDiv.innerHTML = `
-            <div class="pipeline-header">
-                <h3 id="pipeline-heading-${pipeline.id}">${pipelineType} Variant ${pipeline.id + 1} (Temp: ${pipeline.temperature.toFixed(1)}, Model: ${pipeline.modelName})</h3>
-                <div class="pipeline-header-controls">
-                    <span class="pipeline-status status-${pipeline.status}" id="pipeline-status-text-${pipeline.id}">${pipeline.status}</span>
-                    <button class="stop-pipeline-button button-base action-button" id="stop-pipeline-btn-${pipeline.id}" title="Stop this ${pipelineType.toLowerCase()}" aria-label="Stop this ${pipelineType.toLowerCase()}" style="display: none;">Stop</button>
-                </div>
-            </div>
-            <ul class="iterations-list" id="iterations-list-${pipeline.id}">
+            <ul class="iterations-list" id="iterations-list-${pipeline.id}" style="list-style-type: none; padding: 0; display: flex; flex-direction: column; gap: 1.5rem;">
                 ${pipeline.iterations.map(iter => renderIteration(pipeline.id, iter)).join('')}
             </ul>
         `;
         pipelinesContentContainer.appendChild(pipelineContentDiv);
         pipeline.contentElement = pipelineContentDiv;
 
-        const stopButton = pipelineContentDiv.querySelector<HTMLButtonElement>(`#stop-pipeline-btn-${pipeline.id}`);
-        if (stopButton) {
-            pipeline.stopButtonElement = stopButton;
-            stopButton.addEventListener('click', () => {
-                const currentPipeline = pipelinesState.find(p => p.id === pipeline.id);
-                if (currentPipeline && currentPipeline.status === 'running') {
-                    currentPipeline.isStopRequested = true;
-                    updatePipelineStatusUI(pipeline.id, 'stopping');
-                }
-            });
-        }
+        // Stop button is now part of the iteration card header during processing
         updatePipelineStatusUI(pipeline.id, pipeline.status); 
 
         pipeline.iterations.forEach(iter => {
-            const detailsElement = pipelineContentDiv.querySelector<HTMLDetailsElement>(`#iteration-${pipeline.id}-${iter.iterationNumber} details`);
-            const summaryElement = detailsElement?.querySelector('summary');
-            if (detailsElement && summaryElement) {
-                if (iter.isDetailsOpen !== undefined) {
-                   detailsElement.open = iter.isDetailsOpen;
-                }
-                summaryElement.addEventListener('click', (e) => {
-                    setTimeout(() => { 
-                        const iterToUpdate = pipelinesState.find(p => p.id === pipeline.id)?.iterations.find(it => it.iterationNumber === iter.iterationNumber);
-                        if (iterToUpdate) {
-                            iterToUpdate.isDetailsOpen = detailsElement.open;
-                        }
-                    }, 0);
-                });
-            }
             attachIterationActionButtons(pipeline.id, iter.iterationNumber);
         });
     });
 }
 
+function getEmptyStateMessage(status: IterationData['status'], contentType: string): string {
+    switch (status) {
+        case 'pending': return `${contentType} generation is pending.`;
+        case 'processing':
+        case 'retrying': return `Generating ${contentType}...`;
+        case 'cancelled': return `${contentType} generation was cancelled by the user.`;
+        case 'error': return `An error occurred while generating ${contentType}.`;
+        default: return `No valid ${contentType} was generated.`;
+    }
+}
+
 function renderIteration(pipelineId: number, iter: IterationData): string {
+    const pipeline = pipelinesState.find(p => p.id === pipelineId);
+    if (!pipeline) return '';
+
     let displayStatusText: string = iter.status.charAt(0).toUpperCase() + iter.status.slice(1);
     if (iter.status === 'retrying' && iter.retryAttempt !== undefined) {
         displayStatusText = `Retrying (${iter.retryAttempt}/${MAX_RETRIES})...`;
@@ -920,30 +937,30 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
 
     let promptsHtml = '';
     if (currentMode === 'website') {
-        if (iter.requestPromptHtml_InitialGenerate) promptsHtml += `<h4 class="prompt-title prompt-title-initial-gen">Initial HTML Generation Prompt:</h4><pre class="prompt-block">${escapeHtml(iter.requestPromptHtml_InitialGenerate)}</pre>`;
-        if (iter.requestPromptHtml_FeatureImplement) promptsHtml += `<h4 class="prompt-title prompt-title-feature-implement">Feature Implementation & Stabilization Prompt:</h4><pre class="prompt-block">${escapeHtml(iter.requestPromptHtml_FeatureImplement)}</pre>`;
-        if (iter.requestPromptHtml_BugFix) promptsHtml += `<h4 class="prompt-title prompt-title-bug-fix">HTML Bug Fix/Polish & Completion Prompt:</h4><pre class="prompt-block">${escapeHtml(iter.requestPromptHtml_BugFix)}</pre>`;
-        if (iter.requestPromptFeatures_Suggest) promptsHtml += `<h4 class="prompt-title prompt-title-feature-suggest">Feature Suggestion Prompt:</h4><pre class="prompt-block">${escapeHtml(iter.requestPromptFeatures_Suggest)}</pre>`;
+        if (iter.requestPromptHtml_InitialGenerate) promptsHtml += `<h6 class="prompt-title">Initial HTML Generation Prompt:</h6><pre>${escapeHtml(iter.requestPromptHtml_InitialGenerate)}</pre>`;
+        if (iter.requestPromptHtml_FeatureImplement) promptsHtml += `<h6 class="prompt-title">Feature Implementation & Stabilization Prompt:</h6><pre>${escapeHtml(iter.requestPromptHtml_FeatureImplement)}</pre>`;
+        if (iter.requestPromptHtml_BugFix) promptsHtml += `<h6 class="prompt-title">HTML Bug Fix/Polish & Completion Prompt:</h6><pre>${escapeHtml(iter.requestPromptHtml_BugFix)}</pre>`;
+        if (iter.requestPromptFeatures_Suggest) promptsHtml += `<h6 class="prompt-title">Feature Suggestion Prompt:</h6><pre>${escapeHtml(iter.requestPromptFeatures_Suggest)}</pre>`;
     } else if (currentMode === 'creative') {
-        if (iter.requestPromptText_GenerateDraft) promptsHtml += `<h4 class="prompt-title prompt-title-draft-gen">Draft Generation Prompt:</h4><pre class="prompt-block">${escapeHtml(iter.requestPromptText_GenerateDraft)}</pre>`;
-        if (iter.requestPromptText_Critique) promptsHtml += `<h4 class="prompt-title prompt-title-critique">Critique Prompt:</h4><pre class="prompt-block">${escapeHtml(iter.requestPromptText_Critique)}</pre>`;
-        if (iter.requestPromptText_Revise) promptsHtml += `<h4 class="prompt-title prompt-title-revise">Revision Prompt:</h4><pre class="prompt-block">${escapeHtml(iter.requestPromptText_Revise)}</pre>`;
-        if (iter.requestPromptText_Polish) promptsHtml += `<h4 class="prompt-title prompt-title-polish">Polish Prompt:</h4><pre class="prompt-block">${escapeHtml(iter.requestPromptText_Polish)}</pre>`;
+        if (iter.requestPromptText_GenerateDraft) promptsHtml += `<h6 class="prompt-title">Draft Generation Prompt:</h6><pre>${escapeHtml(iter.requestPromptText_GenerateDraft)}</pre>`;
+        if (iter.requestPromptText_Critique) promptsHtml += `<h6 class="prompt-title">Critique Prompt:</h6><pre>${escapeHtml(iter.requestPromptText_Critique)}</pre>`;
+        if (iter.requestPromptText_Revise) promptsHtml += `<h6 class="prompt-title">Revision Prompt:</h6><pre>${escapeHtml(iter.requestPromptText_Revise)}</pre>`;
+        if (iter.requestPromptText_Polish) promptsHtml += `<h6 class="prompt-title">Polish Prompt:</h6><pre>${escapeHtml(iter.requestPromptText_Polish)}</pre>`;
     } else if (currentMode === 'agent') {
-        if (iter.agentJudgeLLM_InitialRequest) promptsHtml += `<h4 class="prompt-title prompt-title-agent-judge">Judge LLM - Initial Request to Design Prompts:</h4><pre class="prompt-block">${escapeHtml(iter.agentJudgeLLM_InitialRequest)}</pre>`;
-        if (iter.agentGeneratedPrompts && iter.iterationNumber === 0) { // Only show full JSON in setup iteration
-             promptsHtml += `<h4 class="prompt-title prompt-title-agent-generated">Judge LLM - Generated Prompt Design:</h4><pre class="code-block language-json">${escapeHtml(JSON.stringify(iter.agentGeneratedPrompts, null, 2))}</pre>`;
+        if (iter.agentJudgeLLM_InitialRequest) promptsHtml += `<h6 class="prompt-title">Judge LLM - Initial Request to Design Prompts:</h6><pre>${escapeHtml(iter.agentJudgeLLM_InitialRequest)}</pre>`;
+        if (iter.agentGeneratedPrompts && iter.iterationNumber === 0) {
+             promptsHtml += `<h6 class="prompt-title">Judge LLM - Generated Prompt Design:</h6><pre>${escapeHtml(JSON.stringify(iter.agentGeneratedPrompts, null, 2))}</pre>`;
         }
-        if (iter.requestPrompt_SysInstruction) promptsHtml += `<h4 class="prompt-title prompt-title-agent-sys">System Instruction (Main Step):</h4><pre class="prompt-block">${escapeHtml(iter.requestPrompt_SysInstruction)}</pre>`;
-        if (iter.requestPrompt_UserTemplate) promptsHtml += `<h4 class="prompt-title prompt-title-agent-user">User Prompt Template (Main Step):</h4><pre class="prompt-block">${escapeHtml(iter.requestPrompt_UserTemplate)}</pre>`;
-        if (iter.requestPrompt_Rendered) promptsHtml += `<h4 class="prompt-title prompt-title-agent-rendered">Rendered User Prompt (Main Step - Sent to API):</h4><pre class="prompt-block">${escapeHtml(iter.requestPrompt_Rendered)}</pre>`;
+        if (iter.requestPrompt_SysInstruction) promptsHtml += `<h6 class="prompt-title">System Instruction (Main Step):</h6><pre>${escapeHtml(iter.requestPrompt_SysInstruction)}</pre>`;
+        if (iter.requestPrompt_UserTemplate) promptsHtml += `<h6 class="prompt-title">User Prompt Template (Main Step):</h6><pre>${escapeHtml(iter.requestPrompt_UserTemplate)}</pre>`;
+        if (iter.requestPrompt_Rendered) promptsHtml += `<h6 class="prompt-title">Rendered User Prompt (Main Step - Sent to API):</h6><pre>${escapeHtml(iter.requestPrompt_Rendered)}</pre>`;
         
-        // For loop iterations (Implement + Refine/Suggest), show sub-step prompts if they exist
-        // The main prompts above will be for the "Implement" part of the loop.
-        // The sub-step prompts will be for the "Refine/Suggest" part of the loop.
-        if (iter.requestPrompt_SubStep_SysInstruction) promptsHtml += `<hr class="sub-divider"><h4 class="prompt-title prompt-title-agent-sys">System Instruction (Loop Sub-Step - Refine/Suggest):</h4><pre class="prompt-block">${escapeHtml(iter.requestPrompt_SubStep_SysInstruction)}</pre>`;
-        if (iter.requestPrompt_SubStep_UserTemplate) promptsHtml += `<h4 class="prompt-title prompt-title-agent-user">User Prompt Template (Loop Sub-Step - Refine/Suggest):</h4><pre class="prompt-block">${escapeHtml(iter.requestPrompt_SubStep_UserTemplate)}</pre>`;
-        if (iter.requestPrompt_SubStep_Rendered) promptsHtml += `<h4 class="prompt-title prompt-title-agent-rendered">Rendered User Prompt (Loop Sub-Step - Refine/Suggest - Sent to API):</h4><pre class="prompt-block">${escapeHtml(iter.requestPrompt_SubStep_Rendered)}</pre>`;
+        if (iter.requestPrompt_SubStep_SysInstruction) promptsHtml += `<hr class="sub-divider"><h6 class="prompt-title">System Instruction (Loop Sub-Step - Refine/Suggest):</h6><pre>${escapeHtml(iter.requestPrompt_SubStep_SysInstruction)}</pre>`;
+        if (iter.requestPrompt_SubStep_UserTemplate) promptsHtml += `<h6 class="prompt-title">User Prompt Template (Loop Sub-Step - Refine/Suggest):</h6><pre>${escapeHtml(iter.requestPrompt_SubStep_UserTemplate)}</pre>`;
+        if (iter.requestPrompt_SubStep_Rendered) promptsHtml += `<h6 class="prompt-title">Rendered User Prompt (Loop Sub-Step - Refine/Suggest - Sent to API):</h6><pre>${escapeHtml(iter.requestPrompt_SubStep_Rendered)}</pre>`;
+    }
+    if (promptsHtml) {
+        promptsHtml = `<div class="model-detail-section"><h5 class="model-section-title">Prompts</h5><div class="scrollable-content-area custom-scrollbar">${promptsHtml}</div></div>`;
     }
 
     let generatedOutputHtml = '';
@@ -952,61 +969,76 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
 
 
     if (currentMode === 'website') {
-        if (iter.generatedHtml || ['completed', 'error', 'retrying', 'processing', 'cancelled'].includes(iter.status)) {
-            generatedOutputHtml = `
-                <h4>Generated HTML Code (Stabilized/Polished):</h4>
-                <pre id="html-code-${pipelineId}-${iter.iterationNumber}" class="code-block language-html">${iter.generatedHtml ? escapeHtml(iter.generatedHtml) : (iter.status === 'cancelled' ? '<!-- HTML generation cancelled. -->' : '<!-- No valid HTML was generated or an error occurred. -->')}</pre>
-                <button id="download-html-${pipelineId}-${iter.iterationNumber}" class="download-html-button button-base action-button" type="button" ${!iter.generatedHtml ? 'disabled' : ''}>Download HTML</button>
-                <button id="copy-html-${pipelineId}-${iter.iterationNumber}" class="copy-html-button button-base action-button" type="button" ${!iter.generatedHtml ? 'disabled' : ''}>Copy HTML</button>
-                <button class="compare-output-button button-base action-button" data-pipeline-id="${pipelineId}" data-iteration-number="${iter.iterationNumber}" data-content-type="html" type="button" ${!iter.generatedHtml ? 'disabled' : ''}>Compare</button>
+        if (iter.generatedHtml || ['completed', 'error', 'retrying', 'processing', 'pending', 'cancelled'].includes(iter.status)) {
+            const hasContent = !!iter.generatedHtml && !isEmptyOrPlaceholderHtml(iter.generatedHtml);
+            const codeActionsHtml = hasContent ? `
+                <div class="code-actions">
+                    <button id="download-html-${pipelineId}-${iter.iterationNumber}" class="button" type="button">Download</button>
+                    <button id="copy-html-${pipelineId}-${iter.iterationNumber}" class="button" type="button">Copy</button>
+                    <button class="compare-output-button button" data-pipeline-id="${pipelineId}" data-iteration-number="${iter.iterationNumber}" data-content-type="html" type="button">Compare</button>
+                </div>` : '';
+            
+            let htmlContent;
+            if (hasContent) {
+                htmlContent = `<pre id="html-code-${pipelineId}-${iter.iterationNumber}" class="language-html">${escapeHtml(iter.generatedHtml!)}</pre>`;
+            } else {
+                htmlContent = `<div class="empty-state-message">${getEmptyStateMessage(iter.status, 'HTML')}</div>`;
+            }
+
+             generatedOutputHtml = `
+                <div class="code-block-wrapper">
+                  <div class="scrollable-content-area custom-scrollbar">${htmlContent}</div>
+                  ${codeActionsHtml}
+                </div>
             `;
-        } else if (iter.status === 'pending') {
-             generatedOutputHtml = '<p>No HTML generated for this iteration yet.</p>';
         }
     } else if (currentMode === 'creative' || currentMode === 'agent') {
         let mainContentToDisplay = iter.generatedOrRevisedText; // Creative
         let mainContentLabel = "Generated/Revised Text:";
+        let subStepHtml = '';
 
         if (currentMode === 'agent') {
             mainContentToDisplay = iter.generatedMainContent;
             
-            if (iter.iterationNumber === 0 && iter.agentGeneratedPrompts) { // Judge LLM prompt design
+            if (iter.iterationNumber === 0 && iter.agentGeneratedPrompts) {
                  mainContentToDisplay = "Dynamically designed prompts from Judge LLM are shown above in the 'Prompts' section. No direct content output for this setup step.";
                  mainContentLabel = "Setup Information:";
-            } else if (iter.generatedSubStep_Content && iter.iterationNumber > 2 && iter.iterationNumber < TOTAL_STEPS_AGENT -1) { // Agent loop: Implement (sub-step) then Refine/Suggest (main content)
-                 // iter.generatedSubStep_Content is the output of the "Implement" part of the loop
-                 // iter.generatedMainContent is the output of the "Refine/Suggest" part of the loop
-                 generatedOutputHtml += `
-                    <h4>Content After Suggestion Implementation (Loop Sub-Step):</h4>
-                    <pre id="agent-substep-content-${pipelineId}-${iter.iterationNumber}" class="text-block generated-text-block language-${outputContentType}">${iter.generatedSubStep_Content ? escapeHtml(iter.generatedSubStep_Content) : 'No content from implementation sub-step.'}</pre>
-                    <hr class="sub-divider">`;
+            } else if (iter.generatedSubStep_Content && iter.iterationNumber > 2 && iter.iterationNumber < TOTAL_STEPS_AGENT -1) {
+                 subStepHtml = `<h6 class="model-section-title">Content After Suggestion Implementation (Loop Sub-Step):</h6><div class="code-block-wrapper"><div class="scrollable-content-area custom-scrollbar"><pre id="agent-substep-content-${pipelineId}-${iter.iterationNumber}" class="language-${outputContentType}">${iter.generatedSubStep_Content ? escapeHtml(iter.generatedSubStep_Content) : ''}</pre></div></div>`;
                  mainContentLabel = "Refined Content After Suggestions (Loop Main Step):";
-            } else if (iter.iterationNumber === 1) { // Initial Generation
-                mainContentLabel = "Initial Generated Content:";
-            } else if (iter.iterationNumber === 2) { // Initial Refine/Suggest
-                mainContentLabel = "Refined Content (After Initial Suggestions):";
-            } else if (iter.iterationNumber === TOTAL_STEPS_AGENT -1) { // Final Polish
-                mainContentLabel = "Final Polished Content:";
-            } else {
-                 mainContentLabel = "Generated/Refined Output:";
-            }
+            } else if (iter.iterationNumber === 1) { mainContentLabel = "Initial Generated Content:"; } 
+            else if (iter.iterationNumber === 2) { mainContentLabel = "Refined Content (After Initial Suggestions):"; } 
+            else if (iter.iterationNumber === TOTAL_STEPS_AGENT -1) { mainContentLabel = "Final Polished Content:"; } 
+            else { mainContentLabel = "Generated/Refined Output:"; }
         }
         
-        if (mainContentToDisplay || ['completed', 'error', 'retrying', 'processing', 'cancelled'].includes(iter.status)) {
-             generatedOutputHtml += `
-                <h4>${mainContentLabel}</h4>
-                <pre id="text-block-${pipelineId}-${iter.iterationNumber}" class="text-block generated-text-block language-${outputContentType}">${mainContentToDisplay ? escapeHtml(mainContentToDisplay) : (iter.status === 'cancelled' ? 'Generation cancelled.' : 'No output was generated or an error occurred.')}</pre>`;
-            // Only add download/copy buttons if there's actual content to download/copy (not for iter 0 message)
-            if (mainContentToDisplay && !(currentMode ==='agent' && iter.iterationNumber === 0)) {
-                generatedOutputHtml += `
-                <button id="download-text-${pipelineId}-${iter.iterationNumber}" class="download-text-button button-base action-button" type="button" ${!mainContentToDisplay ? 'disabled' : ''}>Download Output</button>
-                <button id="copy-text-${pipelineId}-${iter.iterationNumber}" class="copy-text-button button-base action-button" type="button" ${!mainContentToDisplay ? 'disabled' : ''}>Copy Output</button>
-                <button class="compare-output-button button-base action-button" data-pipeline-id="${pipelineId}" data-iteration-number="${iter.iterationNumber}" data-content-type="text" type="button" ${!mainContentToDisplay ? 'disabled' : ''}>Compare</button>
-                `;
+        if (mainContentToDisplay || ['completed', 'error', 'retrying', 'processing', 'pending', 'cancelled'].includes(iter.status)) {
+            const hasContent = !!mainContentToDisplay && !(currentMode === 'agent' && iter.iterationNumber === 0);
+            const codeActionsHtml = hasContent ? `
+              <div class="code-actions">
+                  <button id="download-text-${pipelineId}-${iter.iterationNumber}" class="button" type="button">Download</button>
+                  <button id="copy-text-${pipelineId}-${iter.iterationNumber}" class="button" type="button">Copy</button>
+                  <button class="compare-output-button button" data-pipeline-id="${pipelineId}" data-iteration-number="${iter.iterationNumber}" data-content-type="text" type="button">Compare</button>
+              </div>` : '';
+
+            let contentBlock;
+            if (hasContent) {
+                contentBlock = `<pre id="text-block-${pipelineId}-${iter.iterationNumber}" class="language-${outputContentType}">${escapeHtml(mainContentToDisplay!)}</pre>`;
+            } else {
+                contentBlock = `<div class="empty-state-message">${getEmptyStateMessage(iter.status, 'output')}</div>`;
             }
-        } else if (iter.status === 'pending') {
-            generatedOutputHtml = `<p>No output generated for this iteration yet.</p>`;
+
+            generatedOutputHtml += `
+                ${subStepHtml}
+                <h6 class="model-section-title">${mainContentLabel}</h6>
+                <div class="code-block-wrapper">
+                  <div class="scrollable-content-area custom-scrollbar">${contentBlock}</div>
+                  ${codeActionsHtml}
+                </div>`;
         }
+    }
+    if (generatedOutputHtml) {
+        generatedOutputHtml = `<div class="model-detail-section">${generatedOutputHtml}</div>`;
     }
 
     let suggestionsHtml = '';
@@ -1015,74 +1047,90 @@ function renderIteration(pipelineId: number, iter: IterationData): string {
 
     if ((currentMode === 'website' || currentMode === 'agent') && suggestionsToDisplay && suggestionsToDisplay.length > 0) {
         const title = currentMode === 'website' ? "Suggested Next Steps (HTML Features):" : "Suggested Next Steps:";
-        suggestionsHtml = `<h4>${title}</h4><ul class="feature-list">${suggestionsToDisplay.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>`;
+        suggestionsHtml = `<h5 class="model-section-title">${title}</h5><ul class="suggestion-list">${suggestionsToDisplay.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>`;
     } else if (currentMode === 'creative' && critiqueToDisplay && critiqueToDisplay.length > 0) {
-        suggestionsHtml = `<h4>Critique & Suggestions:</h4><ul class="critique-list">${critiqueToDisplay.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>`;
-    } else if (iter.status === 'cancelled' && (currentMode !== 'agent' || iter.iterationNumber > 0)) { // Don't show for agent iter 0 cancelled
-        suggestionsHtml = (currentMode === 'website' || currentMode === 'agent') ? '<h4>Suggested Next Steps:</h4><p>Cancelled by user.</p>' : '<h4>Critique & Suggestions:</h4><p>Cancelled by user.</p>';
+        suggestionsHtml = `<h5 class="model-section-title">Critique & Suggestions:</h5><ul class="suggestion-list">${critiqueToDisplay.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>`;
+    }
+    if(suggestionsHtml) {
+        suggestionsHtml = `<div class="model-detail-section">${suggestionsHtml}</div>`;
     }
 
 
     let previewHtml = '';
     if (currentMode === 'website') {
-        const noPreviewMessage = iter.status === 'cancelled' ? "Preview not available: Pipeline execution was cancelled." : "Preview not available: HTML generation pending, failed, or content is not valid HTML.";
-        const isEmptyGenHtml = !iter.generatedHtml || iter.generatedHtml.trim() === '' || iter.generatedHtml.includes('<!-- No HTML generated yet') || iter.generatedHtml.includes('<!-- No valid HTML was generated') || iter.generatedHtml.includes('<!-- HTML generation cancelled. -->');
+        const isEmptyGenHtml = isEmptyOrPlaceholderHtml(iter.generatedHtml);
         const previewContainerId = `preview-container-${pipelineId}-${iter.iterationNumber}`;
         const fullscreenButtonId = `fullscreen-btn-${pipelineId}-${iter.iterationNumber}`;
+        const hasContentForPreview = iter.generatedHtml && !isEmptyGenHtml;
 
-        if (isEmptyGenHtml && (['pending', 'processing', 'retrying', 'error', 'cancelled'].includes(iter.status))) {
-            previewHtml = `<div class="preview-header"><h4>Live Preview:</h4><button id="${fullscreenButtonId}" class="fullscreen-toggle-button button-base action-button" title="Toggle Fullscreen Preview" aria-label="Toggle Fullscreen Preview" disabled><span class="icon-fullscreen">${fullscreenIconSvg}</span><span class="icon-exit-fullscreen" style="display:none;">${exitFullscreenIconSvg}</span></button></div><div id="${previewContainerId}" class="html-preview-container no-preview-message-container"><p class="no-preview-message">${noPreviewMessage}</p></div>`;
-        } else if (iter.generatedHtml && !isEmptyGenHtml) {
+        previewHtml = `
+        <div class="model-detail-header" style="border-bottom: none; margin-bottom: 0.75rem; padding-bottom: 0;">
+            <h5 class="model-section-title" style="border-bottom: none; margin-bottom: 0;">Live Preview</h5>
+            <div class="model-card-actions">
+                <button id="${fullscreenButtonId}" class="button fullscreen-toggle-button" type="button" ${!hasContentForPreview ? 'disabled' : ''} title="Toggle Fullscreen Preview" aria-label="Toggle Fullscreen Preview">
+                    <span class="icon-fullscreen">${fullscreenIconSvg}</span>
+                    <span class="icon-exit-fullscreen" style="display:none;">${exitFullscreenIconSvg}</span>
+                </button>
+            </div>
+        </div>`;
+        
+        let previewContent;
+        if (hasContentForPreview) {
             const iframeSandboxOptions = "allow-scripts allow-same-origin allow-forms allow-popups";
-            previewHtml = `<div class="preview-header"><h4>Live Preview:</h4><button id="${fullscreenButtonId}" class="fullscreen-toggle-button button-base action-button" title="Toggle Fullscreen Preview" aria-label="Toggle Fullscreen Preview"><span class="icon-fullscreen">${fullscreenIconSvg}</span><span class="icon-exit-fullscreen" style="display:none;">${exitFullscreenIconSvg}</span></button></div><div id="${previewContainerId}" class="html-preview-container"><iframe id="preview-iframe-${pipelineId}-${iter.iterationNumber}" srcdoc="${escapeHtml(iter.generatedHtml)}" sandbox="${iframeSandboxOptions}" title="HTML Preview for Iteration ${iter.iterationNumber} of Pipeline ${pipelineId+1}"></iframe></div>`;
-        } else if (['pending', 'processing', 'retrying', 'error', 'completed', 'cancelled'].includes(iter.status)) {
-            previewHtml = `<div class="preview-header"><h4>Live Preview:</h4><button id="${fullscreenButtonId}" class="fullscreen-toggle-button button-base action-button" title="Toggle Fullscreen Preview" aria-label="Toggle Fullscreen Preview" disabled><span class="icon-fullscreen">${fullscreenIconSvg}</span><span class="icon-exit-fullscreen" style="display:none;">${exitFullscreenIconSvg}</span></button></div><div id="${previewContainerId}" class="html-preview-container no-preview-message-container"><p class="no-preview-message">${noPreviewMessage}</p></div>`;
+            previewContent = `<iframe id="preview-iframe-${pipelineId}-${iter.iterationNumber}" srcdoc="${escapeHtml(iter.generatedHtml!)}" sandbox="${iframeSandboxOptions}" title="HTML Preview for Iteration ${iter.iterationNumber} of Pipeline ${pipelineId+1}"></iframe>`;
+        } else {
+            const noPreviewMessage = getEmptyStateMessage(iter.status, 'HTML preview');
+            previewContent = `<div class="empty-state-message">${noPreviewMessage}</div>`;
         }
+        previewHtml += `<div id="${previewContainerId}" class="html-preview-container">${previewContent}</div>`;
+
+    }
+    if (previewHtml) {
+        previewHtml = `<div class="model-detail-section">${previewHtml}</div>`;
     }
 
     return `
-    <li id="iteration-${pipelineId}-${iter.iterationNumber}" class="iteration-item" data-iteration-number="${iter.iterationNumber}">
-        <details ${iter.isDetailsOpen ? 'open' : ''}>
-            <summary>
-                <span class="iteration-title">${escapeHtml(iter.title)}</span>
-                <span class="iteration-status status-${iter.status}" id="iter-status-text-${pipelineId}-${iter.iterationNumber}">${displayStatusText}</span>
-            </summary>
-            <div class="iteration-details" id="iter-details-${pipelineId}-${iter.iterationNumber}">
-                ${iter.error ? `<div class="error-message"><strong>Error:</strong> <pre>${escapeHtml(iter.error)}</pre></div>` : ''}
-                ${(promptsHtml.length > 0) ? `<div class="iteration-detail-group" aria-label="Prompts Section">${promptsHtml}</div>` : ''}
-                ${(promptsHtml.length > 0 && (generatedOutputHtml.length > 0 || suggestionsHtml.length > 0 || previewHtml.length > 0)) ? '<hr class="sub-divider">' : ''}
-                ${(generatedOutputHtml.length > 0) ? `<div class="iteration-detail-group" aria-label="Generated Output Section">${generatedOutputHtml}</div>` : ''}
-                ${(generatedOutputHtml.length > 0 && (suggestionsHtml.length > 0 || previewHtml.length > 0)) ? '<hr class="sub-divider">' : ''}
-                ${(suggestionsHtml.length > 0) ? `<div class="iteration-detail-group" aria-label="Suggestions Section">${suggestionsHtml}</div>` : ''}
-                ${(suggestionsHtml.length > 0 && previewHtml.length > 0) ? '<hr class="sub-divider">' : ''}
-                ${(previewHtml.length > 0) ? `<div class="iteration-detail-group" aria-label="Preview Section">${previewHtml}</div>` : ''}
-                ${ !(promptsHtml.length > 0 || generatedOutputHtml.length > 0 || suggestionsHtml.length > 0 || previewHtml.length > 0 || iter.error) ? '<p class="no-details-message">No details available for this iteration yet.</p>' : ''}
+    <li id="iteration-${pipelineId}-${iter.iterationNumber}" class="model-detail-card">
+        <div class="model-detail-header">
+            <div class="model-title-area">
+                <h4 class="model-title">${escapeHtml(iter.title)}</h4>
             </div>
-        </details>
+            <div class="model-card-actions">
+                <span class="status-badge status-${iter.status}">${displayStatusText}</span>
+            </div>
+        </div>
+        <div class="iteration-details">
+            ${iter.error ? `<div class="status-message error"><pre>${escapeHtml(iter.error)}</pre></div>` : ''}
+            ${promptsHtml}
+            ${generatedOutputHtml}
+            ${suggestionsHtml}
+            ${previewHtml}
+        </div>
     </li>`;
 }
 
 async function copyToClipboard(text: string, buttonElement: HTMLButtonElement) {
+    if (buttonElement.disabled) return; // Defensive check
+
     try {
         await navigator.clipboard.writeText(text);
         const originalText = buttonElement.textContent;
         buttonElement.textContent = 'Copied!';
         buttonElement.classList.add('copied');
-        buttonElement.disabled = true;
+        buttonElement.disabled = true; // Temporarily disable while showing "Copied!"
         setTimeout(() => {
             buttonElement.textContent = originalText;
             buttonElement.classList.remove('copied');
-            // Re-enable based on data attribute set during button creation
-            buttonElement.disabled = buttonElement.dataset.hasContent !== 'true';
+            buttonElement.disabled = false; // Re-enable the button
         }, 2000);
     } catch (err) {
         console.error('Failed to copy text: ', err);
         const originalText = buttonElement.textContent;
         buttonElement.textContent = 'Copy Failed';
+        buttonElement.disabled = true; // Temporarily disable
         setTimeout(() => {
             buttonElement.textContent = originalText;
-             // Re-enable based on data attribute, even on fail, if content technically exists
-            buttonElement.disabled = buttonElement.dataset.hasContent !== 'true';
+            buttonElement.disabled = false; // Re-enable even on fail
         }, 2000);
     }
 }
@@ -1098,38 +1146,32 @@ function attachIterationActionButtons(pipelineId: number, iterationNumber: numbe
 
         const downloadButton = document.querySelector<HTMLButtonElement>(`#download-html-${pipelineId}-${iterationNumber}`);
         if (downloadButton) {
-            const newDownloadButton = downloadButton.cloneNode(true) as HTMLButtonElement;
-            downloadButton.parentNode?.replaceChild(newDownloadButton, downloadButton);
-            newDownloadButton.addEventListener('click', () => {
-                if (iter.generatedHtml) { // Guard again, though canDownloadOrCopyHtml covers it
+            downloadButton.onclick = () => {
+                if (iter.generatedHtml) {
                     downloadFile(iter.generatedHtml, `website_pipeline-${pipelineId + 1}_iter-${iter.iterationNumber}_temp-${pipeline.temperature}.html`, 'text/html');
                 }
-            });
-            newDownloadButton.disabled = !canDownloadOrCopyHtml;
+            };
+            downloadButton.disabled = !canDownloadOrCopyHtml;
         }
 
         const copyButton = document.querySelector<HTMLButtonElement>(`#copy-html-${pipelineId}-${iterationNumber}`);
         if (copyButton) {
-            const newCopyButton = copyButton.cloneNode(true) as HTMLButtonElement;
-            copyButton.parentNode?.replaceChild(newCopyButton, copyButton);
-            newCopyButton.dataset.hasContent = String(canDownloadOrCopyHtml);
-            newCopyButton.addEventListener('click', () => {
-                if (iter.generatedHtml) copyToClipboard(iter.generatedHtml, newCopyButton);
-            });
-            newCopyButton.disabled = !canDownloadOrCopyHtml;
+            copyButton.dataset.hasContent = String(canDownloadOrCopyHtml);
+            copyButton.onclick = () => {
+                if (iter.generatedHtml) copyToClipboard(iter.generatedHtml, copyButton);
+            };
+            copyButton.disabled = !canDownloadOrCopyHtml;
         }
 
         const fullscreenButton = document.querySelector<HTMLButtonElement>(`#fullscreen-btn-${pipelineId}-${iterationNumber}`);
         const previewContainer = document.getElementById(`preview-container-${pipelineId}-${iterationNumber}`);
         if (fullscreenButton && previewContainer) {
-            const newFullscreenButton = fullscreenButton.cloneNode(true) as HTMLButtonElement;
-            fullscreenButton.parentNode?.replaceChild(newFullscreenButton, fullscreenButton);
-            newFullscreenButton.addEventListener('click', () => {
+            fullscreenButton.onclick = () => {
                 if (!document.fullscreenElement) {
                     previewContainer.requestFullscreen().catch(err => console.error(`Error full-screen: ${err.message}`));
                 } else if (document.exitFullscreen) document.exitFullscreen();
-            });
-            newFullscreenButton.disabled = !canDownloadOrCopyHtml;
+            };
+            fullscreenButton.disabled = !canDownloadOrCopyHtml;
         }
     } else if (currentMode === 'creative' || currentMode === 'agent') {
         const textContentForActions = currentMode === 'creative' ? iter.generatedOrRevisedText : iter.generatedMainContent;
@@ -1143,27 +1185,21 @@ function attachIterationActionButtons(pipelineId: number, iterationNumber: numbe
         
         const downloadButton = document.querySelector<HTMLButtonElement>(`#download-text-${pipelineId}-${iterationNumber}`);
         if (downloadButton) {
-            const newDownloadButton = downloadButton.cloneNode(true) as HTMLButtonElement;
-            downloadButton.parentNode?.replaceChild(newDownloadButton, downloadButton);
-            newDownloadButton.addEventListener('click', () => {
+            downloadButton.onclick = () => {
                 if (canDownloadOrCopyText && textContentForActions) {
                     downloadFile(textContentForActions, defaultFileName, contentType);
                 }
-            });
-            newDownloadButton.disabled = !canDownloadOrCopyText;
-            newDownloadButton.style.display = isAgentSetupStep ? 'none' : 'inline-flex';
+            };
+            downloadButton.disabled = !canDownloadOrCopyText;
         }
 
         const copyButton = document.querySelector<HTMLButtonElement>(`#copy-text-${pipelineId}-${iterationNumber}`);
         if (copyButton) {
-            const newCopyButton = copyButton.cloneNode(true) as HTMLButtonElement;
-            copyButton.parentNode?.replaceChild(newCopyButton, copyButton);
-            newCopyButton.dataset.hasContent = String(canDownloadOrCopyText);
-            newCopyButton.addEventListener('click', () => {
-                if (canDownloadOrCopyText && textContentForActions) copyToClipboard(textContentForActions, newCopyButton);
-            });
-            newCopyButton.disabled = !canDownloadOrCopyText;
-            newCopyButton.style.display = isAgentSetupStep ? 'none' : 'inline-flex';
+            copyButton.dataset.hasContent = String(canDownloadOrCopyText);
+            copyButton.onclick = () => {
+                if (canDownloadOrCopyText && textContentForActions) copyToClipboard(textContentForActions, copyButton);
+            };
+            copyButton.disabled = !canDownloadOrCopyText;
         }
     }
 }
@@ -1188,19 +1224,6 @@ function updateIterationUI(pipelineId: number, iterationNumber: number) {
 
     if (newContentFirstChild) {
         iterationElement.replaceWith(newContentFirstChild);
-        const newDetailsElement = newContentFirstChild.querySelector<HTMLDetailsElement>('details');
-        if (newDetailsElement) {
-            const summaryElement = newDetailsElement.querySelector('summary');
-            if (summaryElement) {
-                if (iter.isDetailsOpen !== undefined) newDetailsElement.open = iter.isDetailsOpen;
-                summaryElement.addEventListener('click', (e) => {
-                     setTimeout(() => { 
-                        const iterToUpdate = pipelinesState.find(p => p.id === pipelineId)?.iterations.find(it => it.iterationNumber === iter.iterationNumber);
-                        if (iterToUpdate) iterToUpdate.isDetailsOpen = newDetailsElement.open;
-                    }, 0);
-                });
-            }
-        }
         attachIterationActionButtons(pipelineId, iterationNumber);
     }
 }
@@ -1215,7 +1238,7 @@ function updatePipelineStatusUI(pipelineId: number, status: PipelineState['statu
     const statusTextElement = document.getElementById(`pipeline-status-text-${pipelineId}`);
     if (statusTextElement) {
         statusTextElement.textContent = status;
-        statusTextElement.className = `pipeline-status status-${status}`;
+        statusTextElement.className = `pipeline-status status-badge status-${status}`;
     }
     if (pipeline.tabButtonElement) {
         pipeline.tabButtonElement.className = `tab-button status-${status}`;
@@ -1864,7 +1887,7 @@ function exportConfiguration() {
             return rest;
         }))),
         activeMathPipeline: currentMode === 'math' ? JSON.parse(JSON.stringify(activeMathPipeline)) : null,
-        activeReactPipeline: currentMode === 'react' ? JSON.parse(JSON.stringify(activeReactPipeline)) : null, // Added for React
+        activeReactPipeline: currentMode === 'react' ? JSON.parse(JSON.stringify(activeReactPipeline)) : null,
         activePipelineId: (currentMode !== 'math' && currentMode !== 'react') ? activePipelineId : null,
         activeMathProblemTabId: (currentMode === 'math' && activeMathPipeline) ? activeMathPipeline.activeTabId : undefined,
         // activeReactProblemTabId: (currentMode === 'react' && activeReactPipeline) ? activeReactPipeline.activeTabId : undefined, // For React worker tabs
@@ -2011,10 +2034,6 @@ function handleImportConfiguration(event: Event) {
             customPromptsReactState = JSON.parse(JSON.stringify(importedReactPrompts));
             
             updateCustomPromptTextareasFromState();
-            
-            // Note: The prompts modal doesn't have a persistent open/closed state in the new design. It's always closed on load.
-            // const importedOpenState = importedConfig.isCustomPromptsOpen === undefined ? false : importedConfig.isCustomPromptsOpen;
-            // setPromptsModalVisible(importedOpenState);
             
             updateControlsState();
         } catch (error: any) {
@@ -2252,7 +2271,7 @@ function renderActiveMathPipeline() {
         return;
     }
     if (!activeMathPipeline) {
-        tabsNavContainer.innerHTML = '<p class="no-pipelines-message" style="padding: 1rem; color: var(--text-secondary-color);">Enter a math problem and click "Solve Problem".</p>';
+        tabsNavContainer.innerHTML = '<p class="no-pipelines-message">Enter a math problem and click "Solve Problem".</p>';
         pipelinesContentContainer.innerHTML = '';
         return;
     }
@@ -2262,7 +2281,7 @@ function renderActiveMathPipeline() {
     pipelinesContentContainer.innerHTML = ''; 
 
     const problemTabButton = document.createElement('button');
-    problemTabButton.className = 'tab-button';
+    problemTabButton.className = 'tab-button math-mode-tab';
     problemTabButton.id = `math-tab-problem-details`;
     problemTabButton.textContent = 'Problem Details';
     problemTabButton.setAttribute('role', 'tab');
@@ -2272,27 +2291,27 @@ function renderActiveMathPipeline() {
 
     const problemContentPane = document.createElement('div');
     problemContentPane.id = `math-content-problem-details`;
-    problemContentPane.className = 'math-pipeline-content-pane';
+    problemContentPane.className = 'math-pipeline-content-pane model-detail-card';
     problemContentPane.setAttribute('role', 'tabpanel');
     problemContentPane.setAttribute('aria-labelledby', `math-tab-problem-details`);
     let problemDetailsHtml = `
         <div class="math-problem-display">
-            <h3>Original Problem</h3>
+            <h4 class="model-title">Original Problem</h4>
             <p class="problem-text">${escapeHtml(mathProcess.problemText)}</p>`;
     if (mathProcess.problemImageBase64 && mathProcess.problemImageMimeType) {
         problemDetailsHtml += `<img src="data:${mathProcess.problemImageMimeType};base64,${mathProcess.problemImageBase64}" alt="Uploaded Math Problem Image" class="problem-image-display">`;
     }
     if (mathProcess.requestPromptInitialStrategyGen) {
         problemDetailsHtml += `
-            <div class="math-detail-group">
-                <h4 class="prompt-title prompt-title-math-initial-strategy">Initial Strategy Generation User Prompt:</h4>
-                <pre class="prompt-block">${escapeHtml(mathProcess.requestPromptInitialStrategyGen)}</pre>
+            <div class="model-detail-section">
+                <h5 class="model-section-title">Initial Strategy Generation User Prompt:</h5>
+                <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(mathProcess.requestPromptInitialStrategyGen)}</pre></div>
             </div>`;
     }
      if (mathProcess.status === 'retrying' && mathProcess.retryAttempt !== undefined && mathProcess.initialStrategies.length === 0) { 
-        problemDetailsHtml += `<p class="iteration-status status-retrying">Retrying initial strategy generation (${mathProcess.retryAttempt}/${MAX_RETRIES})...</p>`;
+        problemDetailsHtml += `<p class="status-badge status-retrying">Retrying initial strategy generation (${mathProcess.retryAttempt}/${MAX_RETRIES})...</p>`;
     } else if (mathProcess.error && mathProcess.initialStrategies.length === 0) { 
-        problemDetailsHtml += `<div class="error-message"><strong>Error during initial strategy generation:</strong> <pre>${escapeHtml(mathProcess.error)}</pre></div>`;
+        problemDetailsHtml += `<div class="status-message error"><pre>${escapeHtml(mathProcess.error)}</pre></div>`;
     }
     problemDetailsHtml += `</div>`;
     problemContentPane.innerHTML = problemDetailsHtml;
@@ -2301,7 +2320,7 @@ function renderActiveMathPipeline() {
 
     mathProcess.initialStrategies.forEach((mainStrategy, index) => {
         const tabButton = document.createElement('button');
-        tabButton.className = 'tab-button';
+        tabButton.className = 'tab-button math-mode-tab';
         tabButton.id = `math-tab-strategy-${index}`;
         tabButton.textContent = `Strategy ${index + 1}`;
         if (mainStrategy.status === 'error') tabButton.classList.add('status-math-error');
@@ -2315,98 +2334,104 @@ function renderActiveMathPipeline() {
 
         const contentPane = document.createElement('div');
         contentPane.id = `math-content-strategy-${index}`;
-        contentPane.className = 'math-pipeline-content-pane';
+        contentPane.className = 'math-pipeline-content-pane model-detail-card';
         contentPane.setAttribute('role', 'tabpanel');
         contentPane.setAttribute('aria-labelledby', `math-tab-strategy-${index}`);
         
         let contentHtml = `<div class="math-strategy-branch" id="math-branch-${mainStrategy.id}">
-            <details ${mainStrategy.isDetailsOpen ? 'open' : ''}>
-                <summary>
-                    <span class="math-strategy-title">Main Strategy ${index + 1}:</span>
-                    <span class="math-step-status status-${mainStrategy.status}" id="math-main-strat-status-${mainStrategy.id}">${mainStrategy.status}</span>
-                </summary>
-                <div class="math-strategy-details">
-                    <p class="strategy-text">${escapeHtml(mainStrategy.strategyText)}</p>`;
+            <div class="model-detail-header">
+                <div class="model-title-area">
+                    <h4 class="model-title">Main Strategy ${index + 1}</h4>
+                </div>
+                <div class="model-card-actions">
+                    <span class="status-badge status-${mainStrategy.status}" id="math-main-strat-status-${mainStrategy.id}">${mainStrategy.status}</span>
+                </div>
+            </div>
+            <div class="math-strategy-details">
+                <p class="strategy-text">${escapeHtml(mainStrategy.strategyText)}</p>`;
         if (mainStrategy.requestPromptSubStrategyGen) {
-            contentHtml += `
-                <div class="math-detail-group">
-                    <h4 class="prompt-title prompt-title-math-sub-strategy">Sub-strategy Generation User Prompt:</h4>
-                    <pre class="prompt-block">${escapeHtml(mainStrategy.requestPromptSubStrategyGen)}</pre>
+            contentHtml += `<div class="model-detail-section">
+                    <h5 class="model-section-title">Sub-strategy Generation User Prompt:</h5>
+                    <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(mainStrategy.requestPromptSubStrategyGen)}</pre></div>
                 </div>`;
         }
         if (mainStrategy.status === 'retrying' && mainStrategy.retryAttempt !== undefined) {
-             contentHtml += `<p class="iteration-status status-retrying">Retrying sub-strategy generation (${mainStrategy.retryAttempt}/${MAX_RETRIES})...</p>`;
+             contentHtml += `<p class="status-badge status-retrying">Retrying sub-strategy generation (${mainStrategy.retryAttempt}/${MAX_RETRIES})...</p>`;
         } else if (mainStrategy.error) {
-             contentHtml += `<div class="error-message"><strong>Error during sub-strategy generation:</strong> <pre>${escapeHtml(mainStrategy.error)}</pre></div>`;
+             contentHtml += `<div class="status-message error"><pre>${escapeHtml(mainStrategy.error)}</pre></div>`;
         }
-        contentHtml += `</div></details>`; // Close main strategy details
+        contentHtml += `</div>`; // Close main strategy details
         
         if (mainStrategy.subStrategies.length > 0) {
-            contentHtml += `<ul class="math-sub-strategies-list">`;
+            contentHtml += `<ul class="math-sub-strategies-list" style="list-style-type: none; padding: 0;">`;
             mainStrategy.subStrategies.forEach((subStrategy, subIndex) => {
+                 let solutionContent;
+                 if (subStrategy.solutionAttempt) {
+                     solutionContent = `<pre id="math-solution-${subStrategy.id}">${escapeHtml(subStrategy.solutionAttempt)}</pre>`;
+                 } else {
+                     solutionContent = `<div class="empty-state-message">${getEmptyStateMessage(subStrategy.status, 'solution')}</div>`;
+                 }
+
                 contentHtml += `
-                    <li class="math-sub-strategy-item" id="math-sub-item-${subStrategy.id}">
-                        <details ${subStrategy.isDetailsOpen ? 'open' : ''}>
-                            <summary>
-                                <span class="math-sub-strategy-title">Sub-Strategy ${index + 1}.${subIndex + 1}:</span>
-                                <span class="math-step-status status-${subStrategy.status}" id="math-sub-strat-status-${subStrategy.id}">${subStrategy.status}</span>
-                            </summary>
-                            <div class="math-sub-strategy-details">
-                                <p class="sub-strategy-text">${escapeHtml(subStrategy.subStrategyText)}</p>`;
+                    <li class="math-sub-strategy-item model-detail-section" id="math-sub-item-${subStrategy.id}">
+                        <h5 class="model-section-title">Sub-Strategy ${index + 1}.${subIndex + 1} <span class="status-badge status-${subStrategy.status}" id="math-sub-strat-status-${subStrategy.id}">${subStrategy.status}</span></h5>
+                        <div class="math-sub-strategy-details">
+                            <p class="sub-strategy-text">${escapeHtml(subStrategy.subStrategyText)}</p>`;
                 if (subStrategy.requestPromptSolutionAttempt) {
-                     contentHtml += `
-                        <div class="math-detail-group">
-                            <h4 class="prompt-title prompt-title-math-solution">Solution Attempt User Prompt:</h4>
-                            <pre class="prompt-block">${escapeHtml(subStrategy.requestPromptSolutionAttempt)}</pre>
+                     contentHtml += `<div class="model-detail-section">
+                            <h6 class="prompt-title">Solution Attempt User Prompt:</h6>
+                            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(subStrategy.requestPromptSolutionAttempt)}</pre></div>
                         </div>`;
                 }
                 if (subStrategy.status === 'retrying' && subStrategy.retryAttempt !== undefined) {
-                    contentHtml += `<p class="iteration-status status-retrying">Retrying solution attempt (${subStrategy.retryAttempt}/${MAX_RETRIES})...</p>`;
-                } else if (subStrategy.solutionAttempt) {
-                    contentHtml += `
-                        <div class="math-detail-group">
-                            <h4>Solution Attempt:</h4>
-                            <pre class="text-block solution-attempt-block">${escapeHtml(subStrategy.solutionAttempt)}</pre>
+                    contentHtml += `<p class="status-badge status-retrying">Retrying solution attempt (${subStrategy.retryAttempt}/${MAX_RETRIES})...</p>`;
+                } else if (subStrategy.solutionAttempt || ['pending', 'processing', 'retrying', 'cancelled', 'error'].includes(subStrategy.status)) {
+                    contentHtml += `<div class="model-detail-section">
+                            <h6 class="prompt-title">Solution Attempt:</h6>
+                             <div class="code-block-wrapper">
+                                <div class="scrollable-content-area custom-scrollbar">${solutionContent}</div>
+                                ${subStrategy.solutionAttempt ? `
+                                <div class="code-actions">
+                                    <button class="button download-math-solution-btn" data-sub-strategy-id="${subStrategy.id}" title="Download Solution">Download</button>
+                                    <button class="button copy-math-solution-btn" data-sub-strategy-id="${subStrategy.id}" title="Copy Solution">Copy</button>
+                                </div>` : ''}
+                            </div>
                         </div>`;
-                } else if (subStrategy.status === 'error' && subStrategy.error) {
-                     contentHtml += `<div class="error-message"><strong>Error in solution attempt:</strong> <pre>${escapeHtml(subStrategy.error)}</pre></div>`;
-                } else if (subStrategy.status === 'pending') {
-                     contentHtml += `<p>Solution attempt pending...</p>`
-                } else if (subStrategy.status === 'processing') {
-                     contentHtml += `<p>Solution attempt in progress...</p>`
-                } else if (subStrategy.status === 'cancelled') {
-                    contentHtml += `<p>Solution attempt cancelled.</p>`
                 }
-
-
-                contentHtml += `</div></details></li>`; // Close sub-strategy item
+                 if (subStrategy.error && subStrategy.status === 'error') {
+                     contentHtml += `<div class="status-message error"><pre>${escapeHtml(subStrategy.error)}</pre></div>`;
+                 }
+                contentHtml += `</div></li>`; // Close sub-strategy item
             });
             contentHtml += `</ul>`; // Close sub-strategies list
         } else if (mainStrategy.status === 'completed' && mainStrategy.subStrategies.length === 0) {
-             contentHtml += `<p>No sub-strategies were generated for this main strategy.</p>`;
+             contentHtml += `<p class="no-details-message">No sub-strategies were generated for this main strategy.</p>`;
         }
         
         contentHtml += `</div>`; // Close math-strategy-branch
         contentPane.innerHTML = contentHtml;
         pipelinesContentContainer.appendChild(contentPane);
 
-        // Attach event listeners for details toggling (persistence)
-        const mainStrategyDetails = contentPane.querySelector<HTMLDetailsElement>(`#math-branch-${mainStrategy.id} > details`);
-        if (mainStrategyDetails) {
-            mainStrategyDetails.addEventListener('toggle', () => {
-                const ms = activeMathPipeline?.initialStrategies.find(s => s.id === mainStrategy.id);
-                if (ms) ms.isDetailsOpen = mainStrategyDetails.open;
+        // Attach listeners for copy buttons
+        contentPane.querySelectorAll('.copy-math-solution-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const subStrategyId = (e.currentTarget as HTMLElement).dataset.subStrategyId;
+                const solutionText = mathProcess.initialStrategies.flatMap(ms => ms.subStrategies).find(ss => ss.id === subStrategyId)?.solutionAttempt;
+                if (solutionText) {
+                    copyToClipboard(solutionText, e.currentTarget as HTMLButtonElement);
+                }
             });
-        }
-        mainStrategy.subStrategies.forEach(subS => {
-            const subStrategyDetails = contentPane.querySelector<HTMLDetailsElement>(`#math-sub-item-${subS.id} details`);
-            if (subStrategyDetails) {
-                subStrategyDetails.addEventListener('toggle', () => {
-                   const ms = activeMathPipeline?.initialStrategies.find(s => s.id === mainStrategy.id);
-                   const ss = ms?.subStrategies.find(s_ => s_.id === subS.id);
-                   if (ss) ss.isDetailsOpen = subStrategyDetails.open;
-                });
-            }
+        });
+
+        // Attach listeners for download buttons
+        contentPane.querySelectorAll('.download-math-solution-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const subStrategyId = (e.currentTarget as HTMLElement).dataset.subStrategyId;
+                const subStrategy = mathProcess.initialStrategies.flatMap(ms => ms.subStrategies).find(ss => ss.id === subStrategyId);
+                if (subStrategy?.solutionAttempt) {
+                    downloadFile(subStrategy.solutionAttempt, `math_solution_${subStrategy.id}.txt`, 'text/plain');
+                }
+            });
         });
     });
 
@@ -2538,64 +2563,53 @@ function renderReactModePipeline() {
     }
 
     if (!activeReactPipeline) {
-        tabsNavContainer.innerHTML = '<p class="no-pipelines-message" style="padding: 1rem; color: var(--text-secondary-color);">Enter a React App Request and click "Generate React App".</p>';
+        tabsNavContainer.innerHTML = '<p class="no-pipelines-message">Enter a React App Request and click "Generate React App".</p>';
         pipelinesContentContainer.innerHTML = '';
         return;
     }
 
     const pipeline = activeReactPipeline;
-    // Preserve current scroll positions
-    const scrollPositions: { [id: string]: { top: number, left: number } } = {};
-    document.querySelectorAll('.react-details-section details[open], .code-block, .prompt-block, .react-final-output-pane pre').forEach(el => {
-        scrollPositions[el.id || (el.parentElement?.id + '-child-' + Array.from(el.parentElement?.children || []).indexOf(el))] = { top: el.scrollTop, left: el.scrollLeft };
-    });
+    
+    tabsNavContainer.innerHTML = ''; 
+    pipelinesContentContainer.innerHTML = '';
 
-
-    tabsNavContainer.innerHTML = ''; // Clear previous tabs
-    pipelinesContentContainer.innerHTML = ''; // Clear previous content
-
-    // Orchestrator Display Area (Above Tabs)
     const orchestratorPane = document.createElement('div');
-    orchestratorPane.className = 'react-orchestrator-pane';
+    orchestratorPane.className = 'react-orchestrator-pane model-detail-card';
     let orchestratorHtml = `
-        <div class="pipeline-header">
-             <h3>React App Orchestration</h3>
-             <div class="pipeline-header-controls">
-                <span class="pipeline-status status-${pipeline.status}" id="react-orchestrator-status-text">${pipeline.status.replace('_', ' ')}</span>
-                <button class="stop-pipeline-button button-base action-button" id="stop-react-pipeline-btn" title="Stop React App Generation" aria-label="Stop React App Generation" style="display: ${pipeline.status === 'orchestrating' || pipeline.status === 'processing_workers' ? 'inline-flex' : 'none'};">
+        <div class="model-detail-header">
+             <div class="model-title-area">
+                <h4 class="model-title">React App Orchestration</h4>
+             </div>
+             <div class="model-card-actions">
+                <span class="status-badge status-${pipeline.status}" id="react-orchestrator-status-text">${pipeline.status.replace('_', ' ')}</span>
+                <button class="button pipeline-remove-button" id="stop-react-pipeline-btn" title="Stop React App Generation" aria-label="Stop React App Generation" style="display: ${pipeline.status === 'orchestrating' || pipeline.status === 'processing_workers' ? 'inline-flex' : 'none'};">
                     ${pipeline.status === 'stopping' ? 'Stopping...' : 'Stop'}
                 </button>
             </div>
         </div>
-        <details class="react-details-section" id="react-orchestrator-req-details" ${pipeline.userRequest ? 'open' : ''}>
-            <summary>User Request & Orchestrator Config</summary>
-            <div class="detail-content">
-                <p><strong>User Request:</strong> ${escapeHtml(pipeline.userRequest)}</p>
-                <h4 class="prompt-title">Orchestrator System Instruction:</h4>
-                <pre class="prompt-block" id="react-orchestrator-sys-prompt-display">${escapeHtml(pipeline.orchestratorSystemInstruction)}</pre>
-            </div>
-        </details>
+        <div class="model-detail-section">
+            <h5 class="model-section-title">User Request & Orchestrator Config</h5>
+            <p><strong>User Request:</strong> ${escapeHtml(pipeline.userRequest)}</p>
+            <h6 class="prompt-title">Orchestrator System Instruction:</h6>
+            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(pipeline.orchestratorSystemInstruction)}</pre></div>
+        </div>
     `;
     if (pipeline.orchestratorPlan) {
         orchestratorHtml += `
-        <details class="react-details-section" id="react-orchestrator-plan-details" open>
-            <summary>Orchestrator's Plan (plan.txt)</summary>
-            <div class="detail-content">
-                <pre class="code-block language-text" id="react-plan-display">${escapeHtml(pipeline.orchestratorPlan)}</pre>
-            </div>
-        </details>`;
+        <div class="model-detail-section">
+            <h5 class="model-section-title">Orchestrator's Plan (plan.txt)</h5>
+            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(pipeline.orchestratorPlan)}</pre></div>
+        </div>`;
     }
     if (pipeline.orchestratorRawOutput) {
          orchestratorHtml += `
-        <details class="react-details-section" id="react-orchestrator-raw-details">
-            <summary>Orchestrator Raw Output (for debugging)</summary>
-            <div class="detail-content">
-                <pre class="code-block language-json" id="react-orchestrator-raw-display">${escapeHtml(pipeline.orchestratorRawOutput)}</pre>
-            </div>
-        </details>`;
+        <div class="model-detail-section">
+            <h5 class="model-section-title">Orchestrator Raw Output (for debugging)</h5>
+            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(pipeline.orchestratorRawOutput)}</pre></div>
+        </div>`;
     }
-     if (pipeline.error && (pipeline.status === 'failed' || pipeline.status === 'error' && pipeline.stages.every(s => s.status === 'pending'))) { // Show overall error if orchestration failed
-        orchestratorHtml += `<div class="error-message"><strong>Orchestration Error:</strong> <pre>${escapeHtml(pipeline.error)}</pre></div>`;
+     if (pipeline.error && (pipeline.status === 'failed' || pipeline.status === 'error' && pipeline.stages.every(s => s.status === 'pending'))) {
+        orchestratorHtml += `<div class="status-message error"><pre>${escapeHtml(pipeline.error)}</pre></div>`;
     }
     orchestratorPane.innerHTML = orchestratorHtml;
     pipelinesContentContainer.appendChild(orchestratorPane);
@@ -2613,7 +2627,6 @@ function renderReactModePipeline() {
     }
 
 
-    // Worker Agent Tabs & Panes
     pipeline.stages.forEach(stage => {
         const tabButtonId = `react-pipeline-tab-worker-${stage.id}`;
         const contentPaneId = `react-worker-content-worker-${stage.id}`;
@@ -2629,7 +2642,7 @@ function renderReactModePipeline() {
 
         const workerContentPane = document.createElement('div');
         workerContentPane.id = contentPaneId;
-        workerContentPane.className = 'react-worker-content-pane pipeline-content';
+        workerContentPane.className = 'react-worker-content-pane model-detail-card';
         workerContentPane.setAttribute('role', 'tabpanel');
         workerContentPane.setAttribute('aria-labelledby', tabButton.id);
 
@@ -2639,82 +2652,92 @@ function renderReactModePipeline() {
         }
 
         let workerDetailsHtml = `
-            <div class="pipeline-header">
-                <h4>${escapeHtml(stage.title)}</h4>
-                <span class="iteration-status status-${stage.status}">${displayStatusText}</span>
+            <div class="model-detail-header">
+                <div class="model-title-area">
+                    <h4 class="model-title">${escapeHtml(stage.title)}</h4>
+                </div>
+                <div class="model-card-actions">
+                    <span class="status-badge status-${stage.status}">${displayStatusText}</span>
+                </div>
             </div>`;
         if (stage.error) {
-            workerDetailsHtml += `<div class="error-message"><strong>Error:</strong> <pre>${escapeHtml(stage.error)}</pre></div>`;
+            workerDetailsHtml += `<div class="status-message error"><pre>${escapeHtml(stage.error)}</pre></div>`;
         }
-        workerDetailsHtml += `<details class="react-details-section" id="react-worker-${stage.id}-prompts-details" ${stage.isDetailsOpen ? 'open' : ''}>
-            <summary>Prompts for ${escapeHtml(stage.title)}</summary>
-            <div class="detail-content">
-                <h5 class="prompt-title">System Instruction:</h5>
-                <pre class="prompt-block" id="react-worker-${stage.id}-sys-prompt">${escapeHtml(stage.systemInstruction || "Not available.")}</pre>
-                <h5 class="prompt-title">Rendered User Prompt:</h5>
-                <pre class="prompt-block" id="react-worker-${stage.id}-user-prompt">${escapeHtml(stage.renderedUserPrompt || stage.userPrompt || "Not available.")}</pre>
-            </div>
-        </details>`;
+        workerDetailsHtml += `<div class="model-detail-section">
+            <h5 class="model-section-title">Prompts for ${escapeHtml(stage.title)}</h5>
+            <h6 class="prompt-title">System Instruction:</h6>
+            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(stage.systemInstruction || "Not available.")}</pre></div>
+            <h6 class="prompt-title" style="margin-top: 1rem;">Rendered User Prompt:</h6>
+            <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(stage.renderedUserPrompt || stage.userPrompt || "Not available.")}</pre></div>
+        </div>`;
+        
+        const hasContent = !!stage.generatedContent;
+        let contentBlock;
+        if (hasContent) {
+            contentBlock = `<pre id="react-worker-${stage.id}-code-block">${escapeHtml(stage.generatedContent!)}</pre>`;
+        } else {
+            contentBlock = `<div class="empty-state-message">${getEmptyStateMessage(stage.status, 'code')}</div>`;
+        }
 
-        if (stage.generatedContent) {
+        if (hasContent || ['pending', 'processing', 'retrying', 'error', 'cancelled'].includes(stage.status)) {
             workerDetailsHtml += `
-            <details class="react-details-section" id="react-worker-${stage.id}-code-details" open>
-                <summary>Generated Code/Content</summary>
-                <div class="detail-content">
-                    <pre class="code-block language-javascript" id="react-worker-${stage.id}-code-block">${escapeHtml(stage.generatedContent)}</pre>
-                     <button class="button-base action-button copy-react-worker-code-btn" data-worker-id="${stage.id}">Copy Code</button>
+            <div class="model-detail-section">
+                <h5 class="model-section-title">Generated Code/Content</h5>
+                <div class="code-block-wrapper">
+                    <div class="scrollable-content-area custom-scrollbar">${contentBlock}</div>
+                    ${hasContent ? `
+                     <div class="code-actions">
+                        <button class="button download-react-worker-code-btn" data-worker-id="${stage.id}" title="Download Code Snippet">Download</button>
+                        <button class="button copy-react-worker-code-btn" data-worker-id="${stage.id}" title="Copy Code Snippet">Copy</button>
+                     </div>` : ''}
                 </div>
-            </details>`;
-        } else if (stage.status === 'completed' && !stage.generatedContent) {
-             workerDetailsHtml += `<p>Agent completed but generated no content.</p>`;
+            </div>`;
         }
         workerContentPane.innerHTML = workerDetailsHtml;
         pipelinesContentContainer.appendChild(workerContentPane);
 
-        const promptsDetailsElement = workerContentPane.querySelector<HTMLDetailsElement>(`#react-worker-${stage.id}-prompts-details`);
-        if (promptsDetailsElement) {
-            promptsDetailsElement.addEventListener('toggle', () => {
-                const stageToUpdate = activeReactPipeline?.stages.find(s => s.id === stage.id);
-                if (stageToUpdate) stageToUpdate.isDetailsOpen = promptsDetailsElement.open;
-            });
-        }
-
         const copyBtn = workerContentPane.querySelector('.copy-react-worker-code-btn');
         if (copyBtn) {
             copyBtn.addEventListener('click', (e) => {
-                const workerId = parseInt((e.target as HTMLElement).dataset.workerId || "-1", 10);
+                const workerId = parseInt((e.currentTarget as HTMLElement).dataset.workerId || "-1", 10);
                 const contentToCopy = activeReactPipeline?.stages.find(s => s.id === workerId)?.generatedContent;
                 if (contentToCopy) {
-                    copyToClipboard(contentToCopy, e.target as HTMLButtonElement);
+                    copyToClipboard(contentToCopy, e.currentTarget as HTMLButtonElement);
                 }
+            });
+        }
+        
+        const downloadBtn = workerContentPane.querySelector('.download-react-worker-code-btn');
+        if(downloadBtn) {
+            downloadBtn.addEventListener('click', (e) => {
+                 const workerId = parseInt((e.currentTarget as HTMLElement).dataset.workerId || "-1", 10);
+                 const stage = activeReactPipeline?.stages.find(s => s.id === workerId);
+                 if (stage?.generatedContent) {
+                     const safeTitle = stage.title.replace(/[\s&/\\?#]+/g, '_').toLowerCase();
+                     downloadFile(stage.generatedContent, `react_worker_${stage.id}_${safeTitle}.txt`, 'text/plain');
+                 }
             });
         }
     });
 
-    // Final Aggregated Code Display
     if (pipeline.finalAppendedCode) {
         const finalOutputPane = document.createElement('div');
-        finalOutputPane.className = 'react-final-output-pane';
+        finalOutputPane.className = 'react-final-output-pane model-detail-card';
         finalOutputPane.innerHTML = `
-            <h3>Final Aggregated Application Code</h3>
+            <div class="model-detail-header">
+                <h4 class="model-title">Final Aggregated Application Code</h4>
+                <div class="model-card-actions">
+                    <button id="download-react-runnable-project" class="button" type="button">Download Project (.zip)</button>
+                </div>
+            </div>
             <p>The following is a concatenation of outputs from successful worker agents. File markers (e.g., // --- FILE: src/App.tsx ---) should indicate intended file paths.</p>
-            <pre id="react-final-appended-code" class="code-block language-javascript">${escapeHtml(pipeline.finalAppendedCode)}</pre>
-            <button id="download-react-runnable-project" class="button-base action-button" type="button">Download Runnable Project (.zip)</button>
+            <div class="scrollable-content-area custom-scrollbar"><pre id="react-final-appended-code">${escapeHtml(pipeline.finalAppendedCode)}</pre></div>
         `;
         pipelinesContentContainer.appendChild(finalOutputPane);
 
         const downloadRunnableProjectButton = document.getElementById('download-react-runnable-project');
         if (downloadRunnableProjectButton && pipeline.finalAppendedCode) {
             downloadRunnableProjectButton.addEventListener('click', createAndDownloadReactProjectZip);
-        }
-    }
-
-    // Restore scroll positions
-    for (const id in scrollPositions) {
-        const element = document.getElementById(id);
-        if (element) {
-            element.scrollTop = scrollPositions[id].top;
-            element.scrollLeft = scrollPositions[id].left;
         }
     }
 
@@ -2855,44 +2878,7 @@ function aggregateReactOutputs() {
 
 
 function initializeUI() {
-    if (!initializeApiKey()) {
-        // If API key init fails, message is already shown by initializeApiKey().
-        // Controls will be disabled.
-    }
-
-    if (saveApiKeyButton && apiKeyInput && apiKeyStatusElement) {
-        saveApiKeyButton.addEventListener('click', () => {
-            const newApiKey = apiKeyInput.value.trim();
-            if (newApiKey) {
-                localStorage.setItem('geminiApiKey', newApiKey);
-                apiKeyInput.value = ''; // Clear field for security
-                apiKeyStatusElement.textContent = "API Key saved to Local Storage. Initializing...";
-                apiKeyStatusElement.className = 'api-key-status-message status-processing';
-                if(initializeApiKey()){ // Attempt to re-initialize with the new key
-                    apiKeyStatusElement.textContent = "API Key saved and client initialized.";
-                    apiKeyStatusElement.className = 'api-key-status-message status-ok';
-                } else {
-                    // initializeApiKey will set its own error messages
-                }
-            } else {
-                apiKeyStatusElement.textContent = "Please enter an API Key to save.";
-                apiKeyStatusElement.className = 'api-key-status-message status-error';
-            }
-        });
-    }
-
-    if (clearApiKeyButton && apiKeyInput && apiKeyStatusElement) {
-        clearApiKeyButton.addEventListener('click', () => {
-            localStorage.removeItem('geminiApiKey');
-            apiKeyInput.value = '';
-            apiKeyInput.placeholder = 'Enter your API Key';
-            ai = null; // De-initialize the AI client
-            apiKeyStatusElement.textContent = "API Key cleared from Local Storage. Enter a new key to use the API.";
-            apiKeyStatusElement.className = 'api-key-status-message status-error';
-            if (generateButton) generateButton.disabled = true; // Disable generation
-            initializeApiKey(); // Re-run to update status and button states based on fallback (if any)
-        });
-    }
+    initializeApiKey();
 
     renderPipelineSelectors();
     initializeCustomPromptTextareas();
@@ -2901,8 +2887,8 @@ function initializeUI() {
     if (generateButton) {
         generateButton.addEventListener('click', async () => {
             if (!ai) { // Double check if API client is not initialized
-                alert("API Key is not configured or failed to initialize. Please set your API Key.");
-                initializeApiKey(); // Try to re-initialize or prompt user
+                alert("API Key is not configured. Please ensure the process.env.API_KEY is set or provide one manually.");
+                initializeApiKey(); // Try to re-initialize
                 return;
             }
             const initialIdea = initialIdeaInput.value.trim();
@@ -2963,28 +2949,27 @@ function initializeUI() {
             }
         });
     }
-    
-    if (customPromptsHeader) {
-        customPromptsHeader.addEventListener('click', () => setPromptsModalVisible(true));
-    }
-    if (promptsModalCloseButton) {
-        promptsModalCloseButton.addEventListener('click', () => setPromptsModalVisible(false));
-    }
-    if (promptsModalOverlay) {
-        promptsModalOverlay.addEventListener('click', (e) => {
-            // Close if clicking on the overlay itself, not the content
-            if (e.target === promptsModalOverlay) {
-                setPromptsModalVisible(false);
-            }
-        });
-    }
-
 
     if (exportConfigButton) {
         exportConfigButton.addEventListener('click', exportConfiguration);
     }
     if (importConfigInput) {
         importConfigInput.addEventListener('change', handleImportConfiguration);
+    }
+
+    // Prompts Modal Listeners
+    if (customizePromptsTrigger) {
+        customizePromptsTrigger.addEventListener('click', () => setPromptsModalVisible(true));
+    }
+    if (promptsModalCloseButton) {
+        promptsModalCloseButton.addEventListener('click', () => setPromptsModalVisible(false));
+    }
+    if (promptsModalOverlay) {
+        promptsModalOverlay.addEventListener('click', (e) => {
+            if (e.target === promptsModalOverlay) {
+                setPromptsModalVisible(false);
+            }
+        });
     }
 
     // Diff Modal Listeners
@@ -3012,6 +2997,25 @@ function initializeUI() {
             }
         });
     }
+
+    // API Key Listeners
+    saveApiKeyButton.addEventListener('click', () => {
+        const key = apiKeyInput.value.trim();
+        if (key) {
+            localStorage.setItem('gemini-api-key', key);
+            apiKeyInput.value = ''; // Clear input after save
+            initializeApiKey(); // Re-initialize
+            updateControlsState(); // Update button states
+        } else {
+            alert("Please enter a valid API Key.");
+        }
+    });
+
+    clearApiKeyButton.addEventListener('click', () => {
+        localStorage.removeItem('gemini-api-key');
+        initializeApiKey(); // Re-initialize
+        updateControlsState(); // Update button states
+    });
 
     updateControlsState();
 }
@@ -3137,7 +3141,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentMode = firstModeRadio.value as ApplicationMode;
          }
     }
-    updateUIAfterModeChange(); // Ensure UI fully reflects the active mode after DOM is ready & mode is finalized.
+    updateUIAfterModeChange(); 
 
     const preloader = document.getElementById('preloader');
     const sidebar = document.getElementById('controls-sidebar');
@@ -3145,14 +3149,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (preloader) {
         preloader.classList.add('hidden');
-        // Delay adding 'is-visible' for a smoother entrance animation after preloader fades
-        setTimeout(() => {
-            if (sidebar) sidebar.classList.add('is-visible');
-            if (mainContent) mainContent.classList.add('is-visible');
-        }, 150); // Adjust delay as needed, should be less than preloader fade time but enough for it to start
-    } else {
-        // Fallback if preloader isn't found, show content immediately
-        if (sidebar) sidebar.classList.add('is-visible');
-        if (mainContent) mainContent.classList.add('is-visible');
     }
 });
