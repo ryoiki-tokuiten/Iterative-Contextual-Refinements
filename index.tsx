@@ -119,6 +119,15 @@ interface MathMainStrategyData {
     error?: string; // error during sub-strategy generation for this main strategy
     isDetailsOpen?: boolean;
     retryAttempt?: number; // for sub-strategy generation step
+
+    // New fields for judging sub-strategies
+    judgedBestSubStrategyId?: string;
+    judgedBestSolution?: string; // The full text of the best solution with reasoning.
+    judgingRequestPrompt?: string;
+    judgingResponseText?: string; // The raw response from the judge
+    judgingStatus?: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
+    judgingError?: string;
+    judgingRetryAttempt?: number;
 }
 interface MathPipelineState {
     id: string; // unique ID for this math problem instance
@@ -130,8 +139,17 @@ interface MathPipelineState {
     status: 'idle' | 'processing' | 'retrying' | 'completed' | 'error' | 'stopping' | 'stopped' | 'cancelled'; // Overall status
     error?: string; // Overall error for the whole process
     isStopRequested?: boolean;
-    activeTabId?: string; // e.g., "problem-details", "strategy-0", "strategy-1"
+    activeTabId?: string; // e.g., "problem-details", "strategy-0", "final-result"
     retryAttempt?: number; // for initial strategy generation step
+
+    // New fields for final judging
+    finalJudgedBestStrategyId?: string;
+    finalJudgedBestSolution?: string;
+    finalJudgingRequestPrompt?: string;
+    finalJudgingResponseText?: string;
+    finalJudgingStatus?: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
+    finalJudgingError?: string;
+    finalJudgingRetryAttempt?: number;
 }
 
 
@@ -965,6 +983,7 @@ function getEmptyStateMessage(status: IterationData['status'], contentType: stri
 function renderMarkdown(content: string | undefined): string {
     if (typeof content !== 'string') return '';
     // Use DOMPurify to prevent XSS attacks after rendering markdown.
+    // marked.parse is synchronous since the highlighter is synchronous.
     return DOMPurify.sanitize(marked.parse(content));
 }
 
@@ -2107,6 +2126,64 @@ function handleImportConfiguration(event: Event) {
 
 // ---------- MATH MODE SPECIFIC FUNCTIONS ----------
 
+const makeMathJudgingApiCall = async (
+    currentProcess: MathPipelineState,
+    parts: Part[],
+    systemInstruction: string,
+    isJson: boolean,
+    stepDescription: string,
+    targetStatusObject: MathMainStrategyData | MathPipelineState,
+    statusType: 'intra-strategy' | 'final'
+): Promise<string> => {
+    if (!currentProcess || currentProcess.isStopRequested) throw new PipelineStopRequestedError(`Stop requested before API call: ${stepDescription}`);
+    let responseText = "";
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        if (currentProcess.isStopRequested) throw new PipelineStopRequestedError(`Stop requested during retry for: ${stepDescription}`);
+        
+        if (statusType === 'intra-strategy') {
+            (targetStatusObject as MathMainStrategyData).judgingRetryAttempt = attempt;
+            (targetStatusObject as MathMainStrategyData).judgingStatus = attempt > 0 ? 'retrying' : 'processing';
+        } else { // final
+            (targetStatusObject as MathPipelineState).finalJudgingRetryAttempt = attempt;
+            (targetStatusObject as MathPipelineState).finalJudgingStatus = attempt > 0 ? 'retrying' : 'processing';
+        }
+        renderActiveMathPipeline(); 
+
+        if (attempt > 0) await new Promise(resolve => setTimeout(resolve, INITIAL_DELAY_MS * Math.pow(BACKOFF_FACTOR, attempt)));
+        
+        try {
+            const apiResponse = await callGemini(parts, MATH_FIXED_TEMPERATURE, MATH_MODEL_NAME, systemInstruction, isJson);
+            responseText = apiResponse.text;
+            if (statusType === 'intra-strategy') {
+                 (targetStatusObject as MathMainStrategyData).judgingStatus = 'processing';
+            } else {
+                 (targetStatusObject as MathPipelineState).finalJudgingStatus = 'processing';
+            }
+            renderActiveMathPipeline();
+            return responseText;
+        } catch (e: any) {
+            const errorMsg = `Attempt ${attempt + 1} for ${stepDescription} failed: ${e.message || 'Unknown API error'}`;
+             if (statusType === 'intra-strategy') {
+                (targetStatusObject as MathMainStrategyData).judgingError = errorMsg;
+            } else {
+                (targetStatusObject as MathPipelineState).finalJudgingError = errorMsg;
+            }
+            console.warn(`Math Solver (${stepDescription}), Attempt ${attempt + 1} failed: ${e.message}`);
+            renderActiveMathPipeline();
+            if (attempt === MAX_RETRIES) {
+                if (statusType === 'intra-strategy') {
+                    (targetStatusObject as MathMainStrategyData).judgingError = `Failed ${stepDescription} after ${MAX_RETRIES + 1} attempts: ${e.message || 'Unknown API error'}`;
+                } else {
+                     (targetStatusObject as MathPipelineState).finalJudgingError = `Failed ${stepDescription} after ${MAX_RETRIES + 1} attempts: ${e.message || 'Unknown API error'}`;
+                }
+                throw e; 
+            }
+        }
+    }
+    throw new Error(`API call for ${stepDescription} failed all retries.`);
+};
+
 async function startMathSolvingProcess(problemText: string, imageBase64?: string | null, imageMimeType?: string | null) {
     if (!ai) {
         return;
@@ -2296,6 +2373,117 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
         await Promise.allSettled(solutionPromises);
         
         if (currentProcess.isStopRequested) throw new PipelineStopRequestedError("Stopped during solution attempts.");
+        
+        // --- Judging Phase 1: Intra-Strategy ---
+        const intraStrategyJudgingPromises = currentProcess.initialStrategies.map(async (mainStrategy, mainIndex) => {
+            if (currentProcess.isStopRequested) {
+                mainStrategy.judgingStatus = 'cancelled';
+                return;
+            }
+            mainStrategy.judgingStatus = 'processing';
+            renderActiveMathPipeline();
+
+            const completedSolutions = mainStrategy.subStrategies
+                .filter(ss => ss.status === 'completed' && ss.solutionAttempt)
+                .map(ss => ({ id: ss.id, solution: ss.solutionAttempt! }));
+            
+            if (completedSolutions.length === 0) {
+                mainStrategy.judgingStatus = 'completed'; // Completed with no result
+                mainStrategy.judgingError = 'No valid solutions from sub-strategies to judge.';
+                renderActiveMathPipeline();
+                return;
+            }
+
+            const sysPromptJudge = `You are 'Mathesis Veritas', an AI Grandmaster of Mathematical Verification and Elegance. Your sole purpose is to analyze multiple proposed solutions to a mathematical problem, identify the most correct, rigorous, and elegant solution, and present it with a clear, step-by-step justification. Your output must be a JSON object.`;
+            const solutionsText = completedSolutions.map((s, i) => `--- SOLUTION ${i+1} (ID: ${s.id}) ---\n${s.solution}`).join('\n\n');
+            const userPromptJudge = `Original Problem: ${problemText}\n\nMain Strategy Being Evaluated: "${mainStrategy.strategyText}"\n\nBelow are ${completedSolutions.length} attempted solutions derived from this main strategy. Your task is:\n1.  Critically analyze each solution for correctness, rigor, clarity, and elegance.\n2.  Identify the single BEST solution that most effectively and correctly solves the problem according to the main strategy.\n3.  Present your final judgment as a JSON object with the following structure: \`{"best_solution_id": "ID of the winning solution", "best_solution_text": "The full text of the winning solution, potentially corrected or clarified by you for perfection.", "reasoning": "A detailed, step-by-step explanation of why this solution is superior to the others."}\`\n\nAttempted Solutions:\n${solutionsText}`;
+            mainStrategy.judgingRequestPrompt = userPromptJudge;
+
+            try {
+                const judgingResponseText = await makeMathJudgingApiCall(
+                    currentProcess,
+                    [{ text: userPromptJudge }],
+                    sysPromptJudge,
+                    true,
+                    `Judging for Main Strategy ${mainIndex + 1}`,
+                    mainStrategy,
+                    'intra-strategy'
+                );
+                mainStrategy.judgingResponseText = judgingResponseText;
+                const cleanedJson = cleanOutputByType(judgingResponseText, 'json');
+                const parsed = JSON.parse(cleanedJson);
+
+                if (!parsed.best_solution_id || !parsed.best_solution_text || !parsed.reasoning) {
+                    throw new Error("Judge LLM response is missing critical fields (best_solution_id, best_solution_text, reasoning).");
+                }
+                
+                mainStrategy.judgedBestSubStrategyId = parsed.best_solution_id;
+                const subStrategyOrigin = mainStrategy.subStrategies.find(s => s.id === parsed.best_solution_id);
+                const subStrategyTitle = subStrategyOrigin ? `from Sub-Strategy originating from "${subStrategyOrigin.subStrategyText.substring(0,50)}..."` : `from Sub-Strategy ${parsed.best_solution_id}`;
+                mainStrategy.judgedBestSolution = `### Judged Best Solution for Strategy ${mainIndex+1}\n\n**Origin:** ${subStrategyTitle}\n\n**Reasoning for Selection:**\n${parsed.reasoning}\n\n---\n\n**Final Solution Text:**\n${parsed.best_solution_text}`;
+                mainStrategy.judgingStatus = 'completed';
+
+            } catch (e: any) {
+                mainStrategy.judgingStatus = 'error';
+                mainStrategy.judgingError = e.message || 'Failed to judge solutions.';
+                console.error(`Error judging for MS ${mainIndex + 1}:`, e);
+            } finally {
+                renderActiveMathPipeline();
+            }
+        });
+
+        await Promise.allSettled(intraStrategyJudgingPromises);
+        if (currentProcess.isStopRequested) throw new PipelineStopRequestedError("Stopped during intra-strategy judging.");
+        
+        // --- Judging Phase 2: Final Verdict ---
+        currentProcess.finalJudgingStatus = 'processing';
+        renderActiveMathPipeline();
+
+        const judgedSolutions = currentProcess.initialStrategies
+            .filter(ms => ms.judgingStatus === 'completed' && ms.judgedBestSolution)
+            .map(ms => ({ id: ms.id, solution: ms.judgedBestSolution! }));
+
+        if (judgedSolutions.length === 0) {
+            currentProcess.finalJudgingStatus = 'error';
+            currentProcess.finalJudgingError = "No successfully judged solutions available for final review.";
+        } else {
+             const sysPromptFinalJudge = `You are 'Mathesis Ultima', the ultimate arbiter of mathematical truth and beauty. You review final candidate solutions from different strategic approaches and select the single most superior solution overall, presenting it with unparalleled clarity and authority. Your output must be a JSON object.`;
+             const finalSolutionsText = judgedSolutions.map((s, i) => `--- CANDIDATE SOLUTION ${i+1} (from Main Strategy ID: ${s.id}) ---\n${s.solution}`).join('\n\n');
+             const userPromptFinalJudge = `Original Problem: ${problemText}\n\nBelow are ${judgedSolutions.length} final candidate solutions, each being the winner from a different overarching strategic approach. Your task is to select the SINGLE OVERALL BEST solution based on correctness, efficiency, elegance, and clarity.\n\nPresent your final verdict as a JSON object with the following structure: \`{"best_strategy_id": "ID of the winning main strategy", "final_solution_text": "The full text of the absolute best solution, polished to perfection.", "final_reasoning": "A detailed justification for why this solution and its underlying strategy are superior to all other candidates."}\`\n\nFinal Candidate Solutions:\n${finalSolutionsText}`;
+
+            currentProcess.finalJudgingRequestPrompt = userPromptFinalJudge;
+
+            try {
+                 const finalJudgingResponseText = await makeMathJudgingApiCall(
+                    currentProcess,
+                    [{ text: userPromptFinalJudge }],
+                    sysPromptFinalJudge,
+                    true,
+                    'Final Judging',
+                    currentProcess,
+                    'final'
+                );
+                currentProcess.finalJudgingResponseText = finalJudgingResponseText;
+                const cleanedJson = cleanOutputByType(finalJudgingResponseText, 'json');
+                const parsed = JSON.parse(cleanedJson);
+
+                if (!parsed.best_strategy_id || !parsed.final_solution_text || !parsed.final_reasoning) {
+                    throw new Error("Final Judge LLM response is missing critical fields (best_strategy_id, final_solution_text, final_reasoning).");
+                }
+
+                currentProcess.finalJudgedBestStrategyId = parsed.best_strategy_id;
+                const strategyOrigin = currentProcess.initialStrategies.find(s => s.id === parsed.best_strategy_id);
+                const strategyTitle = strategyOrigin ? `from Strategy originating from "${strategyOrigin.strategyText.substring(0,60)}..."` : `from Strategy ${parsed.best_strategy_id}`;
+
+                currentProcess.finalJudgedBestSolution = `### Final Judged Best Solution\n\n**Origin:** ${strategyTitle}\n\n**Final Reasoning:**\n${parsed.final_reasoning}\n\n---\n\n**Definitive Solution:**\n${parsed.final_solution_text}`;
+                currentProcess.finalJudgingStatus = 'completed';
+            
+            } catch (e: any) {
+                currentProcess.finalJudgingStatus = 'error';
+                currentProcess.finalJudgingError = e.message || "Failed to perform final judging.";
+                console.error(`Error in final judging:`, e);
+            }
+        }
 
         currentProcess.status = 'completed';
 
@@ -2380,9 +2568,9 @@ function renderActiveMathPipeline() {
         tabButton.className = 'tab-button math-mode-tab';
         tabButton.id = `math-tab-strategy-${index}`;
         tabButton.textContent = `Strategy ${index + 1}`;
-        if (mainStrategy.status === 'error') tabButton.classList.add('status-math-error');
-        else if (mainStrategy.status === 'processing' || mainStrategy.status === 'retrying') tabButton.classList.add('status-math-processing');
-        else if (mainStrategy.subStrategies.every(s => s.status === 'completed')) tabButton.classList.add('status-math-completed');
+        if (mainStrategy.status === 'error' || mainStrategy.judgingStatus === 'error') tabButton.classList.add('status-math-error');
+        else if (mainStrategy.status === 'processing' || mainStrategy.status === 'retrying' || mainStrategy.judgingStatus === 'processing' || mainStrategy.judgingStatus === 'retrying') tabButton.classList.add('status-math-processing');
+        else if (mainStrategy.judgingStatus === 'completed') tabButton.classList.add('status-math-completed');
         tabButton.setAttribute('role', 'tab');
         tabButton.setAttribute('aria-controls', `pipeline-content-strategy-${index}`);
         tabButton.addEventListener('click', () => activateTab(`strategy-${index}`));
@@ -2466,6 +2654,33 @@ function renderActiveMathPipeline() {
              contentHtml += `<div class="empty-state-message">No sub-strategies were generated for this main strategy.</div>`;
         }
         
+        // --- Intra-Strategy Judging Section ---
+        if (mainStrategy.judgingStatus) {
+            let statusText = mainStrategy.judgingStatus;
+            if (statusText === 'retrying' && mainStrategy.judgingRetryAttempt) statusText += ` (${mainStrategy.judgingRetryAttempt}/${MAX_RETRIES})`;
+            
+            contentHtml += `<div class="math-judging-section model-detail-section" id="math-judging-${mainStrategy.id}">
+                <div class="model-detail-header">
+                    <h5 class="model-section-title">Strategy ${index + 1} - Judging Result</h5>
+                    <span class="status-badge status-${mainStrategy.judgingStatus}">${statusText}</span>
+                </div>`;
+            if (mainStrategy.judgingError) {
+                 contentHtml += `<div class="status-message error"><pre>${escapeHtml(mainStrategy.judgingError)}</pre></div>`;
+            }
+            if (mainStrategy.judgedBestSolution) {
+                contentHtml += `<div class="markdown-content">${renderMarkdown(mainStrategy.judgedBestSolution)}</div>`;
+            } else if (mainStrategy.judgingStatus === 'processing' || mainStrategy.judgingStatus === 'retrying') {
+                 contentHtml += `<div class="empty-state-message">Judging solutions for this strategy...</div>`;
+            }
+            if (mainStrategy.judgingRequestPrompt) {
+                 contentHtml += `<details class="collapsible-section prompt-details">
+                        <summary class="model-section-title">Judging Prompt</summary>
+                        <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(mainStrategy.judgingRequestPrompt)}</pre></div>
+                    </details>`;
+            }
+            contentHtml += `</div>`;
+        }
+
         contentHtml += `</div>`; // Close math-strategy-branch
         contentPane.innerHTML = contentHtml;
         pipelinesContentContainer.appendChild(contentPane);
@@ -2487,6 +2702,54 @@ function renderActiveMathPipeline() {
             });
         });
     });
+
+    // --- Final Result Tab and Pane ---
+    if (mathProcess.finalJudgingStatus) {
+        const finalTabButton = document.createElement('button');
+        finalTabButton.className = 'tab-button math-mode-tab';
+        finalTabButton.id = `math-tab-final-result`;
+        finalTabButton.textContent = 'Final Result';
+        if (mathProcess.finalJudgingStatus === 'error') finalTabButton.classList.add('status-math-error');
+        else if (mathProcess.finalJudgingStatus === 'processing' || mathProcess.finalJudgingStatus === 'retrying') finalTabButton.classList.add('status-math-processing');
+        else if (mathProcess.finalJudgingStatus === 'completed') finalTabButton.classList.add('status-math-completed');
+        finalTabButton.setAttribute('role', 'tab');
+        finalTabButton.setAttribute('aria-controls', `pipeline-content-final-result`);
+        finalTabButton.addEventListener('click', () => activateTab('final-result'));
+        tabsNavContainer.appendChild(finalTabButton);
+
+        const finalContentPane = document.createElement('div');
+        finalContentPane.id = `pipeline-content-final-result`;
+        finalContentPane.className = 'pipeline-content';
+        finalContentPane.setAttribute('role', 'tabpanel');
+        finalContentPane.setAttribute('aria-labelledby', `math-tab-final-result`);
+
+        let finalContentHtml = `<div class="math-judging-section model-detail-card">`;
+        let statusText = mathProcess.finalJudgingStatus;
+        if (statusText === 'retrying' && mathProcess.finalJudgingRetryAttempt) statusText += ` (${mathProcess.finalJudgingRetryAttempt}/${MAX_RETRIES})`;
+
+        finalContentHtml += `<div class="model-detail-header">
+                <h4 class="model-title">Overall Best Solution</h4>
+                <span class="status-badge status-${mathProcess.finalJudgingStatus}">${statusText}</span>
+            </div>`;
+        if (mathProcess.finalJudgingError) {
+             finalContentHtml += `<div class="status-message error"><pre>${escapeHtml(mathProcess.finalJudgingError)}</pre></div>`;
+        }
+        if (mathProcess.finalJudgedBestSolution) {
+            finalContentHtml += `<div class="markdown-content">${renderMarkdown(mathProcess.finalJudgedBestSolution)}</div>`;
+        } else if (mathProcess.finalJudgingStatus === 'processing' || mathProcess.finalJudgingStatus === 'retrying') {
+             finalContentHtml += `<div class="empty-state-message">Selecting the best overall solution...</div>`;
+        }
+        if (mathProcess.finalJudgingRequestPrompt) {
+             finalContentHtml += `<details class="collapsible-section prompt-details">
+                    <summary class="model-section-title">Final Judging Prompt</summary>
+                    <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(mathProcess.finalJudgingRequestPrompt)}</pre></div>
+                </details>`;
+        }
+        finalContentHtml += `</div>`;
+        finalContentPane.innerHTML = finalContentHtml;
+        pipelinesContentContainer.appendChild(finalContentPane);
+    }
+
 
     if (mathProcess.activeTabId) {
         activateTab(mathProcess.activeTabId);
@@ -2947,14 +3210,14 @@ function aggregateReactOutputs() {
 function initializeUI() {
     initializeApiKey();
 
-    marked.use({
+    marked.setOptions({
         gfm: true,
         breaks: true,
-        highlight: function (code, lang) {
+        highlight: (code, lang) => {
             const language = hljs.getLanguage(lang) ? lang : 'plaintext';
             return hljs.highlight(code, { language }).value;
         },
-    });
+    } as any);
 
     renderPipelineSelectors();
     initializeCustomPromptTextareas();

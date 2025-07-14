@@ -668,9 +668,22 @@ textarea.input-base {
 .status-processing, .status-retrying, .status-orchestrating, .status-orchestrating_retrying, .status-processing_workers, .status-stopping { background-color: rgba(var(--accent-yellow-rgb), 0.15); color: var(--accent-yellow); }
 .status-idle, .status-pending, .status-stopped, .status-cancelled { background-color: rgba(var(--card-bg-base-rgb), 0.4); color: var(--text-tertiary-color); }
 
-.tab-button.status-math-error, .tab-button.status-error { border-bottom-color: var(--accent-pink); }
-.tab-button.status-math-processing, .tab-button.status-processing { border-bottom-color: var(--accent-yellow); }
-.tab-button.status-math-completed, .tab-button.status-completed { border-bottom-color: var(--accent-green); }
+.tab-button.status-math-error, .tab-button.status-error { border-bottom-color: rgba(var(--accent-pink-rgb), 0.6); }
+.tab-button.status-math-processing, .tab-button.status-processing { border-bottom-color: rgba(var(--accent-yellow-rgb), 0.6); }
+.tab-button.status-math-completed, .tab-button.status-completed { border-bottom-color: rgba(var(--accent-green-rgb), 0.6); }
+
+.tab-button.active.status-math-error, .tab-button.active.status-error { border-bottom-color: var(--accent-pink); }
+.tab-button.active.status-math-processing, .tab-button.active.status-processing { border-bottom-color: var(--accent-yellow); }
+.tab-button.active.status-math-completed, .tab-button.active.status-completed {
+  border-bottom-color: var(--accent-green);
+  box-shadow: 0 2px 20px -5px var(--success-glow);
+}
+#math-tab-final-result.status-math-completed.active {
+    color: var(--accent-green);
+    font-weight: 700;
+    box-shadow: 0 4px 25px -5px var(--success-glow);
+}
+
 
 .status-message {
   padding: 1rem 1.5rem; 
@@ -1283,6 +1296,35 @@ summary.prompt-group-title::-webkit-details-marker { display: none; }
 .solution-details .code-block-wrapper, .prompt-details .scrollable-content-area {
     margin-top: 1rem;
 }
+
+.math-judging-section {
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border-color);
+    background: linear-gradient(rgba(var(--accent-purple-rgb), 0.03), transparent);
+}
+
+.math-judging-section .markdown-content h3, 
+#pipeline-content-final-result .markdown-content h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--accent-purple);
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(var(--accent-purple-rgb), 0.2);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.math-judging-section .markdown-content hr,
+#pipeline-content-final-result .markdown-content hr {
+    border: none;
+    height: 1px;
+    background-color: var(--border-color);
+    margin: 1.5rem 0;
+}
+
 
 /* React Mode Specific Layout */
 .worker-details-grid {
