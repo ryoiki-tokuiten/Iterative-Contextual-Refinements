@@ -11,10 +11,20 @@
   "dependencies": {
     "@google/genai": "^1.4.0",
     "diff": "^8.0.2",
+    "dompurify": "3.1.6",
+    "highlight.js": "11.9.0",
+    "htm": "^3.1.1",
     "jszip": "^3.10.1",
     "marked": "4.3.0",
-    "dompurify": "3.1.6",
-    "highlight.js": "11.9.0"
+    "preact": "^10.26.9",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^15.6.1",
+    "rehype-katex": "^7.0.1",
+    "remark": "^15.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
