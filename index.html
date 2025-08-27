@@ -540,9 +540,13 @@
                                     <div id="diff-source-content" class="comparison-content custom-scrollbar"></div>
                                 </div>
                                 <div class="comparison-side">
-                                    <h4 class="comparison-title">
+                                    <h4 class="comparison-title" style="display: flex; align-items: center; gap: 0.5rem;">
                                         <span class="material-symbols-outlined">auto_fix_high</span>
                                         <span id="diff-target-title">Bug Fixed/Polished</span>
+                                        <button id="view-provided-patches-button" class="button" type="button" title="View Provided Diff Format Patches" style="margin-left: auto;">
+                                            <span class="material-symbols-outlined">difference</span>
+                                            <span class="button-text">View Provided Diff Format Patches</span>
+                                        </button>
                                     </h4>
                                     <div id="diff-target-content" class="comparison-content custom-scrollbar"></div>
                                 </div>
@@ -628,6 +632,18 @@
                         <div class="diff-no-selection empty-state-message">
                             <p>Select a target from the list to view differences.</p>
                         </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Provided Patches Modal -->
+            <div id="patches-modal-overlay" class="modal-overlay" style="display: none;">
+                <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="patches-modal-title">
+                    <header class="modal-header">
+                        <h2 id="patches-modal-title" class="modal-title">Provided Diff Format Patches</h2>
+                        <button id="patches-modal-close-button" class="modal-close-button" aria-label="Close Patches Viewer"><span class="material-symbols-outlined">close</span></button>
+                    </header>
+                    <div class="modal-body">
+                        <pre class="custom-scrollbar" style="max-height: 60vh; white-space: pre-wrap;"><code id="patches-modal-content" class="language-json"></code></pre>
                     </div>
                 </div>
             </div>

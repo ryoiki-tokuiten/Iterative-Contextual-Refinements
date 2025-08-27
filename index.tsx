@@ -81,6 +81,10 @@ interface IterationData {
     generatedSubStep_Content?: string;
     generatedSuggestions?: string[]; // For Agent mode's refine/suggest step output
 
+    // Diff-format patches provided by model for this iteration's target content (if any)
+    providedPatchesJson?: string; // Raw JSON string (array or object with { patches: [...] })
+    providedPatchesContentType?: string; // e.g., 'html', 'text', 'markdown', 'python'
+
     status: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
     error?: string;
     isDetailsOpen?: boolean;
@@ -776,8 +780,6 @@ function renderPrompt(template: string, data: Record<string, string>): string {
     }
     return rendered;
 }
-
-
 function renderPipelineSelectors() {
     if (!pipelineSelectorsContainer) return;
     pipelineSelectorsContainer.innerHTML = ''; // Clear existing
@@ -1551,7 +1553,6 @@ function replaceOnceExact(haystack: string, needle: string, replacement: string)
     const result = haystack.slice(0, idx) + replacement + haystack.slice(idx + needle.length);
     return { result, applied: true, multiple: occurrences > 1 };
 }
-
 function applyPatches(currentHtml: string, patches: HtmlPatchOperation[]): string {
     let modifiedHtml = currentHtml ?? '';
     if (!Array.isArray(patches) || patches.length === 0) return modifiedHtml;
@@ -1649,13 +1650,14 @@ function applyPatches(currentHtml: string, patches: HtmlPatchOperation[]): strin
     return modifiedHtml;
 }
 
-function parseHtmlPatchesFromJson(rawJsonString: string): HtmlPatchOperation[] | null {
+function parsePatchesFromJson(rawJsonString: string): HtmlPatchOperation[] | null {
     const cleaned = cleanOutputByType(rawJsonString, 'json');
     try {
-        const parsed = JSON.parse(cleaned);
-        if (!Array.isArray(parsed)) return null;
+        const parsedAny = JSON.parse(cleaned);
+        const maybeArray = Array.isArray(parsedAny) ? parsedAny : (parsedAny && typeof parsedAny === 'object' && Array.isArray(parsedAny.patches) ? parsedAny.patches : null);
+        if (!maybeArray) return null;
         const normalized: HtmlPatchOperation[] = [];
-        for (const item of parsed) {
+        for (const item of maybeArray) {
             if (!item || typeof item !== 'object') continue;
             const op = String((item as any).operation || '').toLowerCase();
             const searchBlock = (item as any).search_block;
@@ -1669,7 +1671,7 @@ function parseHtmlPatchesFromJson(rawJsonString: string): HtmlPatchOperation[] |
         }
         return normalized;
     } catch (e) {
-        console.warn('parseHtmlPatchesFromJson: Failed to parse JSON patches. Raw (first 300 chars):', rawJsonString.substring(0, 300), e);
+        console.warn('parsePatchesFromJson: Failed to parse JSON patches. Raw (first 300 chars):', rawJsonString.substring(0, 300), e);
         return null;
     }
 }
@@ -1887,10 +1889,12 @@ async function runPipeline(pipelineId: number, initialRequest: string) {
                     iteration.requestPromptHtml_BugFix = userPromptInitialBugFix;
                     {
                         const bugfixResponse = await makeApiCall(userPromptInitialBugFix, customPromptsWebsiteState.sys_initialBugFix, true, "Initial HTML Bug Fix (JSON Patches)");
-                        const patches = parseHtmlPatchesFromJson(bugfixResponse);
+                        const patches = parsePatchesFromJson(bugfixResponse);
                         if (patches && patches.length > 0) {
                             const patched = applyPatches(rawHtmlAfterGenOrImpl || "", patches);
                             iteration.generatedHtml = cleanHtmlOutput(patched);
+                            iteration.providedPatchesJson = cleanOutputByType(bugfixResponse, 'json');
+                            iteration.providedPatchesContentType = 'html';
                         } else {
                             // Fallback: treat response as full HTML if JSON invalid or empty
                             const fallbackHtml = cleanOutputByType(bugfixResponse, 'html');
@@ -1916,10 +1920,12 @@ async function runPipeline(pipelineId: number, initialRequest: string) {
                     iteration.requestPromptHtml_BugFix = userPromptRefineBugFix;
                     {
                         const bugfixResponse = await makeApiCall(userPromptRefineBugFix, customPromptsWebsiteState.sys_refineBugFix, true, `Bug Fix & Completion (Iter ${i}) - JSON Patches`);
-                        const patches = parseHtmlPatchesFromJson(bugfixResponse);
+                        const patches = parsePatchesFromJson(bugfixResponse);
                         if (patches && patches.length > 0) {
                             const patched = applyPatches(rawHtmlAfterGenOrImpl || "", patches);
                             iteration.generatedHtml = cleanHtmlOutput(patched);
+                            iteration.providedPatchesJson = cleanOutputByType(bugfixResponse, 'json');
+                            iteration.providedPatchesContentType = 'html';
                         } else {
                             // Fallback: treat response as full HTML if JSON invalid or empty
                             const fallbackHtml = cleanOutputByType(bugfixResponse, 'html');
@@ -1958,7 +1964,20 @@ async function runPipeline(pipelineId: number, initialRequest: string) {
                     const critiqueToImplementStr = currentSuggestions.map(s => `- ${s}`).join('\n');
                     const userPromptRevise = renderPrompt(customPromptsCreativeState.user_creative_refine_revise, { currentDraft: currentTextContent || placeholderDraft, critiqueToImplementStr });
                     iteration.requestPromptText_Revise = userPromptRevise;
-                    iteration.generatedOrRevisedText = cleanTextOutput(await makeApiCall(userPromptRevise, customPromptsCreativeState.sys_creative_refine_revise, false, `Draft Revision (Iter ${i})`));
+                    {
+                        const reviseResponse = await makeApiCall(userPromptRevise, customPromptsCreativeState.sys_creative_refine_revise, true, `Draft Revision (Iter ${i}) - JSON Patches or Full`);
+                        const maybePatches = parsePatchesFromJson(reviseResponse);
+                        if (maybePatches && maybePatches.length > 0 && currentTextContent) {
+                            // Apply patches to current text (treat as plain text blocks)
+                            const patched = applyPatches(currentTextContent, maybePatches as any);
+                            iteration.generatedOrRevisedText = cleanTextOutput(patched);
+                            iteration.providedPatchesJson = cleanOutputByType(reviseResponse, 'json');
+                            iteration.providedPatchesContentType = 'text';
+                        } else {
+                            // Fallback to plain text revision
+                            iteration.generatedOrRevisedText = cleanTextOutput(cleanOutputByType(reviseResponse, 'text'));
+                        }
+                    }
                     currentTextContent = iteration.generatedOrRevisedText || "";
 
                     const userPromptNewCritique = renderPrompt(customPromptsCreativeState.user_creative_refine_critique, { currentDraft: currentTextContent || placeholderDraft });
@@ -1969,7 +1988,18 @@ async function runPipeline(pipelineId: number, initialRequest: string) {
                 } else {
                     const userPromptFinalPolish = renderPrompt(customPromptsCreativeState.user_creative_final_polish, { currentDraft: currentTextContent || placeholderDraft });
                     iteration.requestPromptText_Polish = userPromptFinalPolish;
-                    iteration.generatedOrRevisedText = cleanTextOutput(await makeApiCall(userPromptFinalPolish, customPromptsCreativeState.sys_creative_final_polish, false, "Final Polish"));
+                    {
+                        const polishResponse = await makeApiCall(userPromptFinalPolish, customPromptsCreativeState.sys_creative_final_polish, true, "Final Polish - JSON Patches or Full");
+                        const maybePatches = parsePatchesFromJson(polishResponse);
+                        if (maybePatches && maybePatches.length > 0 && currentTextContent) {
+                            const patched = applyPatches(currentTextContent, maybePatches as any);
+                            iteration.generatedOrRevisedText = cleanTextOutput(patched);
+                            iteration.providedPatchesJson = cleanOutputByType(polishResponse, 'json');
+                            iteration.providedPatchesContentType = 'text';
+                        } else {
+                            iteration.generatedOrRevisedText = cleanTextOutput(cleanOutputByType(polishResponse, 'text'));
+                        }
+                    }
                     currentTextContent = iteration.generatedOrRevisedText || "";
                     iteration.critiqueSuggestions = [];
                 }
@@ -2039,14 +2069,21 @@ async function runPipeline(pipelineId: number, initialRequest: string) {
                         iteration.requestPrompt_SysInstruction = agentGeneratedPrompts.feature_implementation.system_instruction;
                         iteration.requestPrompt_UserTemplate = agentGeneratedPrompts.feature_implementation.user_prompt_template;
                         iteration.requestPrompt_Rendered = renderPrompt(iteration.requestPrompt_UserTemplate, { initialRequest, currentContent: currentAgentContent || placeholderContent, suggestionsToImplementStr: currentSuggestions.join('; ') });
-                        const rawImplementedContent = await makeApiCall(iteration.requestPrompt_Rendered, iteration.requestPrompt_SysInstruction, false, `Agent Loop ${i - 2} - Implement`);
-                        const implementedContent = cleanOutputByType(rawImplementedContent, outputType);
-                        iteration.generatedSubStep_Content = implementedContent;
+                        const implResponse = await makeApiCall(iteration.requestPrompt_Rendered, iteration.requestPrompt_SysInstruction, true, `Agent Loop ${i - 2} - Implement (JSON Patches or Full)`);
+                        const implPatches = parsePatchesFromJson(implResponse);
+                        if (implPatches && implPatches.length > 0) {
+                            const patched = applyPatches(currentAgentContent || placeholderContent, implPatches as any);
+                            iteration.generatedSubStep_Content = cleanOutputByType(patched, outputType);
+                            iteration.providedPatchesJson = cleanOutputByType(implResponse, 'json');
+                            iteration.providedPatchesContentType = outputType.includes('html') ? 'html' : 'text';
+                        } else {
+                            iteration.generatedSubStep_Content = cleanOutputByType(implResponse, outputType);
+                        }
 
                         // Sub-Step B: Refine Implemented & Suggest Next
                         iteration.requestPrompt_SubStep_SysInstruction = agentGeneratedPrompts.refinement_and_suggestion.system_instruction; // Re-use
                         iteration.requestPrompt_SubStep_UserTemplate = agentGeneratedPrompts.refinement_and_suggestion.user_prompt_template; // Re-use
-                        iteration.requestPrompt_SubStep_Rendered = renderPrompt(iteration.requestPrompt_SubStep_UserTemplate, { initialRequest, currentContent: implementedContent || placeholderContent });
+                        iteration.requestPrompt_SubStep_Rendered = renderPrompt(iteration.requestPrompt_SubStep_UserTemplate, { initialRequest, currentContent: (iteration.generatedSubStep_Content || implementedContent) || placeholderContent });
                         const refineSuggestLoopJsonResponseString = await makeApiCall(iteration.requestPrompt_SubStep_Rendered, iteration.requestPrompt_SubStep_SysInstruction, true, `Agent Loop ${i - 2} - Refine & Suggest`);
                         const refineSuggestLoopJson = cleanOutputByType(refineSuggestLoopJsonResponseString, 'json');
                         try {
@@ -2065,8 +2102,16 @@ async function runPipeline(pipelineId: number, initialRequest: string) {
                         iteration.requestPrompt_SysInstruction = agentGeneratedPrompts.final_polish.system_instruction;
                         iteration.requestPrompt_UserTemplate = agentGeneratedPrompts.final_polish.user_prompt_template;
                         iteration.requestPrompt_Rendered = renderPrompt(iteration.requestPrompt_UserTemplate, { initialRequest, currentContent: currentAgentContent || placeholderContent });
-                        const rawFinalContent = await makeApiCall(iteration.requestPrompt_Rendered, iteration.requestPrompt_SysInstruction, false, "Agent Final Polish");
-                        iteration.generatedMainContent = cleanOutputByType(rawFinalContent, outputType);
+                        const finalResponse = await makeApiCall(iteration.requestPrompt_Rendered, iteration.requestPrompt_SysInstruction, true, "Agent Final Polish (JSON Patches or Full)");
+                        const finalPatches = parsePatchesFromJson(finalResponse);
+                        if (finalPatches && finalPatches.length > 0) {
+                            const patched = applyPatches(currentAgentContent || placeholderContent, finalPatches as any);
+                            iteration.generatedMainContent = cleanOutputByType(patched, outputType);
+                            iteration.providedPatchesJson = cleanOutputByType(finalResponse, 'json');
+                            iteration.providedPatchesContentType = outputType.includes('html') ? 'html' : 'text';
+                        } else {
+                            iteration.generatedMainContent = cleanOutputByType(finalResponse, outputType);
+                        }
                         currentAgentContent = iteration.generatedMainContent || "";
                         iteration.generatedSuggestions = [];
                     }
@@ -2242,7 +2287,6 @@ function exportConfiguration() {
     const configJson = JSON.stringify(config, null, 2);
     downloadFile(configJson, `iterative_studio_config_${currentMode}.json`, 'application/json');
 }
-
 function handleImportConfiguration(event: Event) {
     if (isGenerating) {
         alert("Cannot import configuration while generation is in progress.");
@@ -3006,7 +3050,6 @@ function synthesizeKnowledgePacket(hypotheses: MathHypothesisData[]): string {
 
     return knowledgePacket;
 }
-
 // Helper function for math judging API calls (similar to makeMathApiCall but specialized for judging)
 async function makeMathJudgingApiCall(
     currentProcess: MathPipelineState,
@@ -3597,7 +3640,6 @@ function activateStrategyTab(strategyIndex: number) {
         content.classList.toggle('active', index === strategyIndex);
     });
 }
-
 function renderActiveMathPipeline() {
     if (currentMode !== 'math' || !pipelinesContentContainer || !tabsNavContainer) {
         if (currentMode !== 'math' && tabsNavContainer && pipelinesContentContainer) {
@@ -4340,7 +4382,6 @@ function aggregateReactOutputs() {
     activeReactPipeline.finalAppendedCode = combinedCode;
     console.log("Final appended code generated:", activeReactPipeline.finalAppendedCode.substring(0, 1000) + "...");
 }
-
 // ----- END REACT MODE SPECIFIC FUNCTIONS -----
 
 
@@ -4502,6 +4543,8 @@ function initializeUI() {
             openPreviewFullscreen('source');
         } else if (target.closest('#fullscreen-target-button')) {
             openPreviewFullscreen('target');
+        } else if (target.closest('#view-provided-patches-button')) {
+            openPatchesModal();
         } else {
             // Close diff view dropdown if clicking outside
             if (!target.closest('#diff-view-toggle')) {
@@ -4525,6 +4568,8 @@ function initializeUI() {
                 if (hypothesisId) {
                     openArgumentModal(hypothesisId);
                 }
+            } else if (target.closest('#view-provided-patches-button')) {
+                openPatchesModal();
             }
         });
     }
@@ -4549,6 +4594,22 @@ function initializeUI() {
     });
 
     updateControlsState();
+
+    // Patches modal controls
+    const patchesCloseBtn = document.getElementById('patches-modal-close-button');
+    const patchesOverlay = document.getElementById('patches-modal-overlay');
+    if (patchesCloseBtn && patchesOverlay) {
+        patchesCloseBtn.addEventListener('click', () => {
+            patchesOverlay.classList.remove('is-visible');
+            setTimeout(() => { (patchesOverlay as HTMLElement).style.display = 'none'; }, 150);
+        });
+        patchesOverlay.addEventListener('click', (e) => {
+            if (e.target === patchesOverlay) {
+                patchesOverlay.classList.remove('is-visible');
+                setTimeout(() => { (patchesOverlay as HTMLElement).style.display = 'none'; }, 150);
+            }
+        });
+    }
 }
 
 // ---------- DIFF MODAL FUNCTIONS ----------
@@ -4557,6 +4618,7 @@ let diffSourceData: { pipelineId: number, iterationNumber: number, contentType: 
 let currentDiffViewMode: 'unified' | 'split' = 'split';
 let currentSourceContent: string = '';
 let currentTargetContent: string = '';
+let currentProvidedPatchesJson: string | null = null;
 
 // Helper function to extract HTML from old format request prompts
 function extractHtmlFromRequestPrompt(requestPrompt: string): string | null {
@@ -4778,6 +4840,7 @@ function openDiffModal(pipelineId: number, iterationNumber: number, contentType:
                 sourceTitle = "Before Fixing";
                 targetTitle = "After Fixing";
             }
+            currentProvidedPatchesJson = iteration.providedPatchesJson || null;
         } else {
             // Old format: extract raw HTML from request prompt
             const rawHtmlFromPrompt = extractHtmlFromRequestPrompt(iteration.requestPromptHtml_BugFix);
@@ -4787,6 +4850,7 @@ function openDiffModal(pipelineId: number, iterationNumber: number, contentType:
                 targetContent = iteration.generatedHtml;
                 sourceTitle = "Before Bug Fix";
                 targetTitle = "After Bug Fix";
+                currentProvidedPatchesJson = iteration.providedPatchesJson || null;
             } else {
                 // Fallback: compare with previous iteration if available
                 if (iteration.iterationNumber > 0) {
@@ -4918,6 +4982,7 @@ function activateDiffMode(mode: 'instant-fixes' | 'global-compare') {
                     if (sourceIteration.generatedRawHtml) {
                         // New format: compare raw vs fixed within same iteration
                         targetContent = sourceIteration.generatedHtml; // Request 2 output
+                        currentProvidedPatchesJson = sourceIteration.providedPatchesJson || null;
                         
                         if (sourceIteration.title.includes('Initial')) {
                             targetTitle = "Initial Bug Fix (Request 2)";
@@ -4933,6 +4998,7 @@ function activateDiffMode(mode: 'instant-fixes' | 'global-compare') {
                         if (rawHtmlFromPrompt) {
                             targetContent = sourceIteration.generatedHtml;
                             targetTitle = "After Bug Fix";
+                            currentProvidedPatchesJson = sourceIteration.providedPatchesJson || null;
                         } else {
                             // Fallback: compare with previous iteration if available
                             if (diffSourceData.iterationNumber > 0) {
@@ -4963,7 +5029,7 @@ function activateDiffMode(mode: 'instant-fixes' | 'global-compare') {
             }
         }
         
-        // Check if we have both raw and bug-fixed versions within the same iteration
+        // Check if we have both raw and bug-fix versions within the same iteration
         let hasBugFixVersion = false;
         if (diffSourceData.contentType === 'html') {
             const sourceIteration = pipeline.iterations.find(iter => iter.iterationNumber === diffSourceData.iterationNumber);
@@ -5000,7 +5066,6 @@ function activateDiffMode(mode: 'instant-fixes' | 'global-compare') {
         }
     }
 }
-
 function renderDiffSideBySide(sourceText: string, targetText: string) {
     // Store content in global variables for toggle functionality
     currentSourceContent = sourceText;
@@ -5165,6 +5230,7 @@ function activateInstantFixesView(view: 'side-by-side' | 'diff-analysis' | 'prev
             if (diffSourceData.contentType === 'html') {
                 const sourceIteration = pipeline?.iterations.find(iter => iter.iterationNumber === diffSourceData.iterationNumber);
                 analysisTargetContent = sourceIteration?.generatedHtml;
+                currentProvidedPatchesJson = sourceIteration?.providedPatchesJson || null;
             } else {
                 const sourceIteration = pipeline?.iterations.find(iter => iter.iterationNumber === diffSourceData.iterationNumber);
                 analysisTargetContent = sourceIteration?.generatedOrRevisedText || sourceIteration?.generatedMainContent;
@@ -5199,6 +5265,7 @@ function activateInstantFixesView(view: 'side-by-side' | 'diff-analysis' | 'prev
             const sourceIteration = pipeline?.iterations.find(iter => iter.iterationNumber === diffSourceData.iterationNumber);
             if (sourceIteration) {
                 targetContent = sourceIteration.generatedHtml; // Request 2 output
+                currentProvidedPatchesJson = sourceIteration.providedPatchesJson || null;
                 
                 if (sourceIteration.title.includes('Initial')) {
                     targetTitle = "Initial Bug Fix (Request 2)";

@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -408,7 +407,14 @@ Your SOLE AND EXCLUSIVE task is to meticulously revise the "{{currentDraft}}" by
 *   **Enhanced Flow & Readability:** Smooth out any awkward phrasing, improve transitions between sentences and paragraphs, and refine sentence structures for optimal clarity and rhythm.
 *   **Preserve Strengths:** While implementing suggestions, be careful to preserve the original draft's strengths and core voice, unless a suggestion explicitly targets a change in voice.
 
-${systemInstructionTextOutputOnly} Your revision should be a clear demonstration of how insightful feedback can unlock a story's true potential.`,
+**Output Format (Preferred JSON Patch Array):**
+Return ONLY either:
+1) A JSON array of simplified patches with fields: operation ('replace' | 'insert_after' | 'insert_before' | 'delete'), search_block (multi-line unique string from the draft), and replace_with/new_content as required; or
+2) If patching is not suitable, the full revised text only.
+
+${systemInstructionJsonOutputOnly}
+
+If returning full text, output only the revised text without any commentary. Your revision should be a clear demonstration of how insightful feedback can unlock a story's true potential.`,
     user_creative_refine_revise: `Current Text Draft:
 \`\`\`
 {{currentDraft}}
@@ -416,7 +422,7 @@ ${systemInstructionTextOutputOnly} Your revision should be a clear demonstration
 Editorial Suggestions to Implement:
 {{critiqueToImplementStr}}
 
-Your task: Rewrite the draft, carefully, creatively, and holistically incorporating ALL of these editorial suggestions. Aim to significantly elevate the story's quality, impact, and coherence. The output must be the revised text ONLY.`,
+Your task: Rewrite the draft, carefully, creatively, and holistically incorporating ALL of these editorial suggestions. Prefer returning a JSON array of simplified patches (replace/insert_before/insert_after/delete) with unique multi-line search_block values that exist verbatim in the draft. If not feasible, return the fully revised text only.`,
     sys_creative_refine_critique: `
 **Persona:**
 You are 'Insightful Quill MKII', an advanced AI literary editor and narrative strategist, building upon prior analyses to guide a work towards exceptional quality. Your focus is now on finer nuances, deeper thematic explorations, and advanced storytelling techniques.
@@ -479,11 +485,20 @@ You are presented with a near-final text draft ("{{currentDraft}}"). Your SOLE A
 **Objective:**
 The output MUST be a flawless, stylistically impeccable, and publication-ready version of the text. It should read as if polished by a team of the world's best human editors.
 
-${systemInstructionTextOutputOnly} No error, however small, should escape your notice.`,
+**Output Format (Preferred JSON Patch Array):**
+Return ONLY either:
+1) A JSON array of simplified patches with fields: operation ('replace' | 'insert_after' | 'insert_before' | 'delete'), search_block (multi-line unique string from the draft), and replace_with/new_content as required; or
+2) If patching is not suitable, the fully polished text only.
+
+${systemInstructionJsonOutputOnly}
+
+No error, however small, should escape your notice.`,
     user_creative_final_polish: `Final Draft for Meticulous Polishing:
 \`\`\`
 {{currentDraft}}
 \`\`\`
+Prefer returning a JSON array of simplified patches (replace/insert_before/insert_after/delete) with unique multi-line search_block values that exist verbatim in the draft. If not feasible, return the fully polished text only.
+
 Perform an exhaustive and meticulous final polish on this draft. Your goal is to make it publication-ready and stylistically impeccable. Correct ALL errors in grammar, spelling, punctuation, and ensure strict consistency in style. Refine word choices, sentence structures, and transitions to enhance clarity, flow, and readability. Eliminate all redundancies. Output the polished text ONLY.`,
 };
 
