@@ -81,6 +81,10 @@
                                 <span>Math</span>
                             </label>
                             <label class="radio-label-modern">
+                                <input type="radio" name="appMode" value="deepthink">
+                                <span>Deepthink</span>
+                            </label>
+                            <label class="radio-label-modern">
                                 <input type="radio" name="appMode" value="agent">
                                 <span>Agent</span>
                             </label>
@@ -447,6 +451,106 @@
                                         <span class="prompt-placeholders">Variables: <code>{{originalProblemText}}</code>, <code>{{assignedStrategy}}</code>, <code>{{subStrategies}}</code></span>
                                     </div>
                                     <div class="prompt-card-body"><textarea id="user-math-red-team" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="deepthink-prompts-container" class="prompts-mode-container">
+                            <div class="prompt-content-pane" data-prompt-key="deepthink-initial-strategy">
+                                <h4 class="prompt-pane-title">Initial Strategy Generation</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-deepthink-initial-strategy" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{originalProblemText}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-deepthink-initial-strategy" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
+                            </div>
+                            <div class="prompt-content-pane" data-prompt-key="deepthink-sub-strategy">
+                                <h4 class="prompt-pane-title">Sub-Strategy Generation</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-deepthink-sub-strategy" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{originalProblemText}}</code>, <code>{{currentMainStrategy}}</code>, <code>{{otherMainStrategiesStr}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-deepthink-sub-strategy" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
+                            </div>
+                            <div class="prompt-content-pane" data-prompt-key="deepthink-solution-attempt">
+                                <h4 class="prompt-pane-title">Solution Attempt</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-deepthink-solution-attempt" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{originalProblemText}}</code>, <code>{{currentSubStrategy}}</code>, <code>{{knowledgePacket}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-deepthink-solution-attempt" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
+                            </div>
+                            <div class="prompt-content-pane" data-prompt-key="deepthink-self-improvement">
+                                <h4 class="prompt-pane-title">Self-Improvement</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-deepthink-self-improvement" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{originalProblemText}}</code>, <code>{{currentSubStrategy}}</code>, <code>{{solutionAttempt}}</code>, <code>{{knowledgePacket}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-deepthink-self-improvement" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
+                            </div>
+                            <div class="prompt-content-pane" data-prompt-key="deepthink-hypothesis-generation">
+                                <h4 class="prompt-pane-title">Hypothesis Generation</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-deepthink-hypothesis-generation" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{originalProblemText}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-deepthink-hypothesis-generation" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
+                            </div>
+                            <div class="prompt-content-pane" data-prompt-key="deepthink-hypothesis-tester">
+                                <h4 class="prompt-pane-title">Hypothesis Testing</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-deepthink-hypothesis-tester" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{originalProblemText}}</code>, <code>{{hypothesisText}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-deepthink-hypothesis-tester" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
+                            </div>
+                            <div class="prompt-content-pane" data-prompt-key="deepthink-red-team">
+                                <h4 class="prompt-pane-title">Red Team Evaluation</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-deepthink-red-team" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{originalProblemText}}</code>, <code>{{assignedStrategy}}</code>, <code>{{subStrategies}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-deepthink-red-team" class="prompt-textarea" rows="4"></textarea></div>
                                 </div>
                             </div>
                         </div>
