@@ -13,6 +13,7 @@ import {
     defaultCustomPromptsWebsite,
     defaultCustomPromptsCreative,
     createDefaultCustomPromptsMath,
+    createDefaultCustomPromptsDeepthink,
     createDefaultCustomPromptsAgent,
     defaultCustomPromptsReact, // Added for React mode
     systemInstructionHtmlOutputOnly, // Though not directly used in index.tsx, it's good to be aware it's here if needed
@@ -37,7 +38,7 @@ class PipelineStopRequestedError extends Error {
     }
 }
 
-type ApplicationMode = 'website' | 'creative' | 'math' | 'agent' | 'react';
+type ApplicationMode = 'website' | 'creative' | 'math' | 'agent' | 'react' | 'deepthink';
 
 interface AgentGeneratedPrompts {
     iteration_type_description: string;
@@ -362,6 +363,7 @@ const temperatures = [0, 0.7, 1.0, 1.5, 2.0];
 
 let pipelinesState: PipelineState[] = [];
 let activeMathPipeline: MathPipelineState | null = null;
+let activeDeepthinkPipeline: MathPipelineState | null = null; // Deepthink reuses Math pipeline structure
 let activeReactPipeline: ReactPipelineState | null = null; // Added for React mode
 let ai: GoogleGenAI | null = null;
 let activePipelineId: number | null = null;
@@ -376,6 +378,7 @@ let isCustomPromptsOpen = false;
 let customPromptsWebsiteState: CustomizablePromptsWebsite = JSON.parse(JSON.stringify(defaultCustomPromptsWebsite));
 let customPromptsCreativeState: CustomizablePromptsCreative = JSON.parse(JSON.stringify(defaultCustomPromptsCreative));
 let customPromptsMathState: CustomizablePromptsMath = createDefaultCustomPromptsMath(NUM_INITIAL_STRATEGIES_MATH, NUM_SUB_STRATEGIES_PER_MAIN_MATH);
+let customPromptsDeepthinkState: CustomizablePromptsMath = createDefaultCustomPromptsDeepthink(NUM_INITIAL_STRATEGIES_MATH, NUM_SUB_STRATEGIES_PER_MAIN_MATH);
 let customPromptsAgentState: CustomizablePromptsAgent = createDefaultCustomPromptsAgent(NUM_AGENT_MAIN_REFINEMENT_LOOPS);
 let customPromptsReactState: CustomizablePromptsReact = JSON.parse(JSON.stringify(defaultCustomPromptsReact)); // Added for React mode
 
@@ -405,6 +408,7 @@ const appModeSelector = document.getElementById('app-mode-selector') as HTMLElem
 const websitePromptsContainer = document.getElementById('website-prompts-container') as HTMLElement;
 const creativePromptsContainer = document.getElementById('creative-prompts-container') as HTMLElement;
 const mathPromptsContainer = document.getElementById('math-prompts-container') as HTMLElement;
+const deepthinkPromptsContainer = document.getElementById('deepthink-prompts-container') as HTMLElement;
 const agentPromptsContainer = document.getElementById('agent-prompts-container') as HTMLElement;
 const reactPromptsContainer = document.getElementById('react-prompts-container') as HTMLElement; // Added for React mode
 
@@ -469,6 +473,24 @@ const customPromptTextareasMath: { [K in keyof CustomizablePromptsMath]: HTMLTex
     user_math_hypothesisTester: document.getElementById('user-math-hypothesis-tester') as HTMLTextAreaElement,
     sys_math_redTeam: document.getElementById('sys-math-red-team') as HTMLTextAreaElement,
     user_math_redTeam: document.getElementById('user-math-red-team') as HTMLTextAreaElement,
+};
+
+// Deepthink uses identical structure; map to separate references for clarity
+const customPromptTextareasDeepthink: { [K in keyof CustomizablePromptsMath]: HTMLTextAreaElement | null } = {
+    sys_math_initialStrategy: document.getElementById('sys-deepthink-initial-strategy') as HTMLTextAreaElement,
+    user_math_initialStrategy: document.getElementById('user-deepthink-initial-strategy') as HTMLTextAreaElement,
+    sys_math_subStrategy: document.getElementById('sys-deepthink-sub-strategy') as HTMLTextAreaElement,
+    user_math_subStrategy: document.getElementById('user-deepthink-sub-strategy') as HTMLTextAreaElement,
+    sys_math_solutionAttempt: document.getElementById('sys-deepthink-solution-attempt') as HTMLTextAreaElement,
+    user_math_solutionAttempt: document.getElementById('user-deepthink-solution-attempt') as HTMLTextAreaElement,
+    sys_math_selfImprovement: document.getElementById('sys-deepthink-self-improvement') as HTMLTextAreaElement,
+    user_math_selfImprovement: document.getElementById('user-deepthink-self-improvement') as HTMLTextAreaElement,
+    sys_math_hypothesisGeneration: document.getElementById('sys-deepthink-hypothesis-generation') as HTMLTextAreaElement,
+    user_math_hypothesisGeneration: document.getElementById('user-deepthink-hypothesis-generation') as HTMLTextAreaElement,
+    sys_math_hypothesisTester: document.getElementById('sys-deepthink-prover') as HTMLTextAreaElement, // tester reused
+    user_math_hypothesisTester: document.getElementById('user-deepthink-prover') as HTMLTextAreaElement,
+    sys_math_redTeam: document.getElementById('sys-deepthink-red-team') as HTMLTextAreaElement,
+    user_math_redTeam: document.getElementById('user-deepthink-red-team') as HTMLTextAreaElement,
 };
 
 const customPromptTextareasAgent: { [K in keyof CustomizablePromptsAgent]: HTMLTextAreaElement | null } = {
@@ -579,6 +601,17 @@ function initializeCustomPromptTextareas() {
             });
         }
     }
+    // Deepthink Prompts (same structure)
+    for (const key in customPromptTextareasDeepthink) {
+        const k = key as keyof CustomizablePromptsMath;
+        const textarea = customPromptTextareasDeepthink[k];
+        if (textarea) {
+            textarea.value = customPromptsDeepthinkState[k];
+            textarea.addEventListener('input', (e) => {
+                customPromptsDeepthinkState[k] = (e.target as HTMLTextAreaElement).value;
+            });
+        }
+    }
     // Agent Prompts (for Judge LLM)
     for (const key in customPromptTextareasAgent) {
         const k = key as keyof CustomizablePromptsAgent;
@@ -619,6 +652,11 @@ function updateCustomPromptTextareasFromState() {
         const textarea = customPromptTextareasMath[k];
         if (textarea) textarea.value = customPromptsMathState[k];
     }
+    for (const key in customPromptTextareasDeepthink) {
+        const k = key as keyof CustomizablePromptsMath;
+        const textarea = customPromptTextareasDeepthink[k];
+        if (textarea) textarea.value = customPromptsDeepthinkState[k];
+    }
     for (const key in customPromptTextareasAgent) {
         const k = key as keyof CustomizablePromptsAgent;
         const textarea = customPromptTextareasAgent[k];
@@ -646,6 +684,11 @@ const promptNavStructure = {
         { groupTitle: "1. Strategic Solver", prompts: ["math-initial-strategy", "math-sub-strategy", "math-solution-attempt", "math-self-improvement"] },
         { groupTitle: "2. Hypothesis Explorer", prompts: ["math-hypothesis-generation", "math-prover", "math-disprover"] },
         { groupTitle: "3. Red Team Evaluator", prompts: ["math-red-team"] }
+    ],
+    deepthink: [
+        { groupTitle: "1. Strategic Solver", prompts: ["deepthink-initial-strategy", "deepthink-sub-strategy", "deepthink-solution-attempt", "deepthink-self-improvement"] },
+        { groupTitle: "2. Hypothesis Explorer", prompts: ["deepthink-hypothesis-generation", "deepthink-prover", "deepthink-disprover"] },
+        { groupTitle: "3. Red Team Evaluator", prompts: ["deepthink-red-team"] }
     ],
     agent: [
         { groupTitle: "Agent Configuration", prompts: ["agent-judge-llm"] }
@@ -778,6 +821,13 @@ function updateUIAfterModeChange() {
         if (mathProblemImageInputContainer) mathProblemImageInputContainer.style.display = 'flex';
         if (modelSelectionContainer) modelSelectionContainer.style.display = 'none';
         if (temperatureSelectionContainer) temperatureSelectionContainer.style.display = 'none';
+    } else if (currentMode === 'deepthink') {
+        if (initialIdeaLabel) initialIdeaLabel.textContent = 'Core Challenge:';
+        if (initialIdeaInput) initialIdeaInput.placeholder = 'Describe the complex problem or objective...';
+        if (generateButtonText) generateButtonText.textContent = 'Run Deepthink';
+        if (mathProblemImageInputContainer) mathProblemImageInputContainer.style.display = 'none';
+        if (modelSelectionContainer) modelSelectionContainer.style.display = 'none';
+        if (temperatureSelectionContainer) temperatureSelectionContainer.style.display = 'none';
     } else if (currentMode === 'agent') {
         if (initialIdeaLabel) initialIdeaLabel.textContent = 'Your Request:';
         if (initialIdeaInput) initialIdeaInput.placeholder = 'E.g., "Python snake game", "Analyze iPhone sales data"...';
@@ -796,9 +846,11 @@ function updateUIAfterModeChange() {
     if (!isGenerating) {
         pipelinesState = [];
         activeMathPipeline = null;
+        activeDeepthinkPipeline = null;
         activeReactPipeline = null;
         renderPipelines();
         renderActiveMathPipeline();
+        renderActiveDeepthinkPipeline();
         renderReactModePipeline();
     }
     updateControlsState();
@@ -868,7 +920,7 @@ function updateControlsState() {
     if (generateButton) {
         let disabled = isGenerating || !isApiKeyReady;
         if (!disabled) {
-            if (currentMode === 'math') {
+            if (currentMode === 'math' || currentMode === 'deepthink') {
                 // Enabled if not generating
             } else if (currentMode === 'react') {
                 // Enabled if not generating
@@ -886,9 +938,9 @@ function updateControlsState() {
     if (initialIdeaInput) initialIdeaInput.disabled = isGenerating;
     if (mathProblemImageInput) mathProblemImageInput.disabled = isGenerating;
 
-    if (modelSelectElement) modelSelectElement.disabled = isGenerating || currentMode === 'math';
+    if (modelSelectElement) modelSelectElement.disabled = isGenerating || currentMode === 'math' || currentMode === 'deepthink';
     if (pipelineSelectorsContainer) {
-        const disableSelectors = isGenerating || currentMode === 'math' || currentMode === 'react';
+        const disableSelectors = isGenerating || currentMode === 'math' || currentMode === 'deepthink' || currentMode === 'react';
         pipelineSelectorsContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => (cb as HTMLInputElement).disabled = disableSelectors);
         const pipelineSelectHeading = document.getElementById('pipeline-select-heading');
         if (pipelineSelectHeading) {
@@ -897,7 +949,7 @@ function updateControlsState() {
         }
     }
 
-    if (currentMode === 'math' && modelSelectElement) {
+    if ((currentMode === 'math' || currentMode === 'deepthink') && modelSelectElement) {
         modelSelectElement.value = MATH_MODEL_NAME;
     }
 
@@ -1003,6 +1055,19 @@ function activateTab(idToActivate: number | string) {
             activateStrategyTab(activeMathPipeline.activeStrategyTab ?? 0);
         }
 
+    } else if (currentMode === 'deepthink' && activeDeepthinkPipeline) {
+        activeDeepthinkPipeline.activeTabId = idToActivate as string;
+        document.querySelectorAll('#tabs-nav-container .tab-button.math-mode-tab').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('#pipelines-content-container > .pipeline-content').forEach(pane => pane.classList.remove('active'));
+        const tabButton = document.getElementById(`math-tab-${idToActivate}`);
+        const contentPane = document.getElementById(`pipeline-content-${idToActivate}`);
+        if (tabButton) tabButton.classList.add('active');
+        if (contentPane) contentPane.classList.add('active');
+
+        if (idToActivate === 'strategic-solver' && activeDeepthinkPipeline.initialStrategies.length > 0) {
+            activateStrategyTab(activeDeepthinkPipeline.activeStrategyTab ?? 0);
+        }
+
     } else if (currentMode === 'react' && activeReactPipeline) {
         activeReactPipeline.activeTabId = idToActivate as string;
         document.querySelectorAll('#tabs-nav-container .tab-button.react-mode-tab').forEach(btn => btn.classList.remove('active'));
@@ -1013,7 +1078,7 @@ function activateTab(idToActivate: number | string) {
         if (tabButton) tabButton.classList.add('active');
         if (contentPane) contentPane.classList.add('active');
 
-    } else if (currentMode !== 'math' && currentMode !== 'react') {
+    } else if (currentMode !== 'math' && currentMode !== 'react' && currentMode !== 'deepthink') {
         activePipelineId = idToActivate as number;
         document.querySelectorAll('#tabs-nav-container .tab-button').forEach(btn => {
             btn.classList.toggle('active', btn.id === `pipeline-tab-${activePipelineId}`);
@@ -1027,7 +1092,7 @@ function activateTab(idToActivate: number | string) {
 
 
 function renderPipelines() {
-    if (currentMode === 'math' || currentMode === 'react') { // React mode also has its own renderer
+    if (currentMode === 'math' || currentMode === 'react' || currentMode === 'deepthink') { // React & Deepthink have their own renderers
         tabsNavContainer.innerHTML = '';
         pipelinesContentContainer.innerHTML = '';
         return;
@@ -2294,24 +2359,24 @@ function exportConfiguration() {
     const config: ExportedConfig = {
         currentMode: currentMode,
         initialIdea: initialIdeaInput.value,
-        problemImageBase64: currentMode === 'math' ? currentProblemImageBase64 : undefined,
-        problemImageMimeType: currentMode === 'math' ? currentProblemImageMimeType : undefined,
+        problemImageBase64: (currentMode === 'math') ? currentProblemImageBase64 : undefined,
+        problemImageMimeType: (currentMode === 'math') ? currentProblemImageMimeType : undefined,
         selectedModel: modelSelectElement.value,
         selectedOriginalTemperatureIndices: selectedOriginalIndices,
         pipelinesState: JSON.parse(JSON.stringify(pipelinesState.map(p => {
             const { tabButtonElement, contentElement, stopButtonElement, ...rest } = p;
             return rest;
         }))),
-        activeMathPipeline: currentMode === 'math' ? JSON.parse(JSON.stringify(activeMathPipeline)) : null,
+        activeMathPipeline: (currentMode === 'math' || currentMode === 'deepthink') ? JSON.parse(JSON.stringify(currentMode==='math'?activeMathPipeline:activeDeepthinkPipeline)) : null,
         activeReactPipeline: currentMode === 'react' ? JSON.parse(JSON.stringify(activeReactPipeline)) : null,
-        activePipelineId: (currentMode !== 'math' && currentMode !== 'react') ? activePipelineId : null,
-        activeMathProblemTabId: (currentMode === 'math' && activeMathPipeline) ? activeMathPipeline.activeTabId : undefined,
+        activePipelineId: (currentMode !== 'math' && currentMode !== 'react' && currentMode !== 'deepthink') ? activePipelineId : null,
+        activeMathProblemTabId: ((currentMode === 'math' && activeMathPipeline) ? activeMathPipeline.activeTabId : (currentMode === 'deepthink' && activeDeepthinkPipeline) ? activeDeepthinkPipeline.activeTabId : undefined),
         // activeReactProblemTabId: (currentMode === 'react' && activeReactPipeline) ? activeReactPipeline.activeTabId : undefined, // For React worker tabs
         globalStatusText: "Ready.",
         globalStatusClass: "status-idle",
         customPromptsWebsite: customPromptsWebsiteState,
         customPromptsCreative: customPromptsCreativeState,
-        customPromptsMath: customPromptsMathState,
+        customPromptsMath: (currentMode === 'deepthink') ? customPromptsDeepthinkState : customPromptsMathState,
         customPromptsAgent: customPromptsAgentState,
         customPromptsReact: customPromptsReactState, // Added for React
         isCustomPromptsOpen: isCustomPromptsOpen,
@@ -2394,6 +2459,7 @@ function handleImportConfiguration(event: Event) {
             modelSelectElement.value = importedConfig.selectedModel || (currentMode === 'math' ? MATH_MODEL_NAME : modelSelectElement.options[0].value);
 
             activeMathPipeline = null; // Reset other mode states
+            activeDeepthinkPipeline = null;
             pipelinesState = [];
             activeReactPipeline = null;
 
@@ -2416,17 +2482,22 @@ function handleImportConfiguration(event: Event) {
                 if (activePipelineId !== null && pipelinesState.some(p => p.id === activePipelineId)) activateTab(activePipelineId);
                 else if (pipelinesState.length > 0) activateTab(pipelinesState[0].id);
 
-            } else if (currentMode === 'math') {
-                activeMathPipeline = importedConfig.activeMathPipeline ? {
+            } else if (currentMode === 'math' || currentMode === 'deepthink') {
+                const importedPipeline = importedConfig.activeMathPipeline ? {
                     ...importedConfig.activeMathPipeline,
                     isStopRequested: false,
                     status: (importedConfig.activeMathPipeline.status === 'processing' || importedConfig.activeMathPipeline.status === 'stopping') ? 'idle' : importedConfig.activeMathPipeline.status,
                     activeTabId: importedConfig.activeMathProblemTabId || 'problem-details',
                 } : null;
                 activePipelineId = null;
-                renderActiveMathPipeline();
-                if (activeMathPipeline && activeMathPipeline.activeTabId) {
-                    activateTab(activeMathPipeline.activeTabId);
+                if (currentMode === 'math') {
+                    activeMathPipeline = importedPipeline;
+                    renderActiveMathPipeline();
+                    if (activeMathPipeline && activeMathPipeline.activeTabId) activateTab(activeMathPipeline.activeTabId);
+                } else {
+                    activeDeepthinkPipeline = importedPipeline;
+                    renderActiveDeepthinkPipeline();
+                    if (activeDeepthinkPipeline && activeDeepthinkPipeline.activeTabId) activateTab(activeDeepthinkPipeline.activeTabId);
                 }
             } else if (currentMode === 'react') { // Added for React
                 activeReactPipeline = importedConfig.activeReactPipeline ? {
@@ -2447,7 +2518,12 @@ function handleImportConfiguration(event: Event) {
             customPromptsCreativeState = importedConfig.customPromptsCreative ? JSON.parse(JSON.stringify(importedConfig.customPromptsCreative)) : JSON.parse(JSON.stringify(defaultCustomPromptsCreative));
 
             const importedMathPrompts = importedConfig.customPromptsMath || createDefaultCustomPromptsMath(NUM_INITIAL_STRATEGIES_MATH, NUM_SUB_STRATEGIES_PER_MAIN_MATH);
-            customPromptsMathState = JSON.parse(JSON.stringify(importedMathPrompts));
+            // If importing while in deepthink, load into deepthink; otherwise math
+            if (importedConfig.currentMode === 'deepthink') {
+                customPromptsDeepthinkState = JSON.parse(JSON.stringify(importedMathPrompts));
+            } else {
+                customPromptsMathState = JSON.parse(JSON.stringify(importedMathPrompts));
+            }
 
             const importedAgentPrompts = importedConfig.customPromptsAgent || createDefaultCustomPromptsAgent(NUM_AGENT_MAIN_REFINEMENT_LOOPS);
             customPromptsAgentState = JSON.parse(JSON.stringify(importedAgentPrompts));
@@ -3106,6 +3182,54 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
             updateControlsState();
             renderActiveMathPipeline();
         }
+    }
+}
+
+// ---------- DEEPTHINK MODE (GENERALIZED MATH) ----------
+async function startDeepthinkProcess(coreChallenge: string) {
+    if (!ai) {
+        return;
+    }
+    isGenerating = true;
+    updateControlsState();
+
+    // Initialize a pipeline identical to math (no image support in Deepthink)
+    activeDeepthinkPipeline = {
+        id: `deepthink-process-${Date.now()}`,
+        problemText: coreChallenge,
+        problemImageBase64: null,
+        problemImageMimeType: null,
+        initialStrategies: [],
+        hypotheses: [],
+        redTeamAgents: [],
+        status: 'processing',
+        isStopRequested: false,
+        activeTabId: 'problem-details',
+        activeStrategyTab: 0,
+        strategicSolverComplete: false,
+        hypothesisExplorerComplete: false,
+        redTeamComplete: false,
+        knowledgePacket: ''
+    };
+    renderActiveDeepthinkPipeline();
+
+    // Temporarily swap states to reuse math orchestration with Deepthink prompts
+    const savedPipeline = activeMathPipeline;
+    const savedPrompts = customPromptsMathState;
+    activeMathPipeline = activeDeepthinkPipeline;
+    customPromptsMathState = customPromptsDeepthinkState;
+
+    try {
+        await startMathSolvingProcess(coreChallenge, null, null);
+        // After completion, copy back the possibly updated pipeline
+        activeDeepthinkPipeline = activeMathPipeline;
+    } finally {
+        // Restore original references
+        customPromptsMathState = savedPrompts;
+        activeMathPipeline = savedPipeline;
+        isGenerating = false;
+        updateControlsState();
+        renderActiveDeepthinkPipeline();
     }
 }
 
@@ -4220,6 +4344,28 @@ let redTeamHtml = `<div class="math-red-team model-detail-card">`;
     updateControlsState();
 }
 
+// Deepthink uses the exact same renderer with shared CSS classes and structure
+function renderActiveDeepthinkPipeline() {
+    if (currentMode !== 'deepthink' || !pipelinesContentContainer || !tabsNavContainer) {
+        if (currentMode !== 'deepthink' && tabsNavContainer && pipelinesContentContainer) {
+            tabsNavContainer.innerHTML = '';
+            pipelinesContentContainer.innerHTML = '';
+        }
+        return;
+    }
+    if (!activeDeepthinkPipeline) {
+        tabsNavContainer.innerHTML = '<p class="no-pipelines-message">Enter a core challenge and click "Run Deepthink".</p>';
+        pipelinesContentContainer.innerHTML = '';
+        return;
+    }
+
+    // Temporarily alias to reuse the math renderer logic by swapping the reference
+    const saved = activeMathPipeline;
+    activeMathPipeline = activeDeepthinkPipeline;
+    renderActiveMathPipeline();
+    activeMathPipeline = saved;
+}
+
 
 // ----- END MATH MODE SPECIFIC FUNCTIONS -----
 
@@ -4698,6 +4844,8 @@ function initializeUI() {
 
             if (currentMode === 'math') {
                 await startMathSolvingProcess(initialIdea, currentProblemImageBase64, currentProblemImageMimeType);
+            } else if (currentMode === 'deepthink') {
+                await startDeepthinkProcess(initialIdea);
             } else if (currentMode === 'react') {
                 await startReactModeProcess(initialIdea);
             } else { // Website, Creative, Agent modes

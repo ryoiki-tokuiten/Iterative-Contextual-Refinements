@@ -1941,7 +1941,7 @@ summary.prompt-group-title::-webkit-details-marker { display: none; }
   50% { box-shadow: 0 0 16px 0px rgba(var(--accent-yellow-rgb), 0.4); }
 }
 
-/* Math Mode Tabs - Override base styles for status indicators */
+/* Math/Deepthink Mode Tabs - Override base styles for status indicators */
 .tab-button.math-mode-tab {
   /* Inherit the beautiful base tab styles */
 }
