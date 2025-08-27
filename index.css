@@ -1,3 +1,50 @@
+/* Math Red Team — Evaluation Summary */
+.math-evaluation-summary {
+    margin: 1rem 0 1.25rem 0;
+    padding: 1rem 1.25rem;
+    background: rgba(var(--card-bg-base-rgb), 0.25);
+    border: none;
+    border-radius: var(--border-radius-lg);
+}
+.math-evaluation-summary .eval-summary-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+.math-evaluation-summary .eval-icon { color: var(--accent-purple); }
+.math-evaluation-summary .eval-title {
+    font-weight: 700;
+    color: var(--text-color);
+}
+.math-evaluation-summary .eval-items {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    gap: 0.75rem 1rem;
+}
+.math-evaluation-summary .eval-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(var(--card-bg-base-rgb), 0.2);
+    padding: 0.6rem 0.8rem;
+    border-radius: 10px;
+}
+.math-evaluation-summary .eval-label { color: var(--text-secondary-color); }
+.math-evaluation-summary .eval-value { color: var(--text-color); font-weight: 700; }
+
+/* Reasoning "code-like" block */
+.reasoning-block { margin: 1rem 0 1.25rem 0; }
+.reasoning-block-header { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; }
+.reasoning-icon { color: var(--accent-blue); }
+.reasoning-title { font-weight: 700; color: var(--text-color); }
+.reasoning-code {
+    background: rgba(var(--bg-color-rgb), 0.55);
+    border-radius: var(--border-radius-md);
+    padding: 1rem;
+    box-shadow: var(--shadow-sm);
+}
+.reasoning-code pre, .reasoning-code code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
 :root {
   /* Core Palette - Futuristic Dark Theme ("Aurora") */
   --bg-color: #050608; /* Rich, near-black for depth */
@@ -2193,33 +2240,28 @@ summary.prompt-group-title::-webkit-details-marker { display: none; }
 
 .sub-strategy-card {
     background: var(--card-bg-color);
-    border: 1px solid var(--border-color);
+    border: none;
     border-radius: var(--border-radius-lg);
     padding: 1.5rem;
     backdrop-filter: var(--card-blur-effect);
     -webkit-backdrop-filter: var(--card-blur-effect);
     box-shadow: var(--shadow-md);
-    transition: all var(--transition-speed) var(--easing-curve);
+    transition: background-color var(--transition-speed) var(--easing-curve), box-shadow var(--transition-speed) var(--easing-curve);
     position: relative;
     overflow: hidden;
 }
 
 .sub-strategy-card:hover {
-    transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
-    border-color: var(--border-hover-color);
 }
 
 .sub-strategy-card h6 {
-    font-size: 1rem;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text-color);
-    margin: 0 0 1rem 0;
-    padding-bottom: 0.75rem;
-    border-bottom: 1px solid var(--border-color);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-size: 0.85rem;
+    margin: 0 0 0.75rem 0;
+    padding: 0;
+    text-transform: none;
+    letter-spacing: 0.01em;
 }
 
 .sub-strategy-card .markdown-content {
@@ -2259,22 +2301,20 @@ summary.prompt-group-title::-webkit-details-marker { display: none; }
 }
 
 .sub-strategy-card .button {
-    background: linear-gradient(135deg, rgba(var(--accent-blue-rgb), 0.15), rgba(var(--accent-blue-rgb), 0.08));
-    border-color: rgba(var(--accent-blue-rgb), 0.3);
-    color: var(--accent-blue);
+    background: rgba(var(--card-bg-base-rgb), 0.7);
+    border-color: var(--border-color);
+    color: var(--text-secondary-color);
     font-weight: 600;
     padding: 0.75rem 1.5rem;
     font-size: 0.9rem;
-    transition: all var(--transition-speed) var(--easing-curve);
+    transition: background-color var(--transition-speed) var(--easing-curve), box-shadow var(--transition-speed) var(--easing-curve);
     width: 100%;
     justify-content: center;
 }
 
 .sub-strategy-card .button:hover {
-    background: linear-gradient(135deg, rgba(var(--accent-blue-rgb), 0.25), rgba(var(--accent-blue-rgb), 0.15));
-    border-color: var(--accent-blue);
-    box-shadow: 0 0 15px -3px rgba(var(--accent-blue-rgb), 0.4);
-    transform: translateY(-1px);
+    background: rgba(var(--card-bg-base-rgb), 0.55);
+    box-shadow: 0 0 0 1.5px rgba(var(--glow-color-rgb), 0.15);
 }
 
 /* Remove the dot after solution button */

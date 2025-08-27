@@ -3712,13 +3712,7 @@ function renderActiveMathPipeline() {
     if (mathProcess.problemImageBase64 && mathProcess.problemImageMimeType) {
         problemDetailsHtml += `<img src="data:${mathProcess.problemImageMimeType};base64,${mathProcess.problemImageBase64}" alt="Uploaded Math Problem Image" class="problem-image-display">`;
     }
-    if (mathProcess.requestPromptInitialStrategyGen) {
-        problemDetailsHtml += `
-            <details class="model-detail-section collapsible-section">
-                <summary class="model-section-title">Initial Strategy Generation Prompt</summary>
-                <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(mathProcess.requestPromptInitialStrategyGen)}</pre></div>
-            </details>`;
-    }
+    // Do not show the request prompt here (design requirement)
     if (mathProcess.status === 'retrying' && mathProcess.retryAttempt !== undefined && mathProcess.initialStrategies.length === 0) {
         problemDetailsHtml += `<p class="status-badge status-retrying">Retrying initial strategy generation (${mathProcess.retryAttempt}/${MAX_RETRIES})...</p>`;
     } else if (mathProcess.error && mathProcess.initialStrategies.length === 0) {
@@ -3755,6 +3749,22 @@ function renderActiveMathPipeline() {
 
     strategicSolverCard.appendChild(subTabsNav);
 
+    // Red Team Evaluation Summary block (clean, compact)
+    const evaluationSummary = document.createElement('div');
+    evaluationSummary.className = 'math-evaluation-summary';
+    const killedStrategies = 0; // placeholder values until wired to data
+    const killedSubStrategies = 0;
+    evaluationSummary.innerHTML = `
+        <div class="eval-summary-header">
+            <span class="material-symbols-outlined eval-icon" aria-hidden="true">shield_person</span>
+            <span class="eval-title">Evaluation Results</span>
+        </div>
+        <div class="eval-items">
+            <div class="eval-item"><span class="eval-label">Killed Strategies</span><span class="eval-value">${killedStrategies}</span></div>
+            <div class="eval-item"><span class="eval-label">Killed Sub-Strategies</span><span class="eval-value">${killedSubStrategies}</span></div>
+        </div>`;
+    strategicSolverCard.appendChild(evaluationSummary);
+
     mathProcess.initialStrategies.forEach((mainStrategy, index) => {
         const subTabContent = document.createElement('div');
         subTabContent.className = 'sub-tab-content';
@@ -3778,10 +3788,15 @@ function renderActiveMathPipeline() {
             subStrategyTitle.textContent = `Sub-Strategy ${index + 1}.${subIndex + 1}`;
             subStrategyCard.appendChild(subStrategyTitle);
 
-            const subStrategyText = document.createElement('div');
-            subStrategyText.className = 'markdown-content';
-            subStrategyText.innerHTML = renderMarkdown(subStrategy.subStrategyText);
-            subStrategyCard.appendChild(subStrategyText);
+            const reasoningBlock = document.createElement('div');
+            reasoningBlock.className = 'reasoning-block';
+            reasoningBlock.innerHTML = `
+                <div class=\"reasoning-block-header\"> 
+                    <span class=\"material-symbols-outlined reasoning-icon\" aria-hidden=\"true\">code</span>
+                    <span class=\"reasoning-title\">Reasoning</span>
+                </div>
+                <div class=\"reasoning-code like-code scrollable-content-area custom-scrollbar\">${renderMarkdown(subStrategy.subStrategyText)}</div>`;
+            subStrategyCard.appendChild(reasoningBlock);
 
             const solutionButton = document.createElement('button');
             solutionButton.className = 'button';
