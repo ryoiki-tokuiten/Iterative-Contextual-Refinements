@@ -427,6 +427,20 @@
                                     <div class="prompt-card-body"><textarea id="user-math-disprover" class="prompt-textarea" rows="4"></textarea></div>
                                 </div>
                             </div>
+                            <div class="prompt-content-pane" data-prompt-key="math-red-team">
+                                <h4 class="prompt-pane-title">Red Team Strategy Evaluator</h4>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header"><span class="prompt-card-title">System Instruction</span></div>
+                                    <div class="prompt-card-body"><textarea id="sys-math-red-team" class="prompt-textarea" rows="8"></textarea></div>
+                                </div>
+                                <div class="prompt-card">
+                                    <div class="prompt-card-header">
+                                        <span class="prompt-card-title">User Prompt Template</span>
+                                        <span class="prompt-placeholders">Variables: <code>{{originalProblemText}}</code>, <code>{{assignedStrategy}}</code>, <code>{{subStrategies}}</code></span>
+                                    </div>
+                                    <div class="prompt-card-body"><textarea id="user-math-red-team" class="prompt-textarea" rows="4"></textarea></div>
+                                </div>
+                            </div>
                         </div>
                         <div id="agent-prompts-container" class="prompts-mode-container">
                            <div class="prompt-content-pane" data-prompt-key="agent-judge-llm">
