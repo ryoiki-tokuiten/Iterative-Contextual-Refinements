@@ -2819,20 +2819,33 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
         if (currentProcess.isStopRequested) throw new PipelineStopRequestedError("Stopped during parallel processing.");
 
         // Phase 2.5: Red Team Strategy Evaluation
-        // Initialize Red Team agents - one for each strategy
-        currentProcess.redTeamAgents = currentProcess.initialStrategies.map((strategy, index) => ({
-            id: `redteam-${index}`,
-            assignedStrategyId: strategy.id,
-            killedStrategyIds: [],
-            killedSubStrategyIds: [],
-            status: 'pending',
-            isDetailsOpen: true
-        }));
-        currentProcess.redTeamStatus = 'processing';
+        // Ensure we have valid strategies with sub-strategies before proceeding
+        const validStrategies = currentProcess.initialStrategies.filter(s => 
+            s.status === 'completed' && s.subStrategies && s.subStrategies.length > 0
+        );
+
+        if (validStrategies.length === 0) {
+            console.warn("No valid strategies with sub-strategies found, skipping Red Team evaluation");
+            currentProcess.redTeamStatus = 'completed';
+            currentProcess.redTeamComplete = true;
+            currentProcess.redTeamAgents = [];
+        } else {
+            // Initialize Red Team agents - one for each valid strategy
+            currentProcess.redTeamAgents = validStrategies.map((strategy, index) => ({
+                id: `redteam-${index}`,
+                assignedStrategyId: strategy.id,
+                killedStrategyIds: [],
+                killedSubStrategyIds: [],
+                status: 'pending',
+                isDetailsOpen: true
+            }));
+            currentProcess.redTeamStatus = 'processing';
+        }
         renderActiveMathPipeline();
 
-        // Run Red Team agents in parallel
-        await Promise.allSettled(currentProcess.redTeamAgents.map(async (redTeamAgent, agentIndex) => {
+        // Run Red Team agents in parallel (only if we have agents)
+        if (currentProcess.redTeamAgents.length > 0) {
+            await Promise.allSettled(currentProcess.redTeamAgents.map(async (redTeamAgent, agentIndex) => {
             if (currentProcess.isStopRequested) {
                 redTeamAgent.status = 'cancelled';
                 return;
@@ -2845,6 +2858,14 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
                 const assignedStrategy = currentProcess.initialStrategies.find(s => s.id === redTeamAgent.assignedStrategyId);
                 if (!assignedStrategy) {
                     throw new Error(`Could not find assigned strategy ${redTeamAgent.assignedStrategyId}`);
+                }
+
+                // Ensure the strategy has sub-strategies
+                if (!assignedStrategy.subStrategies || assignedStrategy.subStrategies.length === 0) {
+                    console.warn(`Strategy ${assignedStrategy.id} has no sub-strategies, Red Team agent will skip evaluation`);
+                    redTeamAgent.status = 'completed';
+                    redTeamAgent.reasoning = "No sub-strategies to evaluate - strategy passed by default";
+                    return;
                 }
 
                 // Format sub-strategies for the prompt
@@ -2882,7 +2903,9 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
                     redTeamAgent.killedSubStrategyIds = redTeamDecision.killed_substrategy_ids || [];
                 } catch (parseError) {
                     console.warn(`Failed to parse Red Team decision for agent ${agentIndex + 1}:`, parseError);
-                    // If parsing fails, assume no strategies are killed
+                    // If parsing fails, try to extract useful information from text response
+                    redTeamAgent.reasoning = `JSON parsing failed. Raw response: ${redTeamResponse.substring(0, 500)}...`;
+                    // Conservative approach: assume no strategies are killed if we can't parse
                     redTeamAgent.killedStrategyIds = [];
                     redTeamAgent.killedSubStrategyIds = [];
                 }
@@ -2920,37 +2943,54 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
                     });
                 });
             }
-        });
+        }));
+
+        // Check if any Red Team agents completed successfully
+        const successfulRedTeamAgents = currentProcess.redTeamAgents.filter(agent => agent.status === 'completed');
+        const failedRedTeamAgents = currentProcess.redTeamAgents.filter(agent => agent.status === 'error');
+        
+        if (successfulRedTeamAgents.length === 0 && failedRedTeamAgents.length > 0) {
+            console.warn("All Red Team agents failed - proceeding without Red Team evaluation");
+            currentProcess.redTeamError = `All ${failedRedTeamAgents.length} Red Team agents failed. Proceeding with all strategies.`;
+        } else if (failedRedTeamAgents.length > 0) {
+            console.warn(`${failedRedTeamAgents.length} Red Team agents failed, but ${successfulRedTeamAgents.length} succeeded`);
+        }
 
         currentProcess.redTeamStatus = 'completed';
         currentProcess.redTeamComplete = true;
         renderActiveMathPipeline();
+        } // End of Red Team processing conditional
 
         if (currentProcess.isStopRequested) throw new PipelineStopRequestedError("Stopped after Red Team evaluation.");
 
-        // Edge case handling: Check if all strategies/sub-strategies were killed
-        const remainingStrategies = currentProcess.initialStrategies.filter(s => !s.isKilledByRedTeam);
-        const remainingSubStrategies = currentProcess.initialStrategies.flatMap(s => 
-            s.subStrategies.filter(sub => !sub.isKilledByRedTeam)
-        );
+        // Edge case handling: Check if all strategies/sub-strategies were killed (only if Red Team ran successfully)
+        const successfulRedTeamCount = currentProcess.redTeamAgents.filter(agent => agent.status === 'completed').length;
+        if (currentProcess.redTeamAgents.length > 0 && successfulRedTeamCount > 0) {
+            const remainingStrategies = currentProcess.initialStrategies.filter(s => !s.isKilledByRedTeam);
+            const remainingSubStrategies = currentProcess.initialStrategies.flatMap(s => 
+                s.subStrategies.filter(sub => !sub.isKilledByRedTeam)
+            );
 
-        if (remainingStrategies.length === 0) {
-            console.warn("All main strategies were eliminated by Red Team evaluation");
-            currentProcess.status = 'completed';
-            currentProcess.error = "All strategies were eliminated by Red Team evaluation. No solution attempts can be made.";
-            renderActiveMathPipeline();
-            return;
+            if (remainingStrategies.length === 0) {
+                console.warn("All main strategies were eliminated by Red Team evaluation");
+                currentProcess.status = 'completed';
+                currentProcess.error = "All strategies were eliminated by Red Team evaluation. No solution attempts can be made.";
+                renderActiveMathPipeline();
+                return;
+            }
+
+            if (remainingSubStrategies.length === 0) {
+                console.warn("All sub-strategies were eliminated by Red Team evaluation");
+                currentProcess.status = 'completed';
+                currentProcess.error = "All sub-strategies were eliminated by Red Team evaluation. No solution attempts can be made.";
+                renderActiveMathPipeline();
+                return;
+            }
+
+            console.log(`Red Team evaluation complete. Remaining: ${remainingStrategies.length} strategies, ${remainingSubStrategies.length} sub-strategies.`);
+        } else {
+            console.log("Red Team evaluation skipped - proceeding with all strategies.");
         }
-
-        if (remainingSubStrategies.length === 0) {
-            console.warn("All sub-strategies were eliminated by Red Team evaluation");
-            currentProcess.status = 'completed';
-            currentProcess.error = "All sub-strategies were eliminated by Red Team evaluation. No solution attempts can be made.";
-            renderActiveMathPipeline();
-            return;
-        }
-
-        console.log(`Red Team evaluation complete. Remaining: ${remainingStrategies.length} strategies, ${remainingSubStrategies.length} sub-strategies.`);
 
         // Phase 3: Knowledge Packet Synthesis
         currentProcess.knowledgePacket = synthesizeKnowledgePacket(currentProcess.hypotheses);
