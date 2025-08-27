@@ -1511,6 +1511,169 @@ function cleanOutputByType(rawOutput: string, type: string = 'text'): string {
     return textToClean;
 }
 
+// ---------- HTML PATCHING (Website mode) ----------
+
+type HtmlPatchOperation = {
+    operation: 'replace' | 'insert_after' | 'insert_before' | 'delete';
+    search_block: string;
+    replace_with?: string;
+    new_content?: string;
+};
+
+function escapeRegExp(literal: string): string {
+    return literal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildFlexibleWhitespaceRegex(block: string): RegExp {
+    // Escape regex chars, then normalize any run of whitespace in the block to match any whitespace run in the source
+    const escaped = escapeRegExp(block).replace(/\s+/g, '\\s+');
+    // Use multiline to make ^ and $ behave per line where relevant; avoid global to ensure single replacement
+    return new RegExp(escaped, 'm');
+}
+
+function countOccurrences(haystack: string, needle: string): number {
+    if (!needle) return 0;
+    let count = 0;
+    let idx = 0;
+    while (true) {
+        idx = haystack.indexOf(needle, idx);
+        if (idx === -1) break;
+        count++;
+        idx += Math.max(1, needle.length);
+    }
+    return count;
+}
+
+function replaceOnceExact(haystack: string, needle: string, replacement: string): { result: string, applied: boolean, multiple: boolean } {
+    const occurrences = countOccurrences(haystack, needle);
+    if (occurrences === 0) return { result: haystack, applied: false, multiple: false };
+    const idx = haystack.indexOf(needle);
+    const result = haystack.slice(0, idx) + replacement + haystack.slice(idx + needle.length);
+    return { result, applied: true, multiple: occurrences > 1 };
+}
+
+function applyPatches(currentHtml: string, patches: HtmlPatchOperation[]): string {
+    let modifiedHtml = currentHtml ?? '';
+    if (!Array.isArray(patches) || patches.length === 0) return modifiedHtml;
+
+    for (const rawPatch of patches) {
+        if (!rawPatch || typeof rawPatch !== 'object') {
+            console.warn('applyPatches: Skipping invalid patch (not an object):', rawPatch);
+            continue;
+        }
+
+        const op = String((rawPatch as any).operation || '').toLowerCase() as HtmlPatchOperation['operation'];
+        const searchBlock = (rawPatch as any).search_block ?? '';
+        const replaceWith = (rawPatch as any).replace_with ?? '';
+        const newContent = (rawPatch as any).new_content ?? '';
+
+        if (!op || !searchBlock || typeof searchBlock !== 'string') {
+            console.warn('applyPatches: Skipping patch with missing/invalid operation or search_block:', rawPatch);
+            continue;
+        }
+
+        try {
+            if (op === 'replace') {
+                // Try exact once
+                let { result, applied, multiple } = replaceOnceExact(modifiedHtml, searchBlock, replaceWith);
+                if (!applied) {
+                    // Fallback to flexible whitespace matching
+                    const regex = buildFlexibleWhitespaceRegex(searchBlock);
+                    if (regex.test(modifiedHtml)) {
+                        result = modifiedHtml.replace(regex, replaceWith);
+                        applied = true;
+                        // We cannot easily detect multiplicity with non-global regex; good enough to warn for exact case only
+                    }
+                }
+                if (!applied) {
+                    console.warn('applyPatches: replace - search_block not found. Patch skipped. block (first 120 chars):', searchBlock.substring(0, 120));
+                } else if (multiple) {
+                    console.warn('applyPatches: replace - multiple matches found. Only first occurrence was replaced. block (first 120 chars):', searchBlock.substring(0, 120));
+                }
+                modifiedHtml = result;
+            } else if (op === 'insert_after') {
+                // Exact: insert after the matched block (first occurrence)
+                let { result, applied, multiple } = replaceOnceExact(modifiedHtml, searchBlock, searchBlock + newContent);
+                if (!applied) {
+                    const regex = buildFlexibleWhitespaceRegex(searchBlock);
+                    if (regex.test(modifiedHtml)) {
+                        result = modifiedHtml.replace(regex, (m) => m + newContent);
+                        applied = true;
+                    }
+                }
+                if (!applied) {
+                    console.warn('applyPatches: insert_after - search_block not found. Patch skipped. block (first 120 chars):', searchBlock.substring(0, 120));
+                } else if (multiple) {
+                    console.warn('applyPatches: insert_after - multiple matches found. Only first occurrence was used. block (first 120 chars):', searchBlock.substring(0, 120));
+                }
+                modifiedHtml = result;
+            } else if (op === 'insert_before') {
+                // Exact: insert before the matched block (first occurrence)
+                let { result, applied, multiple } = replaceOnceExact(modifiedHtml, searchBlock, newContent + searchBlock);
+                if (!applied) {
+                    const regex = buildFlexibleWhitespaceRegex(searchBlock);
+                    if (regex.test(modifiedHtml)) {
+                        result = modifiedHtml.replace(regex, (m) => newContent + m);
+                        applied = true;
+                    }
+                }
+                if (!applied) {
+                    console.warn('applyPatches: insert_before - search_block not found. Patch skipped. block (first 120 chars):', searchBlock.substring(0, 120));
+                } else if (multiple) {
+                    console.warn('applyPatches: insert_before - multiple matches found. Only first occurrence was used. block (first 120 chars):', searchBlock.substring(0, 120));
+                }
+                modifiedHtml = result;
+            } else if (op === 'delete') {
+                // Exact delete
+                let { result, applied, multiple } = replaceOnceExact(modifiedHtml, searchBlock, '');
+                if (!applied) {
+                    const regex = buildFlexibleWhitespaceRegex(searchBlock);
+                    if (regex.test(modifiedHtml)) {
+                        result = modifiedHtml.replace(regex, '');
+                        applied = true;
+                    }
+                }
+                if (!applied) {
+                    console.warn('applyPatches: delete - search_block not found. Patch skipped. block (first 120 chars):', searchBlock.substring(0, 120));
+                } else if (multiple) {
+                    console.warn('applyPatches: delete - multiple matches found. Only first occurrence was deleted. block (first 120 chars):', searchBlock.substring(0, 120));
+                }
+                modifiedHtml = result;
+            } else {
+                console.warn('applyPatches: Unsupported operation. Skipping.', op, rawPatch);
+            }
+        } catch (e) {
+            console.warn('applyPatches: Error applying patch. Skipping this patch.', e, rawPatch);
+        }
+    }
+    return modifiedHtml;
+}
+
+function parseHtmlPatchesFromJson(rawJsonString: string): HtmlPatchOperation[] | null {
+    const cleaned = cleanOutputByType(rawJsonString, 'json');
+    try {
+        const parsed = JSON.parse(cleaned);
+        if (!Array.isArray(parsed)) return null;
+        const normalized: HtmlPatchOperation[] = [];
+        for (const item of parsed) {
+            if (!item || typeof item !== 'object') continue;
+            const op = String((item as any).operation || '').toLowerCase();
+            const searchBlock = (item as any).search_block;
+            const replaceWith = (item as any).replace_with;
+            const newContent = (item as any).new_content;
+            if (!op || typeof searchBlock !== 'string') continue;
+            if (op === 'replace' && typeof replaceWith !== 'string') continue;
+            if ((op === 'insert_after' || op === 'insert_before') && typeof newContent !== 'string') continue;
+            if (op !== 'replace' && op !== 'insert_after' && op !== 'insert_before' && op !== 'delete') continue;
+            normalized.push({ operation: op as any, search_block: searchBlock, replace_with: replaceWith, new_content: newContent });
+        }
+        return normalized;
+    } catch (e) {
+        console.warn('parseHtmlPatchesFromJson: Failed to parse JSON patches. Raw (first 300 chars):', rawJsonString.substring(0, 300), e);
+        return null;
+    }
+}
+
 
 function generateFallbackFeaturesFromString(text: string): string[] {
     const listItemsRegex = /(?:^\s*[-*+]|\d+\.)\s+(.*)/gm;
@@ -1722,7 +1885,18 @@ async function runPipeline(pipelineId: number, initialRequest: string) {
 
                     const userPromptInitialBugFix = renderPrompt(customPromptsWebsiteState.user_initialBugFix, { initialIdea: initialRequest, rawHtml: rawHtmlAfterGenOrImpl || placeholderRawHtml });
                     iteration.requestPromptHtml_BugFix = userPromptInitialBugFix;
-                    iteration.generatedHtml = cleanHtmlOutput(await makeApiCall(userPromptInitialBugFix, customPromptsWebsiteState.sys_initialBugFix, false, "Initial HTML Bug Fix"));
+                    {
+                        const bugfixResponse = await makeApiCall(userPromptInitialBugFix, customPromptsWebsiteState.sys_initialBugFix, true, "Initial HTML Bug Fix (JSON Patches)");
+                        const patches = parseHtmlPatchesFromJson(bugfixResponse);
+                        if (patches && patches.length > 0) {
+                            const patched = applyPatches(rawHtmlAfterGenOrImpl || "", patches);
+                            iteration.generatedHtml = cleanHtmlOutput(patched);
+                        } else {
+                            // Fallback: treat response as full HTML if JSON invalid or empty
+                            const fallbackHtml = cleanOutputByType(bugfixResponse, 'html');
+                            iteration.generatedHtml = fallbackHtml && fallbackHtml.length > 0 ? cleanHtmlOutput(fallbackHtml) : (rawHtmlAfterGenOrImpl || "");
+                        }
+                    }
                     currentHtmlContent = iteration.generatedHtml || "";
 
                     const userPromptInitialFeatures = renderPrompt(customPromptsWebsiteState.user_initialFeatureSuggest, { initialIdea: initialRequest, currentHtml: currentHtmlContent || placeholderCurrentHtml });
@@ -1740,7 +1914,18 @@ async function runPipeline(pipelineId: number, initialRequest: string) {
 
                     const userPromptRefineBugFix = renderPrompt(customPromptsWebsiteState.user_refineBugFix, { rawHtml: rawHtmlAfterGenOrImpl || placeholderRawHtml });
                     iteration.requestPromptHtml_BugFix = userPromptRefineBugFix;
-                    iteration.generatedHtml = cleanHtmlOutput(await makeApiCall(userPromptRefineBugFix, customPromptsWebsiteState.sys_refineBugFix, false, `Bug Fix & Completion (Iter ${i})`));
+                    {
+                        const bugfixResponse = await makeApiCall(userPromptRefineBugFix, customPromptsWebsiteState.sys_refineBugFix, true, `Bug Fix & Completion (Iter ${i}) - JSON Patches`);
+                        const patches = parseHtmlPatchesFromJson(bugfixResponse);
+                        if (patches && patches.length > 0) {
+                            const patched = applyPatches(rawHtmlAfterGenOrImpl || "", patches);
+                            iteration.generatedHtml = cleanHtmlOutput(patched);
+                        } else {
+                            // Fallback: treat response as full HTML if JSON invalid or empty
+                            const fallbackHtml = cleanOutputByType(bugfixResponse, 'html');
+                            iteration.generatedHtml = fallbackHtml && fallbackHtml.length > 0 ? cleanHtmlOutput(fallbackHtml) : (rawHtmlAfterGenOrImpl || "");
+                        }
+                    }
                     currentHtmlContent = iteration.generatedHtml || "";
 
                     const userPromptRefineFeatures = renderPrompt(customPromptsWebsiteState.user_refineFeatureSuggest, { initialIdea: initialRequest, currentHtml: currentHtmlContent || placeholderCurrentHtml });
