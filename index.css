@@ -3468,55 +3468,40 @@ hr.sub-divider {
 
 
 /* Red Team Evaluator Styles */
-.red-team-agents-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-    gap: 1.5rem;
-    margin-top: 1rem;
-}
+.math-red-team { display: flex; flex-direction: column; gap: 1rem; }
+.math-red-team .track-description { color: var(--text-secondary-color); font-size: var(--font-size-sm); }
+
+.red-team-agents-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1rem; }
 
 .red-team-agent-card {
-    background: var(--card-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
+    background: var(--sub-panel-bg-color);
+    border: 1px solid var(--sub-panel-border-color);
+    border-radius: var(--border-radius-lg);
     padding: 1rem;
-    transition: all 0.2s ease;
+    box-shadow: var(--shadow-lg);
+    transition: background-color var(--transition-speed), box-shadow var(--transition-speed);
 }
+.red-team-agent-card:hover { background: rgba(var(--card-bg-base-rgb), 0.3); box-shadow: var(--shadow-lg); }
 
-.red-team-agent-card:hover {
-    border-color: var(--accent-color);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
+.red-team-agent-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+.red-team-agent-title { margin: 0; color: var(--text-color); font-size: 1.05rem; }
 
-.red-team-agent-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 1px solid var(--border-color);
-}
+.red-team-results { background: rgba(var(--card-bg-base-rgb), 0.25); padding: 0.75rem; border-radius: var(--border-radius-md); }
+.red-team-results-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.red-team-stat { background: rgba(var(--card-bg-base-rgb), 0.28); border: 1px solid var(--sub-panel-border-color); border-radius: var(--border-radius-md); padding: 0.6rem 0.8rem; }
+.red-team-stat .label { display:block; font-size: var(--font-size-xs); color: var(--text-tertiary-color); margin-bottom: 0.15rem; }
+.red-team-stat .value { font-weight: 600; color: var(--text-color); }
 
-.red-team-agent-title {
-    margin: 0;
-    color: var(--text-color);
-    font-size: 1.1rem;
-}
+.killed-items { color: var(--text-secondary-color); font-size: var(--font-size-sm); margin-top: 0.5rem; }
 
-.red-team-results {
-    background: var(--secondary-bg);
-    padding: 0.75rem;
-    border-radius: 6px;
-    margin: 0.5rem 0;
-}
+/* Reasoning block */
+.red-team-reasoning { margin-top: 0.5rem; }
+.reasoning-header { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--text-secondary-color); font-weight: 600; margin-bottom: 0.5rem; }
+.reasoning-icon { font-size: 1.1rem; }
+.reasoning-code-block { background: rgba(var(--card-bg-base-rgb), 0.22); border: 1px solid var(--sub-panel-border-color); border-radius: var(--border-radius-md); padding: 0.9rem 1rem; max-height: 260px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.9rem; line-height: 1.6; white-space: pre-wrap; }
 
-.killed-items {
-    background: rgba(var(--accent-pink-rgb), 0.1);
-    border-left: 3px solid var(--accent-pink);
-    padding: 0.5rem;
-    margin: 0.5rem 0;
-    border-radius: 0 4px 4px 0;
-}
+/* No transform, no gradient, no hover borders */
+.red-team-agent-card:hover, .red-team-agent-card:active { transform: none; }
 
 .killed-items p {
     margin: 0.25rem 0;

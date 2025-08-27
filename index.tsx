@@ -4285,11 +4285,10 @@ function renderActiveMathPipeline() {
                 
                 redTeamHtml += `
                     <div class="red-team-results">
-                        <p><strong>Evaluation Results:</strong></p>
-                        <ul>
-                            <li>Killed Strategies: ${killedStrategiesCount}</li>
-                            <li>Killed Sub-Strategies: ${killedSubStrategiesCount}</li>
-                        </ul>`;
+                        <div class="red-team-results-list">
+                            <div class="red-team-stat"><span class="label">Killed Strategies</span><div class="value">${killedStrategiesCount}</div></div>
+                            <div class="red-team-stat"><span class="label">Killed Sub-Strategies</span><div class="value">${killedSubStrategiesCount}</div></div>
+                        </div>`;
 
                 if (killedStrategiesCount > 0 || killedSubStrategiesCount > 0) {
                     redTeamHtml += `<div class="killed-items">`;
@@ -4309,13 +4308,7 @@ function renderActiveMathPipeline() {
                 redTeamHtml += `<div class="status-message error"><pre>${escapeHtml(redTeamAgent.error)}</pre></div>`;
             }
 
-            if (redTeamAgent.requestPrompt) {
-                redTeamHtml += `
-                    <details class="model-detail-section collapsible-section" ${redTeamAgent.isDetailsOpen ? 'open' : ''}>
-                        <summary class="model-section-title">Request Prompt</summary>
-                        <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(redTeamAgent.requestPrompt)}</pre></div>
-                    </details>`;
-            }
+            // Request prompt intentionally hidden in Red Team tab UI per UX spec
 
             if (redTeamAgent.evaluationResponse) {
                 redTeamHtml += `
@@ -4327,10 +4320,10 @@ function renderActiveMathPipeline() {
 
             if (redTeamAgent.reasoning) {
                 redTeamHtml += `
-                    <details class="model-detail-section collapsible-section" ${redTeamAgent.isDetailsOpen ? 'open' : ''}>
-                        <summary class="model-section-title">Reasoning</summary>
-                        <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(redTeamAgent.reasoning)}</pre></div>
-                    </details>`;
+                    <div class="red-team-reasoning">
+                        <div class="reasoning-header"><span class="material-symbols-outlined reasoning-icon">code</span><span>Reasoning</span></div>
+                        <pre class="reasoning-code-block custom-scrollbar">${escapeHtml(redTeamAgent.reasoning)}</pre>
+                    </div>`;
             }
 
             redTeamHtml += `
