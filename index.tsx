@@ -2674,6 +2674,18 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
 
             currentProcess.strategicSolverComplete = true;
             renderActiveMathPipeline();
+
+            // Start Red Team evaluation immediately after strategic solver completes
+            console.log("Strategic Solver complete - starting Red Team evaluation");
+            try {
+                await runRedTeamEvaluation(currentProcess, problemText, imageBase64, imageMimeType, makeMathApiCall);
+            } catch (e: any) {
+                console.error("Red Team evaluation failed:", e);
+                currentProcess.redTeamStatus = 'error';
+                currentProcess.redTeamError = e.message || "Red Team evaluation failed";
+                currentProcess.redTeamComplete = true;
+                renderActiveMathPipeline();
+            }
         })();
 
         const trackBPromise = (async () => {
@@ -2818,65 +2830,9 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
 
         if (currentProcess.isStopRequested) throw new PipelineStopRequestedError("Stopped during parallel processing.");
 
-        // Phase 2.5: Red Team Strategy Evaluation
-        // Ensure we have valid strategies with sub-strategies before proceeding
-        const validStrategies = currentProcess.initialStrategies.filter(s => 
-            s.status === 'completed' && s.subStrategies && s.subStrategies.length > 0
-        );
+        // Red Team evaluation now happens immediately after Track A completes (moved above)
 
-        if (validStrategies.length === 0) {
-            console.warn("No valid strategies with sub-strategies found, skipping Red Team evaluation");
-            currentProcess.redTeamStatus = 'completed';
-            currentProcess.redTeamComplete = true;
-            currentProcess.redTeamAgents = [];
-        } else {
-            // Initialize Red Team agents - one for each valid strategy
-            currentProcess.redTeamAgents = validStrategies.map((strategy, index) => ({
-                id: `redteam-${index}`,
-                assignedStrategyId: strategy.id,
-                killedStrategyIds: [],
-                killedSubStrategyIds: [],
-                status: 'pending',
-                isDetailsOpen: true
-            }));
-            currentProcess.redTeamStatus = 'processing';
-        }
-        renderActiveMathPipeline();
-
-        // Run Red Team agents in parallel (only if we have agents)
-        if (currentProcess.redTeamAgents.length > 0) {
-            await Promise.allSettled(currentProcess.redTeamAgents.map(async (redTeamAgent, agentIndex) => {
-            if (currentProcess.isStopRequested) {
-                redTeamAgent.status = 'cancelled';
-                return;
-            }
-
-            try {
-                redTeamAgent.status = 'processing';
-                renderActiveMathPipeline();
-
-                const assignedStrategy = currentProcess.initialStrategies.find(s => s.id === redTeamAgent.assignedStrategyId);
-                if (!assignedStrategy) {
-                    throw new Error(`Could not find assigned strategy ${redTeamAgent.assignedStrategyId}`);
-                }
-
-                // Ensure the strategy has sub-strategies
-                if (!assignedStrategy.subStrategies || assignedStrategy.subStrategies.length === 0) {
-                    console.warn(`Strategy ${assignedStrategy.id} has no sub-strategies, Red Team agent will skip evaluation`);
-                    redTeamAgent.status = 'completed';
-                    redTeamAgent.reasoning = "No sub-strategies to evaluate - strategy passed by default";
-                    return;
-                }
-
-                // Format sub-strategies for the prompt
-                const subStrategiesText = assignedStrategy.subStrategies
-                    .map((sub, idx) => `${idx + 1}. [ID: ${sub.id}] ${sub.subStrategyText}`)
-                    .join('\n\n');
-
-                const redTeamUserPrompt = renderPrompt(customPromptsMathState.user_math_redTeam, {
-                    originalProblemText: problemText,
-                    assignedStrategy: `[ID: ${assignedStrategy.id}] ${assignedStrategy.strategyText}`,
-                    subStrategies: subStrategiesText
+        // (Old Red Team processing code removed - now handled immediately after Track A completes)
                 });
                 const redTeamPromptParts: Part[] = [{ text: redTeamUserPrompt }];
                 if (imageBase64 && imageMimeType) {
@@ -3229,6 +3185,160 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
             renderActiveMathPipeline();
         }
     }
+}
+
+// Helper function to run Red Team evaluation for completed strategies
+async function runRedTeamEvaluation(
+    currentProcess: MathPipelineState, 
+    problemText: string, 
+    imageBase64?: string | null, 
+    imageMimeType?: string | null,
+    makeMathApiCall?: any
+): Promise<void> {
+    if (!currentProcess || !makeMathApiCall) return;
+
+    // Ensure we have valid strategies with sub-strategies before proceeding
+    const validStrategies = currentProcess.initialStrategies.filter(s => 
+        s.status === 'completed' && s.subStrategies && s.subStrategies.length > 0
+    );
+
+    if (validStrategies.length === 0) {
+        console.log("No valid strategies with sub-strategies found, skipping Red Team evaluation");
+        currentProcess.redTeamStatus = 'completed';
+        currentProcess.redTeamComplete = true;
+        currentProcess.redTeamAgents = [];
+        return;
+    }
+
+    // Initialize Red Team agents - one for each valid strategy
+    currentProcess.redTeamAgents = validStrategies.map((strategy, index) => ({
+        id: `redteam-${index}`,
+        assignedStrategyId: strategy.id,
+        killedStrategyIds: [],
+        killedSubStrategyIds: [],
+        status: 'pending',
+        isDetailsOpen: true
+    }));
+    currentProcess.redTeamStatus = 'processing';
+    renderActiveMathPipeline();
+
+    // Run Red Team agents in parallel
+    await Promise.allSettled(currentProcess.redTeamAgents.map(async (redTeamAgent, agentIndex) => {
+        if (currentProcess.isStopRequested) {
+            redTeamAgent.status = 'cancelled';
+            return;
+        }
+
+        try {
+            redTeamAgent.status = 'processing';
+            renderActiveMathPipeline();
+
+            const assignedStrategy = currentProcess.initialStrategies.find(s => s.id === redTeamAgent.assignedStrategyId);
+            if (!assignedStrategy) {
+                throw new Error(`Could not find assigned strategy ${redTeamAgent.assignedStrategyId}`);
+            }
+
+            // Ensure the strategy has sub-strategies
+            if (!assignedStrategy.subStrategies || assignedStrategy.subStrategies.length === 0) {
+                console.warn(`Strategy ${assignedStrategy.id} has no sub-strategies, Red Team agent will skip evaluation`);
+                redTeamAgent.status = 'completed';
+                redTeamAgent.reasoning = "No sub-strategies to evaluate - strategy passed by default";
+                return;
+            }
+
+            // Format sub-strategies for the prompt
+            const subStrategiesText = assignedStrategy.subStrategies
+                .map((sub, idx) => `${idx + 1}. [ID: ${sub.id}] ${sub.subStrategyText}`)
+                .join('\n\n');
+
+            const redTeamUserPrompt = renderPrompt(customPromptsMathState.user_math_redTeam, {
+                originalProblemText: problemText,
+                assignedStrategy: `[ID: ${assignedStrategy.id}] ${assignedStrategy.strategyText}`,
+                subStrategies: subStrategiesText
+            });
+            const redTeamPromptParts: Part[] = [{ text: redTeamUserPrompt }];
+            if (imageBase64 && imageMimeType) {
+                redTeamPromptParts.unshift({ inlineData: { mimeType: imageMimeType, data: imageBase64 } });
+            }
+            redTeamAgent.requestPrompt = redTeamUserPrompt + (imageBase64 ? "\n[Image Provided]" : "");
+
+            const redTeamResponse = await makeMathApiCall(
+                redTeamPromptParts,
+                customPromptsMathState.sys_math_redTeam,
+                true,
+                `Red Team Agent ${agentIndex + 1}`,
+                redTeamAgent,
+                'retryAttempt'
+            );
+
+            redTeamAgent.evaluationResponse = cleanTextOutput(redTeamResponse);
+            
+            // Parse Red Team decision
+            try {
+                const redTeamDecision = JSON.parse(redTeamResponse);
+                redTeamAgent.reasoning = redTeamDecision.overall_reasoning || '';
+                redTeamAgent.killedStrategyIds = redTeamDecision.killed_strategy_ids || [];
+                redTeamAgent.killedSubStrategyIds = redTeamDecision.killed_substrategy_ids || [];
+            } catch (parseError) {
+                console.warn(`Failed to parse Red Team decision for agent ${agentIndex + 1}:`, parseError);
+                // If parsing fails, try to extract useful information from text response
+                redTeamAgent.reasoning = `JSON parsing failed. Raw response: ${redTeamResponse.substring(0, 500)}...`;
+                // Conservative approach: assume no strategies are killed if we can't parse
+                redTeamAgent.killedStrategyIds = [];
+                redTeamAgent.killedSubStrategyIds = [];
+            }
+
+            redTeamAgent.status = 'completed';
+        } catch (e: any) {
+            redTeamAgent.status = 'error';
+            redTeamAgent.error = e.message || `Failed to run Red Team Agent ${agentIndex + 1}.`;
+            console.error(`Error in Red Team Agent ${agentIndex + 1}:`, e);
+        } finally {
+            renderActiveMathPipeline();
+        }
+    }));
+
+    // Apply Red Team decisions - mark strategies and sub-strategies for elimination
+    currentProcess.redTeamAgents.forEach(redTeamAgent => {
+        if (redTeamAgent.status === 'completed') {
+            // Mark killed main strategies
+            redTeamAgent.killedStrategyIds.forEach(strategyId => {
+                const strategy = currentProcess.initialStrategies.find(s => s.id === strategyId);
+                if (strategy) {
+                    strategy.isKilledByRedTeam = true;
+                    strategy.redTeamReason = `Eliminated by Red Team Agent ${redTeamAgent.id}`;
+                }
+            });
+
+            // Mark killed sub-strategies
+            redTeamAgent.killedSubStrategyIds.forEach(subStrategyId => {
+                currentProcess.initialStrategies.forEach(strategy => {
+                    const subStrategy = strategy.subStrategies.find(sub => sub.id === subStrategyId);
+                    if (subStrategy) {
+                        subStrategy.isKilledByRedTeam = true;
+                        subStrategy.redTeamReason = `Eliminated by Red Team Agent ${redTeamAgent.id}`;
+                    }
+                });
+            });
+        }
+    });
+
+    // Check if any Red Team agents completed successfully
+    const successfulRedTeamAgents = currentProcess.redTeamAgents.filter(agent => agent.status === 'completed');
+    const failedRedTeamAgents = currentProcess.redTeamAgents.filter(agent => agent.status === 'error');
+    
+    if (successfulRedTeamAgents.length === 0 && failedRedTeamAgents.length > 0) {
+        console.warn("All Red Team agents failed - proceeding without Red Team evaluation");
+        currentProcess.redTeamError = `All ${failedRedTeamAgents.length} Red Team agents failed. Proceeding with all strategies.`;
+    } else if (failedRedTeamAgents.length > 0) {
+        console.warn(`${failedRedTeamAgents.length} Red Team agents failed, but ${successfulRedTeamAgents.length} succeeded`);
+    }
+
+    currentProcess.redTeamStatus = 'completed';
+    currentProcess.redTeamComplete = true;
+    renderActiveMathPipeline();
+
+    console.log(`Red Team evaluation complete for ${validStrategies.length} strategies.`);
 }
 
 // Helper function to synthesize knowledge packet from hypothesis exploration results
