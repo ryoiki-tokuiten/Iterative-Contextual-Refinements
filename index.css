@@ -2277,6 +2277,35 @@ summary.prompt-group-title::-webkit-details-marker { display: none; }
     transform: translateY(-1px);
 }
 
+/* Red Team killed styling */
+.sub-strategy-card.killed {
+    opacity: 0.6;
+    filter: grayscale(0.3);
+    position: relative;
+}
+.sub-strategy-card.killed::after {
+    content: 'KILLED';
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background: rgba(var(--accent-pink-rgb), 0.15);
+    color: var(--accent-pink);
+    border: 1px solid rgba(var(--accent-pink-rgb), 0.4);
+    padding: 0.1rem 0.4rem;
+    border-radius: var(--border-radius-sm);
+    font-size: var(--font-size-xs);
+}
+
+.math-red-team-gate .red-team-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 1rem;
+}
+.math-red-team-gate .red-team-card.strategy-killed {
+    border: 1px solid rgba(var(--accent-pink-rgb), 0.4);
+    box-shadow: 0 0 20px var(--error-glow);
+}
+
 /* Remove the dot after solution button */
 .sub-strategy-card::after {
     display: none;

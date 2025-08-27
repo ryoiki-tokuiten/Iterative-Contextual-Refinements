@@ -122,6 +122,9 @@ interface MathSubStrategyData {
     error?: string;
     isDetailsOpen?: boolean;
     retryAttempt?: number;
+
+    // Red Team gating flag
+    isKilled?: boolean;
 }
 
 // New interfaces for Hypothesis Explorer
@@ -165,6 +168,15 @@ interface MathMainStrategyData {
     judgingStatus?: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
     judgingError?: string;
     judgingRetryAttempt?: number;
+
+    // Red Team gating fields (per main strategy)
+    redTeamRequestPrompt?: string;
+    redTeamResponseJson?: string;
+    redTeamKilledIds?: string[];
+    redTeamStatus?: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
+    redTeamError?: string;
+    redTeamRetryAttempt?: number;
+    isKilled?: boolean;
 }
 interface MathPipelineState {
     id: string; // unique ID for this math problem instance
@@ -193,6 +205,7 @@ interface MathPipelineState {
     // Synchronization flags
     strategicSolverComplete?: boolean; // Track A completion
     hypothesisExplorerComplete?: boolean; // Track B completion
+    redTeamGateComplete?: boolean; // Red Team gating completion
 
     // New fields for final judging
     finalJudgedBestStrategyId?: string;
@@ -254,6 +267,10 @@ export interface CustomizablePromptsMath { // Export for prompts.ts
     user_math_prover: string; // {{originalProblemText}}, {{hypothesis}} (+ image)
     sys_math_disprover: string;
     user_math_disprover: string; // {{originalProblemText}}, {{hypothesis}} (+ image)
+
+    // New prompts for Red Team evaluation
+    sys_math_redTeam: string;
+    user_math_redTeam: string; // {{originalProblemText}}, {{mainStrategyId}}, {{mainStrategyText}}, {{subStrategiesList}} (+ image)
 }
 
 export interface CustomizablePromptsAgent { // Export for prompts.ts
@@ -445,6 +462,8 @@ const customPromptTextareasMath: { [K in keyof CustomizablePromptsMath]: HTMLTex
     user_math_prover: document.getElementById('user-math-prover') as HTMLTextAreaElement,
     sys_math_disprover: document.getElementById('sys-math-disprover') as HTMLTextAreaElement,
     user_math_disprover: document.getElementById('user-math-disprover') as HTMLTextAreaElement,
+    sys_math_redTeam: document.getElementById('sys-math-red-team') as HTMLTextAreaElement,
+    user_math_redTeam: document.getElementById('user-math-red-team') as HTMLTextAreaElement,
 };
 
 const customPromptTextareasAgent: { [K in keyof CustomizablePromptsAgent]: HTMLTextAreaElement | null } = {
@@ -620,7 +639,8 @@ const promptNavStructure = {
     ],
     math: [
         { groupTitle: "1. Strategic Solver", prompts: ["math-initial-strategy", "math-sub-strategy", "math-solution-attempt", "math-self-improvement"] },
-        { groupTitle: "2. Hypothesis Explorer", prompts: ["math-hypothesis-generation", "math-prover", "math-disprover"] }
+        { groupTitle: "2. Hypothesis Explorer", prompts: ["math-hypothesis-generation", "math-prover", "math-disprover"] },
+        { groupTitle: "3. Red Team Gate", prompts: ["math-red-team"] }
     ],
     agent: [
         { groupTitle: "Agent Configuration", prompts: ["agent-judge-llm"] }
@@ -2467,7 +2487,7 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
         isJson: boolean,
         stepDescription: string,
         targetStatusField: MathMainStrategyData | MathSubStrategyData | MathPipelineState | MathHypothesisData,
-        retryAttemptField: 'retryAttempt' | 'selfImprovementRetryAttempt' | 'proverRetryAttempt' | 'disproverRetryAttempt' | 'hypothesisGenRetryAttempt'
+        retryAttemptField: 'retryAttempt' | 'selfImprovementRetryAttempt' | 'proverRetryAttempt' | 'disproverRetryAttempt' | 'hypothesisGenRetryAttempt' | 'redTeamRetryAttempt'
     ): Promise<string> => {
         if (!currentProcess || currentProcess.isStopRequested) throw new PipelineStopRequestedError(`Stop requested before API call: ${stepDescription}`);
         let responseText = "";
@@ -2486,6 +2506,8 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
                 targetStatusField.disproverStatus = attempt > 0 ? 'retrying' : 'processing';
             } else if ('hypothesisGenStatus' in targetStatusField && retryAttemptField === 'hypothesisGenRetryAttempt') {
                 targetStatusField.hypothesisGenStatus = attempt > 0 ? 'retrying' : 'processing';
+            } else if ('redTeamStatus' in targetStatusField && retryAttemptField === 'redTeamRetryAttempt') {
+                targetStatusField.redTeamStatus = attempt > 0 ? 'retrying' : 'processing';
             } else {
                 targetStatusField.status = attempt > 0 ? 'retrying' : 'processing';
             }
@@ -2507,6 +2529,8 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
                     targetStatusField.disproverStatus = 'processing';
                 } else if ('hypothesisGenStatus' in targetStatusField && retryAttemptField === 'hypothesisGenRetryAttempt') {
                     targetStatusField.hypothesisGenStatus = 'processing';
+                } else if ('redTeamStatus' in targetStatusField && retryAttemptField === 'redTeamRetryAttempt') {
+                    targetStatusField.redTeamStatus = 'processing';
                 } else {
                     targetStatusField.status = 'processing';
                 }
@@ -2525,6 +2549,8 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
                     targetStatusField.disproverError = `Attempt ${attempt + 1} for ${stepDescription} failed: ${e.message || 'Unknown API error'}`;
                 } else if ('hypothesisGenError' in targetStatusField && retryAttemptField === 'hypothesisGenRetryAttempt') {
                     targetStatusField.hypothesisGenError = `Attempt ${attempt + 1} for ${stepDescription} failed: ${e.message || 'Unknown API error'}`;
+                } else if ('redTeamError' in targetStatusField && retryAttemptField === 'redTeamRetryAttempt') {
+                    targetStatusField.redTeamError = `Attempt ${attempt + 1} for ${stepDescription} failed: ${e.message || 'Unknown API error'}`;
                 } else {
                     targetStatusField.error = `Attempt ${attempt + 1} for ${stepDescription} failed: ${e.message || 'Unknown API error'}`;
                 }
@@ -2539,6 +2565,8 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
                         targetStatusField.disproverError = `Failed ${stepDescription} after ${MAX_RETRIES + 1} attempts: ${e.message || 'Unknown API error'}`;
                     } else if ('hypothesisGenError' in targetStatusField && retryAttemptField === 'hypothesisGenRetryAttempt') {
                         targetStatusField.hypothesisGenError = `Failed ${stepDescription} after ${MAX_RETRIES + 1} attempts: ${e.message || 'Unknown API error'}`;
+                    } else if ('redTeamError' in targetStatusField && retryAttemptField === 'redTeamRetryAttempt') {
+                        targetStatusField.redTeamError = `Failed ${stepDescription} after ${MAX_RETRIES + 1} attempts: ${e.message || 'Unknown API error'}`;
                     } else {
                         targetStatusField.error = `Failed ${stepDescription} after ${MAX_RETRIES + 1} attempts: ${e.message || 'Unknown API error'}`;
                     }
@@ -2634,6 +2662,68 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
                 }
             }));
 
+            // After sub-strategies are generated, run Red Team Gate on each main strategy in parallel
+            const redTeamPromises = currentProcess.initialStrategies.map(async (mainStrategy, mainIndex) => {
+                if (currentProcess.isStopRequested) {
+                    mainStrategy.redTeamStatus = 'cancelled';
+                    return;
+                }
+                try {
+                    mainStrategy.redTeamStatus = 'processing';
+                    renderActiveMathPipeline();
+
+                    const subList = mainStrategy.subStrategies.map(ss => `- ${ss.id}: ${ss.subStrategyText}`).join('\n');
+                    const redTeamUserPrompt = renderPrompt(customPromptsMathState.user_math_redTeam, {
+                        originalProblemText: problemText,
+                        mainStrategyId: mainStrategy.id,
+                        mainStrategyText: mainStrategy.strategyText,
+                        subStrategiesList: subList || 'None'
+                    });
+                    const redTeamParts: Part[] = [{ text: redTeamUserPrompt }];
+                    if (imageBase64 && imageMimeType) {
+                        redTeamParts.unshift({ inlineData: { mimeType: imageMimeType, data: imageBase64 } });
+                    }
+                    mainStrategy.redTeamRequestPrompt = redTeamUserPrompt + (imageBase64 ? "\n[Image Provided]" : "");
+
+                    // Expect JSON only
+                    const redTeamJson = await makeMathApiCall(
+                        redTeamParts,
+                        customPromptsMathState.sys_math_redTeam,
+                        true,
+                        `Red Team Gate for Main Strategy ${mainIndex + 1}`,
+                        mainStrategy,
+                        'redTeamRetryAttempt'
+                    );
+                    const cleaned = cleanOutputByType(redTeamJson, 'json');
+                    mainStrategy.redTeamResponseJson = cleaned;
+                    try {
+                        const parsed = JSON.parse(cleaned);
+                        const killIds: string[] = Array.isArray(parsed?.kill_ids) ? parsed.kill_ids : [];
+                        mainStrategy.redTeamKilledIds = killIds;
+                        // Apply kills: if main id killed, mark whole strategy killed
+                        if (killIds.includes(mainStrategy.id)) {
+                            mainStrategy.isKilled = true;
+                        }
+                        // Mark sub-strategies killed
+                        mainStrategy.subStrategies.forEach(ss => {
+                            if (killIds.includes(ss.id)) ss.isKilled = true;
+                        });
+                        mainStrategy.redTeamStatus = 'completed';
+                    } catch (pe: any) {
+                        mainStrategy.redTeamStatus = 'error';
+                        mainStrategy.redTeamError = `Failed to parse Red Team JSON: ${pe.message || 'Unknown parse error'}`;
+                    }
+                } catch (e: any) {
+                    mainStrategy.redTeamStatus = 'error';
+                    mainStrategy.redTeamError = e.message || 'Red Team evaluation failed.';
+                    console.error(`Error in Red Team for MS ${mainIndex + 1}:`, e);
+                } finally {
+                    renderActiveMathPipeline();
+                }
+            });
+
+            await Promise.allSettled(redTeamPromises);
+            currentProcess.redTeamGateComplete = true;
             currentProcess.strategicSolverComplete = true;
             renderActiveMathPipeline();
         })();
@@ -2790,7 +2880,13 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
 
         const solutionPromises: Promise<void>[] = [];
         currentProcess.initialStrategies.forEach((mainStrategy, mainIndex) => {
+            if (mainStrategy.isKilled) {
+                return; // Skip entire strategy
+            }
             mainStrategy.subStrategies.forEach(async (subStrategy, subIndex) => {
+                if (subStrategy.isKilled) {
+                    return; // Skip killed sub-strategy
+                }
                 if (currentProcess.isStopRequested) {
                     subStrategy.status = 'cancelled';
                     subStrategy.error = "Process stopped by user.";
@@ -2873,6 +2969,10 @@ async function startMathSolvingProcess(problemText: string, imageBase64?: string
 
         // --- Judging Phase 1: Intra-Strategy (using refined solutions) ---
         const intraStrategyJudgingPromises = currentProcess.initialStrategies.map(async (mainStrategy, mainIndex) => {
+            if (mainStrategy.isKilled) {
+                mainStrategy.judgingStatus = 'cancelled';
+                return;
+            }
             if (currentProcess.isStopRequested) {
                 mainStrategy.judgingStatus = 'cancelled';
                 return;
@@ -3663,6 +3763,7 @@ function renderActiveMathPipeline() {
         { id: 'problem-details', text: 'Problem Details' },
         { id: 'strategic-solver', text: 'Strategic Solver' },
         { id: 'hypothesis-explorer', text: 'Hypothesis Explorer' },
+        { id: 'red-team-gate', text: 'Red Team Gate' },
         { id: 'final-result', text: 'Final Result' }
     ];
 
@@ -3684,6 +3785,12 @@ function renderActiveMathPipeline() {
             }
         } else if (tabInfo.id === 'hypothesis-explorer') {
             if (mathProcess.hypothesisExplorerComplete) {
+                tabButton.classList.add('status-math-completed');
+            } else if (mathProcess.status === 'processing') {
+                tabButton.classList.add('status-math-processing');
+            }
+        } else if (tabInfo.id === 'red-team-gate') {
+            if (mathProcess.redTeamGateComplete) {
                 tabButton.classList.add('status-math-completed');
             } else if (mathProcess.status === 'processing') {
                 tabButton.classList.add('status-math-processing');
@@ -3773,6 +3880,7 @@ function renderActiveMathPipeline() {
         mainStrategy.subStrategies.forEach((subStrategy, subIndex) => {
             const subStrategyCard = document.createElement('div');
             subStrategyCard.className = 'sub-strategy-card';
+            if (subStrategy.isKilled) subStrategyCard.classList.add('killed');
 
             const subStrategyTitle = document.createElement('h6');
             subStrategyTitle.textContent = `Sub-Strategy ${index + 1}.${subIndex + 1}`;
@@ -3786,9 +3894,20 @@ function renderActiveMathPipeline() {
             const solutionButton = document.createElement('button');
             solutionButton.className = 'button';
             solutionButton.textContent = 'Solution';
-            solutionButton.addEventListener('click', () => openSolutionModal(subStrategy.id));
-            subStrategyCard.appendChild(solutionButton);
+            if (subStrategy.isKilled) {
+                (solutionButton as HTMLButtonElement).disabled = true;
+                solutionButton.title = 'Eliminated by Red Team';
+            } else {
+                solutionButton.addEventListener('click', () => openSolutionModal(subStrategy.id));
+            }
 
+            if (subStrategy.isKilled) {
+                const killedTag = document.createElement('span');
+                killedTag.className = 'status-badge status-error';
+                killedTag.textContent = 'Eliminated';
+                subStrategyCard.appendChild(killedTag);
+            }
+            subStrategyCard.appendChild(solutionButton);
             subStrategiesGrid.appendChild(subStrategyCard);
         });
 
@@ -3803,7 +3922,7 @@ function renderActiveMathPipeline() {
 
         const bestJudgedSolutionText = document.createElement('div');
         bestJudgedSolutionText.className = 'markdown-content';
-        bestJudgedSolutionText.innerHTML = renderMarkdown(mainStrategy.judgedBestSolution || 'Not available');
+        bestJudgedSolutionText.innerHTML = renderMarkdown(mainStrategy.isKilled ? '*Eliminated by Red Team*' : (mainStrategy.judgedBestSolution || 'Not available'));
         bestJudgedSolution.appendChild(bestJudgedSolutionText);
 
         subTabContent.appendChild(bestJudgedSolution);
@@ -3813,6 +3932,58 @@ function renderActiveMathPipeline() {
 
     strategicSolverContentPane.appendChild(strategicSolverCard);
     pipelinesContentContainer.appendChild(strategicSolverContentPane);
+
+    // Red Team Gate Pane
+    const redTeamContentPane = document.createElement('div');
+    redTeamContentPane.id = `pipeline-content-red-team-gate`;
+    redTeamContentPane.className = 'pipeline-content';
+    redTeamContentPane.setAttribute('role', 'tabpanel');
+    redTeamContentPane.setAttribute('aria-labelledby', `math-tab-red-team-gate`);
+    let redTeamHtml = `<div class="math-red-team-gate model-detail-card">
+        <h4 class="model-title">Red Team Strategy Gate</h4>
+        <p class="track-description">Three independent Red Team evaluators analyze each strategy using only its own sub-strategies and can eliminate the entire strategy or particular sub-strategies if definitive blockers are found.</p>`;
+    if (mathProcess.redTeamGateComplete) {
+        redTeamHtml += `<p class="status-badge status-completed">Red Team Gate Complete</p>`;
+    } else if (mathProcess.status === 'processing') {
+        redTeamHtml += `<p class="status-badge status-processing">Red Team Gate In Progress</p>`;
+    }
+    if (mathProcess.initialStrategies.length > 0) {
+        redTeamHtml += `<div class="red-team-grid">`;
+        mathProcess.initialStrategies.forEach((mainStrategy, index) => {
+            const killedList = (mainStrategy.redTeamKilledIds || []).map(id => `<code>${id}</code>`).join(', ');
+            const statusBadge = mainStrategy.redTeamStatus === 'completed' ? 'status-completed' : mainStrategy.redTeamStatus === 'processing' || mainStrategy.redTeamStatus === 'retrying' ? 'status-processing' : mainStrategy.redTeamStatus === 'error' ? 'status-error' : 'status-pending';
+            redTeamHtml += `<div class="red-team-card ${mainStrategy.isKilled ? 'strategy-killed' : ''}">
+                <div class="model-detail-header">
+                    <div class="model-title-area">
+                        <h5 class="model-title">Strategy ${index + 1} (${mainStrategy.id})</h5>
+                    </div>
+                    <div class="model-card-actions">
+                        <span class="status-badge ${statusBadge}">${mainStrategy.redTeamStatus || 'pending'}</span>
+                    </div>
+                </div>
+                <div class="model-detail-section">
+                    <h6 class="model-section-title">Strategy</h6>
+                    <div class="markdown-content">${renderMarkdown(mainStrategy.strategyText)}</div>
+                </div>
+                <details class="model-detail-section collapsible-section" ${mainStrategy.redTeamRequestPrompt ? '' : 'open'}>
+                    <summary class="model-section-title">Red Team Request Prompt</summary>
+                    <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(mainStrategy.redTeamRequestPrompt || 'Not available')}</pre></div>
+                </details>
+                <details class="model-detail-section collapsible-section">
+                    <summary class="model-section-title">Red Team JSON Response</summary>
+                    <div class="scrollable-content-area custom-scrollbar"><pre>${escapeHtml(mainStrategy.redTeamResponseJson || 'Not available')}</pre></div>
+                </details>
+                <div class="model-detail-section">
+                    <h6 class="model-section-title">Eliminated IDs</h6>
+                    <p>${killedList || 'None'}</p>
+                </div>
+            </div>`;
+        });
+        redTeamHtml += `</div>`;
+    }
+    redTeamHtml += `</div>`;
+    redTeamContentPane.innerHTML = redTeamHtml;
+    pipelinesContentContainer.appendChild(redTeamContentPane);
 
     // Hypothesis Explorer Pane
     const hypothesisExplorerContentPane = document.createElement('div');
