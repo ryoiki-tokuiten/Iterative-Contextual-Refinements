@@ -414,6 +414,15 @@ class PromptEditor {
     editor.className = 'prompt-styling-editor';
     editor.contentEditable = 'true';
     editor.setAttribute('spellcheck', 'false');
+    editor.setAttribute('role', 'textbox');
+    editor.setAttribute('aria-multiline', 'true');
+
+    // Copy accessibility attributes from source textarea
+    const ariaLabel = this.textarea.getAttribute('aria-label');
+    if (ariaLabel) editor.setAttribute('aria-label', ariaLabel);
+
+    const ariaLabelledBy = this.textarea.getAttribute('aria-labelledby');
+    if (ariaLabelledBy) editor.setAttribute('aria-labelledby', ariaLabelledBy);
 
     this.textarea.parentNode?.insertBefore(container, this.textarea);
     container.appendChild(editor);

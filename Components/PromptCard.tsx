@@ -20,10 +20,12 @@ export const PromptCard: React.FC<PromptCardProps> = ({
     agentName,
     placeholders
 }) => {
+    const titleId = `${textareaId}-label`;
+
     return (
         <div className="prompt-card">
             <div className="prompt-card-header">
-                <span className="prompt-card-title">{title}</span>
+                <span id={titleId} className="prompt-card-title">{title}</span>
                 {agentName && (
                     <div className="prompt-model-selector">
                         <select className="prompt-model-select" data-agent={agentName}>
@@ -40,6 +42,7 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                     id={textareaId}
                     className="prompt-textarea"
                     rows={rows}
+                    aria-labelledby={titleId}
                 />
             </div>
         </div>
