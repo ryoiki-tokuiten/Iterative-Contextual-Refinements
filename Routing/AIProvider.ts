@@ -709,6 +709,109 @@ export class LocalModelsProvider implements AIProvider {
     }
 }
 
+export class NVIDIAProvider implements AIProvider {
+    private client: OpenAI | null = null;
+
+    initialize(apiKey: string): boolean {
+        try {
+            this.client = new OpenAI({
+                apiKey,
+                baseURL: 'https://integrate.api.nvidia.com/v1',
+                dangerouslyAllowBrowser: true
+            });
+            return true;
+        } catch (e) {
+            console.error("Failed to initialize NVIDIA:", e);
+            return false;
+        }
+    }
+
+    async generateContent(
+        promptOrParts: string | Part[] | StructuredMessage[],
+        temperature: number,
+        modelToUse: string,
+        systemInstruction?: string,
+        isJsonOutput: boolean = false,
+        topP?: number,
+        thinkingConfig?: any
+    ): Promise<GenerateContentResponse> {
+        if (!this.client) throw new Error("NVIDIA client not initialized.");
+
+        const messages: any[] = [];
+
+        // Handle structured messages properly
+        if (isStructuredMessages(promptOrParts)) {
+            // Add system instruction FIRST
+            if (systemInstruction) {
+                messages.push({ role: 'system', content: systemInstruction });
+            }
+
+            // Then add all structured messages (conversation history)
+            for (const msg of promptOrParts) {
+                messages.push({ role: msg.role, content: msg.content });
+            }
+        } else {
+            // Legacy behavior: system instruction + single user message
+            if (systemInstruction) {
+                messages.push({ role: 'system', content: systemInstruction });
+            }
+
+            const userContent = typeof promptOrParts === 'string' ? promptOrParts : promptOrParts.map(p => p.text).join('\n');
+            messages.push({ role: 'user', content: userContent });
+        }
+
+        const requestOptions: any = {
+            model: modelToUse,
+            messages,
+            temperature,
+            top_p: topP !== undefined ? topP : 0.95,
+            max_tokens: 16384,
+            stream: false // Non-streaming by default for compatibility
+        };
+
+        // Add chat_template_kwargs for NVIDIA-specific parameters
+        // This is used for models that support thinking/reasoning control
+        if (thinkingConfig?.thinking !== undefined) {
+            requestOptions.extra_body = {
+                chat_template_kwargs: {
+                    thinking: thinkingConfig.thinking
+                }
+            };
+        }
+
+        if (isJsonOutput) {
+            requestOptions.response_format = { type: "json_object" };
+        }
+
+        const response = await this.client.chat.completions.create(requestOptions);
+
+        const content = response.choices[0]?.message?.content || '';
+
+        // Convert NVIDIA response to Gemini-like format
+        const mockResponse = {
+            text: content,
+            response: {
+                text: () => content,
+                candidates: [{
+                    content: {
+                        parts: [{ text: content }]
+                    }
+                }]
+            }
+        };
+
+        return mockResponse as any;
+    }
+
+    isInitialized(): boolean {
+        return this.client !== null;
+    }
+
+    getProviderName(): string {
+        return 'nvidia';
+    }
+}
+
 // Factory function to create providers
 export function createAIProvider(provider: string): AIProvider {
     switch (provider) {
@@ -723,6 +826,8 @@ export function createAIProvider(provider: string): AIProvider {
             return new AnthropicProvider();
         case 'local':
             return new LocalModelsProvider();
+        case 'nvidia':
+            return new NVIDIAProvider();
         default:
             return new GoogleAIProvider();
     }

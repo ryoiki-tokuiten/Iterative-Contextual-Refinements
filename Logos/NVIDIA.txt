@@ -1,0 +1,1 @@
+NVIDIA logo placeholder - will use fallback icon

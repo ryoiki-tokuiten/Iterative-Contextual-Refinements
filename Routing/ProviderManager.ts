@@ -44,6 +44,10 @@ const DEFAULT_MODELS: Record<string, string[]> = {
         'gpt-5-2025-08-07',
         'gpt-4.1-2025-04-14',
         'gpt-5-mini-2025-08-07'
+    ],
+    nvidia: [
+        'deepseek-ai/deepseek-v4-pro',
+        'minimaxai/minimax-m2.7'
     ]
 };
 
@@ -83,6 +87,13 @@ export class ProviderManager {
             name: 'openai',
             displayName: 'OpenAI',
             models: [...DEFAULT_MODELS.openai],
+            isConfigured: false
+        });
+
+        this.providers.set('nvidia', {
+            name: 'nvidia',
+            displayName: 'NVIDIA',
+            models: [...DEFAULT_MODELS.nvidia],
             isConfigured: false
         });
 
@@ -154,6 +165,14 @@ export class ProviderManager {
             config.apiKey = openrouterKey;
             config.isConfigured = true;
         }
+
+        // Check for NVIDIA API key
+        const nvidiaKey = process.env.NVIDIA_API_KEY;
+        if (nvidiaKey) {
+            const config = this.providers.get('nvidia')!;
+            config.apiKey = nvidiaKey;
+            config.isConfigured = true;
+        }
     }
 
     private initializeConfiguredProviders(): void {
@@ -207,6 +226,8 @@ export class ProviderManager {
                 return config.apiKey === process.env.ANTHROPIC_API_KEY;
             case 'openrouter':
                 return config.apiKey === process.env.OPENROUTER_API_KEY;
+            case 'nvidia':
+                return config.apiKey === process.env.NVIDIA_API_KEY;
             default:
                 return false;
         }
