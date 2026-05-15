@@ -12,10 +12,12 @@ import {
     ensureAgenticInitialized,
     ensureContextualInitialized,
     ensureDeepthinkInitialized,
+    ensureDCAInitialized,
     getLoadedAdaptiveDeepthinkModule,
     getLoadedAgenticModule,
     getLoadedContextualModule,
     getLoadedDeepthinkModule,
+    getLoadedDCAModule,
     loadWebsiteLogic,
     loadWebsiteUI
 } from './ModeLoader';
@@ -71,6 +73,14 @@ export function renderActiveMode() {
             const mod = await ensureAdaptiveDeepthinkInitialized();
             if (mode !== globalState.currentMode || token !== renderToken) return;
             mod.renderAdaptiveDeepthinkMode();
+            return;
+        } else if (mode === 'dynamic-compute') {
+            const mod = await ensureDCAInitialized();
+            if (mode !== globalState.currentMode || token !== renderToken) return;
+            const pipelinesContentContainer = document.getElementById('pipelines-content-container');
+            if (pipelinesContentContainer) {
+                mod.renderDCAMode(pipelinesContentContainer);
+            }
             return;
         } else if (mode === 'deepthink') {
             const mod = await ensureDeepthinkInitialized();
@@ -139,6 +149,9 @@ export function updateUIAfterModeChange() {
         } else if (globalState.currentMode === 'adaptive-deepthink') {
             const adaptive = getLoadedAdaptiveDeepthinkModule();
             if (adaptive) adaptive.cleanupAdaptiveDeepthinkMode();
+        } else if (globalState.currentMode === 'dynamic-compute') {
+            const dca = getLoadedDCAModule();
+            if (dca) dca.cleanupDCAMode();
         }
     }
 

@@ -37,6 +37,9 @@ export const Sidebar: React.FC = () => {
     } else if (currentMode === 'adaptive-deepthink') {
         labelText = 'Core Challenge:';
         placeholderText = 'E.g., "Solve this mathematical problem", "Design a scalable database architecture", "Analyze this complex scenario"...';
+    } else if (currentMode === 'dynamic-compute') {
+        labelText = 'Problem:';
+        placeholderText = 'Enter a problem to dynamically allocate compute over...';
     }
 
     return (

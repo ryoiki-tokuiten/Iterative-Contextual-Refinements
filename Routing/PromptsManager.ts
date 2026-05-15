@@ -13,19 +13,24 @@ import { ContextualPromptsManager } from '../Contextual/ContextualPromptsManager
 import { WebsitePromptsManager } from '../Refine/WebsitePromptsManager';
 import { DeepthinkPromptsManager } from '../Deepthink/DeepthinkPromptsManager';
 
+import { DCAPromptsState } from '../Deepthink/DCA/DCAPrompts';
+import { DCAPromptsManager } from '../Deepthink/DCA/DCAPromptsManager';
+
 export class PromptsManager {
     private websitePromptsManager: WebsitePromptsManager;
     private deepthinkPromptsManager: DeepthinkPromptsManager;
     private agenticPromptsManager: AgenticPromptsManager;
     private adaptiveDeepthinkPromptsManager?: AdaptiveDeepthinkPromptsManager;
     private contextualPromptsManager?: ContextualPromptsManager;
+    private dcaPromptsManager?: DCAPromptsManager;
 
     constructor(
         websitePromptsRef: { current: CustomizablePromptsWebsite },
         deepthinkPromptsRef: { current: CustomizablePromptsDeepthink },
         agenticPromptsRef?: { current: AgenticPrompts },
         adaptiveDeepthinkPromptsRef?: { current: CustomizablePromptsAdaptiveDeepthink },
-        contextualPromptsRef?: { current: CustomizablePromptsContextual }
+        contextualPromptsRef?: { current: CustomizablePromptsContextual },
+        dcaPromptsRef?: { current: DCAPromptsState }
     ) {
         this.websitePromptsManager = new WebsitePromptsManager(websitePromptsRef);
         this.deepthinkPromptsManager = new DeepthinkPromptsManager(deepthinkPromptsRef);
@@ -39,6 +44,22 @@ export class PromptsManager {
         if (contextualPromptsRef) {
             this.contextualPromptsManager = new ContextualPromptsManager(contextualPromptsRef);
         }
+        if (dcaPromptsRef) {
+            this.dcaPromptsManager = new DCAPromptsManager(dcaPromptsRef);
+        }
+    }
+
+    // DCA Prompts
+    public getDCAPromptsManager(): DCAPromptsManager | undefined {
+        return this.dcaPromptsManager;
+    }
+
+    public getDCAPrompts(): DCAPromptsState | undefined {
+        return this.dcaPromptsManager?.getPrompts();
+    }
+
+    public setDCAPrompts(prompts: DCAPromptsState): void {
+        this.dcaPromptsManager?.setPrompts(prompts);
     }
 
     // Website prompts

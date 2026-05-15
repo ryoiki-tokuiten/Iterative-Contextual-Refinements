@@ -36,7 +36,7 @@ export class PipelineStopRequestedError extends Error {
     }
 }
 
-export type ApplicationMode = 'website' | 'deepthink' | 'agentic' | 'contextual' | 'adaptive-deepthink';
+export type ApplicationMode = 'website' | 'deepthink' | 'agentic' | 'contextual' | 'adaptive-deepthink' | 'dynamic-compute';
 
 export type EvolutionMode = 'off' | 'novelty' | 'quality';
 

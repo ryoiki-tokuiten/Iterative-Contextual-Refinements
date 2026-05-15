@@ -119,14 +119,16 @@ export class RoutingManager {
         deepthinkPromptsRef: { current: any },
         agenticPromptsRef?: { current: any },
         adaptiveDeepthinkPromptsRef?: { current: any },
-        contextualPromptsRef?: { current: any }
+        contextualPromptsRef?: { current: any },
+        dcaPromptsRef?: { current: any }
     ): void {
         this.promptsManager = new PromptsManager(
             websitePromptsRef,
             deepthinkPromptsRef,
             agenticPromptsRef,
             adaptiveDeepthinkPromptsRef,
-            contextualPromptsRef
+            contextualPromptsRef,
+            dcaPromptsRef
         );
 
         // Connect PromptsManager to PromptsModal for model selector state management

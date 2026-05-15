@@ -58,6 +58,7 @@ export interface ExportedConfigV1 {
         agentic?: unknown;
         contextual?: unknown;
         adaptiveDeepthink?: unknown;
+        dca?: unknown;
     };
 
     // Model parameters
@@ -174,6 +175,7 @@ export function convertLegacyToVersioned(legacyConfig: Record<string, unknown>):
             agentic: legacyConfig.customPromptsAgentic,
             contextual: legacyConfig.customPromptsContextual,
             adaptiveDeepthink: legacyConfig.customPromptsAdaptiveDeepthink,
+            dca: legacyConfig.customPromptsDCA,
         },
         modelParameters: legacyConfig.modelParameters as ExportedConfigV1['modelParameters'],
         solutionPoolVersions: legacyConfig.solutionPoolVersions as ExportedConfigV1['solutionPoolVersions'],
@@ -217,6 +219,8 @@ function extractLegacyModeState(config: Record<string, unknown>, mode: Applicati
             return config.activeContextualState;
         case 'adaptive-deepthink':
             return config.activeAdaptiveDeepthinkState;
+        case 'dynamic-compute':
+            return config.activeDCAState;
         default:
             return null;
     }

@@ -35,12 +35,17 @@ type SolutionPoolModule = typeof import('../Deepthink/SolutionPool');
 type AgenticModule = typeof import('../Agentic/AgenticUI_Bridge');
 type ContextualModule = typeof import('../Contextual/Contextual');
 type AdaptiveDeepthinkModule = typeof import('../AdaptiveDeepthink/AdaptiveDeepthinkMode');
+type DCAModule = typeof import('../Deepthink/DCA/DCA');
 type WebsiteLogicModule = typeof import('../Refine/WebsiteLogic');
 type WebsiteUIModule = any;
 
 let deepthinkModule: DeepthinkModule | null = null;
 let deepthinkModulePromise: Promise<DeepthinkModule> | null = null;
 let deepthinkInitialized = false;
+
+let dcaModule: DCAModule | null = null;
+let dcaModulePromise: Promise<DCAModule> | null = null;
+let dcaInitialized = false;
 
 let solutionPoolModule: SolutionPoolModule | null = null;
 let solutionPoolModulePromise: Promise<SolutionPoolModule> | null = null;
@@ -118,6 +123,16 @@ async function loadAdaptiveDeepthinkModule(): Promise<AdaptiveDeepthinkModule> {
         });
     }
     return adaptiveDeepthinkModulePromise;
+}
+
+async function loadDCAModule(): Promise<DCAModule> {
+    if (!dcaModulePromise) {
+        dcaModulePromise = import('../Deepthink/DCA/DCA').then((mod) => {
+            dcaModule = mod;
+            return mod;
+        });
+    }
+    return dcaModulePromise;
 }
 
 export async function loadWebsiteLogic(): Promise<WebsiteLogicModule> {
@@ -205,6 +220,19 @@ export async function ensureContextualInitialized(): Promise<ContextualModule> {
 
 export async function ensureAdaptiveDeepthinkInitialized(): Promise<AdaptiveDeepthinkModule> {
     return loadAdaptiveDeepthinkModule();
+}
+
+export async function ensureDCAInitialized(): Promise<DCAModule> {
+    const mod = await loadDCAModule();
+    if (!dcaInitialized) {
+        mod.initializeDCAModule();
+        dcaInitialized = true;
+    }
+    return mod;
+}
+
+export function getLoadedDCAModule(): DCAModule | null {
+    return dcaModule;
 }
 
 export function getLoadedDeepthinkModule(): DeepthinkModule | null {

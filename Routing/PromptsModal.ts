@@ -291,6 +291,12 @@ export class PromptsModal {
                     groupTitle: "CONTEXTUAL AGENTS",
                     prompts: ["contextual-main-generator", "contextual-iterative-agent", "contextual-solution-pool", "contextual-memory"]
                 }
+            ],
+            'dynamic-compute': [
+                {
+                    groupTitle: "DYNAMIC COMPUTE",
+                    prompts: ["dca-solution-generator", "dca-local-pool-agent"]
+                }
             ]
         };
     }
@@ -329,7 +335,8 @@ export class PromptsModal {
             'deepthink-prompts-container',
             'agentic-prompts-container',
             'adaptiveDeepthink-prompts-container',
-            'contextual-prompts-container'
+            'contextual-prompts-container',
+            'dynamic-compute-prompts-container'
         ]);
 
         const modelSelectors = document.querySelectorAll('.prompt-model-select');

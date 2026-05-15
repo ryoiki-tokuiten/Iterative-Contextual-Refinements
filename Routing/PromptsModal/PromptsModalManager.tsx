@@ -5,6 +5,7 @@ import DeepthinkPromptsContent from '../../Deepthink/DeepthinkPromptsContent';
 import AgenticPromptsContent from '../../Agentic/AgenticPromptsContent';
 import AdaptivePromptsContent from '../../AdaptiveDeepthink/AdaptivePromptsContent';
 import ContextualPromptsContent from '../../Contextual/ContextualPromptsContent';
+import DCAPromptsContent from '../../Deepthink/DCA/DCAPromptsContent';
 import { getRoutingManager } from '../index';
 
 /**
@@ -38,6 +39,9 @@ export const PromptsModalManager: React.FC = () => {
             <AdaptivePromptsContent />
             {promptsManager?.getContextualPromptsManager() ? (
                 <ContextualPromptsContent manager={promptsManager!.getContextualPromptsManager()!} />
+            ) : null}
+            {promptsManager?.getDCAPromptsManager() ? (
+                <DCAPromptsContent manager={promptsManager!.getDCAPromptsManager()!} />
             ) : null}
         </PromptsModalLayout>
     );

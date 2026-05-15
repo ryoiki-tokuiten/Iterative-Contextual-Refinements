@@ -99,6 +99,80 @@ function sanitizeContentsForApi(contents: any[]): any[] {
     });
 }
 
+interface ParsedGoogleApiError {
+    code?: number;
+    status?: string;
+    message?: string;
+    rawMessage: string;
+}
+
+function parseGoogleApiError(error: any): ParsedGoogleApiError {
+    const rawMessage = error instanceof Error ? error.message : String(error ?? 'Unknown error');
+    const parsedFromJson = (input: string): ParsedGoogleApiError | null => {
+        try {
+            const payload = JSON.parse(input);
+            if (payload?.error) {
+                return {
+                    code: typeof payload.error.code === 'number' ? payload.error.code : undefined,
+                    status: typeof payload.error.status === 'string' ? payload.error.status : undefined,
+                    message: typeof payload.error.message === 'string' ? payload.error.message : undefined,
+                    rawMessage: input,
+                };
+            }
+        } catch {
+            // Fall through to alternate parsing strategies.
+        }
+        return null;
+    };
+
+    const direct = parsedFromJson(rawMessage);
+    if (direct) return direct;
+
+    const embeddedJsonMatch = rawMessage.match(/(\{[\s\S]*"error"[\s\S]*\})/);
+    if (embeddedJsonMatch) {
+        const embedded = parsedFromJson(embeddedJsonMatch[1]);
+        if (embedded) return embedded;
+    }
+
+    return {
+        code: typeof error?.status === 'number' ? error.status : undefined,
+        rawMessage,
+    };
+}
+
+function isTransientGoogleApiError(error: ParsedGoogleApiError): boolean {
+    return error.code === 500
+        || error.code === 503
+        || error.status === 'INTERNAL'
+        || error.status === 'UNAVAILABLE'
+        || error.status === 'DEADLINE_EXCEEDED';
+}
+
+function normalizeGoogleApiError(error: any, modelToUse: string, hadCodeExecution: boolean): Error {
+    const parsed = parseGoogleApiError(error);
+    const code = parsed.code ?? (typeof error?.status === 'number' ? error.status : undefined);
+    const status = parsed.status ? ` ${parsed.status}` : '';
+    const detail = parsed.message || parsed.rawMessage || 'Request failed.';
+    let message = `Gemini API error (${code ?? 'unknown'}${status}) while using ${modelToUse}: ${detail}`;
+
+    if (isTransientGoogleApiError(parsed)) {
+        message += ' This is a provider-side failure.';
+    }
+
+    if (hadCodeExecution && isTransientGoogleApiError(parsed)) {
+        message += ' If this keeps happening, disable Deepthink code execution and retry.';
+    } else if (isTransientGoogleApiError(parsed)) {
+        message += ' Retry the run, and if it repeats switch to a stable non-preview Gemini model.';
+    }
+
+    const normalized = new Error(message);
+    (normalized as any).cause = error;
+    (normalized as any).status = code;
+    (normalized as any).providerStatus = parsed.status;
+    (normalized as any).rawProviderMessage = parsed.rawMessage;
+    return normalized;
+}
+
 export class GoogleAIProvider implements AIProvider {
     private client: GoogleGenAI | null = null;
 
@@ -189,7 +263,7 @@ export class GoogleAIProvider implements AIProvider {
             }];
         }
 
-        const config: any = { temperature };
+        const config: any = { temperature, maxOutputTokens: 65536 };
         if (topP !== undefined) config.topP = topP;
         if (systemInstruction) config.systemInstruction = systemInstruction;
         if (isJsonOutput) config.responseMimeType = "application/json";
@@ -243,11 +317,44 @@ export class GoogleAIProvider implements AIProvider {
         console.log('codeExecution enabled?', thinkingConfig?.codeExecution);
         console.groupEnd();
 
-        const result = await this.client.models.generateContent(requestOptions);
+        try {
+            const result = await this.client.models.generateContent(requestOptions);
 
-        // Return the full result to preserve thought signatures in response.candidates[0].content
-        // The content object contains parts with thoughtSignature fields that must be preserved
-        return result as any;
+            // Return the full result to preserve thought signatures in response.candidates[0].content
+            // The content object contains parts with thoughtSignature fields that must be preserved
+            return result as any;
+        } catch (error: any) {
+            const parsedError = parseGoogleApiError(error);
+            const hadCodeExecution = !!thinkingConfig?.codeExecution;
+
+            if (hadCodeExecution && isTransientGoogleApiError(parsedError)) {
+                const fallbackConfig = { ...config };
+
+                if (Array.isArray(fallbackConfig.tools)) {
+                    fallbackConfig.tools = fallbackConfig.tools.filter((tool: any) => !tool?.codeExecution);
+                    if (fallbackConfig.tools.length === 0) {
+                        delete fallbackConfig.tools;
+                    }
+                }
+
+                console.warn(`[Gemini] ${modelToUse} failed with native code execution enabled. Retrying once without code execution.`, {
+                    status: parsedError.status,
+                    code: parsedError.code,
+                });
+
+                try {
+                    const fallbackResult = await this.client.models.generateContent({
+                        ...requestOptions,
+                        config: fallbackConfig
+                    });
+                    return fallbackResult as any;
+                } catch (fallbackError: any) {
+                    throw normalizeGoogleApiError(fallbackError, modelToUse, hadCodeExecution);
+                }
+            }
+
+            throw normalizeGoogleApiError(error, modelToUse, hadCodeExecution);
+        }
     }
 
     isInitialized(): boolean {
@@ -553,7 +660,7 @@ export class AnthropicProvider implements AIProvider {
 
         const requestOptions: any = {
             model: modelToUse,
-            max_tokens: 4096,
+            max_tokens: 8192,
             temperature,
             messages
         };

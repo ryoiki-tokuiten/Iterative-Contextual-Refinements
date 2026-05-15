@@ -39,6 +39,12 @@ export const AppModeSelector: React.FC = () => {
                         <span>Adaptive Deepthink</span>
                     </label>
                 </div>
+                <div className="radio-group-full-width-row">
+                    <label className={`radio-label-modern radio-label-full-width ${currentMode === 'dynamic-compute' ? 'active' : ''}`}>
+                        <input type="radio" name="app-mode" value="dynamic-compute" checked={currentMode === 'dynamic-compute'} onChange={handleChange} />
+                        <span>Dynamic Compute Allocation</span>
+                    </label>
+                </div>
 
                 {/* Iterative Refinements Section */}
                 <div className="app-mode-section-label">Iterative Refinements</div>

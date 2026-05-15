@@ -1,6 +1,6 @@
 import { globalState } from '../../../Core/State';
 
-export type AppMode = 'deepthink' | 'adaptive-deepthink' | 'website' | 'agentic' | 'contextual';
+export type AppMode = 'deepthink' | 'adaptive-deepthink' | 'website' | 'agentic' | 'contextual' | 'dynamic-compute';
 
 export interface SidebarState {
     currentMode: AppMode;

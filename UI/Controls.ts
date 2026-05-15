@@ -15,12 +15,12 @@ export interface ControlsDisabledState {
 }
 
 export function computeIsGenerating(): boolean {
-    const { pipelinesState, activeDeepthinkPipeline, isAgenticRunning, isContextualRunning, isAdaptiveDeepthinkRunning } = globalState;
+    const { pipelinesState, activeDeepthinkPipeline, isAgenticRunning, isContextualRunning, isAdaptiveDeepthinkRunning, isDCARunning } = globalState;
 
     const anyPipelineRunningOrStopping = pipelinesState.some(p => p.status === 'running' || p.status === 'stopping');
     const deepthinkPipelineRunningOrStopping = activeDeepthinkPipeline?.status === 'processing' || activeDeepthinkPipeline?.status === 'stopping';
 
-    return anyPipelineRunningOrStopping || deepthinkPipelineRunningOrStopping || isAgenticRunning || isContextualRunning || isAdaptiveDeepthinkRunning;
+    return anyPipelineRunningOrStopping || deepthinkPipelineRunningOrStopping || isAgenticRunning || isContextualRunning || isAdaptiveDeepthinkRunning || isDCARunning;
 }
 
 export function computeIsApiKeyReady(): boolean {

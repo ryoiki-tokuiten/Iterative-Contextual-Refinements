@@ -134,6 +134,11 @@ export class App {
         } else if (globalState.currentMode === 'adaptive-deepthink') {
             const adaptive = await ensureAdaptiveDeepthinkInitialized();
             await adaptive.startAdaptiveDeepthinkProcess(initialIdea, globalState.customPromptsAdaptiveDeepthinkState, globalState.currentProblemImages);
+        } else if (globalState.currentMode === 'dynamic-compute') {
+            const { ensureDCAInitialized } = await import('./ModeLoader');
+            await ensureDCAInitialized();
+            const { startDCAProcess } = await import('../Deepthink/DCA/DCACore');
+            startDCAProcess(initialIdea);
         } else { // Website mode
             console.log('Starting Website mode');
             const websiteLogic = await loadWebsiteLogic();
@@ -171,7 +176,8 @@ export class App {
             { current: globalState.customPromptsDeepthinkState },
             { current: globalState.customPromptsAgenticState },
             { current: globalState.customPromptsAdaptiveDeepthinkState },
-            { current: globalState.customPromptsContextualState }
+            { current: globalState.customPromptsContextualState },
+            { current: globalState.customPromptsDCAState }
         );
 
         const agenticPromptsManager = routingManager.getAgenticPromptsManager();

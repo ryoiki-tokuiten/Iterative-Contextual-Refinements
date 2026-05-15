@@ -434,7 +434,6 @@ const StrategyContent: React.FC<{
 }> = ({ strategy, escapeHtml, onViewSolution }) => {
     const isSkipMode = strategy.subStrategies.length === 1 && strategy.subStrategies[0].id.endsWith('-direct');
     const directSub = isSkipMode ? strategy.subStrategies[0] : null;
-    const hasDirectSolution = directSub && (directSub.solutionAttempt || directSub.refinedSolution);
 
     return (
         <div className="strategy-content">
@@ -444,8 +443,8 @@ const StrategyContent: React.FC<{
                 containerClassName="strategy-text-container"
                 textClassName="strategy-text"
             />
-                <div className="strategy-actions">
-                {isSkipMode && hasDirectSolution && (
+            <div className="strategy-actions">
+                {isSkipMode && directSub && (
                     <button
                         className="view-solution-button"
                         data-sub-strategy-id={directSub!.id}
@@ -473,7 +472,6 @@ const SubStrategiesGrid: React.FC<{
     return (
         <div className="red-team-agents-grid">
             {subStrategies.map((sub, index) => {
-                const hasContent = sub.solutionAttempt || sub.refinedSolution;
                 return (
                     <div key={sub.id} className={`red-team-agent-card${sub.isKilledByRedTeam ? ' killed-sub-strategy' : ''}`}>
                         <div className="red-team-agent-header">
@@ -492,7 +490,7 @@ const SubStrategiesGrid: React.FC<{
                                     textClassName="sub-strategy-text"
                                 />
                                 <div className="sub-strategy-actions">
-                                    {hasContent && (
+                                    {sub.id && (
                                         <button
                                             className="view-solution-button"
                                             data-sub-strategy-id={sub.id}

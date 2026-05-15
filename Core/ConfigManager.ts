@@ -40,6 +40,7 @@ import { createDefaultCustomPromptsDeepthink } from '../Deepthink/DeepthinkPromp
 import { defaultCustomPromptsWebsite } from '../Refine/RefinePrompts';
 import { createDefaultCustomPromptsContextual } from '../Contextual/ContextualPrompts';
 import { createDefaultCustomPromptsAdaptiveDeepthink } from '../AdaptiveDeepthink/AdaptiveDeepthinkPrompt';
+import { createDefaultCustomPromptsDCA } from '../Deepthink/DCA/DCAPrompts';
 import { AGENTIC_SYSTEM_PROMPT } from '../Agentic/AgenticModePrompt';
 import {
     routingManager,
@@ -112,6 +113,7 @@ export async function exportConfiguration(format: ExportFormat = 'auto'): Promis
                 agentic: globalState.customPromptsAgenticState,
                 contextual: globalState.customPromptsContextualState,
                 adaptiveDeepthink: globalState.customPromptsAdaptiveDeepthinkState,
+                dca: globalState.customPromptsDCAState,
             },
             modelParameters: {
                 temperature: getSelectedTemperature(),
@@ -309,6 +311,11 @@ function restoreCustomPrompts(prompts: ExportedConfigV1['customPrompts']): void 
             key: 'contextual' as const,
             target: 'customPromptsContextualState' as const,
             getDefault: createDefaultCustomPromptsContextual
+        },
+        {
+            key: 'dca' as const,
+            target: 'customPromptsDCAState' as const,
+            getDefault: createDefaultCustomPromptsDCA
         }
     ];
 
