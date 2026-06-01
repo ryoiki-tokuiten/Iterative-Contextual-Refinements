@@ -2,128 +2,66 @@
 .copy-solution-btn,
 .download-solution-btn,
 .action-btn {
-    background-color: rgba(var(--card-bg-base-rgb), 0.7);
-    color: var(--text-secondary-color);
-    border: 1px solid var(--border-color);
-    padding: var(--space-3) var(--space-5);
-    /* 12px 20px - Proper 8pt grid */
     min-height: var(--button-height-sm);
-    /* 36px */
-    border-radius: var(--border-radius-md);
-    cursor: pointer;
-    transition: all var(--transition-speed) cubic-bezier(0.25, 0.8, 0.25, 1);
-    font-family: var(--font-family);
-    font-size: var(--font-size-sm);
-    /* 14px */
-    font-weight: var(--font-weight-medium);
-    line-height: var(--line-height-tight);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: var(--gap-sm);
-    /* 12px - Consistent gap */
-    text-decoration: none;
     letter-spacing: var(--letter-spacing-wide);
-    /* Consistent letter-spacing */
     position: relative;
     overflow: hidden;
-}
 
-.copy-solution-btn:hover,
-.download-solution-btn:hover,
-.action-btn:hover {
-    background-color: rgba(var(--card-bg-base-rgb), 0.55);
-    box-shadow: 0 0 0 1.5px rgba(var(--glow-color-rgb), 0.15);
-    transform: translateY(-1px);
-    border-color: var(--border-hover-color);
-    color: var(--text-color);
-}
+    &:hover {
+        transform: translateY(-1px);
+    }
 
-.copy-solution-btn:active,
-.download-solution-btn:active,
-.action-btn:active {
-    transform: translateY(1px);
-    filter: brightness(0.92);
-    box-shadow: var(--shadow-inset);
-}
+    &:active {
+        transform: translateY(1px);
+    }
 
-.copy-solution-btn:disabled,
-.download-solution-btn:disabled,
-.action-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    background-color: rgba(var(--card-bg-base-rgb), 0.3);
-    color: var(--text-muted);
-    border-color: rgba(var(--border-color-rgb), 0.5);
-    transform: none;
-    box-shadow: none;
-}
+    /* Light Mode Premium Overrides */
+    body.light-mode & {
+        background-color: rgba(255, 255, 255, 0.6);
+        border: 1px solid rgba(0, 0, 0, 0.04);
+        box-shadow:
+            0 2px 4px rgba(0, 0, 0, 0.02),
+            0 1px 2px rgba(0, 0, 0, 0.01),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+        backdrop-filter: var(--card-blur-effect);
 
-.copy-solution-btn .icon-slot,
-.download-solution-btn .icon-slot,
-.action-btn .icon-slot {
-    font-size: 1.25em;
-    line-height: 1;
-    transform: translateY(1px);
-}
+        &:hover {
+            background-color: rgba(255, 255, 255, 0.9);
+            border-color: rgba(0, 0, 0, 0.08);
+            color: var(--accent-purple);
+            box-shadow:
+                0 4px 12px rgba(139, 92, 246, 0.15),
+                0 2px 4px rgba(139, 92, 246, 0.05),
+                inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+            transform: translateY(-2px);
+        }
 
-/* Light Mode Premium Overrides */
-body.light-mode .copy-solution-btn,
-body.light-mode .download-solution-btn,
-body.light-mode .action-btn {
-    background-color: rgba(255, 255, 255, 0.6);
-    border: 1px solid rgba(0, 0, 0, 0.04);
-    box-shadow:
-        0 2px 4px rgba(0, 0, 0, 0.02),
-        0 1px 2px rgba(0, 0, 0, 0.01),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.5);
-    color: var(--text-secondary-color);
-    backdrop-filter: blur(8px);
-}
+        &:active {
+            transform: translateY(0);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+            background-color: rgba(245, 245, 245, 0.8);
+        }
+    }
 
-body.light-mode .copy-solution-btn:hover,
-body.light-mode .download-solution-btn:hover,
-body.light-mode .action-btn:hover {
-    background-color: rgba(255, 255, 255, 0.9);
-    border-color: rgba(0, 0, 0, 0.08);
-    color: var(--accent-purple);
-    box-shadow:
-        0 4px 12px rgba(139, 92, 246, 0.15),
-        0 2px 4px rgba(139, 92, 246, 0.05),
-        inset 0 0 0 1px rgba(255, 255, 255, 0.8);
-    transform: translateY(-2px);
-}
+    /* Fullscreen modal specific styles - maintain consistency */
+    .fullscreen-modal & {
+        background: rgba(var(--card-bg-base-rgb), 0.9);
+        border: 1px solid rgba(var(--border-color-rgb), 0.4);
 
-body.light-mode .copy-solution-btn:active,
-body.light-mode .download-solution-btn:active,
-body.light-mode .action-btn:active {
-    transform: translateY(0);
-    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
-    background-color: rgba(245, 245, 245, 0.8);
-}
-
-/* Fullscreen modal specific styles - maintain consistency */
-.fullscreen-modal .copy-solution-btn,
-.fullscreen-modal .download-solution-btn {
-    background: rgba(var(--card-bg-base-rgb), 0.9);
-    border: 1px solid rgba(var(--border-color-rgb), 0.4);
-}
-
-.fullscreen-modal .copy-solution-btn:hover,
-.fullscreen-modal .download-solution-btn:hover {
-    background: rgba(var(--card-bg-base-rgb), 1);
-    border-color: var(--border-hover-color);
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
-    transform: translateY(-1px);
+        &:hover {
+            background: rgba(var(--card-bg-base-rgb), 1);
+            border-color: var(--border-hover-color);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+            transform: translateY(-1px);
+        }
+    }
 }
 
 /* Code actions container */
 .code-actions {
     display: flex;
     gap: var(--gap-xs);
-    /* 8px - Consistent gap */
     align-items: center;
     flex-wrap: wrap;
     margin-top: var(--space-3);
-    /* 12px - Proper spacing */
 }

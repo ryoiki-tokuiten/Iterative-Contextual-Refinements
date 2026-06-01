@@ -8,16 +8,22 @@ import { DeepthinkConfigController, type DeepthinkConfigChangeEvent } from './De
 import { ApiCallEstimator } from './ApiCallEstimator';
 import { globalState } from '../Core/State';
 import { updateCodeExecutionToggleVisibility } from '../UI/setupCodeExecutionToggle';
+import { getModelThinkingType } from './AIProvider';
+import { renderIconMarkup } from '../UI/Icons';
+
+import { ProviderManager } from './ProviderManager';
 
 export class ModelSelectionUI {
     private modelConfig: ModelConfigManager;
     private deepthinkConfig: DeepthinkConfigController | null = null;
+    private providerManager: ProviderManager | null = null;
     private apiCallEstimator: ApiCallEstimator | null = null;
+    private activeProvider: string = 'google';
+    private searchQuery: string = '';
     private elements: {
         modelSelect: HTMLSelectElement | null;
         temperatureSlider: HTMLInputElement | null;
         topPSlider: HTMLInputElement | null;
-        refinementStagesSlider: HTMLInputElement | null;
         strategiesSlider: HTMLInputElement | null;
         subStrategiesSlider: HTMLInputElement | null;
         hypothesisSlider: HTMLInputElement | null;
@@ -29,20 +35,21 @@ export class ModelSelectionUI {
         postQualityFilterToggle: HTMLInputElement | null;
         temperatureValue: HTMLSpanElement | null;
         topPValue: HTMLSpanElement | null;
-        refinementStagesValue: HTMLSpanElement | null;
         strategiesValue: HTMLSpanElement | null;
         subStrategiesValue: HTMLSpanElement | null;
         hypothesisValue: HTMLSpanElement | null;
+        thinkingLevelSelect: HTMLSelectElement | null;
+        thinkingLevelContainer: HTMLDivElement | null;
     };
 
-    constructor(modelConfig: ModelConfigManager, deepthinkConfig?: DeepthinkConfigController) {
+    constructor(modelConfig: ModelConfigManager, deepthinkConfig?: DeepthinkConfigController, providerManager?: ProviderManager) {
         this.modelConfig = modelConfig;
         this.deepthinkConfig = deepthinkConfig || null;
+        this.providerManager = providerManager || null;
         this.elements = {
             modelSelect: null,
             temperatureSlider: null,
             topPSlider: null,
-            refinementStagesSlider: null,
             strategiesSlider: null,
             subStrategiesSlider: null,
             hypothesisSlider: null,
@@ -54,10 +61,11 @@ export class ModelSelectionUI {
             postQualityFilterToggle: null,
             temperatureValue: null,
             topPValue: null,
-            refinementStagesValue: null,
             strategiesValue: null,
             subStrategiesValue: null,
-            hypothesisValue: null
+            hypothesisValue: null,
+            thinkingLevelSelect: null,
+            thinkingLevelContainer: null
         };
     }
 
@@ -66,7 +74,6 @@ export class ModelSelectionUI {
             modelSelect: document.getElementById('model-select') as HTMLSelectElement,
             temperatureSlider: document.getElementById('temperature-slider') as HTMLInputElement,
             topPSlider: document.getElementById('top-p-slider') as HTMLInputElement,
-            refinementStagesSlider: document.getElementById('refinement-stages-slider') as HTMLInputElement,
             strategiesSlider: document.getElementById('strategies-slider') as HTMLInputElement,
             subStrategiesSlider: document.getElementById('sub-strategies-slider') as HTMLInputElement,
             hypothesisSlider: document.getElementById('hypothesis-slider') as HTMLInputElement,
@@ -78,10 +85,11 @@ export class ModelSelectionUI {
             postQualityFilterToggle: document.getElementById('post-quality-filter-toggle') as HTMLInputElement,
             temperatureValue: document.getElementById('temperature-value') as HTMLSpanElement,
             topPValue: document.getElementById('top-p-value') as HTMLSpanElement,
-            refinementStagesValue: document.getElementById('refinement-stages-value') as HTMLSpanElement,
             strategiesValue: document.getElementById('strategies-value') as HTMLSpanElement,
             subStrategiesValue: document.getElementById('sub-strategies-value') as HTMLSpanElement,
-            hypothesisValue: document.getElementById('hypothesis-value') as HTMLSpanElement
+            hypothesisValue: document.getElementById('hypothesis-value') as HTMLSpanElement,
+            thinkingLevelSelect: document.getElementById('thinking-level-select') as HTMLSelectElement,
+            thinkingLevelContainer: document.getElementById('thinking-level-container') as HTMLDivElement
         };
 
         this.createCustomModelSelect();
@@ -132,8 +140,6 @@ export class ModelSelectionUI {
         this.initializeModelOptions();
     }
 
-    private activeProvider: string = 'google';
-
     private createCustomModelSelect(): void {
         if (!this.elements.modelSelect) return;
 
@@ -148,13 +154,42 @@ export class ModelSelectionUI {
             <div class="model-selector-providers" id="model-selector-providers">
                 <!-- Provider tabs will be populated here -->
             </div>
-            <div class="model-selector-models" id="model-selector-models">
-                <!-- Models will be populated here -->
+            <div class="model-selector-models-container">
+                <div class="model-search-container" id="model-search-container">
+                    ${renderIconMarkup('Search', 'model-search-icon')}
+                    <input type="text" class="model-search-input" id="model-search-input" placeholder="Search models...">
+                </div>
+                <div class="model-selector-models" id="model-selector-models">
+                    <!-- Models will be populated here -->
+                </div>
             </div>
         `;
 
+        // Bind search input event
+        const searchInput = customSelect.querySelector('#model-search-input') as HTMLInputElement;
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                this.searchQuery = searchInput.value.trim().toLowerCase();
+                this.filterAndRenderModels();
+            });
+        }
+
         // Insert custom select after the original select
         container.insertBefore(customSelect, this.elements.modelSelect.nextSibling);
+    }
+
+    private filterAndRenderModels(): void {
+        const availableModels = this.modelConfig.getAvailableModels();
+        const selectedModel = this.modelConfig.getSelectedModel();
+        const modelsByProvider: Record<string, typeof availableModels> = {};
+        availableModels.forEach(model => {
+            const prov = model.provider || 'unknown';
+            if (!modelsByProvider[prov]) {
+                modelsByProvider[prov] = [];
+            }
+            modelsByProvider[prov].push(model);
+        });
+        this.renderModelsForProvider(this.activeProvider, modelsByProvider, selectedModel);
     }
 
     private updateCustomSelectOptions(): void {
@@ -170,10 +205,11 @@ export class ModelSelectionUI {
         const modelsByProvider: Record<string, typeof availableModels> = {};
         availableModels.forEach(model => {
             const provider = model.provider || 'unknown';
-            if (!modelsByProvider[provider]) {
-                modelsByProvider[provider] = [];
+            const providerKey = provider.toLowerCase();
+            if (!modelsByProvider[providerKey]) {
+                modelsByProvider[providerKey] = [];
             }
-            modelsByProvider[provider].push(model);
+            modelsByProvider[providerKey].push(model);
         });
 
         // Provider configuration with SVG logos
@@ -220,9 +256,17 @@ export class ModelSelectionUI {
             }
         };
 
+        // Ensure all core providers are present
+        const coreProviders = ['gemini', 'openai', 'anthropic', 'openrouter', 'local'];
+        const modelsProviders = Object.keys(modelsByProvider).map(p => p.toLowerCase());
+        const allProvidersSet = new Set([
+            ...coreProviders,
+            ...modelsProviders
+        ]);
+
         // Sort providers - Google/Gemini first, then others
-        const sortedProviders = Object.keys(modelsByProvider).sort((a, b) => {
-            const order = ['google', 'gemini', 'openai', 'anthropic', 'openrouter', 'meta', 'mistral'];
+        const sortedProviders = Array.from(allProvidersSet).sort((a, b) => {
+            const order = ['google', 'gemini', 'openai', 'anthropic', 'openrouter', 'meta', 'mistral', 'local'];
             const aIndex = order.indexOf(a.toLowerCase());
             const bIndex = order.indexOf(b.toLowerCase());
             if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
@@ -231,12 +275,14 @@ export class ModelSelectionUI {
             return aIndex - bIndex;
         });
 
-        // Determine active provider - prefer Google, or first available
+        // Determine active provider - prefer Google/Gemini, or first available
         const selectedModelData = availableModels.find(m => m.value === selectedModel);
         if (selectedModelData?.provider) {
             this.activeProvider = selectedModelData.provider.toLowerCase();
-        } else if (sortedProviders.includes('google') || sortedProviders.includes('gemini')) {
-            this.activeProvider = sortedProviders.includes('google') ? 'google' : 'gemini';
+        } else if (sortedProviders.includes('gemini')) {
+            this.activeProvider = 'gemini';
+        } else if (sortedProviders.includes('google')) {
+            this.activeProvider = 'google';
         } else if (sortedProviders.length > 0) {
             this.activeProvider = sortedProviders[0].toLowerCase();
         }
@@ -278,17 +324,26 @@ export class ModelSelectionUI {
     private syncModelsSectionHeight(): void {
         const providersContainer = document.getElementById('model-selector-providers');
         const modelsContainer = document.getElementById('model-selector-models');
+        const searchContainer = document.getElementById('model-search-container');
 
         if (providersContainer && modelsContainer) {
             // Get the natural height of providers column
             const providersHeight = providersContainer.offsetHeight;
-            // Set models max-height to match (minus padding)
-            modelsContainer.style.maxHeight = `${providersHeight - 12}px`;
+            const searchHeight = searchContainer ? searchContainer.offsetHeight : 0;
+            // Set models max-height to match (minus padding and search bar height)
+            modelsContainer.style.maxHeight = `${providersHeight - 12 - searchHeight}px`;
         }
     }
 
     private setActiveProvider(provider: string): void {
         this.activeProvider = provider.toLowerCase();
+
+        // Clear search input on provider tab change
+        const searchInput = document.getElementById('model-search-input') as HTMLInputElement;
+        if (searchInput) {
+            searchInput.value = '';
+        }
+        this.searchQuery = '';
 
         // Update active state on tabs
         const tabs = document.querySelectorAll('.provider-tab');
@@ -305,13 +360,15 @@ export class ModelSelectionUI {
         const modelsByProvider: Record<string, typeof availableModels> = {};
         availableModels.forEach(model => {
             const prov = model.provider || 'unknown';
-            if (!modelsByProvider[prov]) {
-                modelsByProvider[prov] = [];
+            const provKey = prov.toLowerCase();
+            if (!modelsByProvider[provKey]) {
+                modelsByProvider[provKey] = [];
             }
-            modelsByProvider[prov].push(model);
+            modelsByProvider[provKey].push(model);
         });
 
         this.renderModelsForProvider(provider, modelsByProvider, selectedModel);
+        this.updateThinkingLevelVisibility();
     }
 
     private renderModelsForProvider(
@@ -324,14 +381,80 @@ export class ModelSelectionUI {
 
         modelsContainer.innerHTML = '';
 
+        const normalizedProvider = provider.toLowerCase();
+        const lookupProviderName = normalizedProvider === 'google' ? 'gemini' : normalizedProvider;
+        const providerConfig = this.providerManager?.getProviderConfig(lookupProviderName);
+        const isConfigured = providerConfig ? providerConfig.isConfigured : false;
+
+        if (!isConfigured) {
+            const displayName = providerConfig?.displayName || (provider.charAt(0).toUpperCase() + provider.slice(1));
+            modelsContainer.innerHTML = `
+                <div class="provider-unconfigured-container">
+                    <div class="provider-unconfigured-icon">
+                        ${renderIconMarkup('TriangleAlert', 'unconfigured-alert-icon', {}, 28)}
+                    </div>
+                    <h4 class="provider-unconfigured-title">${displayName} Not Configured</h4>
+                    <p class="provider-unconfigured-description">
+                        API key or credentials for ${displayName} are not configured in Iterative Studio.
+                    </p>
+                    <button class="provider-configure-btn" id="model-selector-configure-btn">
+                        ${renderIconMarkup('settings', 'configure-settings-icon', {}, 14)}
+                        <span>Configure API Key</span>
+                    </button>
+                </div>
+            `;
+            
+            const configureBtn = modelsContainer.querySelector('#model-selector-configure-btn');
+            if (configureBtn) {
+                configureBtn.addEventListener('click', () => {
+                    document.getElementById('add-providers-trigger')?.click();
+                });
+            }
+            return;
+        }
+
         // Find models for this provider (case-insensitive match)
         const providerKey = Object.keys(modelsByProvider).find(
             k => k.toLowerCase() === provider.toLowerCase()
         );
-        const models = providerKey ? modelsByProvider[providerKey] : [];
+        let models = providerKey ? modelsByProvider[providerKey] : [];
+
+        // Apply search filter if query is not empty
+        if (this.searchQuery) {
+            models = models.filter(model => 
+                model.value.toLowerCase().includes(this.searchQuery) ||
+                (model.label && model.label.toLowerCase().includes(this.searchQuery))
+            );
+        }
 
         if (models.length === 0) {
-            modelsContainer.innerHTML = '<div class="no-models">No models available</div>';
+            if (this.searchQuery) {
+                modelsContainer.innerHTML = '<div class="no-models">No matching models found</div>';
+            } else {
+                modelsContainer.innerHTML = `
+                    <div class="no-models">
+                        No models found for ${providerConfig?.displayName || provider}.<br/>
+                        <button class="provider-configure-btn refresh-models-btn" id="model-selector-refresh-btn" style="margin-top: 12px; font-size: 11px; padding: 6px 10px;">
+                            ${renderIconMarkup('RotateCcw', 'refresh-icon', {}, 12)}
+                            <span>Fetch Models</span>
+                        </button>
+                    </div>
+                `;
+                const refreshBtn = modelsContainer.querySelector('#model-selector-refresh-btn');
+                if (refreshBtn) {
+                    refreshBtn.addEventListener('click', async () => {
+                        const icon = refreshBtn.querySelector('.refresh-icon');
+                        if (icon) icon.classList.add('spinning');
+                        try {
+                            await this.providerManager?.fetchAndSetProviderModels(lookupProviderName);
+                        } catch (err) {
+                            console.error('Fetch failed:', err);
+                        } finally {
+                            if (icon) icon.classList.remove('spinning');
+                        }
+                    });
+                }
+            }
             return;
         }
 
@@ -348,7 +471,7 @@ export class ModelSelectionUI {
 
             // Add checkmark icon for selected model
             const checkIcon = model.value === selectedModel
-                ? `<svg class="model-check-icon" viewBox="0 0 24 24" width="14" height="14"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>`
+                ? renderIconMarkup('CircleCheck', 'model-check-icon', {}, 14)
                 : '';
 
             modelBtn.innerHTML = `<span class="model-name">${model.value}</span>${checkIcon}`;
@@ -378,12 +501,14 @@ export class ModelSelectionUI {
         const modelsByProvider: Record<string, typeof availableModels> = {};
         availableModels.forEach(model => {
             const prov = model.provider || 'unknown';
-            if (!modelsByProvider[prov]) {
-                modelsByProvider[prov] = [];
+            const provKey = prov.toLowerCase();
+            if (!modelsByProvider[provKey]) {
+                modelsByProvider[provKey] = [];
             }
-            modelsByProvider[prov].push(model);
+            modelsByProvider[provKey].push(model);
         });
         this.renderModelsForProvider(this.activeProvider, modelsByProvider, value);
+        this.updateThinkingLevelVisibility();
     }
     private initializeEventListeners(): void {
         // Model selection
@@ -392,6 +517,16 @@ export class ModelSelectionUI {
                 this.modelConfig.setSelectedModel(this.elements.modelSelect!.value);
                 // Update code execution toggle visibility (depends on provider)
                 updateCodeExecutionToggleVisibility(globalState.currentMode);
+                this.updateThinkingLevelVisibility();
+            });
+        }
+
+        // Thinking Level select
+        if (this.elements.thinkingLevelSelect) {
+            this.elements.thinkingLevelSelect.addEventListener('change', () => {
+                const value = this.elements.thinkingLevelSelect!.value as any;
+                globalState.thinkingLevel = value;
+                this.modelConfig.updateParameter('thinkingLevel', value);
             });
         }
 
@@ -410,15 +545,6 @@ export class ModelSelectionUI {
                 const value = parseFloat(this.elements.topPSlider!.value);
                 this.modelConfig.updateParameter('topP', value);
                 this.elements.topPValue!.textContent = value.toString();
-            });
-        }
-
-        // Refinement stages slider
-        if (this.elements.refinementStagesSlider && this.elements.refinementStagesValue) {
-            this.elements.refinementStagesSlider.addEventListener('input', () => {
-                const value = parseInt(this.elements.refinementStagesSlider!.value);
-                this.modelConfig.updateParameter('refinementStages', value);
-                this.elements.refinementStagesValue!.textContent = value.toString();
             });
         }
 
@@ -628,13 +754,6 @@ export class ModelSelectionUI {
             this.elements.topPValue.textContent = params.topP.toString();
         }
 
-        if (this.elements.refinementStagesSlider) {
-            this.elements.refinementStagesSlider.value = params.refinementStages.toString();
-        }
-        if (this.elements.refinementStagesValue) {
-            this.elements.refinementStagesValue.textContent = params.refinementStages.toString();
-        }
-
         if (this.elements.strategiesSlider) {
             this.elements.strategiesSlider.value = params.strategiesCount.toString();
         }
@@ -687,6 +806,7 @@ export class ModelSelectionUI {
                 button.classList.remove('active');
             }
         });
+        this.updateThinkingLevelVisibility();
     }
 
     public getModelConfig(): ModelConfigManager {
@@ -853,6 +973,19 @@ export class ModelSelectionUI {
                 this.elements.skipSubStrategiesToggle.checked = false;
                 this.elements.skipSubStrategiesToggle.disabled = true;
             }
+        }
+    }
+
+    private updateThinkingLevelVisibility(): void {
+        if (!this.elements.thinkingLevelContainer) return;
+        const selectedModel = this.modelConfig.getSelectedModel();
+        const excludedProviders = ['openrouter', 'local'];
+        const show = !excludedProviders.includes(this.activeProvider) && getModelThinkingType(selectedModel) !== 'none';
+        this.elements.thinkingLevelContainer.style.display = show ? '' : 'none';
+        
+        // Also update the select element value to match globalState
+        if (this.elements.thinkingLevelSelect) {
+            this.elements.thinkingLevelSelect.value = globalState.thinkingLevel;
         }
     }
 }

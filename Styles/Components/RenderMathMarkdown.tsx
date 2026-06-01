@@ -279,12 +279,39 @@ function isStandaloneHtmlDocument(content: string): boolean {
     return !EXECUTION_SEGMENT_PATTERN.test(content) && isHTMLContent(content);
 }
 
+function isRelaxedJson(content: string): boolean {
+    const trimmed = content.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+        try {
+            JSON.parse(trimmed);
+            return true;
+        } catch {
+            return (trimmed.includes('"') && trimmed.includes(':')) || trimmed.endsWith('}') || trimmed.endsWith(']');
+        }
+    }
+    return false;
+}
+
 function tokenizeContent(content: string): RenderSegment[] {
     if (isStandaloneHtmlDocument(content)) {
         return [{
             kind: 'execution_code',
             language: 'html',
             code: content.trim(),
+        }];
+    }
+
+    if (isRelaxedJson(content)) {
+        let code = content.trim();
+        try {
+            code = JSON.stringify(JSON.parse(code), null, 2);
+        } catch {
+            // Keep original if not strictly parseable
+        }
+        return [{
+            kind: 'execution_code',
+            language: 'json',
+            code,
         }];
     }
 

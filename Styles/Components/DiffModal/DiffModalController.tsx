@@ -1,27 +1,58 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { ActionButtonGroup } from '../ActionButton';
 import RenderMathMarkdown from '../RenderMathMarkdown';
 import { Icon } from '../../../UI/Icons';
-import {
-    DiffViewMode,
-    DiffContentType,
-    Pipeline,
-} from './types';
-import {
-    computeDiffStats,
-    generateUnifiedDiffHTML,
-    generateSplitDiffHTML,
-    applyDiffTheme,
-    extractIterationContent,
-    resolveModalTitle,
-    buildDiffTargetTree,
-    resolveGlobalCompareContent,
-} from './DiffModalController';
+import { DiffViewMode, DiffContentType } from './types';
+import { createUnifiedDiff, applyCustomThemeToD2H, addDarkThemeStyles } from './utils';
+import * as Diff from 'diff';
+import { html as diff2htmlHtml } from 'diff2html';
+
+// ─── Pure Diff Logic ─────────────────────────────────────────────────────────
+
+export function computeDiffStats(sourceText: string, targetText: string): { added: number; removed: number; total: number } {
+    const differences = Diff.diffLines(sourceText, targetText, { newlineIsToken: true });
+    let added = 0;
+    let removed = 0;
+
+    differences.forEach(part => {
+        const lines = part.value.split('\n').filter(line => line !== '' || part.value.endsWith('\n'));
+        if (part.added) {
+            added += lines.length;
+        } else if (part.removed) {
+            removed += lines.length;
+        }
+    });
+
+    return { added, removed, total: added + removed };
+}
+
+export function generateUnifiedDiffHTML(sourceText: string, targetText: string): string {
+    const unifiedDiff = createUnifiedDiff(sourceText, targetText);
+    return diff2htmlHtml(unifiedDiff, {
+        outputFormat: 'line-by-line',
+        drawFileList: false,
+        matching: 'none',
+        renderNothingWhenEmpty: false
+    });
+}
+
+export function generateSplitDiffHTML(sourceText: string, targetText: string): string {
+    const unifiedDiff = createUnifiedDiff(sourceText, targetText);
+    return diff2htmlHtml(unifiedDiff, {
+        outputFormat: 'side-by-side',
+        drawFileList: false,
+        matching: 'none',
+        renderNothingWhenEmpty: false
+    });
+}
+
+export function applyDiffTheme(container: HTMLElement): void {
+    applyCustomThemeToD2H(container);
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type DiffMode = 'instant-fixes' | 'global-compare';
 type InstantFixesView = 'side-by-side' | 'diff-analysis' | 'preview';
 
 // ─── Diff Stats Bar ───────────────────────────────────────────────────────────
@@ -131,8 +162,6 @@ const InstantFixesPanel: React.FC<InstantFixesPanelProps> = ({
     viewMode,
     isHtmlContent
 }) => {
-    // Track which views have been visited — once mounted, keep them in DOM to
-    // avoid re-processing on tab switch, but don't mount until first visited.
     const [mounted, setMounted] = useState<Record<InstantFixesView, boolean>>({ 'side-by-side': true, 'diff-analysis': false, 'preview': false });
 
     useEffect(() => {
@@ -149,7 +178,7 @@ const InstantFixesPanel: React.FC<InstantFixesPanelProps> = ({
     }, [activeView, sourceContent, targetContent, isHtmlContent]);
 
     return (
-        <div className="instant-fixes-content">
+        <div className="instant-fixes-content" style={{ width: '100%', height: '100%' }}>
             {/* Side-by-side view — always mounted (default tab) */}
             <div id="side-by-side-view" className={`instant-fixes-view${activeView === 'side-by-side' ? ' active' : ''}`}>
                 <div className="side-by-side-comparison">
@@ -184,7 +213,7 @@ const InstantFixesPanel: React.FC<InstantFixesPanelProps> = ({
                 </div>
             </div>
 
-            {/* Diff analysis view — mounted lazily on first visit */}
+            {/* Diff Analysis View */}
             <div id="diff-analysis-view" className={`instant-fixes-view${activeView === 'diff-analysis' ? ' active' : ''}`}>
                 {mounted['diff-analysis']
                     ? <DiffViewerPanel
@@ -199,7 +228,7 @@ const InstantFixesPanel: React.FC<InstantFixesPanelProps> = ({
                 }
             </div>
 
-            {/* Preview view — mounted lazily on first visit */}
+            {/* Preview View */}
             <div id="preview-view" className={`instant-fixes-view${activeView === 'preview' ? ' active' : ''}`}>
                 {mounted['preview'] && (
                     <div className="preview-comparison">
@@ -242,165 +271,32 @@ const InstantFixesPanel: React.FC<InstantFixesPanelProps> = ({
     );
 };
 
-// ─── Global Compare Panel ─────────────────────────────────────────────────────
-
-interface GlobalComparePanelProps {
-    sourceLabel: string;
-    pipelines: Pipeline[];
-    sourceContent: string;
-    targetContent: string;
-    viewMode: DiffViewMode;
-    onSelectTarget: (pipelineId: number, iterationNumber: number) => void;
-    selectedTarget: { pipelineId: number; iterationNumber: number } | null;
-}
-
-const GlobalComparePanel: React.FC<GlobalComparePanelProps> = ({
-    sourceLabel,
-    pipelines,
-    sourceContent,
-    targetContent,
-    viewMode,
-    onSelectTarget,
-    selectedTarget
-}) => {
-    const treeData = buildDiffTargetTree(pipelines);
-
-    return (
-        <div style={{ display: 'flex', height: '100%', width: '100%' }}>
-            <aside id="diff-selector-panel" className="inspector-panel custom-scrollbar" style={{ width: 300, flexShrink: 0 }}>
-                <div className="sidebar-section-content">
-                    <div id="diff-source-display" className="input-group">
-                        <h4 className="model-section-title">Source (A)</h4>
-                        <p id="diff-source-label">{sourceLabel}</p>
-                    </div>
-                    <div className="input-group" style={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-                        <h4 className="model-section-title">Select Target (B)</h4>
-                        <div id="diff-target-tree" className="custom-scrollbar" style={{ flexGrow: 1, overflowY: 'auto', paddingRight: '0.5rem' }}>
-                            {treeData.map(group => (
-                                <div key={group.pipelineId} className="diff-target-pipeline-group">
-                                    <div className="diff-target-pipeline-header">{group.pipelineLabel}</div>
-                                    <div className="diff-target-iterations">
-                                        {group.iterations.map(iter => {
-                                            const isActive = selectedTarget?.pipelineId === group.pipelineId && selectedTarget?.iterationNumber === iter.iterationNumber;
-                                            return (
-                                                <div
-                                                    key={iter.iterationNumber}
-                                                    className={`diff-target-iteration-item${isActive ? ' active' : ''}`}
-                                                    onClick={() => onSelectTarget(group.pipelineId, iter.iterationNumber)}
-                                                >
-                                                    {iter.label}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </aside>
-            <div id="diff-viewer-panel" className="custom-scrollbar" style={{ flex: 1 }}>
-                {selectedTarget && sourceContent && targetContent
-                    ? <DiffViewerPanel
-                        id="diff-viewer-panel-inner"
-                        sourceText={sourceContent}
-                        targetText={targetContent}
-                        viewMode={viewMode}
-                    />
-                    : <div className="diff-no-selection empty-state-message">
-                        <p>Select a target from the list to view differences.</p>
-                    </div>
-                }
-            </div>
-        </div>
-    );
-};
-
 // ─── Main Diff Modal ──────────────────────────────────────────────────────────
 
 interface DiffModalProps {
-    initialPipelineId: number;
-    initialIterationNumber: number;
+    sourceContent: string;
+    targetContent: string;
+    sourceTitle: string;
+    targetTitle: string;
     contentType: DiffContentType;
-    pipelines: Pipeline[];
+    modalTitle: string;
     onClose: () => void;
 }
 
 const DiffModal: React.FC<DiffModalProps> = ({
-    initialPipelineId,
-    initialIterationNumber,
+    sourceContent,
+    targetContent,
+    sourceTitle,
+    targetTitle,
     contentType,
-    pipelines,
+    modalTitle,
     onClose
 }) => {
-    const [currentPipelineId] = useState(initialPipelineId);
-    const [currentIterationNumber, setCurrentIterationNumber] = useState(initialIterationNumber);
-    const [diffMode, setDiffMode] = useState<DiffMode>('instant-fixes');
     const [instantView, setInstantView] = useState<InstantFixesView>('side-by-side');
     const [diffViewMode, setDiffViewMode] = useState<DiffViewMode>('split');
-    const [selectedTarget, setSelectedTarget] = useState<{ pipelineId: number; iterationNumber: number } | null>(null);
-    const [globalCompareContents, setGlobalCompareContents] = useState<{ source: string; target: string } | null>(null);
-
-    const pipeline = pipelines.find(p => p.id === currentPipelineId);
-    const iteration = pipeline?.iterations.find(i => i.iterationNumber === currentIterationNumber);
-    const iterationContent = iteration ? extractIterationContent(iteration, contentType) : null;
-
-    const sourceContent = iterationContent?.sourceContent ?? '';
-    const targetContent = iterationContent?.targetContent ?? '';
-    const sourceTitle = iterationContent?.sourceTitle ?? 'Source';
-    const targetTitle = iterationContent?.targetTitle ?? 'Target';
-    const modalTitle = pipeline ? resolveModalTitle(pipeline, currentIterationNumber) : 'Compare Outputs';
-    const sourceLabel = pipeline && iteration ? `${iteration.title} — Source (A)` : 'None selected';
-
-    const allIterNums = pipeline?.iterations
-        .filter(i => i.generatedContent || i.contentBeforeBugFix)
-        .map(i => i.iterationNumber)
-        .sort((a, b) => a - b) ?? [];
-    const hasPrev = currentIterationNumber > (allIterNums[0] ?? currentIterationNumber);
-    const hasNext = currentIterationNumber < (allIterNums[allIterNums.length - 1] ?? currentIterationNumber);
 
     const stats = computeDiffStats(sourceContent, targetContent);
 
-    // Recompute global compare contents whenever source iteration changes or target changes
-    const recomputeGlobalCompare = useCallback((targetPipelineId: number, targetIterNum: number, srcIterNum: number) => {
-        const result = resolveGlobalCompareContent(
-            { pipelineId: currentPipelineId, iterationNumber: srcIterNum, contentType, content: '', title: '' },
-            targetPipelineId,
-            targetIterNum,
-            pipelines
-        );
-        if (result) setGlobalCompareContents({ source: result.sourceContent, target: result.targetContent });
-    }, [currentPipelineId, contentType, pipelines]);
-
-    // When iteration changes in global compare mode, refresh the diff
-    useEffect(() => {
-        if (diffMode !== 'global-compare' || !selectedTarget) return;
-        recomputeGlobalCompare(selectedTarget.pipelineId, selectedTarget.iterationNumber, currentIterationNumber);
-    }, [currentIterationNumber, diffMode, selectedTarget, recomputeGlobalCompare]);
-
-    const handleSelectTarget = useCallback((pipelineId: number, iterationNumber: number) => {
-        setSelectedTarget({ pipelineId, iterationNumber });
-        recomputeGlobalCompare(pipelineId, iterationNumber, currentIterationNumber);
-    }, [currentIterationNumber, recomputeGlobalCompare]);
-
-    const handleDiffModeChange = useCallback((mode: DiffMode) => {
-        setDiffMode(mode);
-        if (mode === 'instant-fixes') {
-            setInstantView('side-by-side');
-        } else if (mode === 'global-compare') {
-            // Auto-select default target: same iteration of same pipeline — compares
-            // contentBeforeBugFix (source A) vs generatedContent (target B)
-            const defaultTarget = { pipelineId: currentPipelineId, iterationNumber: currentIterationNumber };
-            setSelectedTarget(defaultTarget);
-            recomputeGlobalCompare(defaultTarget.pipelineId, defaultTarget.iterationNumber, currentIterationNumber);
-        }
-    }, [currentPipelineId, currentIterationNumber, recomputeGlobalCompare]);
-
-    const handleInstantViewChange = useCallback((view: InstantFixesView) => {
-        setInstantView(view);
-    }, []);
-
-    // ESC + overlay click
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
         document.addEventListener('keydown', handleKeyDown);
@@ -423,43 +319,35 @@ const DiffModal: React.FC<DiffModalProps> = ({
                     <div className="modal-header-right">
                         <div className="diff-modal-controls">
                             <button
-                                id="instant-fixes-button"
-                                className={`button diff-mode-button${diffMode === 'instant-fixes' ? ' active' : ''}`}
-                                onClick={() => handleDiffModeChange('instant-fixes')}
+                                id="side-by-side-button"
+                                className={`view-mode-button${instantView === 'side-by-side' ? ' active' : ''}`}
+                                onClick={() => setInstantView('side-by-side')}
                             >
                                 <Icon name="auto_fix_high" />
-                                <span className="button-text">Instant Fixes</span>
+                                <span className="button-text">Side by Side</span>
                             </button>
                             <button
                                 id="diff-analysis-view-button"
-                                className={`view-mode-button${instantView === 'diff-analysis' && diffMode === 'instant-fixes' ? ' active' : ''}`}
-                                style={{ display: diffMode === 'instant-fixes' ? 'flex' : 'none' }}
-                                onClick={() => handleInstantViewChange('diff-analysis')}
+                                className={`view-mode-button${instantView === 'diff-analysis' ? ' active' : ''}`}
+                                onClick={() => setInstantView('diff-analysis')}
                             >
                                 <Icon name="difference" />
                                 <span className="button-text">Diff Analysis</span>
                             </button>
-                            <button
-                                id="preview-button"
-                                className={`view-mode-button${instantView === 'preview' && diffMode === 'instant-fixes' ? ' active' : ''}`}
-                                style={{ display: diffMode === 'instant-fixes' ? 'flex' : 'none' }}
-                                onClick={() => handleInstantViewChange('preview')}
-                            >
-                                <Icon name="preview" />
-                                <span className="button-text">Preview</span>
-                            </button>
-                            <button
-                                id="global-compare-button"
-                                className={`button diff-mode-button${diffMode === 'global-compare' ? ' active' : ''}`}
-                                onClick={() => handleDiffModeChange('global-compare')}
-                            >
-                                <Icon name="compare" />
-                                <span className="button-text">Global Compare</span>
-                            </button>
+                            {contentType === 'html' && (
+                                <button
+                                    id="preview-button"
+                                    className={`view-mode-button${instantView === 'preview' ? ' active' : ''}`}
+                                    onClick={() => setInstantView('preview')}
+                                >
+                                    <Icon name="preview" />
+                                    <span className="button-text">Preview</span>
+                                </button>
+                            )}
                             <div
                                 className="diff-view-selector-container"
                                 id="diff-view-selector-container"
-                                style={{ display: diffMode === 'global-compare' || instantView === 'diff-analysis' ? 'flex' : 'none' }}
+                                style={{ display: instantView === 'diff-analysis' ? 'flex' : 'none' }}
                             >
                                 <label htmlFor="diff-view-selector" className="diff-view-label">
                                     <Icon name="view_column" />
@@ -481,35 +369,9 @@ const DiffModal: React.FC<DiffModalProps> = ({
                     </div>
                 </header>
 
-                {/* Diff Stats + Iteration Navigation */}
+                {/* Diff Stats */}
                 <div className="diff-stats-section">
                     <DiffStats added={stats.added} removed={stats.removed} total={stats.total} />
-                    <div className="iteration-navigation">
-                        <button
-                            id="prev-iteration-button"
-                            className="iteration-nav-button"
-                            title="Previous Iteration"
-                            disabled={!hasPrev}
-                            onClick={() => {
-                                const idx = allIterNums.indexOf(currentIterationNumber);
-                                if (idx > 0) setCurrentIterationNumber(allIterNums[idx - 1]);
-                            }}
-                        >
-                            <Icon name="arrow_back" />
-                        </button>
-                        <button
-                            id="next-iteration-button"
-                            className="iteration-nav-button"
-                            title="Next Iteration"
-                            disabled={!hasNext}
-                            onClick={() => {
-                                const idx = allIterNums.indexOf(currentIterationNumber);
-                                if (idx < allIterNums.length - 1) setCurrentIterationNumber(allIterNums[idx + 1]);
-                            }}
-                        >
-                            <Icon name="arrow_forward" />
-                        </button>
-                    </div>
                 </div>
 
                 {/* Modal Body */}
@@ -517,11 +379,7 @@ const DiffModal: React.FC<DiffModalProps> = ({
                     id="diff-modal-body"
                     style={{ display: 'flex', overflow: 'hidden', height: 'calc(100vh - 180px)', padding: 0 }}
                 >
-                    {/* Instant Fixes Panel */}
-                    <div
-                        id="instant-fixes-panel"
-                        className={`diff-mode-panel${diffMode === 'instant-fixes' ? ' active' : ''}`}
-                    >
+                    <div id="instant-fixes-panel" className="diff-mode-panel active" style={{ width: '100%', height: '100%' }}>
                         <InstantFixesPanel
                             activeView={instantView}
                             sourceContent={sourceContent}
@@ -530,22 +388,6 @@ const DiffModal: React.FC<DiffModalProps> = ({
                             targetTitle={targetTitle}
                             viewMode={diffViewMode}
                             isHtmlContent={contentType === 'html'}
-                        />
-                    </div>
-
-                    {/* Global Compare Panel */}
-                    <div
-                        id="global-compare-panel"
-                        className={`diff-mode-panel${diffMode === 'global-compare' ? ' active' : ''}`}
-                    >
-                        <GlobalComparePanel
-                            sourceLabel={sourceLabel}
-                            pipelines={pipelines}
-                            sourceContent={globalCompareContents?.source ?? ''}
-                            targetContent={globalCompareContents?.target ?? ''}
-                            viewMode={diffViewMode}
-                            onSelectTarget={handleSelectTarget}
-                            selectedTarget={selectedTarget}
                         />
                     </div>
                 </div>
@@ -611,8 +453,6 @@ const PromptDiffModal: React.FC<PromptDiffModalProps> = ({ originalPrompt, curre
 };
 
 // ─── Imperative Portal API ────────────────────────────────────────────────────
-// These functions are called from non-React code (Core/App.ts, PromptsModal.ts, etc.)
-// They mount React components into a portal root on the document body.
 
 const roots = new Map<string, Root>();
 
@@ -635,32 +475,23 @@ function unmountRoot(id: string): void {
     document.getElementById(id)?.remove();
 }
 
-export function openDiffModal(pipelineId: number, iterationNumber: number, contentType: DiffContentType): void {
-    // Read from globalState — this is the canonical source of truth for all modes
-    let pipelines: Pipeline[];
-    try {
-        const { globalState } = require('../../../Core/State') as typeof import('../../../Core/State');
-        pipelines = globalState.pipelinesState as unknown as Pipeline[];
-    } catch {
-        pipelines = (window as any).pipelinesState ?? [];
-    }
-
-    const pipeline = pipelines.find(p => p.id === pipelineId);
-    if (!pipeline) return;
-    const iteration = pipeline.iterations.find(i => i.iterationNumber === iterationNumber);
-    if (!iteration) return;
-
-    const content = extractIterationContent(iteration, contentType);
-    if (!content?.sourceContent) { alert('Source content is not available for comparison.'); return; }
-    if (!content?.targetContent) { alert('Target content is not available for comparison.'); return; }
-
+export function openDiffModal(
+    sourceContent: string,
+    targetContent: string,
+    sourceTitle: string = 'Original',
+    targetTitle: string = 'Revised',
+    contentType: DiffContentType = 'text',
+    modalTitle: string = 'Compare Outputs'
+): void {
     const root = getOrCreateRoot('diff-modal-root');
     root.render(
         <DiffModal
-            initialPipelineId={pipelineId}
-            initialIterationNumber={iterationNumber}
+            sourceContent={sourceContent}
+            targetContent={targetContent}
+            sourceTitle={sourceTitle}
+            targetTitle={targetTitle}
             contentType={contentType}
-            pipelines={pipelines}
+            modalTitle={modalTitle}
             onClose={() => unmountRoot('diff-modal-root')}
         />
     );
@@ -682,7 +513,111 @@ export function openPromptDiffModal(originalPrompt: string, currentPrompt: strin
     );
 }
 
-// Legacy exports for any code that accesses these
+// standalone live HTML preview
+export function openFullscreenPreview(content: string, sessionId: string): void {
+    let overlay = document.getElementById(`preview-overlay-${sessionId}`);
+    if (overlay) {
+        const iframe = overlay.querySelector('iframe') as HTMLIFrameElement;
+        const refreshIndicator = overlay.querySelector('.refresh-indicator') as HTMLElement;
+        if (iframe && refreshIndicator) {
+            refreshIndicator.style.display = 'flex';
+            const styledContent = addDarkThemeStyles(content);
+            const blob = new Blob([styledContent], { type: 'text/html' });
+            iframe.src = URL.createObjectURL(blob);
+            iframe.onload = () => {
+                setTimeout(() => { refreshIndicator.style.display = 'none'; }, 300);
+            };
+        }
+        return;
+    }
+
+    overlay = document.createElement('div');
+    overlay.id = `preview-overlay-${sessionId}`;
+    overlay.className = 'preview-fullscreen-overlay';
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        background: var(--bg-color); z-index: 10000;
+        display: flex; flex-direction: column;
+    `;
+
+    const header = document.createElement('div');
+    header.style.cssText = `
+        display: flex; align-items: center; justify-content: space-between;
+        padding: 1rem 1.5rem;
+        background: rgba(var(--card-bg-base-rgb), 0.85);
+        border-bottom: 1px solid var(--border-color);
+        backdrop-filter: var(--card-blur-effect);
+    `;
+    header.innerHTML = `
+        <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-color);">
+            Live Preview
+        </h3>
+        <button class="preview-close-btn" style="
+            background: rgba(var(--accent-pink-rgb), 0.2);
+            border: 1px solid var(--accent-pink);
+            color: var(--accent-pink);
+            padding: 0.5rem 1rem;
+            border-radius: var(--border-radius-md);
+            cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-weight: 500;
+        ">
+            Close
+        </button>
+    `;
+
+    const refreshIndicator = document.createElement('div');
+    refreshIndicator.className = 'refresh-indicator';
+    refreshIndicator.style.cssText = `
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        background: rgba(var(--card-bg-base-rgb), 0.95);
+        border: 1px solid var(--border-color);
+        border-radius: var(--border-radius-md);
+        padding: 1rem 1.5rem; display: none; align-items: center; gap: 0.75rem;
+        z-index: 10001; backdrop-filter: var(--card-blur-effect);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    `;
+    refreshIndicator.innerHTML = `
+        <div style="
+            width: 20px; height: 20px;
+            border: 2px solid rgba(var(--accent-purple-rgb), 0.3);
+            border-top-color: var(--accent-purple);
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+        "></div>
+        <span style="color: var(--text-color); font-weight: 500;">Refreshing...</span>
+    `;
+
+    const iframeContainer = document.createElement('div');
+    iframeContainer.style.cssText = 'flex: 1; position: relative; width: 100%;';
+
+    const iframe = document.createElement('iframe');
+    iframe.style.cssText = 'width: 100%; height: 100%; border: none; background: white;';
+    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+
+    const styledContent = addDarkThemeStyles(content);
+    const blob = new Blob([styledContent], { type: 'text/html' });
+    iframe.src = URL.createObjectURL(blob);
+
+    iframeContainer.appendChild(refreshIndicator);
+    iframeContainer.appendChild(iframe);
+
+    overlay.appendChild(header);
+    overlay.appendChild(iframeContainer);
+    document.body.appendChild(overlay);
+
+    const closeBtn = header.querySelector('.preview-close-btn');
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            overlay!.remove();
+            document.removeEventListener('keydown', handleKeyDown);
+        }
+    };
+
+    closeBtn?.addEventListener('click', () => {
+        overlay!.remove();
+    });
+    document.addEventListener('keydown', handleKeyDown);
+}
+
 export function getDiffSourceData(): null { return null; }
 export function getCurrentSourceContent(): string { return ''; }
 export function getCurrentTargetContent(): string { return ''; }

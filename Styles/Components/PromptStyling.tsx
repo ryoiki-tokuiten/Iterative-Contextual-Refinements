@@ -13,6 +13,7 @@ export interface PromptStylingEditorProps {
   className?: string;
   placeholder?: string;
   rows?: number;
+  readOnly?: boolean;
 }
 
 export const PromptStylingEditor: React.FC<PromptStylingEditorProps> = ({
@@ -21,7 +22,8 @@ export const PromptStylingEditor: React.FC<PromptStylingEditorProps> = ({
   id,
   className = '',
   placeholder,
-  rows
+  rows,
+  readOnly = false
 }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -120,8 +122,8 @@ export const PromptStylingEditor: React.FC<PromptStylingEditorProps> = ({
     <div className="prompt-styling-container">
       <div
         ref={editorRef}
-        className={`prompt-styling-editor ${className}`}
-        contentEditable={true}
+        className={`prompt-styling-editor ${className} ${readOnly ? 'read-only' : ''}`}
+        contentEditable={!readOnly}
         spellCheck={false}
         onInput={handleInput}
         onKeyDown={handleKeyDown}

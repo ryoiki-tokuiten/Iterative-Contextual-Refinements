@@ -1,5 +1,6 @@
 import React from 'react';
 import { ModalType, getModalState, closeModal } from './GlobalModals';
+import { Icon } from './Icons';
 
 export interface ModalProps {
     id: string;
@@ -20,10 +21,12 @@ export const Modal: React.FC<ModalProps> = ({ id, children }) => {
 export const RedTeamModal: React.FC = () => {
     const state = getModalState('red-team');
     return (
-        <div id="red-team-full-modal" className={`modal ${state.isActive ? 'active' : ''}`}>
+        <div id="red-team-full-modal" className={`modal red-team-full-modal ${state.isActive ? 'active' : ''}`}>
             <div className="modal-header">
-                <h3>Red Team Reasoning</h3>
-                <button onClick={() => closeModal('red-team')}>&times;</button>
+                <h3 className="modal-title">Red Team Reasoning</h3>
+                <button className="modal-close-button" onClick={() => closeModal('red-team')} aria-label="Close modal">
+                    <Icon name="close" />
+                </button>
             </div>
             <div id="red-team-modal-content" className="modal-body">
                 <pre>{state.content}</pre>
@@ -35,10 +38,12 @@ export const RedTeamModal: React.FC = () => {
 export const DeepthinkRedTeamModal: React.FC = () => {
     const state = getModalState('deepthink-red-team');
     return (
-        <div id="deepthink-red-team-full-modal" className={`modal ${state.isActive ? 'active' : ''}`}>
+        <div id="deepthink-red-team-full-modal" className={`modal red-team-full-modal ${state.isActive ? 'active' : ''}`}>
             <div className="modal-header">
-                <h3>Deepthink Red Team Reasoning</h3>
-                <button onClick={() => closeModal('deepthink-red-team')}>&times;</button>
+                <h3 className="modal-title">Deepthink Red Team Reasoning</h3>
+                <button className="modal-close-button" onClick={() => closeModal('deepthink-red-team')} aria-label="Close modal">
+                    <Icon name="close" />
+                </button>
             </div>
             <div id="deepthink-red-team-modal-content" className="modal-body">
                 <pre>{state.content}</pre>

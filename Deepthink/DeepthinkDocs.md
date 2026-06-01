@@ -19,7 +19,7 @@ Each agent operates in isolation with carefully controlled shared context. This 
 ### 3. Shared Context Architecture
 The system maintains **three types** of shared context:
 
-- **Knowledge Packet**: Validated insights from hypothesis testing agents, shared with all solution execution agents
+- **Knowledge Packet**: Validated insights from hypothesis testing agents, shared globally with all solution execution agents (in Blind Trust/Strategy-Aware modes) or routed selectively as strategy-specific knowledge packets (in Selective mode)
 - **Dissected Observations Synthesis**: Comprehensive diagnostic intelligence from critique synthesis, shared with corrector agents (in non-iterative refinement mode)
 - **StructuredSolutionPool Repository**: Real-time synchronized solution exploration repository containing solutions, critiques, corrections, and pool outputs from ALL strategies across all iterations, shared with corrector agents and solution pool agents (when enabled in iterative corrections mode with StructuredSolutionPool)
 
@@ -28,7 +28,7 @@ The system is **universally adaptive** across all domains - mathematical problem
 
 ### 5. Three-Phase Pipeline Structure
 - **Track A: Strategic Solver** - Generates and executes interpretive frameworks
-- **Track B: Hypothesis Explorer** (optional) - Generates validated contextual knowledge in parallel
+- **Track B: Hypothesis Explorer** (optional) - Generates validated contextual knowledge (either in parallel via Blind Trust mode, or targeted after strategies are finalized via Strategy-Aware/Selective modes)
 - **Phase C: Final Judging** - Selects the best solution from all refined attempts
 
 ---
@@ -71,22 +71,39 @@ Completely disables the sub-strategy decomposition phase.
 ### Hypothesis Exploration Controls
 
 #### **Number of Hypotheses** (Adaptive, default: 4, can be set to 0)
-Controls how many hypotheses are generated and tested in parallel with strategic generation.
+Controls how many hypotheses are generated and tested in Track B (Hypothesis Explorer).
 
 **System Impact:**
 - Setting to **0** completely disables Track B (Hypothesis Explorer)
-- Each hypothesis is tested independently by a dedicated testing agent with **no shared context**
-- Results are synthesized into the **Knowledge Packet**
-- Knowledge Packet is shared with **all solution execution agents**
 - When disabled: Knowledge Packet contains placeholder indicating hypothesis exploration is off
 
+#### **Hypothesis Injection Mode** (default: Selective)
+Controls how hypotheses are generated in relation to strategies, and how the resulting testing data is injected into solution execution agents.
+
+- **Blind Trust (Parallel)**:
+  - **Process**: Track B (Hypothesis Explorer) and Track A (Strategy/Sub-Strategy Generation) run concurrently.
+  - **Context**: Hypotheses are generated based solely on the original problem text.
+  - **Injection**: A single global **Full Information Packet** containing all hypothesis testing results is compiled and shared with all solution execution agents.
+  - **Significance**: Minimizes pipeline execution time by running generation tracks in parallel. Suitable when domain exploration is independent of the specific execution plans.
+- **Strategy-Aware**:
+  - **Process**: Track B blocks and waits for Track A to finalize strategies (initial generation, sub-strategies, and Red Team pruning).
+  - **Context**: Hypothesis generation receives finalized strategies and sub-strategies context.
+  - **Injection**: A single global **Full Information Packet** containing all hypothesis testing results is compiled and shared with all active solution execution agents.
+  - **Significance**: Ensures hypotheses are targeted specifically towards the surviving, active strategies. Hypotheses probe critical unknowns, risks, and boundary conditions tailored for the planned execution paths rather than investigating general, unused avenues.
+- **Selective**:
+  - **Process**: Track B blocks and waits for Track A to finalize strategies.
+  - **Context**: Hypothesis generation receives finalized strategies context. The agent maps each hypothesis to specific target strategies in a JSON object format.
+  - **Injection**: Creates **strategy-specific knowledge packets**. Each execution agent receives only the subset of hypothesis testing results mapped to its specific strategy (plus global hypotheses).
+  - **Significance**: A massive **context optimization**. By resolving which hypothesis testing findings are routed to which exact execution agent, the system prevents execution agents from being overwhelmed by irrelevant details or biased by information unrelated to their assigned framework, ensuring high-fidelity, focused strategy execution.
+
 **Hypothesis Generation & Testing Process:**
-1. **Hypothesis Generation Agent** receives problem, generates N hypotheses (high-level insights, NOT solutions)
-2. Each hypothesis assigned to independent **Hypothesis Testing Agent**
-3. Testing agents operate in complete isolation: receive only (problem + single hypothesis)
-4. Testing protocol: Dual-pronged investigation (simultaneously validate AND refute)
-5. Results collected into Full Information Packet structure
-6. Information Packet shared with all solution execution agents
+1. **Hypothesis Generation Agent** receives problem (and finalized strategy context in Strategy-Aware/Selective modes) and generates N hypotheses (high-level insights, NOT solutions).
+2. In Selective mode, hypotheses are generated as JSON objects mapping each hypothesis to target strategy IDs.
+3. Each hypothesis is assigned to an independent **Hypothesis Testing Agent**.
+4. Testing agents operate in complete isolation: receive only (problem + single hypothesis).
+5. Testing protocol: Dual-pronged investigation (simultaneously validate AND refute).
+6. Results are collected into a Full Information Packet structure (and split into strategy-specific packets in Selective mode).
+7. Information Packet(s) are shared with corresponding solution execution agents.
 
 **Critical Hypothesis Agent Constraints:**
 - Generation: NEVER solve problem, NEVER embed assumed answers
@@ -565,9 +582,10 @@ After completion:
   If none remain: Pipeline terminates with error
 ```
 
-**Step 4: Wait for Track B** (if hypotheses enabled)
+**Step 4: Synchronize with Track B (Hypothesis Explorer)** (if hypotheses enabled)
 
-Track A blocks until Track B completes and Knowledge Packet is ready.
+- In **Blind Trust** mode: Track A waits at this point for Track B to complete.
+- In **Strategy-Aware** and **Selective** modes: Track B waits for Track A's strategies to be finalized (after Red Team evaluation), then generates/tests hypotheses. Track A waits here for Track B to finish compiling the Knowledge Packet(s).
 
 #### Phase 2: Solution Execution
 
@@ -586,7 +604,7 @@ Solution execution agents receive:
 - Original problem text
 - Assigned main strategy framework
 - Assigned sub-strategy (if enabled, or direct strategy)
-- Knowledge Packet from hypothesis testing
+- Knowledge Packet from hypothesis testing (global Knowledge Packet in Blind Trust/Strategy-Aware modes; strategy-specific Knowledge Packet in Selective mode)
 - Strict mandate to execute assigned framework with absolute fidelity
 
 #### Phase 3: Refinement Flow
@@ -1004,7 +1022,9 @@ Proceed to Final Judging Phase.
 
 ### Track B: Hypothesis Explorer
 
-Runs in parallel with Track A's strategy generation and red team evaluation.
+Execution timing and behavior depend on the **Hypothesis Injection Mode**:
+- **Blind Trust (Parallel)**: Runs in parallel with Track A's strategy generation and red team evaluation.
+- **Strategy-Aware / Selective**: Blocks until Track A's strategies are finalized (after Red Team evaluation), then executes hypothesis generation and testing.
 
 ```
 If hypothesisCount == 0:
@@ -1012,10 +1032,19 @@ If hypothesisCount == 0:
   Return immediately
 
 Step 1: Hypothesis Generation
-  Execute Hypothesis Generation Agent:
-    Input: Original problem
-    Output: Array of N hypotheses
-  
+  If Injection Mode is Blind Trust:
+    Execute Hypothesis Generation Agent:
+      Input: Original problem
+      Output: Array of N hypotheses
+  Else (Strategy-Aware or Selective):
+    Execute Hypothesis Generation Agent:
+      Input: Original problem + Finalized strategies context (surviving active strategies)
+      Output format:
+        - Strategy-Aware: Array of N hypotheses
+        - Selective: Array of N hypothesis objects containing:
+          - "text": Hypothesis description
+          - "target_strategies": Array of main strategy IDs (e.g. ["main1", "main2"]) this hypothesis is tailored for. If empty/omitted, the hypothesis is global.
+
   Constraints:
     - Hypotheses are high-level insights, NOT solution attempts
     - Must NOT embed assumed answers or conclusions
@@ -1051,7 +1080,7 @@ Step 2: Hypothesis Testing (parallel)
 Step 3: Synthesize Knowledge Packet
   Collect all testing results
   
-  Format as Full Information Packet:
+  Format global Full Information Packet:
     <Full Information Packet>
       <Hypothesis 1>
         Testing: [investigation and findings]
@@ -1065,6 +1094,15 @@ Step 3: Synthesize Knowledge Packet
     </Full Information Packet>
   
   Store: currentProcess.knowledgePacket
+
+  If Injection Mode is Selective:
+    For each active main strategy:
+      Filter hypotheses where targetStrategyIds contains strategy's ID, or is empty/globally applicable.
+      Format Strategy-Specific Information Packet:
+        <Strategy-Specific Information Packet for Strategy {id}>
+          [Hypotheses texts, testing outputs, and classifications]
+        </Strategy-Specific Information Packet for Strategy {id}>
+      Store in: currentProcess.strategySpecificKnowledgePackets[strategy.id]
 
 Track A waits for this to complete before solution execution.
 ```
@@ -1399,6 +1437,10 @@ Special error class for graceful early termination.
 - Master Hypothesis Architect
 - Identifies pivotal unknowns and critical uncertainties
 - Generates testable hypotheses (NOT solution attempts)
+- **Injection Mode Adaptation**:
+  - **Blind Trust**: Generates hypotheses independently without strategic context.
+  - **Strategy-Aware**: Receives finalized active strategies context; generates targeted hypotheses.
+  - **Selective**: Receives finalized active strategies context; generates hypotheses mapped to specific strategy IDs.
 - **Absolute prohibition:** Never embed assumed answers in hypotheses
 
 **Hypothesis Testing Agents:**
@@ -1413,7 +1455,7 @@ Special error class for graceful early termination.
 
 **Solution Attempt Agents:**
 - Execute assigned strategy/sub-strategy with absolute fidelity
-- Receive: Problem + Strategy + Sub-strategy + Knowledge Packet
+- Receive: Problem + Strategy + Sub-strategy + Knowledge Packet (global packet in Blind Trust/Strategy-Aware modes; strategy-specific packet in Selective mode)
 - **Absolute mandate:** Execute framework completely, exhaustively
 - **Prohibited:** Deviation from framework, switching strategies, simplification
 - Must complete execution even if:
@@ -1645,6 +1687,14 @@ Understanding how configurations interact is critical for using Deepthink effect
 - **Requires:** Refinement = ON
 - **Requires:** Iterative Corrections = OFF (non-iterative mode only)
 - **Incompatible with:** Iterative Corrections mode
+
+**Hypothesis Injection Mode:**
+- **Options:** Blind Trust, Strategy-Aware, Selective (default)
+- **Requires:** Hypothesis Count > 0 (Track B enabled)
+- **Behavior:**
+  - Blind Trust: Runs concurrent to strategy generation; global packet shared.
+  - Strategy-Aware: Waits for Track A finalized strategies; global packet shared.
+  - Selective: Waits for Track A finalized strategies; strategy-specific packets shared.
 
 ### Mode Combinations
 

@@ -13,7 +13,6 @@ export interface ModelOption {
 export interface ModelParameters {
     temperature: number;
     topP: number;
-    refinementStages: number;
     strategiesCount: number;
     subStrategiesCount: number;
     hypothesisCount: number;
@@ -26,6 +25,9 @@ export interface ModelParameters {
     provideAllSolutionsToCorrectors: boolean;
     postQualityFilterEnabled: boolean;
     deepthinkCodeExecutionEnabled: boolean;
+    hypothesisInjectionMode: 'parallel' | 'strategy_aware' | 'selective_injection';
+    thinkingLevel: 'low' | 'medium' | 'high' | 'minimal';
+    shareHypothesesToDissected: boolean;
 }
 
 export const AVAILABLE_MODELS: ModelOption[] = [
@@ -37,7 +39,6 @@ export const DEFAULT_TEMPERATURES = [0, 0.7, 1.0, 1.5, 2.0];
 export const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
     temperature: 1.0,
     topP: 0.95,
-    refinementStages: 3,
     strategiesCount: 3,
     subStrategiesCount: 3,
     hypothesisCount: 4,
@@ -49,7 +50,10 @@ export const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
     iterativeDepth: 3,
     provideAllSolutionsToCorrectors: false,
     postQualityFilterEnabled: false,
-    deepthinkCodeExecutionEnabled: false
+    deepthinkCodeExecutionEnabled: false,
+    hypothesisInjectionMode: 'selective_injection' as const,
+    thinkingLevel: 'high',
+    shareHypothesesToDissected: false
 };
 
 export class ModelConfigManager {
@@ -59,7 +63,7 @@ export class ModelConfigManager {
 
     constructor() {
         this.parameters = { ...DEFAULT_MODEL_PARAMETERS };
-        this.selectedModel = 'gemini-2.5-pro';
+        this.selectedModel = 'gemini-3.5-flash';
     }
 
     public getSelectedModel(): string {
@@ -68,6 +72,7 @@ export class ModelConfigManager {
 
     public setSelectedModel(model: string): void {
         this.selectedModel = model;
+        window.dispatchEvent(new CustomEvent('selectedModelChanged', { detail: { model } }));
     }
 
     public getParameters(): ModelParameters {
@@ -89,16 +94,16 @@ export class ModelConfigManager {
         return Math.max(0, Math.min(1, this.parameters.topP));
     }
 
-    public getRefinementStages(): number {
-        return Math.max(1, Math.min(5, this.parameters.refinementStages));
-    }
-
     public getStrategiesCount(): number {
         return Math.max(1, Math.min(10, this.parameters.strategiesCount));
     }
 
     public getSubStrategiesCount(): number {
-        return Math.max(1, Math.min(10, this.parameters.subStrategiesCount));
+        const count = this.parameters.subStrategiesCount;
+        if (count === 0) {
+            return 0;
+        }
+        return Math.max(2, Math.min(5, count));
     }
 
     public getHypothesisCount(): number {
@@ -120,6 +125,10 @@ export class ModelConfigManager {
     public isDissectedObservationsEnabled(): boolean {
         // Dissected observations can only be enabled if refinement is enabled
         return this.parameters.refinementEnabled && this.parameters.dissectedObservationsEnabled;
+    }
+
+    public isShareHypothesesToDissected(): boolean {
+        return this.parameters.shareHypothesesToDissected === true;
     }
 
     public isIterativeCorrectionsEnabled(): boolean {
@@ -144,6 +153,14 @@ export class ModelConfigManager {
         return this.parameters.deepthinkCodeExecutionEnabled;
     }
 
+    public getHypothesisInjectionMode(): 'parallel' | 'strategy_aware' | 'selective_injection' {
+        return this.parameters.hypothesisInjectionMode || 'selective_injection';
+    }
+
+    public getThinkingLevel(): 'low' | 'medium' | 'high' | 'minimal' {
+        return this.parameters.thinkingLevel || 'high';
+    }
+
     public getModelProvider(modelValue?: string): string {
         // Use instance's availableModels (dynamically populated), not the empty AVAILABLE_MODELS constant
         const model = this.availableModels.find(m => m.value === (modelValue || this.selectedModel));
@@ -158,7 +175,7 @@ export class ModelConfigManager {
         this.availableModels = models;
         // If current selected model is not available, select the first available model
         if (!models.some(m => m.value === this.selectedModel) && models.length > 0) {
-            this.selectedModel = models[0].value;
+            this.setSelectedModel(models[0].value);
         }
     }
 

@@ -6,15 +6,6 @@
    1. SHARED ANIMATIONS
    -------------------------------------------------------------------------- */
 
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
-}
 
 @keyframes slideUp {
     from {
@@ -28,15 +19,6 @@
     }
 }
 
-@keyframes modalFadeIn {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
-}
 
 @keyframes modalSlideIn {
     from {
@@ -87,74 +69,6 @@
 }
 
 /* --------------------------------------------------------------------------
-   2. GLOBAL SCROLLBAR STYLING
-   -------------------------------------------------------------------------- */
-
-/* Target all scrollable areas in modals for consistent UI */
-.fullscreen-modal .solution-pane-content::-webkit-scrollbar,
-.modal-panel-content::-webkit-scrollbar,
-.custom-scrollbar::-webkit-scrollbar,
-.solution-markdown-content::-webkit-scrollbar,
-.embedded-modal-content .modal-body::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-    /* For horizontal scrolling */
-}
-
-.fullscreen-modal .solution-pane-content::-webkit-scrollbar-track,
-.modal-panel-content::-webkit-scrollbar-track,
-.custom-scrollbar::-webkit-scrollbar-track,
-.solution-markdown-content::-webkit-scrollbar-track,
-.embedded-modal-content .modal-body::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-/* Specific Track overrides */
-.custom-scrollbar::-webkit-scrollbar-track {
-    background: rgba(var(--bg-color-rgb), 0.5);
-    border-radius: 4px;
-}
-
-.solution-markdown-content::-webkit-scrollbar-track {
-    background: rgba(var(--bg-color-rgb), 0.1);
-    border-radius: 3px;
-}
-
-/* Thumbs */
-.fullscreen-modal .solution-pane-content::-webkit-scrollbar-thumb,
-.modal-panel-content::-webkit-scrollbar-thumb,
-.embedded-modal-content .modal-body::-webkit-scrollbar-thumb {
-    background: var(--border-color);
-    border-radius: 4px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(var(--border-color-rgb), 0.8);
-    border-radius: 4px;
-    transition: background 0.2s ease;
-}
-
-.solution-markdown-content::-webkit-scrollbar-thumb {
-    background: var(--border-hover-color);
-    border-radius: 3px;
-    transition: background-color var(--transition-speed-fast);
-}
-
-/* Hover States */
-.fullscreen-modal .solution-pane-content::-webkit-scrollbar-thumb:hover,
-.embedded-modal-content .modal-body::-webkit-scrollbar-thumb:hover {
-    background: var(--text-tertiary-color);
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(var(--text-secondary-rgb), 0.6);
-}
-
-.solution-markdown-content::-webkit-scrollbar-thumb:hover {
-    background: var(--glow-color);
-}
-
-/* --------------------------------------------------------------------------
    3. STANDARD MODAL OVERLAY & CONTENT
    -------------------------------------------------------------------------- */
 
@@ -171,8 +85,8 @@
     justify-content: center;
 
     background-color: rgba(var(--bg-color-rgb), 0.62);
-    backdrop-filter: blur(28px) saturate(110%);
-    -webkit-backdrop-filter: blur(28px) saturate(110%);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
 
     opacity: 0;
     transition: opacity var(--transition-speed-slow) var(--easing-curve);
@@ -193,7 +107,7 @@
     padding: 0;
 
     background: linear-gradient(145deg, rgba(var(--card-bg-base-rgb), 0.7), rgba(var(--bg-color-rgb), 0.6));
-    border: 1px solid var(--border-hover-color);
+    border: none;
     border-radius: 0;
     box-shadow: var(--shadow-xl);
 
@@ -264,8 +178,8 @@
     display: flex;
 
     background: rgba(var(--bg-color-rgb), 0.75);
-    backdrop-filter: blur(48px) saturate(150%);
-    -webkit-backdrop-filter: blur(48px) saturate(150%);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
 
     opacity: 0;
     transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1);
@@ -292,8 +206,8 @@
     border-radius: 0 !important;
 
     background: rgba(var(--card-bg-base-rgb), 0.3);
-    backdrop-filter: blur(64px) saturate(180%);
-    -webkit-backdrop-filter: blur(64px) saturate(180%);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
 
     box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.05),
         inset 0 -2px 0 rgba(0, 0, 0, 0.1);
@@ -306,8 +220,8 @@
     padding: 1rem 2rem !important;
 
     background: rgba(var(--bg-color-rgb), 0.85) !important;
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
 
     border-bottom: 1px solid rgba(var(--border-color-rgb), 0.15) !important;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
@@ -374,8 +288,8 @@
     padding: 2rem;
 
     background: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
 
     animation: fadeIn 0.3s ease;
 }
@@ -393,7 +307,7 @@
     border: 1px solid var(--border-color);
     border-radius: 28px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(12px);
+    backdrop-filter: var(--card-blur-effect);
 
     animation: slideUp 0.3s ease;
 }
@@ -559,7 +473,7 @@
 
     background: rgba(var(--bg-color-rgb), 0.5);
     border-bottom: 1px solid var(--border-color);
-    backdrop-filter: blur(10px);
+    backdrop-filter: var(--card-blur-effect);
 }
 
 .modal-panel-title {

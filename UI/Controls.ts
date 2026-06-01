@@ -15,12 +15,11 @@ export interface ControlsDisabledState {
 }
 
 export function computeIsGenerating(): boolean {
-    const { pipelinesState, activeDeepthinkPipeline, isAgenticRunning, isContextualRunning, isAdaptiveDeepthinkRunning, isDCARunning } = globalState;
+    const { activeDeepthinkPipeline, isAgenticRunning, isContextualRunning, isAdaptiveDeepthinkRunning, isDCARunning } = globalState;
 
-    const anyPipelineRunningOrStopping = pipelinesState.some(p => p.status === 'running' || p.status === 'stopping');
     const deepthinkPipelineRunningOrStopping = activeDeepthinkPipeline?.status === 'processing' || activeDeepthinkPipeline?.status === 'stopping';
 
-    return anyPipelineRunningOrStopping || deepthinkPipelineRunningOrStopping || isAgenticRunning || isContextualRunning || isAdaptiveDeepthinkRunning || isDCARunning;
+    return deepthinkPipelineRunningOrStopping || isAgenticRunning || isContextualRunning || isAdaptiveDeepthinkRunning || isDCARunning;
 }
 
 export function computeIsApiKeyReady(): boolean {
@@ -55,12 +54,15 @@ export function updateControlsState(): void {
 
     const exportConfigButton = document.getElementById('export-config-button') as HTMLButtonElement;
     const importConfigInput = document.getElementById('import-config-input') as HTMLInputElement;
-    const importConfigLabel = document.getElementById('import-config-label') as HTMLLabelElement;
+    const importConfigButton = document.getElementById('import-config-button') as HTMLButtonElement;
     const initialIdeaInput = document.getElementById('initial-idea') as HTMLTextAreaElement;
 
     if (exportConfigButton) exportConfigButton.disabled = disabledState.exportConfigButton;
     if (importConfigInput) importConfigInput.disabled = disabledState.importConfigInput;
-    if (importConfigLabel) importConfigLabel.classList.toggle('disabled', disabledState.importConfigInput);
+    if (importConfigButton) {
+        importConfigButton.disabled = disabledState.importConfigInput;
+        importConfigButton.classList.toggle('disabled', disabledState.importConfigInput);
+    }
     if (initialIdeaInput) initialIdeaInput.disabled = disabledState.initialIdeaInput;
 
     const redTeamButtons = document.querySelectorAll('.red-team-button');

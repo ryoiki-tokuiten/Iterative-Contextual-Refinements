@@ -3,21 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CustomizablePromptsWebsite } from '../Refine/RefinePrompts';
 import { CustomizablePromptsDeepthink } from '../Deepthink/DeepthinkPrompts';
 import { AgenticPromptsManager, AgenticPrompts } from '../Agentic/AgenticPromptsManager';
 import { CustomizablePromptsAdaptiveDeepthink } from '../AdaptiveDeepthink/AdaptiveDeepthinkPrompt';
 import { AdaptiveDeepthinkPromptsManager } from '../AdaptiveDeepthink/AdaptiveDeepthinkPromptsManager';
 import { CustomizablePromptsContextual } from '../Contextual/ContextualPrompts';
 import { ContextualPromptsManager } from '../Contextual/ContextualPromptsManager';
-import { WebsitePromptsManager } from '../Refine/WebsitePromptsManager';
 import { DeepthinkPromptsManager } from '../Deepthink/DeepthinkPromptsManager';
 
 import { DCAPromptsState } from '../Deepthink/DCA/DCAPrompts';
 import { DCAPromptsManager } from '../Deepthink/DCA/DCAPromptsManager';
 
 export class PromptsManager {
-    private websitePromptsManager: WebsitePromptsManager;
     private deepthinkPromptsManager: DeepthinkPromptsManager;
     private agenticPromptsManager: AgenticPromptsManager;
     private adaptiveDeepthinkPromptsManager?: AdaptiveDeepthinkPromptsManager;
@@ -25,14 +22,12 @@ export class PromptsManager {
     private dcaPromptsManager?: DCAPromptsManager;
 
     constructor(
-        websitePromptsRef: { current: CustomizablePromptsWebsite },
         deepthinkPromptsRef: { current: CustomizablePromptsDeepthink },
         agenticPromptsRef?: { current: AgenticPrompts },
         adaptiveDeepthinkPromptsRef?: { current: CustomizablePromptsAdaptiveDeepthink },
         contextualPromptsRef?: { current: CustomizablePromptsContextual },
         dcaPromptsRef?: { current: DCAPromptsState }
     ) {
-        this.websitePromptsManager = new WebsitePromptsManager(websitePromptsRef);
         this.deepthinkPromptsManager = new DeepthinkPromptsManager(deepthinkPromptsRef);
 
         const defaultAgenticRef = agenticPromptsRef || { current: { systemPrompt: '', verifierPrompt: '' } };
@@ -60,19 +55,6 @@ export class PromptsManager {
 
     public setDCAPrompts(prompts: DCAPromptsState): void {
         this.dcaPromptsManager?.setPrompts(prompts);
-    }
-
-    // Website prompts
-    public getWebsitePromptsManager(): WebsitePromptsManager {
-        return this.websitePromptsManager;
-    }
-
-    public getWebsitePrompts(): CustomizablePromptsWebsite {
-        return this.websitePromptsManager.getPrompts();
-    }
-
-    public setWebsitePrompts(prompts: CustomizablePromptsWebsite): void {
-        this.websitePromptsManager.setPrompts(prompts);
     }
 
     // Deepthink prompts

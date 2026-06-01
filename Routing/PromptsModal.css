@@ -417,8 +417,10 @@ textarea.prompt-textarea:focus {
 
 .custom-model-select-option .option-check {
     display: none;
-    font-size: 1rem;
-    color: var(--accent-blue);
+    font-size: 1.1rem;
+    color: var(--accent-green);
+    align-items: center;
+    justify-content: center;
 }
 
 .custom-model-select-option.selected .option-check {
@@ -429,54 +431,10 @@ textarea.prompt-textarea:focus {
     font-size: 0.85rem;
 }
 
-/* Refine Button */
-.prompt-refine-button {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    padding: 0.3rem 0.6rem;
-    margin-left: 0.5rem;
-    background-color: transparent;
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius-sm);
-    color: var(--text-secondary-color);
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
 
-.prompt-refine-button:hover {
-    background-color: rgba(var(--accent-blue-rgb), 0.1);
-    color: var(--accent-blue);
-    border-color: var(--accent-blue);
-}
-
-.prompt-refine-button .icon-slot {
-    font-size: 1rem;
-}
-
-/* Diff Button */
-.prompt-diff-button {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    padding: 0.3rem 0.6rem;
-    margin-left: 0.5rem;
-    background-color: transparent;
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius-sm);
-    color: var(--text-secondary-color);
-    font-size: 0.8rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.prompt-diff-button:hover {
-    background-color: rgba(var(--accent-purple-rgb), 0.1);
-    color: var(--accent-purple);
-    border-color: var(--accent-purple);
-}
-
-.prompt-diff-button .icon-slot {
-    font-size: 1rem;
+/* Ensure the Prompts Modal overlay is perfectly borderless and has flat corners */
+#prompts-modal-overlay .modal-content {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
 }

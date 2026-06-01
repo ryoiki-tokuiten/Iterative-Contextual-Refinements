@@ -28,6 +28,8 @@ export interface DeepthinkConfigState {
     temperature: number;
     topP: number;
     codeExecutionEnabled: boolean;
+    hypothesisInjectionMode: 'parallel' | 'strategy_aware' | 'selective_injection';
+    shareHypothesesToDissected: boolean;
 }
 
 export type DeepthinkConfigChangeEvent = CustomEvent<{
@@ -68,7 +70,9 @@ export class DeepthinkConfigController extends EventTarget {
             provideAllSolutionsEnabled: params.provideAllSolutionsToCorrectors,
             temperature: params.temperature,
             topP: params.topP,
-            codeExecutionEnabled: params.deepthinkCodeExecutionEnabled
+            codeExecutionEnabled: params.deepthinkCodeExecutionEnabled,
+            hypothesisInjectionMode: params.hypothesisInjectionMode || 'selective_injection',
+            shareHypothesesToDissected: params.shareHypothesesToDissected === true
         };
     }
 
@@ -128,6 +132,10 @@ export class DeepthinkConfigController extends EventTarget {
         return this.modelConfig.isDeepthinkCodeExecutionEnabled();
     }
 
+    public getHypothesisInjectionMode(): 'parallel' | 'strategy_aware' | 'selective_injection' {
+        return this.modelConfig.getHypothesisInjectionMode();
+    }
+
     // ========== SETTERS WITH BUSINESS LOGIC ==========
 
     /**
@@ -151,7 +159,12 @@ export class DeepthinkConfigController extends EventTarget {
             return;
         }
 
-        const clampedCount = Math.max(0, Math.min(count, 10));
+        let clampedCount = count;
+        if (count > 0) {
+            clampedCount = Math.max(2, Math.min(count, 5));
+        } else {
+            clampedCount = 0;
+        }
         this.modelConfig.updateParameter('subStrategiesCount', clampedCount);
 
         // Auto-set skipSubStrategies based on count
@@ -240,6 +253,14 @@ export class DeepthinkConfigController extends EventTarget {
 
         this.modelConfig.updateParameter('dissectedObservationsEnabled', enabled);
         this.emitChange('dissectedObservationsEnabled');
+    }
+
+    /**
+     * Set whether hypotheses are shared with dissected observations synthesis agent.
+     */
+    public setShareHypothesesToDissected(share: boolean): void {
+        this.modelConfig.updateParameter('shareHypothesesToDissected', share);
+        this.emitChange('shareHypothesesToDissected');
     }
 
     /**
@@ -351,6 +372,18 @@ export class DeepthinkConfigController extends EventTarget {
     public setCodeExecutionEnabled(enabled: boolean): void {
         this.modelConfig.updateParameter('deepthinkCodeExecutionEnabled', enabled);
         this.emitChange('codeExecutionEnabled');
+    }
+
+    /**
+     * Set hypothesis injection mode.
+     * Controls how hypotheses interact with strategies:
+     * - 'parallel': Current behavior, hypothesis runs independently of strategies
+     * - 'strategy_aware': Hypothesis runs after strategies finalize, full packet injected
+     * - 'selective_injection': Hypothesis runs after strategies finalize, per-strategy packets
+     */
+    public setHypothesisInjectionMode(mode: 'parallel' | 'strategy_aware' | 'selective_injection'): void {
+        this.modelConfig.updateParameter('hypothesisInjectionMode', mode);
+        this.emitChange('hypothesisInjectionMode');
     }
 
     // ========== EVENT EMISSION ==========

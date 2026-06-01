@@ -34,10 +34,9 @@ import {
 // Ensure handlers are registered
 import './StateSerializer/handlers';
 
-import { updateEvolutionModeDescription } from '../UI/CommonUI';
+
 import { updateUIAfterModeChange } from './AppRouter';
 import { createDefaultCustomPromptsDeepthink } from '../Deepthink/DeepthinkPrompts';
-import { defaultCustomPromptsWebsite } from '../Refine/RefinePrompts';
 import { createDefaultCustomPromptsContextual } from '../Contextual/ContextualPrompts';
 import { createDefaultCustomPromptsAdaptiveDeepthink } from '../AdaptiveDeepthink/AdaptiveDeepthinkPrompt';
 import { createDefaultCustomPromptsDCA } from '../Deepthink/DCA/DCAPrompts';
@@ -48,7 +47,6 @@ import {
     getSelectedModel,
     getSelectedTemperature,
     getSelectedTopP,
-    getSelectedRefinementStages,
     getSelectedStrategiesCount,
     getSelectedSubStrategiesCount,
     getSelectedHypothesisCount,
@@ -102,13 +100,11 @@ export async function exportConfiguration(format: ExportFormat = 'auto'): Promis
         _mode: globalState.currentMode,
         data: {
             currentMode: globalState.currentMode,
-            currentEvolutionMode: globalState.currentEvolutionMode,
             initialIdea: initialIdeaInput?.value ?? '',
             selectedModel: getSelectedModel(),
             modeState,
             embeddedStates,
             customPrompts: {
-                website: globalState.customPromptsWebsiteState,
                 deepthink: globalState.customPromptsDeepthinkState,
                 agentic: globalState.customPromptsAgenticState,
                 contextual: globalState.customPromptsContextualState,
@@ -118,7 +114,6 @@ export async function exportConfiguration(format: ExportFormat = 'auto'): Promis
             modelParameters: {
                 temperature: getSelectedTemperature(),
                 topP: getSelectedTopP(),
-                refinementStages: getSelectedRefinementStages(),
                 strategiesCount: getSelectedStrategiesCount(),
                 subStrategiesCount: getSelectedSubStrategiesCount(),
                 hypothesisCount: getSelectedHypothesisCount(),
@@ -213,20 +208,7 @@ async function applyConfiguration(config: VersionedState): Promise<void> {
         modeRadio.checked = true;
     }
 
-    // 2. Restore evolution mode
-    if (data.currentEvolutionMode !== undefined) {
-        globalState.currentEvolutionMode = data.currentEvolutionMode;
-        const evolutionButtons = document.querySelectorAll('.evolution-convergence-button');
-        evolutionButtons.forEach(button => {
-            const buttonValue = (button as HTMLElement).dataset.value;
-            if (buttonValue === globalState.currentEvolutionMode) {
-                button.classList.add('active');
-            } else {
-                button.classList.remove('active');
-            }
-        });
-        updateEvolutionModeDescription(globalState.currentEvolutionMode);
-    }
+
 
     // 3. Restore initial idea
     const initialIdeaInput = getInitialIdeaInput();
@@ -287,11 +269,7 @@ function restoreCustomPrompts(prompts: ExportedConfigV1['customPrompts']): void 
     // Configuration map for restoring prompts
     // Maps the prompt key from export -> global state property -> default value generator
     const promptConfigs = [
-        {
-            key: 'website' as const,
-            target: 'customPromptsWebsiteState' as const,
-            getDefault: () => defaultCustomPromptsWebsite
-        },
+
         {
             key: 'deepthink' as const,
             target: 'customPromptsDeepthinkState' as const,

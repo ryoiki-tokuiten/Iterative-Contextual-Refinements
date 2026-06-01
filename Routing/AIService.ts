@@ -42,9 +42,6 @@ export async function callAI(
         throw new Error(`No configured provider found for model: ${modelToUse}`);
     }
     
-    // Only pass thinking config to Gemini provider (others don't support it)
-    const finalThinkingConfig = aiProvider.getProviderName() === 'gemini' ? thinkingConfig : undefined;
-    
     return await aiProvider.generateContent(
         promptOrParts, 
         temperature, 
@@ -52,7 +49,7 @@ export async function callAI(
         systemInstruction, 
         isJsonOutput, 
         topP,
-        finalThinkingConfig
+        thinkingConfig
     );
 }
 

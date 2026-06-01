@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { callAI, getSelectedModel, getSelectedTemperature, getSelectedTopP, getProviderForCurrentModel } from '../Routing';
+import { callAI, getSelectedModel, getSelectedTemperature, getSelectedTopP, getProviderForCurrentModel, getSelectedThinkingLevel } from '../Routing';
 import { updateControlsState } from '../UI/Controls';
 import { globalState } from '../Core/State';
 import { CustomizablePromptsContextual } from './ContextualPrompts';
@@ -660,9 +660,10 @@ const BASE_THINKING_TOOLS = [{
 function getThinkingConfig() {
     const isGemini = getProviderForCurrentModel() === 'gemini';
     const codeExecutionEnabled = globalState.geminiCodeExecutionEnabled && isGemini;
+    const thinkingLevel = getSelectedThinkingLevel();
 
     return {
-        thinkingBudget: -1,
+        thinkingLevel: thinkingLevel,
         tools: BASE_THINKING_TOOLS,
         codeExecution: codeExecutionEnabled
     };

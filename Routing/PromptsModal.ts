@@ -17,9 +17,9 @@ export class PromptsModal {
         content: HTMLElement | null;
     };
 
-    private currentMode: string = 'website';
+    private currentMode: string = 'deepthink';
     private modelConfig: any = null;
-    private promptsManager: any = null;
+    public promptsManager: any = null;
     private activeRefiners: Map<string, PromptRefiner> = new Map();
 
     constructor() {
@@ -230,20 +230,6 @@ export class PromptsModal {
 
     private getPromptNavStructure() {
         return {
-            website: [
-                {
-                    groupTitle: "1. INITIAL GENERATION & ANALYSIS",
-                    prompts: ["initial-gen", "initial-bugfix", "initial-features"]
-                },
-                {
-                    groupTitle: "2. REFINEMENT CYCLE",
-                    prompts: ["refine-implement", "refine-bugfix", "refine-features"]
-                },
-                {
-                    groupTitle: "3. FINAL POLISH",
-                    prompts: ["final-polish"]
-                }
-            ],
             deepthink: [
                 {
                     groupTitle: "1. STRATEGY GENERATION",
@@ -331,7 +317,6 @@ export class PromptsModal {
         // We still apply createCustomModelSelect() for the visual overlay (styled dropdown,
         // Refine button, Diff button), but skip wiping options and adding imperative listeners.
         const reactContainerIds = new Set([
-            'website-prompts-container',
             'deepthink-prompts-container',
             'agentic-prompts-container',
             'adaptiveDeepthink-prompts-container',
@@ -411,7 +396,6 @@ export class PromptsModal {
     private getAgentNameFromTextareaId(textareaId: string): string | null {
         // Reverse mapping from textarea ID to agent name
         const allMaps = {
-            ...this.getWebsiteAgentMap(),
             ...this.getDeepthinkAgentMap(),
             ...this.getAgenticAgentMap(),
             ...this.getAdaptiveDeepthinkAgentMap(),
@@ -427,17 +411,7 @@ export class PromptsModal {
         return null;
     }
 
-    private getWebsiteAgentMap(): { [key: string]: string } {
-        return {
-            'initialGen': 'sys-initial-gen',
-            'initialBugFix': 'sys-initial-bugfix',
-            'initialFeatureSuggest': 'sys-initial-features',
-            'refineStabilizeImplement': 'sys-refine-implement',
-            'refineBugFix': 'sys-refine-bugfix',
-            'refineFeatureSuggest': 'sys-refine-features',
-            'finalPolish': 'sys-final-polish'
-        };
-    }
+
 
     private getDeepthinkAgentMap(): { [key: string]: string } {
         return {
@@ -511,7 +485,7 @@ export class PromptsModal {
 
         // Add refine button
         const refineButton = document.createElement('button');
-        refineButton.className = 'prompt-refine-button';
+        refineButton.className = 'prompt-model-refine-btn';
         refineButton.type = 'button';
         refineButton.innerHTML = `
             ${renderIconMarkup('edit')}
@@ -526,7 +500,7 @@ export class PromptsModal {
 
         // Add diff button (initially hidden)
         const diffButton = document.createElement('button');
-        diffButton.className = 'prompt-diff-button';
+        diffButton.className = 'prompt-model-diff-btn';
         diffButton.type = 'button';
         diffButton.style.display = 'none';
         diffButton.dataset.agent = agentName;
@@ -631,7 +605,7 @@ export class PromptsModal {
 
         globalOption.innerHTML = `
             <span class="custom-model-select-option-text">Use Global Model</span>
-            ${renderIconMarkup('check', 'option-check')}
+            ${renderIconMarkup('CircleCheck', 'option-check')}
         `;
 
         globalOption.addEventListener('click', () => {
@@ -714,7 +688,7 @@ export class PromptsModal {
 
                 option.innerHTML = `
                     <span class="custom-model-select-option-text">${model.value}</span>
-                    ${renderIconMarkup('check', 'option-check')}
+                    ${renderIconMarkup('CircleCheck', 'option-check')}
                 `;
 
                 option.addEventListener('click', () => {
@@ -771,17 +745,6 @@ export class PromptsModal {
     }
 
     private getTextareaIdForAgent(agentName: string): string | null {
-        // Website mode agents
-        const websiteMap: { [key: string]: string } = {
-            'initialGen': 'sys-initial-gen',
-            'initialBugFix': 'sys-initial-bugfix',
-            'initialFeatureSuggest': 'sys-initial-features',
-            'refineStabilizeImplement': 'sys-refine-implement',
-            'refineBugFix': 'sys-refine-bugfix',
-            'refineFeatureSuggest': 'sys-refine-features',
-            'finalPolish': 'sys-final-polish'
-        };
-
         // Deepthink mode agents
         const deepthinkMap: { [key: string]: string } = {
             'initialStrategy': 'sys-deepthink-initial-strategy',
@@ -823,7 +786,7 @@ export class PromptsModal {
             'contextual-memory': 'sys-contextual-memory'
         };
 
-        return websiteMap[agentName] || deepthinkMap[agentName] || agenticMap[agentName] || adaptiveDeepthinkMap[agentName] || contextualMap[agentName] || null;
+        return deepthinkMap[agentName] || agenticMap[agentName] || adaptiveDeepthinkMap[agentName] || contextualMap[agentName] || null;
     }
 
     private openPromptRefiner(agentName: string): void {
@@ -871,7 +834,7 @@ export class PromptsModal {
         }
 
         // Find the refine button to position the overlay
-        const refineButton = document.querySelector('.prompt-refine-button') as HTMLElement;
+        const refineButton = document.querySelector('.prompt-model-refine-btn') as HTMLElement;
         console.log('Showing refiner overlay');
         refiner.show(refineButton || document.body);
     }
@@ -887,7 +850,7 @@ export class PromptsModal {
         const originalPrompt = textarea.dataset.originalValue || '';
 
         // Find the diff button for this agent
-        const diffButton = document.querySelector(`.prompt-diff-button[data-agent="${agentName}"]`) as HTMLElement;
+        const diffButton = document.querySelector(`.prompt-model-diff-btn[data-agent="${agentName}"]`) as HTMLElement;
         if (!diffButton) {
             // Button doesn't exist yet - might be called before button is created
             return;

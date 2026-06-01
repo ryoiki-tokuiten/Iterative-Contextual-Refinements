@@ -123,7 +123,7 @@ function formatToolCallDisplay(toolCall: AdaptiveDeepthinkToolCall): string {
         case 'Exit':
             return 'Exit()';
         default:
-            return toolCall.type;
+            return (toolCall as any).type;
     }
 }
 

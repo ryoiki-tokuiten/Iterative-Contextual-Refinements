@@ -5,8 +5,6 @@
 
 import { globalState } from './State';
 import { routingManager } from '../Routing';
-import { updateEvolutionModeDescription } from '../UI/CommonUI';
-import { resetSidebarCollapseButtonState } from '../UI/LayoutController';
 import {
     ensureAdaptiveDeepthinkInitialized,
     ensureAgenticInitialized,
@@ -17,9 +15,7 @@ import {
     getLoadedAgenticModule,
     getLoadedContextualModule,
     getLoadedDeepthinkModule,
-    getLoadedDCAModule,
-    loadWebsiteLogic,
-    loadWebsiteUI
+    getLoadedDCAModule
 } from './ModeLoader';
 
 let renderToken = 0;
@@ -42,18 +38,13 @@ export function activateTab(idToActivate: string | number) {
             }
         }
 
-    } else if (globalState.currentMode !== 'deepthink') {
-        globalState.activePipelineId = idToActivate as number;
-
-        // Dispatch event for UI to update tab styles
-        window.dispatchEvent(new CustomEvent('updatePipelineTabUI', { detail: { id: idToActivate } }));
     }
 }
 
 export function renderActiveMode() {
     const token = ++renderToken;
     const mode = globalState.currentMode;
-    (window as any).pipelinesState = globalState.pipelinesState;
+
 
     // Dispatch event to allow UI components (like MainContent) to manage their visibility state
     window.dispatchEvent(new CustomEvent('beforeRenderActiveMode', { detail: { mode } }));
@@ -102,23 +93,8 @@ export function renderActiveMode() {
             return;
         }
 
-        // Default: Website / Refine Mode
-        const tabsNavContainer = document.getElementById('tabs-nav-container');
-        const pipelinesContentContainer = document.getElementById('pipelines-content-container');
-
-        // Initialize pipelines if empty (e.g., when switching to website mode or after import)
-        if (globalState.pipelinesState.length === 0) {
-            const websiteLogic = await loadWebsiteLogic();
-            websiteLogic.initPipelines();
-        }
-
-        if (tabsNavContainer && pipelinesContentContainer) {
-            const websiteUI = await loadWebsiteUI();
-            if (mode !== globalState.currentMode || token !== renderToken) return;
-            tabsNavContainer.innerHTML = '';
-            pipelinesContentContainer.innerHTML = '';
-            websiteUI.renderWebsiteMode(tabsNavContainer, pipelinesContentContainer);
-        }
+        // Fallback for unknown/unsupported modes
+        console.warn('Unknown or unsupported mode in active renderer:', mode);
     })();
 }
 
@@ -134,12 +110,10 @@ export function updateUIAfterModeChange() {
         }
     }, 100);
 
-    if (globalState.currentMode === 'website') {
-        updateEvolutionModeDescription(globalState.currentEvolutionMode);
-    }
+
 
     if (!globalState.isGenerating) {
-        globalState.pipelinesState = [];
+
         if (globalState.currentMode === 'agentic') {
             const agentic = getLoadedAgenticModule();
             if (agentic) agentic.cleanupAgenticMode();

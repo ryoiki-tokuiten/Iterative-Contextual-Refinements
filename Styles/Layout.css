@@ -2,13 +2,14 @@
 #app-container {
     display: flex;
     height: 100vh;
-    padding: var(--space-4);
-    /* 16px */
+    padding: var(--space-2);
     gap: var(--gap-md);
-    /* 16px */
     overflow: hidden;
     position: relative;
 }
+
+/* removed padding: var(--space-4); from app-container. */
+
 
 #controls-sidebar {
     width: 432px;
@@ -21,22 +22,22 @@
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     transform-origin: left center;
     will-change: width, transform, opacity;
-}
 
-#controls-sidebar>* {
-    min-width: 0;
-}
+    &>* {
+        min-width: 0;
+    }
 
-#controls-sidebar.collapsed {
-    width: 0;
-    min-width: 0;
-    opacity: 0;
-    overflow: hidden;
-    padding: 0;
-    margin: 0;
-    border: none;
-    transform: translateX(-100%);
-    pointer-events: none;
+    &.collapsed {
+        width: 0;
+        min-width: 0;
+        opacity: 0;
+        overflow: hidden;
+        padding: 0;
+        margin: 0;
+        border: none;
+        transform: translateX(-100%);
+        pointer-events: none;
+    }
 }
 
 #main-content {
@@ -55,38 +56,30 @@
     border: 1px solid var(--sub-panel-border-color);
     border-radius: var(--border-radius-lg);
     padding: var(--spacing-section-sm);
-    /* 24px */
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: var(--spacing-section-sm);
-    /* 24px */
     box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
     transition: all 0.3s ease;
+
+    body.light-mode & {
+        background: linear-gradient(180deg, rgba(236, 242, 255, 0.5) 0%, rgba(245, 247, 250, 0.8) 100%);
+        border-color: rgba(0, 0, 0, 0.15);
+        box-shadow:
+            0 4px 20px rgba(0, 0, 0, 0.03),
+            1px 0 0 rgba(255, 255, 255, 0.5) inset;
+    }
 }
 
-/* Light mode specific sidebar enhancements */
-body.light-mode .inspector-panel {
-    background: linear-gradient(180deg, rgba(236, 242, 255, 0.5) 0%, rgba(245, 247, 250, 0.8) 100%);
-    border-color: rgba(0, 0, 0, 0.15);
-    box-shadow:
-        0 4px 20px rgba(0, 0, 0, 0.03),
-        1px 0 0 rgba(255, 255, 255, 0.5) inset;
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-}
-
-/* Main header content wrapper - keeps expand button and tabs aligned */
 .main-header-content {
     display: flex;
     align-items: center;
     border-bottom: 1px solid var(--border-color);
     padding: var(--spacing-section-sm) var(--spacing-section-sm) var(--space-3) var(--spacing-section-sm);
-    /* 24px 24px 12px 24px */
     gap: var(--gap-xs);
-    /* 8px */
     flex-shrink: 0;
 }
 
@@ -97,54 +90,45 @@ body.light-mode .inspector-panel {
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: thin;
-    /* Firefox */
     scrollbar-color: var(--border-hover-color) transparent;
-    /* Firefox */
     position: relative;
     flex: 1;
     gap: var(--gap-xs);
-    /* 8px */
     align-items: center;
     border: none;
     padding: var(--space-1);
-    /* 4px */
-    /* Small padding to prevent tab cutoff */
-}
 
-#tabs-nav-container::-webkit-scrollbar {
-    height: 10px;
-}
+    &::-webkit-scrollbar {
+        height: 10px;
+    }
 
-#tabs-nav-container::-webkit-scrollbar-track {
-    background: rgba(var(--bg-color-rgb), 0.12);
-    border-radius: 20px;
-}
+    &::-webkit-scrollbar-track {
+        background: rgba(var(--bg-color-rgb), 0.12);
+        border-radius: 20px;
+    }
 
-#tabs-nav-container::-webkit-scrollbar-thumb {
-    background: linear-gradient(90deg, rgba(var(--border-color-rgb), 0.7), var(--border-hover-color));
-    border-radius: 20px;
-    border: 2px solid transparent;
-    background-clip: padding-box;
-}
+    &::-webkit-scrollbar-thumb {
+        background: linear-gradient(90deg, rgba(var(--border-color-rgb), 0.7), var(--border-hover-color));
+        border-radius: 20px;
+        border: 2px solid transparent;
+        background-clip: padding-box;
 
-#tabs-nav-container::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(90deg, var(--glow-color), var(--border-hover-color));
-    overflow-x: auto;
-    /* always allow horizontal scroll */
+        &:hover {
+            background: linear-gradient(90deg, var(--glow-color), var(--border-hover-color));
+            overflow-x: auto;
+        }
+    }
 }
 
 .tab-button {
     padding: var(--space-3) var(--spacing-section-sm);
-    /* 12px 24px */
     min-height: var(--button-height-md);
-    /* 40px */
     background: transparent;
     border: 1px solid transparent;
     border-radius: var(--border-radius-md);
     color: var(--text-secondary-color);
     font-weight: var(--font-weight-medium);
     font-size: var(--font-size-sm);
-    /* 14px */
     line-height: var(--line-height-tight);
     cursor: pointer;
     transition: all var(--transition-speed) var(--easing-curve);
@@ -157,31 +141,27 @@ body.light-mode .inspector-panel {
     flex-shrink: 0;
     min-width: max-content;
     max-width: none;
-}
 
-/* remove animated overlay to avoid hover glitches */
-.tab-button::before {
-    content: none;
-}
+    &::before {
+        content: none;
+    }
 
-/* luminous hover pop without overpowering the gradient */
-.tab-button:hover:not(:disabled):not(.active) {
-    background: rgba(84, 46, 150, 0.28);
-    border-color: rgba(var(--border-color-rgb), 0.35);
-    color: var(--text-color);
-    box-shadow: 0 0 18px rgba(124, 74, 240, 0.25);
-}
+    &:hover:not(:disabled):not(.active) {
+        background: rgba(84, 46, 150, 0.28);
+        border-color: rgba(var(--border-color-rgb), 0.35);
+        color: var(--text-color);
+        box-shadow: 0 0 18px rgba(124, 74, 240, 0.25);
+    }
 
-.tab-button.active {
-    background: rgba(var(--accent-purple-rgb), 0.08);
-    color: var(--accent-purple);
-    border-color: rgba(var(--accent-purple-rgb), 0.3);
-    box-shadow: 0 0 6px rgba(var(--accent-purple-rgb), 0.2),
-        0 0 2px rgba(var(--accent-purple-rgb), 0.3) inset;
-    font-weight: var(--font-weight-semibold);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    transform: translateY(-1px);
+    &.active {
+        background: rgba(var(--accent-purple-rgb), 0.08);
+        color: var(--accent-purple);
+        border-color: rgba(var(--accent-purple-rgb), 0.3);
+        box-shadow: 0 0 6px rgba(var(--accent-purple-rgb), 0.2),
+            0 0 2px rgba(var(--accent-purple-rgb), 0.3) inset;
+        font-weight: var(--font-weight-semibold);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+        transform: translateY(-1px);
+    }
 }
-
-/* Removed green underline from active tabs */

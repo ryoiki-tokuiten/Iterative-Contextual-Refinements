@@ -76,7 +76,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    backdrop-filter: blur(8px);
+    backdrop-filter: var(--card-blur-effect);
 }
 
 .dca-detail-panel {

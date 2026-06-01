@@ -4,14 +4,13 @@
  */
 
 import { exportConfiguration, handleImportConfiguration } from './ConfigManager';
-import { updateUIAfterModeChange, renderActiveMode } from './AppRouter';
+import { updateUIAfterModeChange } from './AppRouter';
 import { initializeEvolutionConvergenceButtons } from '../Styles/Components/Sidebar/ModelParameters';
 import {
     ensureAdaptiveDeepthinkInitialized,
     ensureAgenticInitialized,
     ensureContextualInitialized,
     ensureDeepthinkInitialized,
-    loadWebsiteLogic,
     setAgenticPromptsManagerForLazyLoad
 } from './ModeLoader';
 
@@ -139,20 +138,8 @@ export class App {
             await ensureDCAInitialized();
             const { startDCAProcess } = await import('../Deepthink/DCA/DCACore');
             startDCAProcess(initialIdea);
-        } else { // Website mode
-            console.log('Starting Website mode');
-            const websiteLogic = await loadWebsiteLogic();
-            websiteLogic.initPipelines();
-            renderActiveMode();
-            console.log('Pipelines initialized:', globalState.pipelinesState.length);
-            const runningPromises = globalState.pipelinesState.map(p => websiteLogic.runPipeline(p.id, initialIdea));
-
-            try {
-                await Promise.allSettled(runningPromises);
-            } finally {
-                globalState.isGenerating = false;
-                updateControlsState();
-            }
+        } else {
+            console.warn('Unknown or unsupported application mode:', globalState.currentMode);
         }
     }
 
@@ -164,15 +151,8 @@ export class App {
         handleImportConfiguration(e);
     }
 
-    public static handleDiffModalClick(pipelineId: number, iterationNumber: number, contentType: 'html' | 'text') {
-        void import('../Styles/Components/DiffModal/DiffModalController').then((mod) => {
-            mod.openDiffModal(pipelineId, iterationNumber, contentType);
-        });
-    }
-
     private static initializeCustomPromptTextareas() {
         routingManager.initializePromptsManager(
-            { current: globalState.customPromptsWebsiteState },
             { current: globalState.customPromptsDeepthinkState },
             { current: globalState.customPromptsAgenticState },
             { current: globalState.customPromptsAdaptiveDeepthinkState },

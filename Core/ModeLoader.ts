@@ -18,12 +18,15 @@ import {
     getRefinementEnabled,
     getSkipSubStrategies,
     getDissectedObservationsEnabled,
+    getShareHypothesesToDissected,
     getIterativeCorrectionsEnabled,
     getIterativeDepth,
     getProvideAllSolutionsToCorrectors,
     getPostQualityFilterEnabled,
     callAI,
-    getProviderForCurrentModel
+    getProviderForCurrentModel,
+    getHypothesisInjectionMode,
+    getSelectedThinkingLevel
 } from '../Routing';
 import { parseJsonSafe } from './JsonParser';
 import { globalState } from './State';
@@ -36,8 +39,6 @@ type AgenticModule = typeof import('../Agentic/AgenticUI_Bridge');
 type ContextualModule = typeof import('../Contextual/Contextual');
 type AdaptiveDeepthinkModule = typeof import('../AdaptiveDeepthink/AdaptiveDeepthinkMode');
 type DCAModule = typeof import('../Deepthink/DCA/DCA');
-type WebsiteLogicModule = typeof import('../Refine/WebsiteLogic');
-type WebsiteUIModule = any;
 
 let deepthinkModule: DeepthinkModule | null = null;
 let deepthinkModulePromise: Promise<DeepthinkModule> | null = null;
@@ -61,12 +62,6 @@ let contextualInitialized = false;
 
 let adaptiveDeepthinkModule: AdaptiveDeepthinkModule | null = null;
 let adaptiveDeepthinkModulePromise: Promise<AdaptiveDeepthinkModule> | null = null;
-
-let websiteLogicModule: WebsiteLogicModule | null = null;
-let websiteLogicModulePromise: Promise<WebsiteLogicModule> | null = null;
-
-let websiteUIModule: WebsiteUIModule | null = null;
-let websiteUIModulePromise: Promise<WebsiteUIModule> | null = null;
 
 export function setAgenticPromptsManagerForLazyLoad(manager: AgenticPromptsManager | null): void {
     agenticPromptsManager = manager;
@@ -135,26 +130,6 @@ async function loadDCAModule(): Promise<DCAModule> {
     return dcaModulePromise;
 }
 
-export async function loadWebsiteLogic(): Promise<WebsiteLogicModule> {
-    if (!websiteLogicModulePromise) {
-        websiteLogicModulePromise = import('../Refine/WebsiteLogic').then((mod) => {
-            websiteLogicModule = mod;
-            return mod;
-        });
-    }
-    return websiteLogicModulePromise;
-}
-
-export async function loadWebsiteUI(): Promise<WebsiteUIModule> {
-    if (!websiteUIModulePromise) {
-        websiteUIModulePromise = import('../Refine/WebsiteUI.tsx').then((mod) => {
-            websiteUIModule = mod;
-            return mod;
-        });
-    }
-    return websiteUIModulePromise;
-}
-
 export async function ensureDeepthinkInitialized(): Promise<DeepthinkModule> {
     const mod = await loadDeepthinkModule();
     if (!deepthinkInitialized) {
@@ -174,12 +149,15 @@ export async function ensureDeepthinkInitialized(): Promise<DeepthinkModule> {
             getRefinementEnabled,
             getSkipSubStrategies,
             getDissectedObservationsEnabled,
+            getShareHypothesesToDissected,
             getIterativeCorrectionsEnabled,
             getIterativeDepth,
             getProvideAllSolutionsToCorrectors,
             getPostQualityFilterEnabled,
             getDeepthinkCodeExecutionEnabled: () => routingManager.getDeepthinkConfigController().isCodeExecutionEnabled(),
             getModelProvider: getProviderForCurrentModel,
+            getHypothesisInjectionMode,
+            getSelectedThinkingLevel,
             cleanTextOutput: (text: string) => text.trim(),
             customPromptsDeepthinkState: globalState.customPromptsDeepthinkState,
             tabsNavContainer: document.getElementById('tabs-nav-container'),

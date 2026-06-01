@@ -29,6 +29,13 @@ export class ProviderManagementUI {
             content: null
         };
         this.initializeElements();
+
+        // Listen to model updates to automatically re-render card contents when dynamically loaded
+        this.providerManager.addModelUpdateListener(() => {
+            if (this.elements.overlay && this.elements.overlay.style.display === 'flex') {
+                this.renderProviderCards();
+            }
+        });
     }
 
     private initializeElements(): void {
@@ -52,7 +59,7 @@ export class ProviderManagementUI {
         // Create Add Providers button
         const triggerButton = document.createElement('button');
         triggerButton.id = 'add-providers-trigger';
-        triggerButton.className = 'add-providers-button';
+        triggerButton.className = 'add-providers-button btn';
         triggerButton.innerHTML = `
             ${renderIconMarkup('key_round')}
             <span>Providers</span>
@@ -61,7 +68,7 @@ export class ProviderManagementUI {
         // Create Prompts button
         const promptsButton = document.createElement('button');
         promptsButton.id = 'prompts-trigger';
-        promptsButton.className = 'prompts-button';
+        promptsButton.className = 'prompts-button btn';
         promptsButton.innerHTML = `
             ${renderIconMarkup('edit')}
             <span>Prompts</span>
@@ -198,8 +205,6 @@ export class ProviderManagementUI {
 
     private renderConfiguredState(provider: ProviderConfig, isEnvironmentKey: boolean): string {
         const models = provider.models;
-        const defaultModels = this.getDefaultModels(provider.name);
-
         // For local models, all models are custom (no defaults)
         const isLocal = provider.name === 'local';
 
@@ -216,9 +221,9 @@ export class ProviderManagementUI {
                     <h4>Available Models</h4>
                     <div class="models-list">
                         ${models.map(model => `
-                            <div class="model-item ${!isLocal && defaultModels.includes(model) ? 'default-model' : 'custom-model'}">
+                            <div class="model-item ${isLocal ? 'custom-model' : 'default-model'}">
                                 <span class="model-name">${model}</span>
-                                ${isLocal || !defaultModels.includes(model) ? `
+                                ${isLocal ? `
                                     <button class="remove-model-btn" data-provider="${provider.name}" data-model="${model}">
                                         ${renderIconMarkup('close')}
                                     </button>
@@ -490,15 +495,6 @@ export class ProviderManagementUI {
         return icons[providerName] || renderIconMarkup('api');
     }
 
-    private getDefaultModels(providerName: string): string[] {
-        const defaultModels: Record<string, string[]> = {
-            gemini: ['gemini-3-pro-preview', 'gemini-3-flash-preview',   'gemini-3.1-flash-lite-preview', 'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'],
-            openrouter: ['deepseek/deepseek-chat-v3.1:free', 'deepseek/deepseek-r1-0528:free', 'qwen/qwen3-coder:free', 'z-ai/glm-4.5-air:free'],
-            anthropic: ['claude-opus-4-1-20250805', 'claude-sonnet-4-20250514'],
-            openai: ['o3-2025-04-16', 'gpt-5-2025-08-07', 'gpt-4.1-2025-04-14', 'gpt-5-mini-2025-08-07']
-        };
-        return defaultModels[providerName] || [];
-    }
 
     private isEnvironmentKey(providerName: string): boolean {
         const provider = this.providerManager.getAllProviders().find(p => p.name === providerName);

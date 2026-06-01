@@ -50,16 +50,16 @@ export function getSelectedModel(): string {
     return getRoutingManager().getSelectedModel();
 }
 
+export function getSelectedThinkingLevel(): 'low' | 'medium' | 'high' | 'minimal' {
+    return getRoutingManager().getThinkingLevel();
+}
+
 export function getSelectedTemperature(): number {
     return getRoutingManager().getTemperature();
 }
 
 export function getSelectedTopP(): number {
     return getRoutingManager().getTopP();
-}
-
-export function getSelectedRefinementStages(): number {
-    return getRoutingManager().getRefinementStages();
 }
 
 export function getSelectedStrategiesCount(): number {
@@ -90,6 +90,10 @@ export function getDissectedObservationsEnabled(): boolean {
     return getRoutingManager().isDissectedObservationsEnabled();
 }
 
+export function getShareHypothesesToDissected(): boolean {
+    return getRoutingManager().isShareHypothesesToDissected();
+}
+
 export function getIterativeCorrectionsEnabled(): boolean {
     return getRoutingManager().isIterativeCorrectionsEnabled();
 }
@@ -106,16 +110,16 @@ export function getPostQualityFilterEnabled(): boolean {
     return getRoutingManager().isPostQualityFilterEnabled();
 }
 
+export function getHypothesisInjectionMode(): 'parallel' | 'strategy_aware' | 'selective_injection' {
+    return getRoutingManager().getHypothesisInjectionMode();
+}
+
 export function getAIProvider() {
     return getRoutingManager().getAIProvider();
 }
 
 export function hasValidApiKey(): boolean {
     return getRoutingManager().hasValidApiKey();
-}
-
-export function getWebsitePrompts() {
-    return getRoutingManager().getWebsitePrompts();
 }
 
 export function getDeepthinkPrompts() {

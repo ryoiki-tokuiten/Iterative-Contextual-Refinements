@@ -636,8 +636,8 @@ body.light-mode .sub-strategy-text-container {
     inset: 0;
     z-index: 9999;
     background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -653,8 +653,8 @@ body.light-mode .sub-strategy-text-container {
 
 body.light-mode .sp-fullscreen-overlay {
     background: rgba(255, 255, 255, 0.55);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
 }
 
 /* Panel — True Fullscreen */
@@ -690,8 +690,8 @@ body.light-mode .sp-fullscreen-panel {
     padding: 1rem 1.5rem;
     border-bottom: 1px solid var(--border-color);
     background: rgba(24, 24, 27, 0.85);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
     flex-shrink: 0;
     position: sticky;
     top: 0;

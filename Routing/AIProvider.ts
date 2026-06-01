@@ -3,9 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GoogleGenAI, GenerateContentResponse, Part } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse, Part, ThinkingLevel } from "@google/genai";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
+import { globalState } from "../Core/State";
+
+// ============================================================================
+// Types & Interfaces
+// ============================================================================
 
 export interface StructuredMessage {
     role: 'system' | 'assistant' | 'user';
@@ -23,20 +28,53 @@ export interface ThinkingConfig {
     codeExecution?: boolean;  // Enable Gemini native code execution tool
 }
 
-// Models that require mandatory high thinking level
-const THINKING_MODELS = [
-    // Gemini 3 family
-    'gemini-3.1-pro-preview',
-    'gemini-3-flash-preview',
-    'gemini-3.1-flash-lite-preview',
-    // Gemma 4 family (all variants support thinking via API)
-    'gemma-4',
-];
 
-// Helper to check if a model requires thinking level config
-function isThinkingModel(modelId: string): boolean {
-    return THINKING_MODELS.some(m => modelId.includes(m));
+
+// ============================================================================
+// Thinking Config
+// ============================================================================
+
+/*
+ * Thinking config may change for providers and models over the time. Current config are according
+ * to May 2026. For updating the thinking config in the future, tag this file to your AI Agent and
+ * ask it to search the web and figure out exactly what updates are needed. Because this is
+ * literally the best we can do for something that changes so fast every month. Like I configured
+ * Gemini 2.5 models and 3 models differently because of different thinking budget rules Google has
+ * set for these different model families. I had to hardcode a specific rule for the Sonnet 3.7
+ * because Anthropic changed their approach after that. Another hurdle is keeping track of
+ * Model-IDs. OpenAI o series models were the thinking models for a long time and are detected
+ * dynamically as soon as you enter the api key, but I can't just go about adding cases for
+ * everything. That's the purpose of this comment. If your use case is specifically a given specific
+ * model, then tag your agent in this file, let it read the docs and search the web for that model
+ * and change the config.
+ */
+export type ThinkingType = 'level' | 'budget' | 'openai_effort' | 'anthropic_effort' | 'none';
+
+export function getModelThinkingType(modelId: string): ThinkingType {
+    const name = modelId.toLowerCase();
+
+    if (name.startsWith('gpt-')) {
+        const match = name.match(/gpt-(\d+)/);
+        if (match && parseInt(match[1]) >= 5) return 'openai_effort';
+        return 'none';
+    }
+    if (/^o[1-9]/.test(name)) return 'openai_effort';
+
+    if (name.startsWith('claude-') || name.includes('claude')) return 'anthropic_effort';
+
+    if (name.includes('gemma-')) return 'level';
+    if (name.includes('gemini-')) {
+        const match = name.match(/gemini-(\d+(?:\.\d+)?)/);
+        if (match) {
+            const version = parseFloat(match[1]);
+            if (version >= 3.0) return 'level';
+            if (version >= 2.0) return 'budget';
+        }
+    }
+
+    return 'none';
 }
+
 
 
 export interface AIProvider {
@@ -52,6 +90,7 @@ export interface AIProvider {
     ): Promise<GenerateContentResponse>;
     isInitialized(): boolean;
     getProviderName(): string;
+    listModels?(): Promise<string[]>;
 }
 
 // Helper to check if input is structured messages
@@ -67,10 +106,121 @@ function hasInlineData(part: any): part is { inlineData: { mimeType: string; dat
     return part && part.inlineData && part.inlineData.mimeType && part.inlineData.data;
 }
 
-// Helper to check if a Part contains text
+// ============================================================================
+// Shared Utilities
+// ============================================================================
+
 function hasText(part: any): part is { text: string } {
     return part && typeof part.text === 'string';
 }
+
+/** Wraps plain text into the Gemini-compatible response shape used by all non-Gemini providers. */
+function wrapAsGeminiResponse(text: string): any {
+    return {
+        text,
+        response: {
+            text: () => text,
+            candidates: [{ content: { parts: [{ text }] } }]
+        }
+    };
+}
+
+/**
+ * Builds an OpenAI-compatible messages array from our unified input types.
+ * Shared by OpenAI, OpenRouter, and Local providers.
+ * When visionSupport is true, Part[] with inlineData is converted to image_url format.
+ */
+function buildChatMessages(
+    promptOrParts: string | Part[] | StructuredMessage[],
+    systemInstruction?: string,
+    visionSupport: boolean = false
+): any[] {
+    const messages: any[] = [];
+
+    if (isStructuredMessages(promptOrParts)) {
+        if (systemInstruction) messages.push({ role: 'system', content: systemInstruction });
+        for (const msg of promptOrParts) messages.push({ role: msg.role, content: msg.content });
+        return messages;
+    }
+
+    if (visionSupport && Array.isArray(promptOrParts) && promptOrParts.length > 0) {
+        if (systemInstruction) messages.push({ role: 'system', content: systemInstruction });
+        const contentParts: any[] = [];
+        for (const part of promptOrParts) {
+            if (hasText(part)) {
+                contentParts.push({ type: 'text', text: part.text });
+            } else if (hasInlineData(part)) {
+                if (VISION_SUPPORTED_MIME_TYPES.includes(part.inlineData.mimeType)) {
+                    contentParts.push({
+                        type: 'image_url',
+                        image_url: { url: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` }
+                    });
+                }
+            }
+        }
+        if (contentParts.length > 0) messages.push({ role: 'user', content: contentParts });
+        return messages;
+    }
+
+    if (systemInstruction) messages.push({ role: 'system', content: systemInstruction });
+    const userContent = typeof promptOrParts === 'string'
+        ? promptOrParts
+        : Array.isArray(promptOrParts)
+            ? promptOrParts.map((p: any) => p.text).filter(Boolean).join('\n')
+            : String(promptOrParts);
+    messages.push({ role: 'user', content: userContent });
+    return messages;
+}
+
+/**
+ * Builds Anthropic-compatible messages and extracts system prompt separately.
+ * Anthropic requires system messages in a dedicated field rather than in the messages array,
+ * and uses a different vision format (source.type: 'base64' instead of image_url).
+ */
+function buildAnthropicMessages(
+    promptOrParts: string | Part[] | StructuredMessage[],
+    systemInstruction?: string
+): { messages: any[], systemPrompt: string | undefined } {
+    let messages: any[] = [];
+    let systemPrompt = systemInstruction;
+
+    if (isStructuredMessages(promptOrParts)) {
+        const systemMessages: string[] = [];
+        if (systemInstruction) systemMessages.push(systemInstruction);
+        for (const msg of promptOrParts) {
+            if (msg.role === 'system') {
+                systemMessages.push(msg.content);
+            } else {
+                messages.push({ role: msg.role, content: msg.content });
+            }
+        }
+        if (systemMessages.length > 0) systemPrompt = systemMessages.join('\n\n');
+    } else if (Array.isArray(promptOrParts) && promptOrParts.length > 0 && !isStructuredMessages(promptOrParts)) {
+        const contentParts: any[] = [];
+        for (const part of promptOrParts) {
+            if (hasText(part)) {
+                contentParts.push({ type: 'text', text: part.text });
+            } else if (hasInlineData(part)) {
+                if (VISION_SUPPORTED_MIME_TYPES.includes(part.inlineData.mimeType)) {
+                    contentParts.push({
+                        type: 'image',
+                        source: { type: 'base64', media_type: part.inlineData.mimeType, data: part.inlineData.data }
+                    });
+                }
+            }
+        }
+        if (contentParts.length > 0) messages = [{ role: 'user', content: contentParts }];
+    } else {
+        const userContent = typeof promptOrParts === 'string' ? promptOrParts : String(promptOrParts);
+        messages = [{ role: 'user', content: userContent }];
+    }
+
+    return { messages, systemPrompt };
+}
+
+// ============================================================================
+// Gemini Provider
+// ============================================================================
 
 /**
  * Sanitize Gemini contents array right before the API call.
@@ -175,14 +325,67 @@ function normalizeGoogleApiError(error: any, modelToUse: string, hadCodeExecutio
 
 export class GoogleAIProvider implements AIProvider {
     private client: GoogleGenAI | null = null;
+    private apiKey: string = '';
 
     initialize(apiKey: string): boolean {
         try {
+            this.apiKey = apiKey;
             this.client = new GoogleGenAI({ apiKey });
             return true;
         } catch (e) {
             console.error("Failed to initialize Google AI:", e);
             return false;
+        }
+    }
+
+    async listModels(): Promise<string[]> {
+        if (!this.apiKey) return [];
+        try {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${this.apiKey}`);
+            if (!res.ok) {
+                throw new Error(`Failed to list models: ${res.statusText}`);
+            }
+            const data = await res.json();
+            const rawModels = data.models || [];
+
+            // Standard suffixes for chat/text models (excludes robotics, image, tts, customtools, etc.)
+            const allowedSuffixes = [
+                '-pro',
+                '-flash',
+                '-flash-lite',
+                '-pro-preview',
+                '-flash-preview',
+                '-flash-lite-preview',
+                '-it' // gemma
+            ];
+
+            const isDatedSnapshot = (modelId: string): boolean => {
+                if (modelId.length < 4) return false;
+                const lastPart = modelId.slice(-4);
+                if (lastPart[0] !== '-') return false;
+                const d1 = lastPart[1];
+                const d2 = lastPart[2];
+                const d3 = lastPart[3];
+                return d1 >= '0' && d1 <= '9' && d2 >= '0' && d2 <= '9' && d3 >= '0' && d3 <= '9';
+            };
+
+            const filteredModels = rawModels
+                .filter((model: any) => {
+                    const modelId = model.name.replace(/^models\//, '');
+                    const isGeminiOrGemma = modelId.startsWith('gemini-') || modelId.startsWith('gemma-');
+                    const supportsGenerate = model.supportedGenerationMethods?.includes('generateContent');
+
+                    const isNotDatedSnapshot = !isDatedSnapshot(modelId);
+                    const matchesAllowedSuffix = allowedSuffixes.some(suffix => modelId.endsWith(suffix));
+
+                    return isGeminiOrGemma && supportsGenerate && isNotDatedSnapshot && matchesAllowedSuffix;
+                })
+                .map((model: any) => model.name.replace(/^models\//, ''));
+
+            return filteredModels;
+        } catch (e) {
+            console.error("Failed to fetch Gemini models:", e);
+            return [];
         }
     }
 
@@ -199,7 +402,9 @@ export class GoogleAIProvider implements AIProvider {
 
         // Handle structured messages properly for Gemini
         let contents: any;
-        if (isStructuredMessages(promptOrParts)) {
+        if (Array.isArray(promptOrParts) && promptOrParts.length > 0 && typeof promptOrParts[0] === 'object' && 'role' in promptOrParts[0] && 'parts' in promptOrParts[0]) {
+            contents = promptOrParts;
+        } else if (isStructuredMessages(promptOrParts)) {
             // Gemini supports multi-turn conversations via contents array
             // Convert structured messages to Gemini's format
             const geminiContents: any[] = [];
@@ -268,40 +473,44 @@ export class GoogleAIProvider implements AIProvider {
         if (systemInstruction) config.systemInstruction = systemInstruction;
         if (isJsonOutput) config.responseMimeType = "application/json";
 
-        // Check if this is a model that supports/requires thinking level config
-        const requiresThinking = isThinkingModel(modelToUse);
+        const thinkingType = getModelThinkingType(modelToUse);
 
-        // Add thinking configuration
-        if (requiresThinking) {
-            // Gemini 3 and Gemma 4 models: Use thinkingLevel instead of thinkingBudget
-            config.thinkingConfig = {
-                thinkingLevel: thinkingConfig?.thinkingLevel || 'high'
-            };
-            console.log(`🧠 Thinking Model Detected (${modelToUse}): Enforcing thinkingLevel=${config.thinkingConfig.thinkingLevel}`);
-        } else if (thinkingConfig?.thinkingLevel) {
-            // Explicit thinkingLevel override for any model
-            config.thinkingConfig = {
-                thinkingLevel: thinkingConfig.thinkingLevel
-            };
-        } else if (thinkingConfig?.thinkingBudget !== undefined) {
-            // Legacy: Gemini 2.5 models use thinkingBudget
+        if (thinkingType === 'level') {
+            const selectedLevel = thinkingConfig?.thinkingLevel || globalState.thinkingLevel;
+            let level = ThinkingLevel.HIGH;
+            if (selectedLevel === 'low') level = ThinkingLevel.LOW;
+            if (selectedLevel === 'medium') level = ThinkingLevel.MEDIUM;
+            if (selectedLevel === 'minimal') level = ThinkingLevel.MINIMAL;
+            if (selectedLevel === 'high') level = ThinkingLevel.HIGH;
+            
+            config.thinkingConfig = { thinkingLevel: level };
+            console.log(`[Gemini] Thinking level model (${modelToUse}): thinkingLevel=${config.thinkingConfig.thinkingLevel}`);
+        } else if (thinkingType === 'budget') {
+            const selectedLevel = thinkingConfig?.thinkingLevel || globalState.thinkingLevel;
+            const budgetMap: Record<string, number> = { 'minimal': 1024, 'low': 2048, 'medium': 4096, 'high': -1 };
+            config.thinkingConfig = { thinkingBudget: budgetMap[selectedLevel] ?? -1 };
+            console.log(`[Gemini] Thinking budget model (${modelToUse}): level=${selectedLevel}, budget=${config.thinkingConfig.thinkingBudget}`);
+        } else if (thinkingType !== 'none' && thinkingConfig?.thinkingBudget !== undefined) {
             config.thinkingBudget = thinkingConfig.thinkingBudget;
         }
 
-        // Tools must be inside config, not at requestOptions level!
-        // Per official docs: config: { tools: [{ codeExecution: {} }] }
-
-        // IMPORTANT: codeExecution and functionDeclarations are MUTUALLY EXCLUSIVE!
-        // When code execution is enabled, we CANNOT use function declarations.
-        // Code execution takes priority when enabled.
-
+        // codeExecution and functionDeclarations are mutually exclusive in Gemini.
         if (thinkingConfig?.codeExecution) {
-            // Code execution mode - ONLY add codeExecution, no function declarations
             config.tools = [{ codeExecution: {} }];
-            console.log('🔧 CODE EXECUTION TOOL ENABLED (function calling disabled)');
+            console.log('[Gemini] Code execution enabled (function calling disabled)');
         } else if (thinkingConfig?.tools && thinkingConfig.tools.length > 0) {
-            // Function calling mode - only when code execution is disabled
-            config.tools = [...thinkingConfig.tools];
+            let toolsToPass = thinkingConfig.tools;
+
+            // Strip dummy reasoning tool that conflicts with native thinking on Gemini 2.0+
+            if (thinkingType !== 'none') {
+                toolsToPass = toolsToPass.filter(
+                    (t: any) => !(t.functionDeclarations?.length === 1 && t.functionDeclarations[0].name === "internal_reasoning_continuation")
+                );
+            }
+
+            if (toolsToPass.length > 0) {
+                config.tools = [...toolsToPass];
+            }
         }
 
         const requestOptions: any = {
@@ -310,18 +519,11 @@ export class GoogleAIProvider implements AIProvider {
             config: config
         };
 
-        // DEBUG: Log the full request to verify code execution is included
-        console.group('🚀 GEMINI API REQUEST DEBUG');
-        console.log('Model:', modelToUse);
-        console.log('Config.tools:', JSON.stringify(config.tools, null, 2));
-        console.log('codeExecution enabled?', thinkingConfig?.codeExecution);
-        console.groupEnd();
+
 
         try {
             const result = await this.client.models.generateContent(requestOptions);
 
-            // Return the full result to preserve thought signatures in response.candidates[0].content
-            // The content object contains parts with thoughtSignature fields that must be preserved
             return result as any;
         } catch (error: any) {
             const parsedError = parseGoogleApiError(error);
@@ -370,6 +572,10 @@ export class GoogleAIProvider implements AIProvider {
     }
 }
 
+// ============================================================================
+// OpenAI Provider
+// ============================================================================
+
 export class OpenAIProvider implements AIProvider {
     private client: OpenAI | null = null;
 
@@ -383,6 +589,22 @@ export class OpenAIProvider implements AIProvider {
         }
     }
 
+    async listModels(): Promise<string[]> {
+        if (!this.client) return [];
+        try {
+            const response = await this.client.models.list();
+            if (!response || !response.data) return [];
+
+            const allowedPrefixes = ['gpt-', 'o1-', 'o3-', 'chatgpt-'];
+            return response.data
+                .map((m: any) => m.id)
+                .filter((id: string) => allowedPrefixes.some(prefix => id.startsWith(prefix)) || id === 'o1');
+        } catch (e) {
+            console.error("Failed to fetch OpenAI models:", e);
+            return [];
+        }
+    }
+
     async generateContent(
         promptOrParts: string | Part[] | StructuredMessage[],
         temperature: number,
@@ -390,90 +612,28 @@ export class OpenAIProvider implements AIProvider {
         systemInstruction?: string,
         isJsonOutput: boolean = false,
         topP?: number,
-        thinkingConfig?: any  // Not used by OpenAI but maintained for interface consistency
+        _thinkingConfig?: any  // Not used by OpenAI but maintained for interface consistency
     ): Promise<GenerateContentResponse> {
         if (!this.client) throw new Error("OpenAI client not initialized.");
 
-        const messages: any[] = [];
+        const messages = buildChatMessages(promptOrParts, systemInstruction, true);
+        const thinkingType = getModelThinkingType(modelToUse);
 
-        // Handle structured messages properly
-        if (isStructuredMessages(promptOrParts)) {
-            // Add system instruction FIRST (the main AGENTIC_SYSTEM_PROMPT)
-            if (systemInstruction) {
-                messages.push({ role: 'system', content: systemInstruction });
-            }
+        const requestOptions: any = { model: modelToUse, messages };
 
-            // Then add all structured messages (conversation history)
-            for (const msg of promptOrParts) {
-                messages.push({ role: msg.role, content: msg.content });
-            }
-        } else if (Array.isArray(promptOrParts) && promptOrParts.length > 0 && !isStructuredMessages(promptOrParts)) {
-            // Handle Part[] with potential images (vision support)
-            if (systemInstruction) {
-                messages.push({ role: 'system', content: systemInstruction });
-            }
-
-            // Build multipart content array for OpenAI vision format
-            const contentParts: any[] = [];
-
-            for (const part of promptOrParts) {
-                if (hasText(part)) {
-                    contentParts.push({ type: 'text', text: part.text });
-                } else if (hasInlineData(part)) {
-                    // Check if this is a supported image type
-                    if (VISION_SUPPORTED_MIME_TYPES.includes(part.inlineData.mimeType)) {
-                        contentParts.push({
-                            type: 'image_url',
-                            image_url: {
-                                url: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`
-                            }
-                        });
-                    }
-                    // Note: Unsupported file types are blocked by App.ts validation before reaching here
-                }
-            }
-
-            // If we have multipart content, use the array format
-            if (contentParts.length > 0) {
-                messages.push({ role: 'user', content: contentParts });
-            }
+        if (thinkingType === 'openai_effort') {
+            const level = _thinkingConfig?.thinkingLevel || 'high';
+            const effortMap: Record<string, string> = { 'minimal': 'low', 'low': 'low', 'medium': 'medium', 'high': 'high' };
+            requestOptions.reasoning_effort = effortMap[level] || 'medium';
         } else {
-            // Legacy behavior: simple string
-            if (systemInstruction) {
-                messages.push({ role: 'system', content: systemInstruction });
-            }
-
-            const userContent = typeof promptOrParts === 'string' ? promptOrParts : String(promptOrParts);
-            messages.push({ role: 'user', content: userContent });
+            requestOptions.temperature = temperature;
+            if (topP !== undefined) requestOptions.top_p = topP;
         }
 
-        const requestOptions: any = {
-            model: modelToUse,
-            messages,
-            temperature,
-        };
-
-        if (topP !== undefined) requestOptions.top_p = topP;
         if (isJsonOutput) requestOptions.response_format = { type: "json_object" };
 
         const response = await this.client.chat.completions.create(requestOptions);
-
-        const content = response.choices[0]?.message?.content || '';
-
-        // Convert OpenAI response to Gemini-like format - create a proper mock
-        const mockResponse = {
-            text: content,  // Direct property access for compatibility
-            response: {
-                text: () => content,
-                candidates: [{
-                    content: {
-                        parts: [{ text: content }]
-                    }
-                }]
-            }
-        };
-
-        return mockResponse as any;
+        return wrapAsGeminiResponse(response.choices[0]?.message?.content || '');
     }
 
     isInitialized(): boolean {
@@ -485,6 +645,10 @@ export class OpenAIProvider implements AIProvider {
     }
 }
 
+// ============================================================================
+// OpenRouter Provider
+// ============================================================================
+
 export class OpenRouterProvider implements AIProvider {
     private client: OpenAI | null = null;
 
@@ -493,12 +657,28 @@ export class OpenRouterProvider implements AIProvider {
             this.client = new OpenAI({
                 apiKey,
                 baseURL: "https://openrouter.ai/api/v1",
-                dangerouslyAllowBrowser: true
+                dangerouslyAllowBrowser: true,
+                defaultHeaders: {
+                    "HTTP-Referer": window.location.origin || "http://localhost:5173",
+                    "X-Title": "Iterative Studio"
+                }
             });
             return true;
         } catch (e) {
             console.error("Failed to initialize OpenRouter:", e);
             return false;
+        }
+    }
+
+    async listModels(): Promise<string[]> {
+        if (!this.client) return [];
+        try {
+            const response = await this.client.models.list();
+            if (!response || !response.data) return [];
+            return response.data.map((m: any) => m.id);
+        } catch (e) {
+            console.error("Failed to fetch OpenRouter models:", e);
+            return [];
         }
     }
 
@@ -509,60 +689,18 @@ export class OpenRouterProvider implements AIProvider {
         systemInstruction?: string,
         isJsonOutput: boolean = false,
         topP?: number,
-        thinkingConfig?: any
+        _thinkingConfig?: any
     ): Promise<GenerateContentResponse> {
         if (!this.client) throw new Error("OpenRouter client not initialized.");
 
-        const messages: any[] = [];
-
-        // Handle structured messages properly
-        if (isStructuredMessages(promptOrParts)) {
-            // Add system instruction FIRST (the main AGENTIC_SYSTEM_PROMPT)
-            if (systemInstruction) {
-                messages.push({ role: 'system', content: systemInstruction });
-            }
-
-            // Then add all structured messages (conversation history)
-            for (const msg of promptOrParts) {
-                messages.push({ role: msg.role, content: msg.content });
-            }
-        } else {
-            // Legacy behavior: system instruction + single user message
-            if (systemInstruction) {
-                messages.push({ role: 'system', content: systemInstruction });
-            }
-
-            const userContent = typeof promptOrParts === 'string' ? promptOrParts : promptOrParts.map(p => p.text).join('\n');
-            messages.push({ role: 'user', content: userContent });
-        }
-
-        const requestOptions: any = {
-            model: modelToUse,
-            messages,
-            temperature,
-        };
+        const messages = buildChatMessages(promptOrParts, systemInstruction);
+        const requestOptions: any = { model: modelToUse, messages, temperature };
 
         if (topP !== undefined) requestOptions.top_p = topP;
         if (isJsonOutput) requestOptions.response_format = { type: "json_object" };
 
         const response = await this.client.chat.completions.create(requestOptions);
-
-        const content = response.choices[0]?.message?.content || '';
-
-        // Convert OpenRouter response to Gemini-like format - create a proper mock
-        const mockResponse = {
-            text: content,  // Direct property access for compatibility
-            response: {
-                text: () => content,
-                candidates: [{
-                    content: {
-                        parts: [{ text: content }]
-                    }
-                }]
-            }
-        };
-
-        return mockResponse as any;
+        return wrapAsGeminiResponse(response.choices[0]?.message?.content || '');
     }
 
     isInitialized(): boolean {
@@ -573,6 +711,10 @@ export class OpenRouterProvider implements AIProvider {
         return 'openrouter';
     }
 }
+
+// ============================================================================
+// Anthropic Provider
+// ============================================================================
 
 export class AnthropicProvider implements AIProvider {
     private client: Anthropic | null = null;
@@ -587,6 +729,20 @@ export class AnthropicProvider implements AIProvider {
         }
     }
 
+    async listModels(): Promise<string[]> {
+        if (!this.client) return [];
+        try {
+            const response = await this.client.models.list({ limit: 1000 });
+            if (!response || !response.data) return [];
+            return response.data
+                .map((m: any) => m.id)
+                .filter((id: string) => id.startsWith('claude-'));
+        } catch (e) {
+            console.error("Failed to fetch Anthropic models:", e);
+            return [];
+        }
+    }
+
     async generateContent(
         promptOrParts: string | Part[] | StructuredMessage[],
         temperature: number,
@@ -594,81 +750,29 @@ export class AnthropicProvider implements AIProvider {
         systemInstruction?: string,
         isJsonOutput: boolean = false,
         topP?: number,
-        thinkingConfig?: any
+        _thinkingConfig?: any
     ): Promise<GenerateContentResponse> {
         if (!this.client) throw new Error("Anthropic client not initialized.");
 
-        let messages: any[] = [];
-        let systemPrompt = systemInstruction;
+        const { messages, systemPrompt } = buildAnthropicMessages(promptOrParts, systemInstruction);
+        const thinkingType = getModelThinkingType(modelToUse);
 
-        // Handle structured messages properly
-        if (isStructuredMessages(promptOrParts)) {
-            // Anthropic requires alternating user/assistant messages
-            // System messages need to be combined into the system prompt
-            const systemMessages: string[] = [];
+        const requestOptions: any = { model: modelToUse, max_tokens: 16384, messages };
 
-            // Add main system instruction first if provided
-            if (systemInstruction) {
-                systemMessages.push(systemInstruction);
-            }
-
-            for (const msg of promptOrParts) {
-                if (msg.role === 'system') {
-                    systemMessages.push(msg.content);
-                } else {
-                    messages.push({ role: msg.role, content: msg.content });
-                }
-            }
-
-            // Combine all system messages
-            if (systemMessages.length > 0) {
-                systemPrompt = systemMessages.join('\n\n');
-            }
-        } else if (Array.isArray(promptOrParts) && promptOrParts.length > 0 && !isStructuredMessages(promptOrParts)) {
-            // Handle Part[] with potential images (vision support)
-            // Build multipart content array for Anthropic vision format
-            const contentParts: any[] = [];
-
-            for (const part of promptOrParts) {
-                if (hasText(part)) {
-                    contentParts.push({ type: 'text', text: part.text });
-                } else if (hasInlineData(part)) {
-                    // Check if this is a supported image type
-                    if (VISION_SUPPORTED_MIME_TYPES.includes(part.inlineData.mimeType)) {
-                        contentParts.push({
-                            type: 'image',
-                            source: {
-                                type: 'base64',
-                                media_type: part.inlineData.mimeType,
-                                data: part.inlineData.data
-                            }
-                        });
-                    }
-                    // Note: Unsupported file types are blocked by App.ts validation before reaching here
-                }
-            }
-
-            // If we have multipart content, use the array format
-            if (contentParts.length > 0) {
-                messages = [{ role: 'user', content: contentParts }];
-            }
+        if (thinkingType === 'anthropic_effort') {
+            const level = _thinkingConfig?.thinkingLevel || 'high';
+            const effortMap: Record<string, string> = { 'minimal': 'low', 'low': 'low', 'medium': 'medium', 'high': 'high' };
+            requestOptions.thinking = { type: 'adaptive' };
+            requestOptions.effort = effortMap[level] || 'high';
+            requestOptions.temperature = 1.0;
         } else {
-            // Legacy behavior: single user message (string)
-            const userContent = typeof promptOrParts === 'string' ? promptOrParts : String(promptOrParts);
-            messages = [{ role: 'user', content: userContent }];
+            requestOptions.temperature = temperature;
         }
-
-        const requestOptions: any = {
-            model: modelToUse,
-            max_tokens: 8192,
-            temperature,
-            messages
-        };
 
         if (systemPrompt) requestOptions.system = systemPrompt;
         if (topP !== undefined) requestOptions.top_p = topP;
 
-        // Anthropic JSON mode: Add JSON instruction to system prompt
+        // Anthropic has no native JSON mode — inject instruction into system prompt
         if (isJsonOutput && systemPrompt) {
             requestOptions.system = `${systemPrompt}\n\nYou must respond with valid JSON only. Do not include any text outside the JSON structure.`;
         } else if (isJsonOutput) {
@@ -676,23 +780,8 @@ export class AnthropicProvider implements AIProvider {
         }
 
         const response = await this.client.messages.create(requestOptions);
-
-        // Convert Anthropic response to Gemini-like format
         const textContent = (response.content.find((c: any) => c.type === 'text') as any)?.text || '';
-
-        const mockResponse = {
-            text: textContent,  // Direct property access for compatibility
-            response: {
-                text: () => textContent,
-                candidates: [{
-                    content: {
-                        parts: [{ text: textContent }]
-                    }
-                }]
-            }
-        };
-
-        return mockResponse as any;
+        return wrapAsGeminiResponse(textContent);
     }
 
     isInitialized(): boolean {
@@ -703,6 +792,10 @@ export class AnthropicProvider implements AIProvider {
         return 'anthropic';
     }
 }
+
+// ============================================================================
+// Local Models Provider
+// ============================================================================
 
 export class LocalModelsProvider implements AIProvider {
     private client: OpenAI | null = null;
@@ -741,70 +834,23 @@ export class LocalModelsProvider implements AIProvider {
         systemInstruction?: string,
         isJsonOutput: boolean = false,
         topP?: number,
-        thinkingConfig?: any
+        _thinkingConfig?: any
     ): Promise<GenerateContentResponse> {
         if (!this.client) throw new Error("Local Models client not initialized.");
 
-        const messages: any[] = [];
-
-        // Handle structured messages properly
-        if (isStructuredMessages(promptOrParts)) {
-            // Add system instruction FIRST (the main AGENTIC_SYSTEM_PROMPT)
-            if (systemInstruction) {
-                messages.push({ role: 'system', content: systemInstruction });
-            }
-
-            // Then add all structured messages (conversation history)
-            for (const msg of promptOrParts) {
-                messages.push({ role: msg.role, content: msg.content });
-            }
-        } else {
-            // Legacy behavior: system instruction + single user message
-            if (systemInstruction) {
-                messages.push({ role: 'system', content: systemInstruction });
-            }
-
-            const userContent = typeof promptOrParts === 'string' ? promptOrParts : promptOrParts.map(p => p.text).join('\n');
-
-            // For JSON output with local models, add instruction to the prompt
-            if (isJsonOutput) {
-                messages.push({
-                    role: 'user',
-                    content: userContent + '\n\nIMPORTANT: You must respond with valid JSON only, no other text.'
-                });
-            } else {
-                messages.push({ role: 'user', content: userContent });
-            }
+        // For local models, we don't rely on response_format. We inject the instruction.
+        let effectiveSystemInstruction = systemInstruction;
+        if (isJsonOutput) {
+            effectiveSystemInstruction = (effectiveSystemInstruction || '') +
+                '\n\nIMPORTANT: You must respond with valid JSON only, no other text.';
         }
 
-        const requestOptions: any = {
-            model: modelToUse,
-            messages,
-            temperature,
-        };
-
+        const messages = buildChatMessages(promptOrParts, effectiveSystemInstruction);
+        const requestOptions: any = { model: modelToUse, messages, temperature };
         if (topP !== undefined) requestOptions.top_p = topP;
-        // Don't use response_format for local models as many don't support it
-        // Instead rely on prompt instruction for JSON output
 
         const response = await this.client.chat.completions.create(requestOptions);
-
-        const content = response.choices[0]?.message?.content || '';
-
-        // Convert response to Gemini-like format
-        const mockResponse = {
-            text: content,
-            response: {
-                text: () => content,
-                candidates: [{
-                    content: {
-                        parts: [{ text: content }]
-                    }
-                }]
-            }
-        };
-
-        return mockResponse as any;
+        return wrapAsGeminiResponse(response.choices[0]?.message?.content || '');
     }
 
     isInitialized(): boolean {
@@ -816,7 +862,10 @@ export class LocalModelsProvider implements AIProvider {
     }
 }
 
-// Factory function to create providers
+// ============================================================================
+// Provider Factory
+// ============================================================================
+
 export function createAIProvider(provider: string): AIProvider {
     switch (provider) {
         case 'gemini':

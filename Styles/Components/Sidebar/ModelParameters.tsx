@@ -1,18 +1,38 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { globalState } from '../../../Core/State';
-import { EvolutionMode, ApplicationMode } from '../../../Core/Types';
-import { EVOLUTION_OPTIONS, getEvolutionModeDescriptionText, handleEvolutionModeSelection } from './ModelParametersLogic';
+import { ApplicationMode } from '../../../Core/Types';
 import { Icon } from '../../../UI/Icons';
+import { getProviderForCurrentModel } from '../../../Routing';
 
 export const ModelParameters: React.FC = () => {
     const [currentMode, setCurrentMode] = useState<ApplicationMode>(globalState.currentMode as ApplicationMode);
+    const [modelProvider, setModelProvider] = useState<string>(() => {
+        try {
+            return getProviderForCurrentModel();
+        } catch {
+            return 'gemini';
+        }
+    });
 
     useEffect(() => {
         const handleModeChange = () => {
             setCurrentMode(globalState.currentMode as ApplicationMode);
         };
+        const handleModelChange = () => {
+            try {
+                setModelProvider(getProviderForCurrentModel());
+            } catch (err) {
+                console.error(err);
+            }
+        };
+
         window.addEventListener('appModeChanged', handleModeChange);
-        return () => window.removeEventListener('appModeChanged', handleModeChange);
+        window.addEventListener('selectedModelChanged', handleModelChange);
+
+        return () => {
+            window.removeEventListener('appModeChanged', handleModeChange);
+            window.removeEventListener('selectedModelChanged', handleModelChange);
+        };
     }, []);
     return (
         <details className="sidebar-section" open>
@@ -20,6 +40,16 @@ export const ModelParameters: React.FC = () => {
             <div className="sidebar-section-content">
                 <div id="model-selection-container" className="input-group-tight">
                     <select id="model-select" className="input-base" aria-label="Select AI Model">
+                    </select>
+                </div>
+
+                <div id="thinking-level-container" className="input-group-tight" style={{ display: 'none' }}>
+                    <label htmlFor="thinking-level-select" className="input-label">Thinking Level</label>
+                    <select id="thinking-level-select" className="input-base" aria-label="Select Gemini Thinking Level">
+                        <option value="minimal">Minimal</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
                     </select>
                 </div>
 
@@ -54,29 +84,6 @@ export const ModelParameters: React.FC = () => {
                             aria-label="Top P slider"
                         />
                     </div>
-                    <div className="input-group-tight" style={{ display: currentMode === 'website' ? '' : 'none' }}>
-                        <label htmlFor="refinement-stages-slider" className="input-label">
-                            Refinement Stages: <span id="refinement-stages-value">3</span>
-                        </label>
-                        <input
-                            type="range"
-                            id="refinement-stages-slider"
-                            className="slider"
-                            min="1"
-                            max="5"
-                            step="1"
-                            defaultValue="3"
-                            aria-label="Number of refinement stages slider"
-                        />
-                    </div>
-
-                    <div className="evolution-convergence-container" style={{ display: currentMode === 'website' ? '' : 'none' }}>
-                        <div className="evolution-convergence-header">
-                            <Icon name="manage_search" className="evolution-convergence-icon" />
-                            <span className="evolution-convergence-title">Iterative Evolutions Convergence</span>
-                        </div>
-                        <EvolutionModeSelector />
-                    </div>
 
                     <div style={{ display: 'none' }}>
                         <span id="strategies-value">3</span>
@@ -97,7 +104,7 @@ export const ModelParameters: React.FC = () => {
                         <input type="checkbox" id="provide-all-solutions-toggle" />
                     </div>
 
-                    <div id="contextual-mode-controls" style={{ display: currentMode === 'contextual' ? '' : 'none' }}>
+                    <div id="contextual-mode-controls" style={{ display: (currentMode === 'contextual' && modelProvider === 'gemini') ? '' : 'none' }}>
                         <div className="code-execution-container">
                             <div className="code-execution-header">
                                 <Icon name="code" />
@@ -126,36 +133,6 @@ export const ModelParameters: React.FC = () => {
 };
 
 export default ModelParameters;
-
-const EvolutionModeSelector: React.FC = () => {
-    const [mode, setMode] = useState<EvolutionMode>(globalState.currentEvolutionMode);
-
-    const handleSelect = useCallback((selected: EvolutionMode) => {
-        setMode(selected);
-        handleEvolutionModeSelection(selected);
-    }, []);
-
-    return (
-        <div className="evolution-convergence-buttons-wrapper">
-            <div className="evolution-convergence-buttons">
-                {EVOLUTION_OPTIONS.map(opt => (
-                    <button
-                        key={opt.value}
-                        type="button"
-                        className={`evolution-convergence-button${mode === opt.value ? ' active' : ''}`}
-                        data-value={opt.value}
-                        onClick={() => handleSelect(opt.value)}
-                    >
-                        {opt.label}
-                    </button>
-                ))}
-            </div>
-            <div className="evolution-convergence-description" id="evolution-mode-description">
-                {getEvolutionModeDescriptionText(mode)}
-            </div>
-        </div>
-    );
-};
 
 export function initializeEvolutionConvergenceButtons(): void {
 }

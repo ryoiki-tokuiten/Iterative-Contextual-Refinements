@@ -3,13 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Part } from "@google/genai";
 import { nanoid } from 'nanoid';
 import { globalState } from '../../Core/State';
 import { callAI, getSelectedModel, getSelectedTemperature, getSelectedTopP } from '../../Routing';
 import { parseJsonSafe } from "../../Core/JsonParser";
 import { updateControlsState } from '../../UI/Controls';
-import { DCA_PROMPTS } from './DCAPrompts';
 
 export interface DCASolution {
     id: string;

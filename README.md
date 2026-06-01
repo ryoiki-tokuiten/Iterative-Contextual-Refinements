@@ -4,7 +4,7 @@ The system integrates with major AI providers (Google AI, OpenAI, Anthropic) and
 
 ## Operational Modes
 
-The system operates in seven distinct modes, each optimized for specific use cases.
+The system operates in four distinct modes, each optimized for specific use cases.
 
 
 ### 1. Deepthink Mode
@@ -123,31 +123,7 @@ User Request → Main Generator → Generated Content
 5. Cycle continues until completion criteria met
 
 
-### 4. Refine Mode
-
-**Purpose**: Traditional iterative refinements with automated feature suggestion and bug fixing. Does not manage it's own conversation history.
-
-**Architecture**:
-- Pipeline-based execution with parallel temperature variations
-- Three-stage refinement process per iteration:
-  1. Initial content generation
-  2. Feature suggestion agent (novelty-seeking or quality-focused)
-  3. Bug fix agent (syntax/runtime error correction)
-
-**Key Components**:
-- `PipelineState`: Manages multiple concurrent refinement pipelines
-- `IterationData`: Tracks individual iteration states and content evolution
-- Evolution mode support (Novelty/Quality) for feature generation
-
-**Workflow**:
-1. User provides initial prompt
-2. System generates base content across multiple temperature settings (This is currently disabled)
-3. Feature suggestion agent proposes enhancements
-4. Bug fix agent validates and corrects errors
-5. Process repeats for configured number of iterations
-
-
-### 5. Agentic Mode
+### 4. Agentic Mode
 
 **Purpose**: General-purpose iterative refinement with tool-based content manipulation.
 
@@ -198,10 +174,6 @@ Supports configuration of:
 Use your lookback IP: http://127.0.0.1:1234 or http://localhost:1234 when you turn off your wifi or unplug the ethernet cable.
 
 ### Mode-Specific Settings
-
-**Website**:
-- Refinement stages count
-- Evolution mode (Novelty/Quality)
 
 **Deepthink/Adaptive**:
 - Strategy count

@@ -4,7 +4,6 @@ import RenderMathMarkdown from '../RenderMathMarkdown';
 import { ContentState } from './types';
 import {
     HistoryEntry,
-    buildContentStatesFromPipeline,
     buildContentStatesFromHistory,
     computeEvolutionDiff,
     splitIntoLines,
@@ -53,7 +52,7 @@ const EvolutionColumn: React.FC<EvolutionColumnProps> = ({ state, index, prevSta
             <div className="evolution-column-header">
                 <div className="evolution-column-title">{state.title}</div>
             </div>
-            <div className="evolution-column-content">
+            <div className="evolution-column-content scrollbar-compact">
                 {hideDiff
                     ? <div className="evolution-rendered-content"><RenderMathMarkdown content={state.content} /></div>
                     : <pre><code>{renderDiffLines()}</code></pre>
@@ -133,7 +132,7 @@ const EvolutionViewerModal: React.FC<EvolutionViewerProps> = ({
                 </div>
 
                 {/* Scroll Container */}
-                <div className="evolution-scroll-container" ref={scrollContainerRef}>
+                <div className="evolution-scroll-container scrollbar-standard" ref={scrollContainerRef}>
                     {contentStates.length === 0
                         ? <div className="evolution-empty-message">No iterations available to display.</div>
                         : contentStates.map((state, idx) => (
@@ -202,37 +201,7 @@ function mountEvolutionViewer(contentStates: ContentState[], sessionId?: string)
     );
 }
 
-export function openEvolutionViewer(pipelineIdOverride?: number): void {
-    const pipelinesState = (window as any).pipelinesState;
-    if (!pipelinesState || !Array.isArray(pipelinesState)) {
-        alert('Cannot open evolution viewer: Invalid pipeline data.');
-        return;
-    }
-
-    let pipeline: any;
-
-    if (pipelineIdOverride !== null && pipelineIdOverride !== undefined) {
-        pipeline = pipelinesState.find((p: any) => p.id === pipelineIdOverride);
-    } else {
-        // Try to get from DiffModalController state — import lazily to avoid circular deps
-        try {
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            const { getDiffSourceData } = require('./DiffModalController');
-            const diffSourceData = getDiffSourceData();
-            if (diffSourceData) {
-                pipeline = pipelinesState.find((p: any) => p.id === diffSourceData.pipelineId);
-            }
-        } catch { /* ignore */ }
-    }
-
-    if (!pipeline) {
-        alert('Pipeline not found.');
-        return;
-    }
-
-    const contentStates = buildContentStatesFromPipeline(pipeline);
-    mountEvolutionViewer(contentStates);
-}
+// Evolution Viewer from content history is the canonical entry point for all modern modes
 
 export function openEvolutionViewerFromHistory(history: HistoryEntry[], sessionId: string): void {
     if (!history || history.length === 0) {

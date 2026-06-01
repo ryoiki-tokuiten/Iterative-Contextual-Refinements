@@ -492,7 +492,7 @@ export const MessageCard: React.FC<{ message: AgenticMessage }> = ({ message }) 
                             <span>Verification Report</span>
                         </div>
                         <div className="verifier-content-wrapper">
-                            <div className="tool-result-content verifier-result-content">
+                            <div className="tool-result-content verifier-result-content scrollbar-compact">
                                 <RenderMathMarkdown content={result} />
                             </div>
                         </div>

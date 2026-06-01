@@ -513,6 +513,14 @@ const SubStrategiesGrid: React.FC<{
     );
 };
 
+const formatStrategyId = (id: string): string => {
+    if (id.startsWith('main')) {
+        const num = id.slice(4);
+        return `Strategy ${num}`;
+    }
+    return id.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+};
+
 // Hypothesis Explorer Tab
 export const HypothesisExplorerTab: React.FC<{
     process: DeepthinkPipelineState;
@@ -528,7 +536,7 @@ export const HypothesisExplorerTab: React.FC<{
             <div className="red-team-agents-grid">
                 {process.hypotheses.map((h, i) => (
                     <div key={h.id} className="red-team-agent-card">
-                        <div className="red-team-agent-header">
+                        <div className="red-team-agent-header" style={{ marginBottom: '0', paddingBottom: '1rem' }}>
                             <h4 className="red-team-agent-title">Hypothesis {i + 1}</h4>
                             <StatusBadge
                                 status={h.testerStatus}
@@ -536,6 +544,62 @@ export const HypothesisExplorerTab: React.FC<{
                             />
                         </div>
                         <div className="red-team-results">
+                            <div className="hypothesis-targets" style={{ 
+                                borderBottom: '1px solid var(--border-color)',
+                                padding: '10px 0',
+                                marginBottom: '12px',
+                                display: 'flex', 
+                                flexWrap: 'wrap', 
+                                alignItems: 'center', 
+                                gap: '6px' 
+                            }}>
+                                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary-color)' }}>Targeting:</span>
+                                {process.hypothesisInjectionMode === 'selective_injection' ? (
+                                    h.targetStrategyIds && h.targetStrategyIds.length > 0 ? (
+                                        h.targetStrategyIds.map(id => {
+                                            const displayName = formatStrategyId(id);
+                                            return (
+                                                <span key={id} className="strategy-target-badge" style={{
+                                                    fontSize: '0.7rem',
+                                                    padding: '2px 8px',
+                                                    borderRadius: '12px',
+                                                    background: 'rgba(var(--accent-blue-rgb), 0.12)',
+                                                    border: '1px solid rgba(var(--accent-blue-rgb), 0.3)',
+                                                    color: 'var(--accent-blue)',
+                                                    fontWeight: 500
+                                                }}>
+                                                    {displayName}
+                                                </span>
+                                            );
+                                        })
+                                    ) : (
+                                        <span className="strategy-target-badge" style={{
+                                            fontSize: '0.7rem',
+                                            padding: '2px 8px',
+                                            borderRadius: '12px',
+                                            background: 'rgba(var(--text-secondary-rgb), 0.08)',
+                                            border: '1px solid rgba(var(--text-secondary-rgb), 0.2)',
+                                            color: 'var(--text-secondary-color)',
+                                            fontWeight: 500,
+                                            fontStyle: 'italic'
+                                        }}>
+                                            All (Fallback)
+                                        </span>
+                                    )
+                                ) : (
+                                    <span className="strategy-target-badge" style={{
+                                        fontSize: '0.7rem',
+                                        padding: '2px 8px',
+                                        borderRadius: '12px',
+                                        background: 'rgba(var(--accent-blue-rgb), 0.12)',
+                                        border: '1px solid rgba(var(--accent-blue-rgb), 0.3)',
+                                        color: 'var(--accent-blue)',
+                                        fontWeight: 500
+                                    }}>
+                                        All Strategies
+                                    </span>
+                                )}
+                            </div>
                             <ExpandableText
                                 text={h.hypothesisText || 'No hypothesis text'}
                                 maxLength={150}
@@ -543,27 +607,35 @@ export const HypothesisExplorerTab: React.FC<{
                                 textClassName="hypothesis-text"
                             />
                             {h.testerAttempt && (
-                                <div className="red-team-reasoning-section">
-                                    <button
-                                        className="view-argument-button"
-                                        data-hypothesis-id={h.id}
-                                        onClick={() => onViewArgument(h.id)}
-                                    >
-                                        <MIcon name="article" /> View The Argument
-                                    </button>
-                                </div>
+                                <button
+                                    className="view-argument-button"
+                                    data-hypothesis-id={h.id}
+                                    onClick={() => onViewArgument(h.id)}
+                                >
+                                    <MIcon name="article" /> View The Argument
+                                </button>
                             )}
                         </div>
                     </div>
                 ))}
             </div>
 
-            {process.knowledgePacket && <KnowledgePacketSection content={process.knowledgePacket} escapeHtml={escapeHtml} />}
+            {process.knowledgePacket && (
+                <KnowledgePacketSection
+                    content={process.knowledgePacket}
+                    escapeHtml={escapeHtml}
+                    process={process}
+                />
+            )}
         </div>
     );
 };
 
-const KnowledgePacketSection: React.FC<{ content: string; escapeHtml: (s: string) => string }> = ({ content }) => {
+const KnowledgePacketSection: React.FC<{
+    content: string;
+    escapeHtml: (s: string) => string;
+    process: DeepthinkPipelineState;
+}> = ({ content, process }) => {
     const [copiedState, setCopiedState] = useState(false);
 
     const handleCopyXml = async () => {
@@ -617,6 +689,35 @@ const KnowledgePacketSection: React.FC<{ content: string; escapeHtml: (s: string
         packetBody = <MathHTML content={content} />;
     }
 
+    // Resolve strategy-to-hypothesis mapping
+    const strategyMappings = React.useMemo(() => {
+        if (!process.hypotheses || !process.initialStrategies) return null;
+
+        return process.initialStrategies.map(strategy => {
+            const mappedHypotheses: number[] = [];
+
+            process.hypotheses.forEach((h, index) => {
+                const hypNum = index + 1; // 1-based index corresponding to Hypothesis 1, 2...
+                
+                if (process.hypothesisInjectionMode !== 'selective_injection') {
+                    mappedHypotheses.push(hypNum);
+                } else {
+                    const isMapped = h.targetStrategyIds?.includes(strategy.id);
+                    const isFallback = !h.targetStrategyIds || h.targetStrategyIds.length === 0;
+                    if (isMapped || isFallback) {
+                        mappedHypotheses.push(hypNum);
+                    }
+                }
+            });
+
+            return {
+                strategyId: strategy.id,
+                strategyText: strategy.strategyText,
+                hypotheses: mappedHypotheses
+            };
+        });
+    }, [process.hypotheses, process.initialStrategies, process.hypothesisInjectionMode]);
+
     return (
         <div className="knowledge-packet-section">
             <div className="knowledge-packet-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -631,7 +732,40 @@ const KnowledgePacketSection: React.FC<{ content: string; escapeHtml: (s: string
                 </div>
             </div>
             <div className="knowledge-packet-content">
-                <div className="knowledge-packet-card">{packetBody}</div>
+                <div className="knowledge-packet-card">
+                    {strategyMappings && strategyMappings.length > 0 && (
+                        <div className="strategy-hypothesis-mappings" style={{
+                            marginBottom: '1.25rem',
+                            padding: '0.85rem 1rem',
+                            background: 'rgba(var(--accent-purple-rgb), 0.04)',
+                            border: '1px solid rgba(var(--accent-purple-rgb), 0.15)',
+                            borderRadius: '12px'
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', color: 'var(--accent-purple)', fontWeight: 600, fontSize: '0.85rem' }}>
+                                <MIcon name="hub" style={{ fontSize: '16px' }} />
+                                <span>Resolved Hypothesis Mappings</span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                {strategyMappings.map(mapping => {
+                                    const strategyName = formatStrategyId(mapping.strategyId);
+                                    return (
+                                        <div key={mapping.strategyId} style={{ display: 'flex', alignItems: 'center', fontSize: '0.85rem', color: 'var(--text-color)' }}>
+                                            <span style={{ fontWeight: 600, color: 'var(--text-color)', minWidth: '95px' }}>{strategyName}:</span>
+                                            <span style={{ marginLeft: '8px', color: 'var(--text-color)' }}>
+                                                {mapping.hypotheses.length > 0 ? (
+                                                    mapping.hypotheses.map(num => `Hypothesis ${num}`).join(', ')
+                                                ) : (
+                                                    <span style={{ fontStyle: 'italic', color: 'var(--text-secondary-color)' }}>None</span>
+                                                )}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                    {packetBody}
+                </div>
             </div>
         </div>
     );

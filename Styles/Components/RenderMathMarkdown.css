@@ -257,9 +257,8 @@
     border: 1px solid rgba(138, 127, 248, 0.2);
     border-radius: 26px;
     color: var(--text-primary);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 4px 20px rgba(138, 127, 248, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
     transition: all 0.3s ease;
     overflow: hidden;
 }
@@ -328,9 +327,8 @@
     border: 1px solid rgba(138, 127, 248, 0.2);
     border-radius: 26px;
     overflow: hidden;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 4px 20px rgba(15, 17, 32, 0.2);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
 }
 
 .latex-content-wrapper th,
@@ -388,9 +386,8 @@
     max-width: 100%;
     overflow-x: auto;
     position: relative;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 4px 20px rgba(15, 17, 32, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
 }
 
 .latex-content-wrapper pre::before {
@@ -544,9 +541,8 @@
     padding: 1.5rem;
     border-radius: 26px;
     border: 1px solid rgba(138, 127, 248, 0.2);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 4px 20px rgba(15, 17, 32, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
     transition: all 0.3s ease;
     position: relative;
     overflow: hidden;

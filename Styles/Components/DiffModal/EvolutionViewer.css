@@ -67,8 +67,8 @@
     box-shadow: 0 1px 0 0 rgba(var(--accent-purple-rgb), 0.08),
         0 8px 32px -8px rgba(0, 0, 0, 0.12);
     flex-shrink: 0;
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
     position: relative;
     z-index: 10;
 }
@@ -126,8 +126,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
     position: relative;
     overflow: hidden;
 }
@@ -191,26 +191,6 @@
             transparent 100%);
     pointer-events: none;
     z-index: 0;
-}
-
-.evolution-scroll-container::-webkit-scrollbar {
-    height: 10px;
-}
-
-.evolution-scroll-container::-webkit-scrollbar-track {
-    background: rgba(var(--bg-color-rgb), 0.12);
-    border-radius: 20px;
-}
-
-.evolution-scroll-container::-webkit-scrollbar-thumb {
-    background: linear-gradient(90deg, rgba(var(--border-color-rgb), 0.7), var(--border-hover-color));
-    border-radius: 20px;
-    border: 2px solid transparent;
-    background-clip: padding-box;
-}
-
-.evolution-scroll-container::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(90deg, var(--glow-color), var(--border-hover-color));
 }
 
 /* Evolution Column - Seamless flow */
@@ -298,8 +278,8 @@
     border-bottom: 1px solid rgba(var(--border-color-rgb), 0.1);
     flex-shrink: 0;
     position: relative;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
     transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
@@ -675,30 +655,6 @@
     visibility: hidden;
 }
 
-/* Scrollbar for content */
-.evolution-column-content::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-.evolution-column-content::-webkit-scrollbar-track {
-    background: rgba(var(--bg-color-rgb), 0.2);
-    border-radius: 12px;
-}
-
-.evolution-column-content::-webkit-scrollbar-thumb {
-    background: rgba(var(--border-color-rgb), 0.5);
-    border-radius: 12px;
-}
-
-.evolution-column-content::-webkit-scrollbar-thumb:hover {
-    background: rgba(var(--border-color-rgb), 0.7);
-}
-
-.evolution-column-content {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(var(--border-color-rgb), 0.5) rgba(var(--bg-color-rgb), 0.2);
-}
 
 /* Empty and Error States */
 .evolution-empty-message,

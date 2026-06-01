@@ -18,7 +18,6 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({ currentMode }) => 
 
     const getButtonText = () => {
         switch (currentMode) {
-            case 'website': return 'Generate & Refine';
             case 'deepthink': return 'Deepthink';
             case 'agentic': return 'Generate & Refine';
             case 'contextual': return 'Start Contextual Refinement';

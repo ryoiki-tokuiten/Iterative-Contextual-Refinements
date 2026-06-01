@@ -1,19 +1,12 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
+//  Just a random realiziation: With just a different prompt template, this can become the old "Refine Mode".
+
 
 // Type definition for customizable Contextual mode prompts
 export interface CustomizablePromptsContextual {
-  // Main Generation Agent (self-corrector)
   sys_contextual_mainGenerator: string;
-  // Iterative Agent (solution critique)
   sys_contextual_iterativeAgent: string;
-  // Solution Pool / Strategy Pool Agent
   sys_contextual_solutionPoolAgent: string;
-  // Memory Agent
   sys_contextual_memoryAgent: string;
-  // Per-agent model selections (defaults to null to use global model)
   model_mainGenerator?: string | null;
   model_iterativeAgent?: string | null;
   model_solutionPoolAgent?: string | null;

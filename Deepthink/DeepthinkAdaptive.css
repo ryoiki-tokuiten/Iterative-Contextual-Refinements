@@ -136,8 +136,8 @@
             rgba(var(--accent-blue-rgb), 0.10) 0%,
             rgba(var(--accent-purple-rgb), 0.08) 30%,
             rgba(var(--accent-purple-rgb), 0.00) 70%);
-    backdrop-filter: blur(18px) saturate(135%);
-    -webkit-backdrop-filter: blur(18px) saturate(135%);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
     pointer-events: none;
     z-index: 0;
 }
@@ -154,8 +154,8 @@
     background: linear-gradient(180deg, rgba(var(--accent-pink-rgb), 0.22), rgba(var(--accent-pink-rgb), 0.16)) !important;
     color: var(--accent-pink) !important;
     border: 1px solid rgba(var(--accent-pink-rgb), 0.45) !important;
-    backdrop-filter: blur(10px) !important;
-    -webkit-backdrop-filter: blur(10px) !important;
+    backdrop-filter: var(--card-blur-effect) !important;
+    -webkit-backdrop-filter: var(--card-blur-effect) !important;
 }
 
 #adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper .agent-panel-header .stop-button:hover,
@@ -171,8 +171,8 @@
     background: linear-gradient(135deg, rgba(var(--accent-green-rgb), 0.22), rgba(var(--accent-green-rgb), 0.12)) !important;
     color: var(--accent-green) !important;
     border: 1px solid rgba(var(--accent-green-rgb), 0.45) !important;
-    backdrop-filter: blur(10px) !important;
-    -webkit-backdrop-filter: blur(10px) !important;
+    backdrop-filter: var(--card-blur-effect) !important;
+    -webkit-backdrop-filter: var(--card-blur-effect) !important;
 }
 
 /* Simulated cursor animation */

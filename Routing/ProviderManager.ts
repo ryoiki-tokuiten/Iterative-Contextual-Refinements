@@ -21,35 +21,16 @@ export interface ModelInfo {
 
 // Hardcoded models available to all users
 const DEFAULT_MODELS: Record<string, string[]> = {
-    gemini: [
-        'gemini-3-pro-preview',
-        'gemini-3-flash-preview',
-        'gemini-3.1-flash-lite-preview',
-        'gemini-2.5-pro',
-        'gemini-2.5-flash',
-        'gemini-2.5-flash-lite'
-    ],
-    openrouter: [
-        'deepseek/deepseek-chat-v3.1:free',
-        'deepseek/deepseek-r1-0528:free',
-        'qwen/qwen3-coder:free',
-        'z-ai/glm-4.5-air:free'
-    ],
-    anthropic: [
-        'claude-opus-4-1-20250805',
-        'claude-sonnet-4-20250514'
-    ],
-    openai: [
-        'o3-2025-04-16',
-        'gpt-5-2025-08-07',
-        'gpt-4.1-2025-04-14',
-        'gpt-5-mini-2025-08-07'
-    ]
+    gemini: [],
+    openrouter: [],
+    anthropic: [],
+    openai: []
 };
 
 export class ProviderManager {
     private providers: Map<string, ProviderConfig> = new Map();
     private activeProviders: Map<string, AIProvider> = new Map();
+    private modelUpdateListeners: (() => void)[] = [];
 
     constructor() {
         this.initializeProviders();
@@ -157,6 +138,7 @@ export class ProviderManager {
     }
 
     private initializeConfiguredProviders(): void {
+        const fetchPromises: Promise<void>[] = [];
         for (const [name, config] of this.providers) {
             if (config.isConfigured && config.apiKey) {
                 try {
@@ -169,6 +151,13 @@ export class ProviderManager {
 
                     if (provider.initialize(initString)) {
                         this.activeProviders.set(name, provider);
+                        if (['gemini', 'openai', 'anthropic', 'openrouter'].includes(name)) {
+                            fetchPromises.push(
+                                this.fetchAndSetProviderModels(name).catch(err => {
+                                    console.error(`Async fetch of ${name} models failed:`, err);
+                                })
+                            );
+                        }
                     }
                 } catch (e) {
                     console.error(`Failed to initialize provider ${name}:`, e);
@@ -240,6 +229,14 @@ export class ProviderManager {
 
                 this.activeProviders.set(providerName, provider);
                 this.saveToStorage();
+
+                if (['gemini', 'openai', 'anthropic', 'openrouter'].includes(providerName)) {
+                    this.fetchAndSetProviderModels(providerName).catch(err => {
+                        console.error(`Async configure fetch of ${providerName} models failed:`, err);
+                    });
+                } else {
+                    this.notifyModelUpdateListeners();
+                }
                 return true;
             }
         } catch (e) {
@@ -256,6 +253,7 @@ export class ProviderManager {
             config.models = [...DEFAULT_MODELS[providerName] || []]; // Reset to default models
             this.activeProviders.delete(providerName);
             this.saveToStorage();
+            this.notifyModelUpdateListeners();
         }
     }
 
@@ -326,6 +324,7 @@ export class ProviderManager {
         if (config && config.isConfigured && !config.models.includes(modelId)) {
             config.models.push(modelId);
             this.saveToStorage();
+            this.notifyModelUpdateListeners();
             return true;
         }
         return false;
@@ -336,8 +335,48 @@ export class ProviderManager {
         if (config && !DEFAULT_MODELS[providerName]?.includes(modelId)) {
             config.models = config.models.filter(m => m !== modelId);
             this.saveToStorage();
+            this.notifyModelUpdateListeners();
             return true;
         }
         return false;
+    }
+
+    public async fetchAndSetProviderModels(providerName: string): Promise<void> {
+        const provider = this.activeProviders.get(providerName);
+        if (!provider || !('listModels' in provider) || typeof (provider as any).listModels !== 'function') {
+            return;
+        }
+
+        try {
+            const models = await (provider as any).listModels();
+            if (models && models.length > 0) {
+                const config = this.providers.get(providerName);
+                if (config) {
+                    config.models = models;
+                    this.saveToStorage();
+                    this.notifyModelUpdateListeners();
+                }
+            }
+        } catch (e) {
+            console.error(`Failed to fetch and update ${providerName} models:`, e);
+        }
+    }
+
+    public addModelUpdateListener(listener: () => void): void {
+        this.modelUpdateListeners.push(listener);
+    }
+
+    public removeModelUpdateListener(listener: () => void): void {
+        this.modelUpdateListeners = this.modelUpdateListeners.filter(l => l !== listener);
+    }
+
+    private notifyModelUpdateListeners(): void {
+        this.modelUpdateListeners.forEach(listener => {
+            try {
+                listener();
+            } catch (e) {
+                console.error("Error notifying model update listener:", e);
+            }
+        });
     }
 }

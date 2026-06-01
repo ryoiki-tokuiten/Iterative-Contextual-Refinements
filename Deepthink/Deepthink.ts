@@ -40,6 +40,7 @@ import {
 } from './Deepthink.tsx';
 
 import { SolutionPoolTabContent } from './SolutionPool.tsx';
+import { DeepthinkLiveTab } from './DeepthinkLiveTab.tsx';
 
 // Core Imports
 import {
@@ -147,12 +148,15 @@ export function initializeDeepthinkModule(dependencies: {
     getSelectedRedTeamAggressiveness: () => string;
     getSkipSubStrategies: () => boolean;
     getDissectedObservationsEnabled: () => boolean;
+    getShareHypothesesToDissected: () => boolean;
     getIterativeCorrectionsEnabled: () => boolean;
     getIterativeDepth: () => number;
     getProvideAllSolutionsToCorrectors: () => boolean;
     getPostQualityFilterEnabled: () => boolean;
     getDeepthinkCodeExecutionEnabled: () => boolean;
     getModelProvider: () => string;
+    getHypothesisInjectionMode: () => 'parallel' | 'strategy_aware' | 'selective_injection';
+    getSelectedThinkingLevel?: () => 'low' | 'medium' | 'high' | 'minimal';
     cleanTextOutput: (text: string) => string;
     customPromptsDeepthinkState: CustomizablePromptsDeepthink;
     tabsNavContainer: HTMLElement | null;
@@ -645,6 +649,7 @@ export function getVisibleDeepthinkTabs(process: DeepthinkPipelineState): Deepth
     const isDissectedEnabled = moduleState.getRefinementEnabled() || moduleState.getIterativeCorrectionsEnabled() || moduleState.getDissectedObservationsEnabled();
 
     return [
+        { id: 'live', label: 'Live', icon: 'terminal', visible: true },
         { id: 'strategic-solver', label: 'Strategic Solver', icon: 'psychology', visible: true },
         { id: 'hypothesis-explorer', label: 'Hypothesis Explorer', icon: 'science', visible: isHypothesisEnabled },
         { id: 'solution-pool', label: 'Solution Pool', icon: 'database', visible: process.structuredSolutionPoolEnabled },
@@ -685,6 +690,8 @@ export function createDeepthinkTabContent(
     });
 
     switch (process.activeTabId) {
+        case 'live':
+            return React.createElement(DeepthinkLiveTab, { process });
         case 'strategic-solver':
             return React.createElement(StrategicSolverTab, {
                 process,
@@ -719,12 +726,7 @@ export function createDeepthinkTabContent(
                 escapeHtml: moduleState.escapeHtml,
             });
         default:
-            return React.createElement(StrategicSolverTab, {
-                process,
-                escapeHtml: moduleState.escapeHtml,
-                onStrategyTabClick,
-                onViewSolution,
-            });
+            return React.createElement(DeepthinkLiveTab, { process });
     }
 }
 
@@ -734,6 +736,11 @@ export function createDeepthinkTabContent(
 
 function getTabStatusClass(tabId: string, process: DeepthinkPipelineState): string {
     switch (tabId) {
+        case 'live':
+            if (process.status === 'error') return 'status-deepthink-error';
+            if (process.status === 'completed') return 'status-deepthink-completed';
+            if (process.status === 'processing') return 'status-deepthink-processing';
+            return '';
         case 'strategic-solver':
             if (process.status === 'error') return 'status-deepthink-error';
             if (process.initialStrategies?.some(s => s.status === 'completed')) return 'status-deepthink-completed';

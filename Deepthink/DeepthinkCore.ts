@@ -16,6 +16,8 @@ import { nanoid } from 'nanoid';
 
 // ========== TYPE DEFINITIONS ==========
 
+export type HypothesisInjectionMode = 'parallel' | 'strategy_aware' | 'selective_injection';
+
 export interface DeepthinkSolutionCritiqueData {
     id: string;
     subStrategyId: string;
@@ -97,6 +99,7 @@ export interface DeepthinkHypothesisData {
     testerStatus: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
     testerError?: string;
     isDetailsOpen?: boolean;
+    targetStrategyIds?: string[];  // Mode 3 (selective_injection): which strategies this hypothesis maps to
 }
 
 export interface DeepthinkRedTeamData {
@@ -204,6 +207,59 @@ export interface DeepthinkPipelineState {
     structuredSolutionPoolAgents: DeepthinkStructuredSolutionPoolAgentData[];
     structuredSolutionPoolStatus?: 'pending' | 'processing' | 'completed' | 'error' | 'cancelled';
     structuredSolutionPoolError?: string;
+    // Hypothesis injection mode tracking
+    hypothesisInjectionMode?: HypothesisInjectionMode;
+    strategySpecificKnowledgePackets?: Record<string, string>; // Mode 3: per-strategy packets
+    liveEvents?: DeepthinkLiveEvent[]; // Real-time pipeline events
+}
+
+export interface DeepthinkLiveEvent {
+    id: string;
+    timestamp: number;
+    agentName: string;
+    stepDescription: string;
+    eventType: 'info' | 'agent_start' | 'agent_complete' | 'agent_error' | 'agent_retry';
+    systemInstruction?: string;
+    prompt?: string;
+    response?: string;
+    error?: string;
+    attempt?: number;
+    modelName?: string;
+    temperature?: number;
+    topP?: number;
+    codeExecutionEnabled?: boolean;
+}
+
+export function addLiveEvent(
+    process: DeepthinkPipelineState, 
+    agentName: string, 
+    stepDescription: string, 
+    eventType: 'info' | 'agent_start' | 'agent_complete' | 'agent_error' | 'agent_retry', 
+    details?: { 
+        systemInstruction?: string; 
+        prompt?: string; 
+        response?: string; 
+        error?: string; 
+        attempt?: number;
+        modelName?: string;
+        temperature?: number;
+        topP?: number;
+        codeExecutionEnabled?: boolean;
+    }
+) {
+    if (!process.liveEvents) {
+        process.liveEvents = [];
+    }
+    const event: DeepthinkLiveEvent = {
+        id: `ev-${nanoid(8)}`,
+        timestamp: Date.now(),
+        agentName,
+        stepDescription,
+        eventType,
+        ...details
+    };
+    process.liveEvents.push(event);
+    render();
 }
 
 // ========== ERROR CLASSES ==========
@@ -238,15 +294,18 @@ export interface DeepthinkCoreDeps {
     getSelectedRedTeamAggressiveness: () => string;
     getSkipSubStrategies: () => boolean;
     getDissectedObservationsEnabled: () => boolean;
+    getShareHypothesesToDissected: () => boolean;
     getIterativeCorrectionsEnabled: () => boolean;
     getIterativeDepth: () => number;
     getProvideAllSolutionsToCorrectors: () => boolean;
     getPostQualityFilterEnabled: () => boolean;
     getDeepthinkCodeExecutionEnabled: () => boolean;
     getModelProvider: () => string;
+    getHypothesisInjectionMode: () => HypothesisInjectionMode;
     escapeHtml: (unsafe: string) => string;
     cleanTextOutput: (text: string) => string;
     updateControlsState: (newState: any) => void;
+    getSelectedThinkingLevel?: () => 'low' | 'medium' | 'high' | 'minimal';
     customPromptsDeepthinkState: CustomizablePromptsDeepthink;
 }
 
@@ -487,15 +546,18 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
         structuredSolutionPoolAgents: [],
         status: 'processing',
         isStopRequested: false,
-        activeTabId: 'strategic-solver',
+        activeTabId: 'live',
         activeStrategyTab: 0,
         strategicSolverComplete: false,
         hypothesisExplorerComplete: false,
         redTeamComplete: false,
         knowledgePacket: '',
         finalJudgingStatus: 'pending',
-        structuredSolutionPoolEnabled: false
+        structuredSolutionPoolEnabled: false,
+        liveEvents: []
     };
+
+    addLiveEvent(activeDeepthinkPipeline, "Orchestrator", "Initializing Multi-Agent Pipeline", "info");
 
     if (setActiveDeepthinkPipeline) {
         setActiveDeepthinkPipeline(activeDeepthinkPipeline);
@@ -516,6 +578,7 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
     ): Promise<string> => {
         if (!currentProcess || currentProcess.isStopRequested) throw new PipelineStopRequestedError(`Stop requested before API call: ${stepDescription}`);
         let responseText = "";
+        const promptText = parts.map(p => p.text || (p.inlineData ? `[Attached Image: ${p.inlineData.mimeType}]` : '')).join('\n');
 
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             if (currentProcess.isStopRequested) throw new PipelineStopRequestedError(`Stop requested during retry for: ${stepDescription}`);
@@ -535,11 +598,26 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
                 const isGeminiProvider = deps.getModelProvider() === 'gemini';
                 const shouldEnableCodeExecution = isCodeExecutionAgent && isGeminiProvider && deps.getDeepthinkCodeExecutionEnabled();
 
-                const thinkingConfig: ThinkingConfig | undefined = shouldEnableCodeExecution
-                    ? { codeExecution: true }
-                    : undefined;
+                const currentTemp = deps.getSelectedTemperature();
+                const currentTopP = deps.getSelectedTopP();
 
-                const strategyResponse = await deps.callGemini(parts, deps.getSelectedTemperature(), agentModel, systemInstruction, isJson, deps.getSelectedTopP(), thinkingConfig);
+                addLiveEvent(currentProcess, stepDescription, `Invoking agent model (Attempt ${attempt + 1}/${MAX_RETRIES + 1})`, "agent_start", {
+                    systemInstruction,
+                    prompt: promptText,
+                    attempt: attempt + 1,
+                    modelName: agentModel,
+                    temperature: currentTemp,
+                    topP: currentTopP,
+                    codeExecutionEnabled: shouldEnableCodeExecution
+                });
+
+                const selectedThinkingLevel = deps.getSelectedThinkingLevel ? deps.getSelectedThinkingLevel() : 'high';
+                const thinkingConfig: ThinkingConfig = {
+                    codeExecution: shouldEnableCodeExecution,
+                    thinkingLevel: selectedThinkingLevel
+                };
+
+                const strategyResponse = await deps.callGemini(parts, currentTemp, agentModel, systemInstruction, isJson, currentTopP, thinkingConfig);
 
                 // Handle code execution responses specially to preserve code blocks and output
                 if (shouldEnableCodeExecution && strategyResponse?.candidates?.[0]?.content?.parts) {
@@ -550,14 +628,53 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
                 }
 
                 if (responseText && responseText.trim() !== "") {
+                    addLiveEvent(currentProcess, stepDescription, `Agent completed successfully`, "agent_complete", {
+                        response: responseText,
+                        systemInstruction,
+                        prompt: promptText,
+                        modelName: agentModel,
+                        temperature: currentTemp,
+                        topP: currentTopP,
+                        codeExecutionEnabled: shouldEnableCodeExecution
+                    });
                     break;
                 } else {
                     throw new Error("Empty response from API");
                 }
             } catch (error: any) {
+                const matched = MODEL_MAP.find(([key]) => stepDescription.includes(key));
+                const agentModel = matched
+                    ? (deps.customPromptsDeepthinkState[matched[1]] as string) || deps.getSelectedModel()
+                    : deps.getSelectedModel();
+                const isCodeExecutionAgent = [...CODE_EXEC_AGENTS].some(agent => stepDescription.includes(agent));
+                const isGeminiProvider = deps.getModelProvider() === 'gemini';
+                const shouldEnableCodeExecution = isCodeExecutionAgent && isGeminiProvider && deps.getDeepthinkCodeExecutionEnabled();
+                const currentTemp = deps.getSelectedTemperature();
+                const currentTopP = deps.getSelectedTopP();
+
                 if (attempt === MAX_RETRIES) {
+                    addLiveEvent(currentProcess, stepDescription, `Agent failed permanently: ${error.message || String(error)}`, "agent_error", {
+                        error: error.message || String(error),
+                        systemInstruction,
+                        prompt: promptText,
+                        modelName: agentModel,
+                        temperature: currentTemp,
+                        topP: currentTopP,
+                        codeExecutionEnabled: shouldEnableCodeExecution
+                    });
                     throw error;
                 } else {
+                    addLiveEvent(currentProcess, stepDescription, `Agent attempt failed: ${error.message || String(error)}`, "agent_retry", {
+                        error: error.message || String(error),
+                        attempt: attempt + 1,
+                        systemInstruction,
+                        prompt: promptText,
+                        modelName: agentModel,
+                        temperature: currentTemp,
+                        topP: currentTopP,
+                        codeExecutionEnabled: shouldEnableCodeExecution
+                    });
+
                     if ('status' in targetStatusField) {
                         (targetStatusField as any).status = 'retrying';
                     }
@@ -586,6 +703,16 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
         return responseText;
     };
 
+    const strategiesFinalizedSignal = {
+        resolve: undefined as (() => void) | undefined
+    };
+    const strategiesFinalizedPromise = new Promise<void>((resolve) => {
+        strategiesFinalizedSignal.resolve = () => resolve();
+    });
+
+    const mode = deps.getHypothesisInjectionMode();
+    currentProcess.hypothesisInjectionMode = mode;
+
     try {
         // Track B: Hypothesis Explorer
         const trackBPromise = (async () => {
@@ -601,17 +728,109 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
                     return;
                 }
 
-                const hypothesisPrompt = deps.customPromptsDeepthinkState.user_deepthink_hypothesisGeneration
+                // If strategy-aware or selective injection, wait for Track A to finalize strategies
+                if (mode !== 'parallel') {
+                    console.log('[Deepthink] Hypothesis injection mode is strategy-aware. Track B waiting for strategies to finalize...');
+                    await strategiesFinalizedPromise;
+                    if (currentProcess.isStopRequested || currentProcess.status === 'error') {
+                        return;
+                    }
+                    console.log('[Deepthink] Track B starting hypothesis generation.');
+                }
+
+                let hypothesisPrompt = deps.customPromptsDeepthinkState.user_deepthink_hypothesisGeneration
                     .replace('{{originalProblemText}}', challengeText)
                     .replace(/\{\{NUM_HYPOTHESES\}\}/g, deps.getSelectedHypothesisCount().toString());
+
+                if (mode !== 'parallel') {
+                    const activeStrategies = currentProcess.initialStrategies.filter(s => !s.isKilledByRedTeam);
+                    const activeStrategiesText = activeStrategies.map(mainStrategy => {
+                        const activeSub = mainStrategy.subStrategies.filter(sub => !sub.isKilledByRedTeam);
+                        const subStrategiesText = activeSub
+                            .map((sub) => `  - Sub-Strategy [ID: ${sub.id}]: ${sub.subStrategyText}`)
+                            .join('\n');
+                        return `Main Strategy [ID: ${mainStrategy.id}]:\n${mainStrategy.strategyText}\nSub-Strategies:\n${subStrategiesText}`;
+                    }).join('\n\n' + '='.repeat(40) + '\n\n');
+
+                    const strategiesContextStr = `
+<Finalized Strategies Context>
+Below are the finalized strategies/sub-strategies that will be executed downstream. Generate hypotheses and reconnaissance targets specifically tailored to support, validate, or explore risks/feasibility for these strategies.
+Do not generate generic or irrelevant hypotheses. Tailor your inquiries directly to the paths represented by these Strategy/Sub-Strategy IDs.
+
+${activeStrategiesText}
+</Finalized Strategies Context>`;
+
+                    if (hypothesisPrompt.includes('{{strategiesContext}}')) {
+                        hypothesisPrompt = hypothesisPrompt.replace('{{strategiesContext}}', strategiesContextStr);
+                    } else {
+                        hypothesisPrompt = hypothesisPrompt + '\n' + strategiesContextStr;
+                    }
+                }
+
                 currentProcess.requestPromptHypothesisGen = hypothesisPrompt;
                 currentProcess.hypothesisGenStatus = 'processing';
                 render();
 
                 const parts: Part[] = buildImageParts(imageBase64, imageMimeType);
 
-                const hypothesisSysPrompt = deps.customPromptsDeepthinkState.sys_deepthink_hypothesisGeneration
+                let hypothesisSysPrompt = deps.customPromptsDeepthinkState.sys_deepthink_hypothesisGeneration
                     .replace(/\{\{NUM_HYPOTHESES\}\}/g, deps.getSelectedHypothesisCount().toString());
+
+                if (mode === 'selective_injection') {
+                    const originalFormatSection = `<Output Format Requirements>
+Your response must be exclusively a valid JSON object. No additional text, commentary, or explanation is permitted. This is an absolute system requirement for programmatic parsing. Any deviation will result in a fatal error. The JSON must adhere with perfect precision to the following structure:
+
+\`\`\`json
+{
+  "hypotheses": [
+    "Hypothesis 1: [A clear, precise, testable statement probing a critical unknown...]",
+    "Hypothesis 2: [...]",
+    "... up to Hypothesis {{NUM_HYPOTHESES}}"
+  ]
+}
+\`\`\`
+You MUST produce exactly {{NUM_HYPOTHESES}} hypotheses in the array.
+</Output Format Requirements>`;
+
+                    const newFormatSection = `<Output Format Requirements>
+Your response must be exclusively a valid JSON object. No additional text, commentary, or explanation is permitted. This is an absolute system requirement for programmatic parsing. Any deviation will result in a fatal error. The JSON must adhere with perfect precision to the following structure:
+
+\`\`\`json
+{
+  "hypotheses": [
+    {
+      "text": "Hypothesis 1: [A clear, precise, testable statement probing a critical unknown...]",
+      "target_strategies": ["main1", "main2"] 
+    },
+    {
+      "text": "Hypothesis 2: [...]",
+      "target_strategies": ["main1"]
+    }
+  ]
+}
+\`\`\`
+For "target_strategies", provide an array of Main Strategy IDs (e.g., "main1", "main2") to which this hypothesis is relevant. If a hypothesis is globally applicable to all strategies, or you cannot decide, return an empty array [] or include all strategy IDs.
+You MUST produce exactly {{NUM_HYPOTHESES}} hypothesis objects in the array.
+</Output Format Requirements>`;
+
+                    if (hypothesisSysPrompt.includes(originalFormatSection)) {
+                        hypothesisSysPrompt = hypothesisSysPrompt.replace(originalFormatSection, newFormatSection);
+                    } else {
+                        hypothesisSysPrompt += `\n\n<CRITICAL FORMAT OVERRIDE FOR SELECTIVE INJECTION>
+You must return the hypotheses as objects containing "text" and "target_strategies" (an array of Main Strategy IDs like ["main1", "main2"] that this hypothesis is tailored for).
+Example structure:
+{
+  "hypotheses": [
+    {
+      "text": "Hypothesis Text here",
+      "target_strategies": ["main1"]
+    }
+  ]
+}
+</CRITICAL FORMAT OVERRIDE FOR SELECTIVE INJECTION>`;
+                    }
+                }
+
                 const hypothesisResponse = await makeDeepthinkApiCall(
                     parts.concat([{ text: hypothesisPrompt }]),
                     hypothesisSysPrompt,
@@ -625,11 +844,25 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
                 const hypotheses = hypothesisData.hypotheses || [];
 
                 for (let i = 0; i < hypotheses.length; i++) {
+                    let hypothesisText = "";
+                    let targetStrategyIds: string[] | undefined = undefined;
+
+                    const rawHyp = hypotheses[i];
+                    if (typeof rawHyp === 'object' && rawHyp !== null) {
+                        hypothesisText = rawHyp.text || "";
+                        if (Array.isArray(rawHyp.target_strategies)) {
+                            targetStrategyIds = rawHyp.target_strategies.map((id: any) => String(id).trim());
+                        }
+                    } else {
+                        hypothesisText = String(rawHyp);
+                    }
+
                     const hypothesis: DeepthinkHypothesisData = {
                         id: `hyp${i + 1}`,
-                        hypothesisText: hypotheses[i],
+                        hypothesisText: hypothesisText,
                         testerStatus: 'pending',
-                        isDetailsOpen: false
+                        isDetailsOpen: false,
+                        targetStrategyIds: targetStrategyIds
                     };
                     currentProcess.hypotheses.push(hypothesis);
                 }
@@ -675,18 +908,49 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
 
                 await Promise.allSettled(hypothesisTestingPromises);
 
+                // 1. Build global/full knowledge packet
                 let knowledgePacket = "<Full Information Packet>\n";
-
                 currentProcess.hypotheses.forEach((hypothesis, index) => {
                     knowledgePacket += `<Hypothesis ${index + 1}>\n`;
                     knowledgePacket += `Hypothesis: ${hypothesis.hypothesisText}\n`;
                     knowledgePacket += `Hypothesis Testing: ${hypothesis.testerAttempt || 'No testing output available'}\n`;
                     knowledgePacket += `</Hypothesis ${index + 1}>\n`;
                 });
-
                 knowledgePacket += "</Full Information Packet>";
-
                 currentProcess.knowledgePacket = knowledgePacket;
+
+                // 2. Build strategy-specific knowledge packets (Mode 3)
+                if (mode === 'selective_injection') {
+                    const strategyPackets: Record<string, string> = {};
+                    const activeStrategies = currentProcess.initialStrategies.filter(s => !s.isKilledByRedTeam);
+
+                    activeStrategies.forEach((strat) => {
+                        const stratId = strat.id; // e.g. "main1"
+                        const relevantHyps = currentProcess.hypotheses.filter(hyp => {
+                            if (!hyp.targetStrategyIds || hyp.targetStrategyIds.length === 0) {
+                                return true; // Global by default
+                            }
+                            return hyp.targetStrategyIds.includes(stratId);
+                        });
+
+                        let stratPacket = `<Strategy-Specific Information Packet for Strategy ${stratId}>\n`;
+                        if (relevantHyps.length === 0) {
+                            stratPacket += "No strategy-specific hypotheses were generated or mapped to this strategy.\n";
+                        } else {
+                            relevantHyps.forEach((hypothesis) => {
+                                stratPacket += `<Hypothesis ${hypothesis.id}>\n`;
+                                stratPacket += `Hypothesis: ${hypothesis.hypothesisText}\n`;
+                                stratPacket += `Hypothesis Testing: ${hypothesis.testerAttempt || 'No testing output available'}\n`;
+                                stratPacket += `</Hypothesis ${hypothesis.id}>\n`;
+                            });
+                        }
+                        stratPacket += `</Strategy-Specific Information Packet for Strategy ${stratId}>`;
+                        strategyPackets[stratId] = stratPacket;
+                    });
+
+                    currentProcess.strategySpecificKnowledgePackets = strategyPackets;
+                }
+
                 currentProcess.hypothesisExplorerComplete = true;
                 render();
 
@@ -840,6 +1104,11 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
                     applyRedTeamResults(currentProcess);
                     render();
 
+                    // Signal that strategies are finalized
+                    if (strategiesFinalizedSignal.resolve) {
+                        strategiesFinalizedSignal.resolve();
+                    }
+
                     const remainingStrategies = currentProcess.initialStrategies.filter(s => !s.isKilledByRedTeam);
                     const remainingSubStrategies = currentProcess.initialStrategies.flatMap(s => s.subStrategies.filter(sub => !sub.isKilledByRedTeam));
                     if (remainingStrategies.length === 0) {
@@ -853,6 +1122,11 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
                         currentProcess.error = "All sub-strategies were eliminated by Red Team evaluation. No solution attempts can be made.";
                         render();
                         return;
+                    }
+                } else {
+                    // Signal that strategies are finalized (since Red Team is off)
+                    if (strategiesFinalizedSignal.resolve) {
+                        strategiesFinalizedSignal.resolve();
                     }
                 }
 
@@ -893,11 +1167,16 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
                             subStrategy.status = 'processing';
                             render();
 
+                            let injectedPacket = currentProcess.knowledgePacket || 'No hypothesis exploration performed.';
+                            if (mode === 'selective_injection' && currentProcess.strategySpecificKnowledgePackets) {
+                                injectedPacket = currentProcess.strategySpecificKnowledgePackets[mainStrategy.id] || injectedPacket;
+                            }
+
                             const solutionPrompt = deps.customPromptsDeepthinkState.user_deepthink_solutionAttempt
                                 .replace('{{originalProblemText}}', challengeText)
                                 .replace('{{currentMainStrategy}}', mainStrategy.strategyText)
                                 .replace('{{currentSubStrategy}}', subStrategy.subStrategyText)
-                                .replace('{{knowledgePacket}}', currentProcess.knowledgePacket || 'No hypothesis exploration performed.');
+                                .replace('{{knowledgePacket}}', injectedPacket);
 
                             subStrategy.requestPromptSolutionAttempt = solutionPrompt;
 
@@ -1026,55 +1305,56 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
                     const skipSubStrategies = deps.getSkipSubStrategies();
                     const postQualityFilterEnabled = deps.getPostQualityFilterEnabled();
                     if (skipSubStrategies) {
-                        console.log('[Deepthink] Generating initial critiques...');
-
-                        // Generate initial critiques for all strategies
-                        const initialCritiquePromises: Promise<void>[] = [];
-                        currentProcess.initialStrategies.forEach((mainStrategy) => {
-                            if (mainStrategy.isKilledByRedTeam) return;
-                            const directSub = mainStrategy.subStrategies[0];
-                            if (!directSub || directSub.isKilledByRedTeam || !directSub.solutionAttempt) return;
-
-                            const critiquePromise = (async () => {
-                                try {
-                                    directSub.solutionCritiqueStatus = 'processing';
-                                    render();
-
-                                    const solutionsText = `${directSub.id}:\nSub-Strategy: ${directSub.subStrategyText}\n\nSolution Attempt:\n${directSub.solutionAttempt}`;
-
-                                    const critiquePrompt = deps.customPromptsDeepthinkState.user_deepthink_solutionCritique
-                                        .replace(/\{\{originalProblemText\}\}/g, challengeText)
-                                        .replace(/\{\{currentMainStrategy\}\}/g, mainStrategy.strategyText)
-                                        .replace(/\{\{allSubStrategiesAndSolutions\}\}/g, solutionsText);
-
-                                    const critiqueResponse = await makeDeepthinkApiCall(
-                                        parts.concat([{ text: critiquePrompt }]),
-                                        deps.customPromptsDeepthinkState.sys_deepthink_solutionCritique,
-                                        false,
-                                        `Initial Solution Critique for ${mainStrategy.id}`,
-                                        directSub,
-                                        'solutionCritiqueRetryAttempt'
-                                    );
-
-                                    directSub.solutionCritique = deps.cleanTextOutput(critiqueResponse);
-                                    directSub.solutionCritiqueStatus = 'completed';
-                                    render();
-                                } catch (error: any) {
-                                    directSub.solutionCritiqueStatus = 'error';
-                                    directSub.solutionCritiqueError = error.message || "Initial critique failed";
-                                    console.error(`[Deepthink] Initial critique failed for ${mainStrategy.id}:`, error.message);
-                                    render();
-                                }
-                            })();
-
-                            initialCritiquePromises.push(critiquePromise);
-                        });
-
-                        await Promise.allSettled(initialCritiquePromises);
-                        console.log('[Deepthink] Initial critiques complete');
-
                         // Only run PostQualityFilter if enabled
+                        // Initial critiques are needed for PQF to evaluate strategies
+                        // When PQF is disabled, the main iteration loop handles critiques at iteration 1
                         if (postQualityFilterEnabled) {
+                            console.log('[Deepthink] Generating initial critiques for PostQualityFilter...');
+
+                            // Generate initial critiques for all strategies
+                            const initialCritiquePromises: Promise<void>[] = [];
+                            currentProcess.initialStrategies.forEach((mainStrategy) => {
+                                if (mainStrategy.isKilledByRedTeam) return;
+                                const directSub = mainStrategy.subStrategies[0];
+                                if (!directSub || directSub.isKilledByRedTeam || !directSub.solutionAttempt) return;
+
+                                const critiquePromise = (async () => {
+                                    try {
+                                        directSub.solutionCritiqueStatus = 'processing';
+                                        render();
+
+                                        const solutionsText = `${directSub.id}:\nSub-Strategy: ${directSub.subStrategyText}\n\nSolution Attempt:\n${directSub.solutionAttempt}`;
+
+                                        const critiquePrompt = deps.customPromptsDeepthinkState.user_deepthink_solutionCritique
+                                            .replace(/\{\{originalProblemText\}\}/g, challengeText)
+                                            .replace(/\{\{currentMainStrategy\}\}/g, mainStrategy.strategyText)
+                                            .replace(/\{\{allSubStrategiesAndSolutions\}\}/g, solutionsText);
+
+                                        const critiqueResponse = await makeDeepthinkApiCall(
+                                            parts.concat([{ text: critiquePrompt }]),
+                                            deps.customPromptsDeepthinkState.sys_deepthink_solutionCritique,
+                                            false,
+                                            `Initial Solution Critique for ${mainStrategy.id}`,
+                                            directSub,
+                                            'solutionCritiqueRetryAttempt'
+                                        );
+
+                                        directSub.solutionCritique = deps.cleanTextOutput(critiqueResponse);
+                                        directSub.solutionCritiqueStatus = 'completed';
+                                        render();
+                                    } catch (error: any) {
+                                        directSub.solutionCritiqueStatus = 'error';
+                                        directSub.solutionCritiqueError = error.message || "Initial critique failed";
+                                        console.error(`[Deepthink] Initial critique failed for ${mainStrategy.id}:`, error.message);
+                                        render();
+                                    }
+                                })();
+
+                                initialCritiquePromises.push(critiquePromise);
+                            });
+
+                            await Promise.allSettled(initialCritiquePromises);
+                            console.log('[Deepthink] Initial critiques complete');
                             console.log('[Deepthink] Starting PostQualityFilter workflow...');
                             currentProcess.postQualityFilterStatus = 'processing';
                             currentProcess.postQualityFilterIterationCount = 0;
@@ -1285,10 +1565,15 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
                                             directSub.status = 'processing';
                                             render();
 
+                                            let injectedPacket = currentProcess.knowledgePacket || '';
+                                            if (mode === 'selective_injection' && currentProcess.strategySpecificKnowledgePackets) {
+                                                injectedPacket = currentProcess.strategySpecificKnowledgePackets[strategy.id] || injectedPacket;
+                                            }
+
                                             const solutionPrompt = deps.customPromptsDeepthinkState.user_deepthink_solutionAttempt
                                                 .replace('{{originalProblemText}}', challengeText)
                                                 .replace('{{assignedStrategy}}', strategy.strategyText)
-                                                .replace('{{knowledgePacket}}', currentProcess.knowledgePacket || '');
+                                                .replace('{{knowledgePacket}}', injectedPacket);
 
                                             directSub.requestPromptSolutionAttempt = solutionPrompt;
 
@@ -1525,6 +1810,8 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
                             console.log(`[Deepthink] Starting StructuredSolutionPool iteration ${iterNum}...`);
 
                             // PHASE 1: Generate critiques for all strategies in parallel
+                            // For iteration 1, reuse the initial critiques already generated before PQF
+                            // to avoid duplicate critique API calls at the start of the pipeline
                             console.log(`[Deepthink] Phase 1: Generating critiques for iteration ${iterNum}...`);
                             const critiquePromises = activeMainStrategies.map(async (mainStrategy) => {
                                 const directSub = mainStrategy.subStrategies[0];
@@ -1536,12 +1823,21 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
                                 }
 
                                 try {
-                                    directSub.solutionCritiqueStatus = 'processing';
-                                    render();
-
                                     // Get history manager for this strategy
                                     const critiqueHistoryManager = critiqueHistoryManagers.get(mainStrategy.id);
                                     if (!critiqueHistoryManager) throw new Error(`No critique history manager for ${mainStrategy.id}`);
+
+                                    // Iteration 1: Reuse initial critique (already generated before PQF)
+                                    if (iterNum === 1 && directSub.solutionCritique && directSub.solutionCritiqueStatus === 'completed') {
+                                        console.log(`[Deepthink] Reusing existing initial critique for ${mainStrategy.id}`);
+                                        // Seed the history manager with the existing critique for proper conversation history
+                                        await critiqueHistoryManager.addCritique(directSub.solutionCritique);
+                                        render();
+                                        return;
+                                    }
+
+                                    directSub.solutionCritiqueStatus = 'processing';
+                                    render();
 
                                     // Get the current solution to critique
                                     let currentSolution: string;
@@ -1879,9 +2175,12 @@ ${strategyCritique}
                                 .filter(section => section.trim().length > 0)
                                 .join('\n\n\n');
 
+                            const shareHypotheses = deps.getShareHypothesesToDissected();
+                            const packetToUse = shareHypotheses ? (currentProcess.knowledgePacket || 'No hypothesis exploration performed.') : 'Hypothesis exploration sharing is disabled for dissected observations.';
+
                             const synthesisPrompt = deps.customPromptsDeepthinkState.user_deepthink_dissectedSynthesis
                                 .replace('{{originalProblemText}}', challengeText)
-                                .replace('{{knowledgePacket}}', currentProcess.knowledgePacket || 'No hypothesis exploration performed.')
+                                .replace('{{knowledgePacket}}', packetToUse)
                                 .replace('{{solutionsWithCritiques}}', solutionsWithCritiques || 'No solution attempts available.');
 
                             currentProcess.dissectedSynthesisRequestPrompt = synthesisPrompt;
@@ -2035,6 +2334,9 @@ ${currentProcess.dissectedObservationsSynthesis}
                 render();
 
             } catch (error: any) {
+                if (strategiesFinalizedSignal.resolve) {
+                    strategiesFinalizedSignal.resolve();
+                }
                 if (!(error instanceof PipelineStopRequestedError)) {
                     currentProcess.status = 'error';
                     currentProcess.error = `Strategic Solver failed: ${error.message}`;

@@ -29,40 +29,6 @@ export interface HistoryEntry {
     timestamp: number;
 }
 
-export function buildContentStatesFromPipeline(pipeline: any): ContentState[] {
-    const iterations = [...pipeline.iterations].sort((a: any, b: any) => a.iterationNumber - b.iterationNumber);
-    const states: ContentState[] = [];
-
-    for (const iteration of iterations) {
-        if (!iteration.generatedContent && !iteration.contentBeforeBugFix) continue;
-
-        if (
-            iteration.contentBeforeBugFix &&
-            iteration.contentBeforeBugFix.trim() !== '' &&
-            iteration.contentBeforeBugFix !== iteration.generatedContent
-        ) {
-            states.push({
-                content: iteration.contentBeforeBugFix,
-                title: (iteration.title || `Iteration ${iteration.iterationNumber}`) + ' (Pre-Fix)',
-                iterationNumber: iteration.iterationNumber,
-                isBugFix: false
-            });
-        }
-
-        const finalContent = iteration.generatedContent || iteration.contentBeforeBugFix || '';
-        if (finalContent.trim() !== '') {
-            states.push({
-                content: finalContent,
-                title: iteration.title || `Iteration ${iteration.iterationNumber}`,
-                iterationNumber: iteration.iterationNumber,
-                isBugFix: !!iteration.contentBeforeBugFix
-            });
-        }
-    }
-
-    return states;
-}
-
 export function buildContentStatesFromHistory(history: HistoryEntry[]): ContentState[] {
     return history.map((entry, index) => ({
         content: entry.content,
@@ -70,18 +36,6 @@ export function buildContentStatesFromHistory(history: HistoryEntry[]): ContentS
         iterationNumber: index + 1,
         isBugFix: false
     }));
-}
-
-export function buildMockPipelineFromHistory(history: HistoryEntry[]): any {
-    return {
-        id: Date.now(),
-        iterations: history.map((entry, index) => ({
-            iterationNumber: index + 1,
-            title: entry.title,
-            generatedContent: entry.content,
-            contentBeforeBugFix: null
-        }))
-    };
 }
 
 // ─── Diff Line Computation ────────────────────────────────────────────────────
@@ -115,4 +69,4 @@ export function splitIntoLines(content: string): string[] {
 }
 
 // Re-export imperative portal API from the React component file
-export { openEvolutionViewer, openEvolutionViewerFromHistory, updateEvolutionViewerIfOpen, closeEvolutionViewer } from './EvolutionViewer.tsx';
+export { openEvolutionViewerFromHistory, updateEvolutionViewerIfOpen, closeEvolutionViewer } from './EvolutionViewer.tsx';

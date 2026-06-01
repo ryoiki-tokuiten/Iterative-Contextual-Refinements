@@ -34,8 +34,8 @@
     /* 24px */
     box-shadow: 0 2px 16px rgba(0, 0, 0, 0.02),
         inset 0 1px 0 rgba(255, 255, 255, 0.02);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
     transition: all 0.4s cubic-bezier(0.23, 1, 0.320, 1);
 }
 
@@ -239,8 +239,8 @@
     gap: var(--gap-xs);
     /* 8px */
     transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-    backdrop-filter: blur(20px) saturate(150%);
-    -webkit-backdrop-filter: blur(20px) saturate(150%);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
     border: 1.5px solid transparent;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04),
         inset 0 1px 0 rgba(255, 255, 255, 0.08),

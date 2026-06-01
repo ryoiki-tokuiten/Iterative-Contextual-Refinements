@@ -153,8 +153,8 @@
     margin-bottom: var(--spacing-section-md);
     /* 32px */
     transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02),
         inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
@@ -313,8 +313,8 @@
 
 .red-team-agent-card {
     background: rgba(var(--card-bg-base-rgb), 0.01);
-    backdrop-filter: blur(40px) saturate(180%);
-    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
     border: 1.5px solid rgba(var(--border-color-rgb), 0.35);
     border-radius: 28px;
     padding: var(--spacing-section-sm);
@@ -335,8 +335,8 @@
         inset 0 -2px 0 rgba(0, 0, 0, 0.12);
     border-color: rgba(var(--border-color-rgb), 0.35);
     background: rgba(var(--card-bg-base-rgb), 0.04);
-    backdrop-filter: blur(56px) saturate(200%);
-    -webkit-backdrop-filter: blur(56px) saturate(200%);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
 }
 
 .red-team-agent-header {
@@ -378,7 +378,7 @@
     border-radius: var(--border-radius-sm);
     padding: clamp(1rem, 1.4vw, 1.75rem);
     text-align: center;
-    backdrop-filter: blur(10px);
+    backdrop-filter: var(--card-blur-effect);
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -429,8 +429,8 @@
 
 .killed-sub-strategy {
     background: rgba(var(--accent-pink-rgb), 0.15) !important;
-    backdrop-filter: blur(8px) !important;
-    -webkit-backdrop-filter: blur(8px) !important;
+    backdrop-filter: var(--card-blur-effect) !important;
+    -webkit-backdrop-filter: var(--card-blur-effect) !important;
     opacity: 0.8;
 }
 
@@ -538,6 +538,8 @@
 }
 
 /* Red Team Full Screen Modal */
+#red-team-full-modal,
+#deepthink-red-team-full-modal,
 .red-team-full-modal {
     position: fixed;
     top: 0;
@@ -545,12 +547,16 @@
     right: 0;
     bottom: 0;
     background: rgba(var(--bg-color-rgb), 0.95);
-    backdrop-filter: blur(20px);
-    z-index: 1000;
+    backdrop-filter: var(--card-blur-effect);
+    z-index: 2200; /* High z-index above everything else */
     display: none;
     padding: 2rem;
+    border: none !important;
+    border-radius: 0 !important;
 }
 
+#red-team-full-modal.active,
+#deepthink-red-team-full-modal.active,
 .red-team-full-modal.active {
     display: flex;
     flex-direction: column;

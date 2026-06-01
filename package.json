@@ -16,7 +16,7 @@
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/lang-markdown": "^6.5.0",
     "@codemirror/lang-python": "^6.2.1",
-    "@google/genai": "^1.4.0",
+    "@google/genai": "^1.52.0",
     "@langchain/anthropic": "^0.3.34",
     "@langchain/community": "^0.3.57",
     "@langchain/core": "^0.3.40",

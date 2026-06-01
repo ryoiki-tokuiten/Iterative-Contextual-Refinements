@@ -292,23 +292,6 @@
     min-height: 0;
 }
 
-.minimal-card-content::-webkit-scrollbar {
-    width: 6px;
-}
-
-.minimal-card-content::-webkit-scrollbar-track {
-    background: rgba(var(--accent-purple-rgb), 0.05);
-    border-radius: 10px;
-}
-
-.minimal-card-content::-webkit-scrollbar-thumb {
-    background: rgba(var(--accent-purple-rgb), 0.3);
-    border-radius: 10px;
-}
-
-.minimal-card-content::-webkit-scrollbar-thumb:hover {
-    background: rgba(var(--accent-purple-rgb), 0.5);
-}
 
 .content-truncated {
     color: var(--text-tertiary-color);
@@ -444,12 +427,6 @@
     border-top-color: var(--accent-purple);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
 }
 
 /* Panel Styling - Theme-aware */

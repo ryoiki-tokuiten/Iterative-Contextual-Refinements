@@ -6,10 +6,10 @@
 import type { ToolDefinition } from '@langchain/core/language_models/base';
 import { AIMessage, BaseMessage, ToolMessage } from '@langchain/core/messages';
 import { ChatAnthropic } from '@langchain/anthropic';
-import { FunctionCallingConfigMode, GoogleGenAI, type Content as GeminiContent, type Part as GeminiPart } from '@google/genai';
+import { type Content as GeminiContent, type Part as GeminiPart } from '@google/genai';
 import { ChatOpenAI } from '@langchain/openai';
 import { nanoid } from 'nanoid';
-import { getRoutingManager, type ProviderConfig } from '../Routing';
+import { getRoutingManager, type ProviderConfig, callAI } from '../Routing';
 
 export interface ToolCallingAgentOptions {
     modelName: string;
@@ -237,30 +237,26 @@ function createGeminiAiMessage(response: any): AIMessage {
 }
 
 export async function invokeGeminiToolAgentTurn(
-    providerConfig: ProviderConfig,
+    _providerConfig: ProviderConfig,
     messages: BaseMessage[],
     systemPrompt: string,
     tools: ToolDefinition[],
     options: ToolCallingAgentOptions
 ): Promise<AIMessage> {
-    const ai = new GoogleGenAI({ apiKey: providerConfig.apiKey! });
-    const response = await ai.models.generateContent({
-        model: options.modelName,
-        contents: buildGeminiContents(messages),
-        config: {
-            systemInstruction: systemPrompt,
-            ...(options.temperature != null ? { temperature: options.temperature } : {}),
-            ...(options.topP != null ? { topP: options.topP } : {}),
+    const contents = buildGeminiContents(messages);
+    const response = await callAI(
+        contents as any,
+        options.temperature,
+        options.modelName,
+        systemPrompt,
+        false,
+        options.topP,
+        {
             tools: [{
                 functionDeclarations: buildGeminiFunctionDeclarations(tools)
-            }],
-            toolConfig: {
-                functionCallingConfig: {
-                    mode: FunctionCallingConfigMode.AUTO
-                }
-            }
+            }]
         }
-    });
+    );
 
     return createGeminiAiMessage(response);
 }

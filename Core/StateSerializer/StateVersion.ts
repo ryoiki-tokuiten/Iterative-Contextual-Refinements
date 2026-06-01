@@ -41,7 +41,6 @@ export interface VersionedState {
 export interface ExportedConfigV1 {
     // Core application state
     currentMode: ApplicationMode;
-    currentEvolutionMode?: 'off' | 'novelty' | 'quality';
     initialIdea: string;
     selectedModel: string;
 
@@ -53,19 +52,16 @@ export interface ExportedConfigV1 {
 
     // Custom prompts for all modes
     customPrompts: {
-        website?: unknown;
         deepthink?: unknown;
         agentic?: unknown;
         contextual?: unknown;
         adaptiveDeepthink?: unknown;
         dca?: unknown;
     };
-
     // Model parameters
     modelParameters?: {
         temperature: number;
         topP: number;
-        refinementStages: number;
         strategiesCount: number;
         subStrategiesCount: number;
         hypothesisCount: number;
@@ -156,7 +152,7 @@ export function migrateToLatest(state: VersionedState): VersionedState {
  */
 export function convertLegacyToVersioned(legacyConfig: Record<string, unknown>): VersionedState {
     // Detect the mode from legacy config
-    const currentMode = (legacyConfig.currentMode as ApplicationMode) || 'website';
+    const currentMode = (legacyConfig.currentMode as ApplicationMode) || 'deepthink';
 
     // Map legacy state fields to new structure
     const modeState = extractLegacyModeState(legacyConfig, currentMode);
@@ -164,13 +160,11 @@ export function convertLegacyToVersioned(legacyConfig: Record<string, unknown>):
     // Build the new versioned structure
     const data: ExportedConfigV1 = {
         currentMode,
-        currentEvolutionMode: legacyConfig.currentEvolutionMode as 'off' | 'novelty' | 'quality' | undefined,
         initialIdea: (legacyConfig.initialIdea as string) || '',
         selectedModel: (legacyConfig.selectedModel as string) || '',
         modeState,
-        embeddedStates: extractLegacyEmbeddedStates(legacyConfig),
+        embeddedStates: undefined,
         customPrompts: {
-            website: legacyConfig.customPromptsWebsite,
             deepthink: legacyConfig.customPromptsDeepthinkState,
             agentic: legacyConfig.customPromptsAgentic,
             contextual: legacyConfig.customPromptsContextual,
@@ -207,12 +201,6 @@ function extractLegacyModeState(config: Record<string, unknown>, mode: Applicati
                 solutionPoolVersions: config.solutionPoolVersions,
                 activeTabId: (config.activeDeepthinkPipeline as any)?.activeTabId || 'strategic-solver'
             };
-        case 'website':
-            // Website handler expects { pipelines, activePipelineId }
-            return {
-                pipelines: config.pipelinesState,
-                activePipelineId: config.activePipelineId
-            };
         case 'agentic':
             return config.activeAgenticState;
         case 'contextual':
@@ -226,11 +214,4 @@ function extractLegacyModeState(config: Record<string, unknown>, mode: Applicati
     }
 }
 
-/**
- * Extract embedded states from legacy configuration.
- */
-function extractLegacyEmbeddedStates(config: Record<string, unknown>): Record<string, unknown> | undefined {
-    const embedded: Record<string, unknown> = {};
 
-    return Object.keys(embedded).length > 0 ? embedded : undefined;
-}

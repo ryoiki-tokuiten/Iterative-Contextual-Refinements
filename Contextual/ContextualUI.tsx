@@ -357,7 +357,7 @@ const MinimalMessageCard: React.FC<{ message: ContextualMessage; allMessages: Co
                     View
                 </button>
             </div>
-            <div className="minimal-card-content">
+            <div className="minimal-card-content scrollbar-compact">
                 <RenderMathMarkdown content={preview} />
                 {needsCollapse && (
                     <>

@@ -106,25 +106,7 @@ body.light-mode .file-list-container {
     background: rgba(255, 255, 255, 0.35) !important;
     border-color: rgba(0, 0, 0, 0.08) !important;
     box-shadow: var(--shadow-sm);
-    backdrop-filter: blur(8px);
-}
-
-.file-list-container::-webkit-scrollbar {
-    width: 6px;
-}
-
-.file-list-container::-webkit-scrollbar-track {
-    background: rgba(var(--border-color-rgb, 255, 255, 255), 0.05);
-    border-radius: 3px;
-}
-
-.file-list-container::-webkit-scrollbar-thumb {
-    background: rgba(var(--accent-purple-rgb, 139, 92, 246), 0.4);
-    border-radius: 3px;
-}
-
-.file-list-container::-webkit-scrollbar-thumb:hover {
-    background: rgba(var(--accent-purple-rgb, 139, 92, 246), 0.6);
+    backdrop-filter: var(--card-blur-effect);
 }
 
 .file-list-header {
@@ -202,7 +184,7 @@ body.light-mode .file-list-container {
 body.light-mode .file-card {
     background: rgba(255, 255, 255, 0.5) !important;
     border-color: rgba(0, 0, 0, 0.06) !important;
-    backdrop-filter: blur(4px);
+    backdrop-filter: var(--card-blur-effect);
 }
 
 .file-card:hover {
@@ -334,20 +316,11 @@ body.light-mode .file-card {
     align-items: center;
     justify-content: center;
     background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
     animation: fadeIn 0.2s ease;
 }
 
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
-}
 
 .file-preview-modal {
     display: flex;

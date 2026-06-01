@@ -8,6 +8,10 @@
     font-size: 1.25em !important;
     font-weight: 500;
     letter-spacing: 0.3px;
+
+    & .base {
+        color: var(--accent-pink) !important;
+    }
 }
 
 .katex-display {
@@ -19,10 +23,6 @@
     border-left: 3px solid rgba(var(--accent-pink-rgb), 0.3);
 }
 
-.katex .base {
-    color: var(--accent-pink) !important;
-}
-
 /* Premium content formatting for optimal readability */
 .markdown-content {
     line-height: 1.9;
@@ -31,130 +31,130 @@
     font-weight: 400;
     color: var(--text-primary-color);
     animation: fadeIn 0.4s ease;
-}
 
-.markdown-content p {
-    margin-top: 0.2em;
-    margin-bottom: 0.4em;
-    line-height: 1.8;
-}
+    /* Theme Overrides via CSS Variables */
+    --md-header-color: var(--accent-pink);
+    --md-strong-color: var(--accent-pink);
+    --md-em-color: var(--accent-orange);
+    --md-blockquote-border: rgba(var(--accent-pink-rgb), 0.4);
+    --md-blockquote-bg: rgba(var(--accent-pink-rgb), 0.03);
+    --md-blockquote-shadow: 0 2px 12px rgba(var(--accent-pink-rgb), 0.04);
+    --md-code-color: var(--accent-pink);
+    --md-code-bg: rgba(var(--accent-pink-rgb), 0.06);
+    --md-code-border: rgba(var(--accent-pink-rgb), 0.12);
+    --md-pre-bg: rgba(var(--accent-pink-rgb), 0.03);
+    --md-pre-border: rgba(var(--accent-pink-rgb), 0.1);
 
-.markdown-content h1,
-.markdown-content h2,
-.markdown-content h3,
-.markdown-content h4,
-.markdown-content h5,
-.markdown-content h6 {
-    margin-top: 0.2em;
-    margin-bottom: 0.3em;
-    line-height: 1.4;
-    font-weight: 600;
-}
+    & p {
+        margin-top: 0.2em;
+        margin-bottom: 0.4em;
+        line-height: 1.8;
+    }
 
-.markdown-content ul,
-.markdown-content ol {
-    margin-bottom: 1.2em;
-    padding-left: 2em;
-}
+    & :is(h1, h2, h3, h4, h5, h6) {
+        margin-top: 0.2em;
+        margin-bottom: 0.3em;
+        line-height: 1.4;
+        font-weight: 600;
+        color: var(--md-header-color);
+    }
 
-.markdown-content li {
-    margin-bottom: 0.5em;
-    line-height: 1.7;
-}
+    & :is(strong, b) {
+        color: var(--md-strong-color);
+        font-weight: 600;
+    }
 
-/* Strategy content typography: align with final solution styling */
-.strategy-content .markdown-content h1,
-.strategy-content .markdown-content h2,
-.strategy-content .markdown-content h3,
-.strategy-content .markdown-content h4,
-.strategy-content .markdown-content h5,
-.strategy-content .markdown-content h6 {
-    color: var(--accent-green);
-    font-weight: 600;
-}
+    & :is(em, i) {
+        color: var(--md-em-color);
+        font-style: italic;
+    }
 
-.strategy-content .markdown-content strong,
-.strategy-content .markdown-content b {
-    color: var(--accent-green);
-    font-weight: 600;
-}
+    & :is(ul, ol) {
+        margin-bottom: 1.2em;
+        padding-left: 2em;
+    }
 
-.strategy-content .markdown-content em,
-.strategy-content .markdown-content i {
-    color: var(--accent-orange);
-    font-style: italic;
-}
+    & li {
+        margin-bottom: 0.5em;
+        line-height: 1.7;
+    }
 
-.markdown-content blockquote {
-    margin: 1.8em 0;
-    padding: 1.2em 1.8em;
-    border-left: 3px solid rgba(var(--accent-pink-rgb), 0.4);
-    background: rgba(var(--accent-pink-rgb), 0.03);
-    font-style: normal;
-    border-radius: 16px;
-    position: relative;
-    font-weight: 500;
-    letter-spacing: 0.2px;
-    box-shadow: 0 2px 12px rgba(var(--accent-pink-rgb), 0.04);
-}
+    /* Keep parent .strategy-content context override fallback */
+    .strategy-content & {
+        --md-header-color: var(--accent-green);
+        --md-strong-color: var(--accent-green);
+    }
 
-.markdown-content blockquote::before {
-    content: '"';
-    position: absolute;
-    left: 0.5em;
-    top: 0.3em;
-    font-size: 2em;
-    color: rgba(var(--accent-pink-rgb), 0.2);
-    font-weight: 700;
-}
+    & blockquote {
+        margin: 1.8em 0;
+        padding: 1.2em 1.8em;
+        border-left: 3px solid var(--md-blockquote-border);
+        background: var(--md-blockquote-bg);
+        font-style: normal;
+        border-radius: 16px;
+        position: relative;
+        font-weight: 500;
+        letter-spacing: 0.2px;
+        box-shadow: var(--md-blockquote-shadow);
 
-.markdown-content code {
-    background: rgba(var(--accent-pink-rgb), 0.06);
-    padding: 0.25em 0.5em;
-    border-radius: 12px;
-    font-family: var(--font-family-mono);
-    font-size: 0.88em;
-    font-weight: 500;
-    color: var(--accent-pink);
-    border: 1px solid rgba(var(--accent-pink-rgb), 0.12);
-    letter-spacing: 0.3px;
-    transition: all var(--transition-speed-fast) ease;
-}
+        &::before {
+            content: '"';
+            position: absolute;
+            left: 0.5em;
+            top: 0.3em;
+            font-size: 2em;
+            color: rgba(var(--accent-pink-rgb), 0.2);
+            font-weight: 700;
+        }
+    }
 
-.markdown-content code:hover {
-    background: rgba(var(--accent-pink-rgb), 0.08);
-    border-color: rgba(var(--accent-pink-rgb), 0.18);
-}
+    & code {
+        background: var(--md-code-bg);
+        padding: 0.25em 0.5em;
+        border-radius: 12px;
+        font-family: var(--font-family-mono);
+        font-size: 0.88em;
+        font-weight: 500;
+        color: var(--md-code-color);
+        border: 1px solid var(--md-code-border);
+        letter-spacing: 0.3px;
+        transition: all var(--transition-speed-fast) ease;
 
-.markdown-content pre:not(.code-block-container pre) {
-    background: rgba(var(--accent-pink-rgb), 0.03);
-    padding: 1.5em;
-    border-radius: 18px;
-    overflow-x: auto;
-    margin: 1.5em 0;
-    border: 1px solid rgba(var(--accent-pink-rgb), 0.1);
-    box-shadow: 0 2px 12px rgba(var(--accent-pink-rgb), 0.03),
-        inset 0 1px 0 rgba(255, 255, 255, 0.02);
-    backdrop-filter: blur(5px);
-    -webkit-backdrop-filter: blur(5px);
-}
+        &:hover {
+            opacity: 0.85;
+        }
+    }
 
-.markdown-content table {
-    border-collapse: collapse;
-    width: 100%;
-    margin: 1.2em 0;
-}
+    & pre:not(.code-block-container pre) {
+        background: var(--md-pre-bg);
+        padding: 1.5em;
+        border-radius: 18px;
+        overflow-x: auto;
+        margin: 1.5em 0;
+        border: 1px solid var(--md-pre-border);
+        box-shadow: 0 2px 12px rgba(var(--accent-pink-rgb), 0.03),
+            inset 0 1px 0 rgba(255, 255, 255, 0.02);
+        backdrop-filter: var(--card-blur-effect);
+        -webkit-backdrop-filter: var(--card-blur-effect);
+    }
 
-.markdown-content th,
-.markdown-content td {
-    border: 1px solid rgba(255, 105, 180, 0.3);
-    padding: 0.8em;
-    text-align: left;
-}
+    & table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 1.2em 0;
+    }
 
-.markdown-content th {
-    background-color: rgba(255, 105, 180, 0.1);
-    font-weight: 600;
+    & th,
+    & td {
+        border: 1px solid rgba(255, 105, 180, 0.3);
+        padding: 0.8em;
+        text-align: left;
+    }
+
+    & th {
+        background-color: rgba(255, 105, 180, 0.1);
+        font-weight: 600;
+    }
 }
 
 /* Premium Theorem-like environment styling */
@@ -174,60 +174,36 @@
     background: rgba(var(--accent-pink-rgb), 0.02);
     box-shadow: 0 3px 16px rgba(var(--accent-pink-rgb), 0.05),
         0 1px 2px rgba(0, 0, 0, 0.03);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
     transition: all var(--transition-speed) var(--easing-curve);
     position: relative;
-}
 
-.theorem-theorem:hover,
-.theorem-lemma:hover,
-.theorem-proposition:hover,
-.theorem-corollary:hover,
-.theorem-definition:hover,
-.theorem-proof:hover,
-.theorem-remark:hover,
-.theorem-example:hover,
-.theorem-note:hover {
-    background: rgba(var(--accent-pink-rgb), 0.04);
-    box-shadow: 0 6px 24px rgba(var(--accent-pink-rgb), 0.08);
-    border-left-width: 4px;
-}
+    &:hover {
+        background: rgba(var(--accent-pink-rgb), 0.04);
+        box-shadow: 0 6px 24px rgba(var(--accent-pink-rgb), 0.08);
+        border-left-width: 4px;
+    }
 
-.theorem-theorem strong,
-.theorem-lemma strong,
-.theorem-proposition strong,
-.theorem-corollary strong,
-.theorem-definition strong,
-.theorem-proof strong,
-.theorem-remark strong,
-.theorem-example strong,
-.theorem-note strong {
-    color: var(--accent-pink);
-    font-weight: 800;
-    font-size: 1.05em;
-    letter-spacing: 0.4px;
-    text-transform: uppercase;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6rem;
-}
+    & strong {
+        color: var(--accent-pink);
+        font-weight: 800;
+        font-size: 1.05em;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
 
-.theorem-theorem strong::before,
-.theorem-lemma strong::before,
-.theorem-proposition strong::before,
-.theorem-corollary strong::before,
-.theorem-definition strong::before,
-.theorem-proof strong::before,
-.theorem-remark strong::before,
-.theorem-example strong::before,
-.theorem-note strong::before {
-    content: '';
-    width: 4px;
-    height: 14px;
-    background: var(--accent-pink);
-    border-radius: 2px;
-    opacity: 0.6;
+        &::before {
+            content: '';
+            width: 4px;
+            height: 14px;
+            background: var(--accent-pink);
+            border-radius: 2px;
+            opacity: 0.6;
+        }
+    }
 }
 
 .theorem-definition {
@@ -241,14 +217,14 @@
     border-left-color: rgba(var(--accent-pink-rgb), 0.3);
     font-style: normal;
     opacity: 0.95;
-}
 
-.theorem-proof::after {
-    content: '∎';
-    position: absolute;
-    bottom: 1rem;
-    right: 1.5rem;
-    font-size: 1.2rem;
-    color: rgba(var(--accent-pink-rgb), 0.4);
-    font-weight: 700;
+    &::after {
+        content: '∎';
+        position: absolute;
+        bottom: 1rem;
+        right: 1.5rem;
+        font-size: 1.2rem;
+        color: rgba(var(--accent-pink-rgb), 0.4);
+        font-weight: 700;
+    }
 }

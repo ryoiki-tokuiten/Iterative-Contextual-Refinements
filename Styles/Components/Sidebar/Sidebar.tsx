@@ -6,9 +6,18 @@ import SidebarFooter from './SidebarFooter';
 import { FileUpload } from './FileUpload';
 import { AppMode, getShowFileUploadForMode, createModeChangeHandler, attachModeChangeListener } from './SidebarLogic';
 import { Icon } from '../../../UI/Icons';
+import { getProviderForCurrentModel } from '../../../Routing';
 
 export const Sidebar: React.FC = () => {
     const [currentMode, setCurrentMode] = useState<AppMode>('deepthink');
+    const [modelProvider, setModelProvider] = useState<string>(() => {
+        try {
+            return getProviderForCurrentModel();
+        } catch {
+            return 'gemini';
+        }
+    });
+    const importInputRef = React.useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         const handler = createModeChangeHandler((mode) => {
@@ -17,18 +26,27 @@ export const Sidebar: React.FC = () => {
 
         const { cleanup } = attachModeChangeListener(handler);
 
-        return cleanup;
+        const handleModelChange = () => {
+            try {
+                setModelProvider(getProviderForCurrentModel());
+            } catch (err) {
+                console.error(err);
+            }
+        };
+        window.addEventListener('selectedModelChanged', handleModelChange);
+
+        return () => {
+            cleanup();
+            window.removeEventListener('selectedModelChanged', handleModelChange);
+        };
     }, []);
 
-    const showFileUpload = getShowFileUploadForMode(currentMode);
+    const showFileUpload = getShowFileUploadForMode(currentMode) && modelProvider === 'gemini';
 
     let labelText = 'Core Challenge:';
     let placeholderText = 'E.g., "Design a sustainable urban transportation system", "Analyze the impact of remote work on company culture"...';
 
-    if (currentMode === 'website') {
-        labelText = 'Iteratively Refine:';
-        placeholderText = 'E.g., "Python Code For Array Sorting Using Cross Products", "An e-commerce site for handmade crafts"...';
-    } else if (currentMode === 'agentic') {
+    if (currentMode === 'agentic') {
         labelText = 'Content to Refine:';
         placeholderText = 'Enter text, code, data report, or any content you want the agent to iteratively refine...';
     } else if (currentMode === 'contextual') {
@@ -72,11 +90,11 @@ export const Sidebar: React.FC = () => {
                                 <Icon name="upload" />
                                 <span className="button-text">Export</span>
                             </button>
-                            <input type="file" id="import-config-input" className="sr-only" accept=".json,.gz,.msgpack,.msgpack.gz" onChange={(e) => import('../../../Core/App').then(m => m.App.handleImportConfig(e.nativeEvent))} />
-                            <label htmlFor="import-config-input" id="import-config-label" className="button" role="button" tabIndex={0}>
+                            <input type="file" id="import-config-input" ref={importInputRef} className="sr-only" accept=".json,.gz,.msgpack,.msgpack.gz" onChange={(e) => import('../../../Core/App').then(m => m.App.handleImportConfig(e.nativeEvent))} />
+                            <button id="import-config-button" className="button" type="button" onClick={() => importInputRef.current?.click()}>
                                 <Icon name="download" />
                                 <span className="button-text">Import</span>
-                            </label>
+                            </button>
                         </div>
                     </div>
                 </details>

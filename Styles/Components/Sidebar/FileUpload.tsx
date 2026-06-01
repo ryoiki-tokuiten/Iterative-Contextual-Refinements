@@ -220,7 +220,7 @@ export const FileUpload: React.FC = () => {
                 </div>
 
                 {files.length > 0 && (
-                    <div className="file-list-container">
+                    <div className="file-list-container scrollbar-compact">
                         <div className="file-list-header">
                             <span className="file-count">{files.length} file{files.length !== 1 ? 's' : ''} • {formatFileSize(totalSize)}</span>
                             <button className="clear-all-btn" onClick={clearAll}>

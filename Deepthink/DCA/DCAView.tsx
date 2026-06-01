@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { DCAUI } from './DCAUI';
-import { getActiveDCAPipeline, startDCAProcess, stopDCAProcess } from './DCACore';
+import { getActiveDCAPipeline, stopDCAProcess } from './DCACore';
 import { Icon } from '../../UI/Icons';
 
 export const DCAView: React.FC = () => {

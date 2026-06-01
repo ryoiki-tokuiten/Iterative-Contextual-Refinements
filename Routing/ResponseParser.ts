@@ -33,6 +33,12 @@ export function extractPartsInOrder(response: any): ResponsePart[] {
     const parts = response.candidates[0].content.parts;
 
     for (const part of parts) {
+        // Skip native thinking/reasoning parts — these are internal model thoughts,
+        // not actual response content. They have thought: true set by the API.
+        if (part.thought === true) {
+            continue;
+        }
+
         if (part.text) {
             orderedParts.push({
                 type: 'text',

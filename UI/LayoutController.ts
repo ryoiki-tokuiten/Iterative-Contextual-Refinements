@@ -125,8 +125,6 @@ export function getSidebarCollapseDisabledReason(): string | null {
             return 'Sidebar collapse disabled until a Contextual run is visible';
         case 'adaptive-deepthink':
             return 'Sidebar collapse disabled until an Adaptive Deepthink run is visible';
-        case 'website':
-            return 'Sidebar collapse disabled until the results header is visible';
         default:
             return 'Sidebar collapse is disabled in this view';
     }
@@ -346,8 +344,6 @@ export function initializeLayoutController(): void {
     window.addEventListener('appModeChanged', syncSidebarCollapseAvailability);
 
     syncSidebarCollapseAvailability();
-
-    (window as any).pipelinesState = globalState.pipelinesState;
 }
 
 export class LayoutController {

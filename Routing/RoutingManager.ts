@@ -48,9 +48,14 @@ export class RoutingManager {
             });
         }
 
+        // Subscribe to provider manager updates
+        this.providerManager.addModelUpdateListener(() => {
+            this.updateAvailableModels();
+        });
+
         // Initialize UI components only when DOM is ready
         if (!this.modelSelectionUI) {
-            this.modelSelectionUI = new ModelSelectionUI(this.modelConfigManager, this.deepthinkConfigController);
+            this.modelSelectionUI = new ModelSelectionUI(this.modelConfigManager, this.deepthinkConfigController, this.providerManager);
         }
 
         // Update available models from provider manager
@@ -58,6 +63,10 @@ export class RoutingManager {
 
         // Initialize model selection UI
         this.modelSelectionUI.initialize();
+    }
+
+    public getThinkingLevel(): 'low' | 'medium' | 'high' | 'minimal' {
+        return this.modelConfigManager.getThinkingLevel();
     }
 
 
@@ -115,7 +124,6 @@ export class RoutingManager {
     }
 
     public initializePromptsManager(
-        websitePromptsRef: { current: any },
         deepthinkPromptsRef: { current: any },
         agenticPromptsRef?: { current: any },
         adaptiveDeepthinkPromptsRef?: { current: any },
@@ -123,7 +131,6 @@ export class RoutingManager {
         dcaPromptsRef?: { current: any }
     ): void {
         this.promptsManager = new PromptsManager(
-            websitePromptsRef,
             deepthinkPromptsRef,
             agenticPromptsRef,
             adaptiveDeepthinkPromptsRef,
@@ -148,10 +155,6 @@ export class RoutingManager {
 
     public getTopP(): number {
         return this.modelConfigManager.getTopP();
-    }
-
-    public getRefinementStages(): number {
-        return this.modelConfigManager.getRefinementStages();
     }
 
     public getStrategiesCount(): number {
@@ -182,6 +185,10 @@ export class RoutingManager {
         return this.modelConfigManager.isDissectedObservationsEnabled();
     }
 
+    public isShareHypothesesToDissected(): boolean {
+        return this.modelConfigManager.isShareHypothesesToDissected();
+    }
+
     public isIterativeCorrectionsEnabled(): boolean {
         return this.modelConfigManager.isIterativeCorrectionsEnabled();
     }
@@ -198,6 +205,10 @@ export class RoutingManager {
         return this.modelConfigManager.isPostQualityFilterEnabled();
     }
 
+    public getHypothesisInjectionMode(): 'parallel' | 'strategy_aware' | 'selective_injection' {
+        return this.modelConfigManager.getHypothesisInjectionMode();
+    }
+
     public hasValidApiKey(): boolean {
         return this.apiKeyManager.hasValidApiKey();
     }
@@ -207,10 +218,6 @@ export class RoutingManager {
     }
 
     // Convenience methods for accessing prompt states
-    public getWebsitePrompts() {
-        return this.promptsManager?.getWebsitePrompts();
-    }
-
     public getDeepthinkPrompts() {
         return this.promptsManager?.getDeepthinkPrompts();
     }

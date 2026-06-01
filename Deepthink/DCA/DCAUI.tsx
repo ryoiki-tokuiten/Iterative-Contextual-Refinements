@@ -1,12 +1,5 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useState, useEffect, useRef } from 'react';
-import * as d3 from 'd3';
-import { motion, AnimatePresence } from 'motion/react';
-import { DCASolution, getActiveDCAPipeline } from './DCACore';
+import React, { useState } from 'react';
+import { DCASolution } from './DCACore';
 import RenderMathMarkdown from '../../Styles/Components/RenderMathMarkdown';
 import { Icon } from '../../UI/Icons';
 import { BaseModal } from '../Deepthink.tsx';
@@ -16,40 +9,6 @@ import '../SolutionPool.css';
 interface DCAUIProps {
     pipeline: any;
 }
-
-const DCANode: React.FC<{
-    node: d3.HierarchyPointNode<DCASolution>;
-    onClick: (s: DCASolution) => void;
-}> = ({ node, onClick }) => {
-    const { data, x, y } = node;
-    const isRoot = data.type === 'root';
-    const isOrtho = data.type === 'orthogonal';
-    const isEvo = data.type === 'evolution';
-
-    return (
-        <motion.g
-            className="dca-node"
-            initial={{ opacity: 0, scale: 0 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: node.depth * 0.1 }}
-            transform={`translate(${y},${x})`}
-            onClick={() => onClick(data)}
-        >
-            <circle
-                r={isRoot ? 25 : isOrtho ? 18 : 12}
-                className={`dca-node-circle ${data.type}`}
-            />
-            <text
-                dy=".31em"
-                x={isRoot ? 0 : 25}
-                className="dca-node-text"
-                style={{ textAnchor: isRoot ? 'middle' : 'start', fill: 'white' }}
-            >
-                {data.title.length > 15 ? data.title.slice(0, 15) + '...' : data.title}
-            </text>
-        </motion.g>
-    );
-};
 
 export const DCAUI: React.FC<DCAUIProps> = ({ pipeline }) => {
     const [selectedSolution, setSelectedSolution] = useState<DCASolution | null>(null);
