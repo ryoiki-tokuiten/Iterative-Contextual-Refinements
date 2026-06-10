@@ -615,7 +615,17 @@ nt Options Container */
     box-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
 }
 
+.method-checkbox-custom.checked {
+    background: rgba(139, 92, 246, 0.2);
+    border-color: var(--accent-purple);
+    box-shadow: 0 0 12px rgba(139, 92, 246, 0.3);
+}
+
 .method-checkbox:checked+.method-checkbox-label .method-checkbox-custom::after {
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.method-checkbox-custom.checked::after {
     transform: translate(-50%, -50%) scale(1);
 }
 
@@ -678,8 +688,8 @@ nt Options Container */
     }
 }
 
-/* Red Team Options Container */
-.red-team-options-container {
+/* Evolution Filter Options Container */
+.evolution-filter-options-container {
     margin-top: 16px;
     padding: 16px;
     background: rgba(var(--accent-pink-rgb), 0.04) !important;
@@ -688,7 +698,7 @@ nt Options Container */
     transition: all var(--transition-speed);
 }
 
-.red-team-options-header {
+.evolution-filter-options-header {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -699,12 +709,12 @@ nt Options Container */
     letter-spacing: 0.3px;
 }
 
-.red-team-options-header .icon-slot {
+.evolution-filter-options-header .icon-slot {
     font-size: 20px;
     color: var(--accent-pink);
 }
 
-/* Post Quality Filter Card in Red Team Section */
+/* Post Quality Filter Card in Evolution Filter Section */
 .post-quality-filter-card-wrapper {
     margin-top: 14px;
 }
@@ -746,6 +756,11 @@ nt Options Container */
     border-color: var(--accent-pink);
 }
 
+.post-quality-filter-card .method-checkbox-custom.checked {
+    background: var(--accent-pink);
+    border-color: var(--accent-pink);
+}
+
 .post-quality-filter-card .method-checkbox-custom::after {
     display: none;
 }
@@ -770,19 +785,24 @@ nt Options Container */
     transform: translate(-50%, -50%) scale(1);
 }
 
-.red-team-toggle-wrapper {
+.post-quality-filter-card .method-checkbox-custom.checked .checkbox-icon {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.pqf-toggle-wrapper {
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
 
-.red-team-buttons {
+.pqf-buttons {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
 }
 
-.red-team-button {
+.pqf-button {
     padding: 10px 18px;
     border: 1px solid rgba(var(--accent-pink-rgb), 0.25);
     background-color: rgba(var(--card-bg-base-rgb), 0.4);
@@ -796,7 +816,7 @@ nt Options Container */
     opacity: 0.7;
 }
 
-.red-team-button:hover {
+.pqf-button:hover {
     opacity: 1;
     background-color: rgba(var(--card-bg-base-rgb), 0.6);
     border-color: rgba(var(--accent-pink-rgb), 0.4);
@@ -804,7 +824,7 @@ nt Options Container */
     box-shadow: 0 4px 12px rgba(236, 72, 153, 0.15);
 }
 
-.red-team-button.active {
+.pqf-button.active {
     background: linear-gradient(135deg,
             rgba(var(--accent-pink-rgb), 0.2),
             rgba(var(--accent-pink-rgb), 0.1));
@@ -1063,4 +1083,3 @@ nt Options Container */
 .refresh-icon.spinning {
     animation: spin 1s linear infinite;
 }
-

@@ -30,12 +30,12 @@ export const DCAUI: React.FC<DCAUIProps> = ({ pipeline }) => {
                             <h4 className="pool-iteration-title">Core Problem</h4>
                         </div>
                         <div className="pool-iteration-content">
-                            <div className="red-team-agent-card" style={{ cursor: 'pointer' }} onClick={() => setSelectedSolution(rootSolution)}>
-                                <div className="red-team-agent-header">
-                                    <h4 className="red-team-agent-title">Root Problem</h4>
+                            <div className="agent-card" style={{ cursor: 'pointer' }} onClick={() => setSelectedSolution(rootSolution)}>
+                                <div className="agent-header">
+                                    <h4 className="agent-title">Root Problem</h4>
                                     <span className="status-badge status-completed">Completed</span>
                                 </div>
-                                <div className="red-team-results">
+                                <div className="agent-results">
                                     <span className="sp-count-badge">Original Challenge</span>
                                     <button className="view-argument-button view-pool-button">
                                         <Icon name="visibility" /> View Detail
@@ -53,14 +53,14 @@ export const DCAUI: React.FC<DCAUIProps> = ({ pipeline }) => {
                             <h4 className="pool-iteration-title">Orthogonal Solutions (Stage 1)</h4>
                         </div>
                         <div className="pool-iteration-content">
-                            <div className="red-team-agents-grid">
+                            <div className="agent-grid">
                                 {orthoSolutions.map(sol => (
-                                    <div key={sol.id} className="red-team-agent-card" style={{ cursor: 'pointer' }} onClick={() => setSelectedSolution(sol)}>
-                                        <div className="red-team-agent-header">
-                                            <h4 className="red-team-agent-title">{sol.title.length > 25 ? sol.title.substring(0, 25) + "..." : sol.title}</h4>
+                                    <div key={sol.id} className="agent-card" style={{ cursor: 'pointer' }} onClick={() => setSelectedSolution(sol)}>
+                                        <div className="agent-header">
+                                            <h4 className="agent-title">{sol.title.length > 25 ? sol.title.substring(0, 25) + "..." : sol.title}</h4>
                                             <span className="status-badge status-completed">Budget: {sol.priority || 2}</span>
                                         </div>
-                                        <div className="red-team-results">
+                                        <div className="agent-results">
                                             <span className="sp-count-badge">Orthogonal Pool</span>
                                             <button className="view-argument-button view-pool-button">
                                                 <Icon name="visibility" /> View Detail
@@ -80,14 +80,14 @@ export const DCAUI: React.FC<DCAUIProps> = ({ pipeline }) => {
                             <h4 className="pool-iteration-title">Dynamic Compute Target Actions (Stage 2)</h4>
                         </div>
                         <div className="pool-iteration-content">
-                            <div className="red-team-agents-grid">
+                            <div className="agent-grid">
                                 {evoSolutions.map(sol => (
-                                    <div key={sol.id} className="red-team-agent-card" style={{ cursor: 'pointer' }} onClick={() => setSelectedSolution(sol)}>
-                                        <div className="red-team-agent-header">
-                                            <h4 className="red-team-agent-title" style={{color: 'var(--accent-teal)'}}>{sol.title.length > 25 ? sol.title.substring(0, 25) + "..." : sol.title}</h4>
+                                    <div key={sol.id} className="agent-card" style={{ cursor: 'pointer' }} onClick={() => setSelectedSolution(sol)}>
+                                        <div className="agent-header">
+                                            <h4 className="agent-title" style={{color: 'var(--accent-teal)'}}>{sol.title.length > 25 ? sol.title.substring(0, 25) + "..." : sol.title}</h4>
                                             <span className="status-badge" style={{background: 'rgba(20, 184, 166, 0.15)', color: 'var(--accent-teal)'}}>Evolved target</span>
                                         </div>
-                                        <div className="red-team-results">
+                                        <div className="agent-results">
                                             <span className="sp-count-badge">Local Agent Action</span>
                                             <button className="view-argument-button view-pool-button">
                                                 <Icon name="visibility" /> View Detail

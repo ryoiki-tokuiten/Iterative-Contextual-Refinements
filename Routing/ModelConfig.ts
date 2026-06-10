@@ -16,12 +16,12 @@ export interface ModelParameters {
     strategiesCount: number;
     subStrategiesCount: number;
     hypothesisCount: number;
-    redTeamAggressiveness: string;
+    pqfAggressiveness: string;
     refinementEnabled: boolean;
     skipSubStrategies: boolean;
     dissectedObservationsEnabled: boolean;
-    iterativeCorrectionsEnabled: boolean;
-    iterativeDepth: number;
+    evolvingDfsEnabled: boolean;
+    evolvingDfsDepth: number;
     provideAllSolutionsToCorrectors: boolean;
     postQualityFilterEnabled: boolean;
     deepthinkCodeExecutionEnabled: boolean;
@@ -42,12 +42,12 @@ export const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
     strategiesCount: 3,
     subStrategiesCount: 3,
     hypothesisCount: 4,
-    redTeamAggressiveness: 'balanced',
+    pqfAggressiveness: 'balanced',
     refinementEnabled: false,
     skipSubStrategies: false,
     dissectedObservationsEnabled: false,
-    iterativeCorrectionsEnabled: false,
-    iterativeDepth: 3,
+    evolvingDfsEnabled: false,
+    evolvingDfsDepth: 3,
     provideAllSolutionsToCorrectors: false,
     postQualityFilterEnabled: false,
     deepthinkCodeExecutionEnabled: false,
@@ -95,6 +95,9 @@ export class ModelConfigManager {
     }
 
     public getStrategiesCount(): number {
+        if (this.isEvolvingDfsEnabled()) {
+            return Math.max(1, Math.min(5, this.parameters.strategiesCount));
+        }
         return Math.max(1, Math.min(10, this.parameters.strategiesCount));
     }
 
@@ -110,8 +113,8 @@ export class ModelConfigManager {
         return Math.max(0, Math.min(6, this.parameters.hypothesisCount));
     }
 
-    public getRedTeamAggressiveness(): string {
-        return this.parameters.redTeamAggressiveness;
+    public getPqfAggressiveness(): string {
+        return this.parameters.pqfAggressiveness;
     }
 
     public isRefinementEnabled(): boolean {
@@ -131,22 +134,22 @@ export class ModelConfigManager {
         return this.parameters.shareHypothesesToDissected === true;
     }
 
-    public isIterativeCorrectionsEnabled(): boolean {
+    public isEvolvingDfsEnabled(): boolean {
         // Iterative corrections can only be enabled if refinement is enabled
-        return this.parameters.refinementEnabled && this.parameters.iterativeCorrectionsEnabled;
+        return this.parameters.refinementEnabled && this.parameters.evolvingDfsEnabled;
     }
 
-    public getIterativeDepth(): number {
-        return Math.max(1, Math.min(10, this.parameters.iterativeDepth));
+    public getEvolvingDfsDepth(): number {
+        return Math.max(1, Math.min(10, this.parameters.evolvingDfsDepth));
     }
 
     public isProvideAllSolutionsToCorrectors(): boolean {
         // Can only be enabled if refinement is enabled
-        return this.parameters.refinementEnabled && this.parameters.provideAllSolutionsToCorrectors;
+        return this.parameters.refinementEnabled && !this.isEvolvingDfsEnabled() && this.parameters.provideAllSolutionsToCorrectors;
     }
 
     public isPostQualityFilterEnabled(): boolean {
-        return this.parameters.postQualityFilterEnabled;
+        return this.isEvolvingDfsEnabled() ? true : this.parameters.postQualityFilterEnabled;
     }
 
     public isDeepthinkCodeExecutionEnabled(): boolean {
@@ -154,6 +157,9 @@ export class ModelConfigManager {
     }
 
     public getHypothesisInjectionMode(): 'parallel' | 'strategy_aware' | 'selective_injection' {
+        if (this.isEvolvingDfsEnabled()) {
+            return 'selective_injection';
+        }
         return this.parameters.hypothesisInjectionMode || 'selective_injection';
     }
 

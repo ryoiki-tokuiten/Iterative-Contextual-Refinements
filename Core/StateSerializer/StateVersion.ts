@@ -65,11 +65,12 @@ export interface ExportedConfigV1 {
         strategiesCount: number;
         subStrategiesCount: number;
         hypothesisCount: number;
-        redTeamAggressiveness: string;
+        pqfAggressiveness: string;
         refinementEnabled: boolean;
         skipSubStrategies: boolean;
         dissectedObservationsEnabled: boolean;
-        iterativeCorrectionsEnabled: boolean;
+        evolvingDfsEnabled: boolean;
+        evolvingDfsDepth: number;
         provideAllSolutionsToCorrectors?: boolean;
     };
 
@@ -213,5 +214,4 @@ function extractLegacyModeState(config: Record<string, unknown>, mode: Applicati
             return null;
     }
 }
-
 

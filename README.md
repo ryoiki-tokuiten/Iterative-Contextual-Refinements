@@ -9,42 +9,24 @@ The system operates in four distinct modes, each optimized for specific use case
 
 ### 1. Deepthink Mode
 
-**Purpose**: Complex problem-solving through strategic decomposition and hypothesis exploration.
+**Purpose**: High-depth problem solving through independent strategic branches, targeted hypothesis testing, parallel execution, critique, correction, and explicit final selection.
 
-**Architecture**:
-- Multi-strategy parallel exploration system
-- Three operational strategies:
-  1. **Strategic Solver**: Decomposes problems into main strategies and sub-strategies
-  2. **Hypothesis Explorer**: Generates and tests multiple hypotheses
-  3. **Dissected Observations**: Analyzes problem from multiple perspectives
-4. **Red Team Filter**: Filters weak strategies and sub-strategies
+Deepthink supports two execution families:
 
-**Agent Pipeline**:
-- **Strategy Generation Agent**: Creates high-level approaches
-- **Sub-Strategy Agent**: Breaks down strategies into actionable steps
-- **Solution Agent**: Implements sub-strategy solutions
-- **Critique Agent**: Evaluates solution quality
-- **Refinement Agent**: Applies self-improvement corrections
-- **Iterative Corrections**: Refines solutions iteratively with Critique + Correction Loop.
-- **Red Team Agent**: Validates and filters weak solutions
-- **Final Judge Agent**: Selects optimal solution
+1. **Single-pass strategic search**: Generates up to ten main strategies, optionally expands each into sub-strategies, tests hypotheses, executes all branches, and optionally performs critique synthesis, full-solution context correction, or both.
+2. **Evolving Depth First Search**: Runs up to five direct strategy branches through repeated correction and critique. Each branch has a structured breadth-first solution pool, recursive memory bank, selective hypothesis packet, and periodic Post Quality Filter evaluation.
 
-**Key Features**:
-- Iterative correction loops for solution refinement
-- Red team evaluation for quality control
-- Configurable depth (strategies, sub-strategies, hypotheses)
-- Parallel execution of multiple solution paths
+In Evolving DFS, the original execution is iteration 1. Subsequent iterations correct and critique the active solution, refresh strategy-specific hypotheses every two global iterations, and run memory/PQF maintenance after each branch accumulates five new history entries. PQF can keep a branch or replace its strategy in the same stable slot with a clean, versioned branch.
 
-**Workflow**:
-1. Problem decomposed into main strategies
-2. Each strategy expanded into sub-strategies
-3. Solutions generated for each sub-strategy
-4. Solutions critiqued and refined
-5. Red team filters weak solutions
-6. Final judge selects best approach
+The Structured Solution Pool is the BFS companion to the depth-first correction loop. It creates five substantively executed alternatives per strategy and iteration, while correctors receive deep local history and only limited cross-strategy context. Replaced branches remain archived for inspection but are excluded from active prompts and final judging.
 
+Hypothesis routing supports Blind Trust, Strategy-Aware, and Selective modes. Evolving DFS always uses Selective mode and injects each strategy's tested packet into its execution, correction, and solution-pool agents.
 
-![Deepthink Architecture](Deepthink/SystemArchitecture.png)
+The Final Judge sees only active candidate solution texts. It does not receive critiques, memory banks, solution pools, PQF decisions, or replaced branches.
+
+![Current Deepthink Architecture](Deepthink/SystemArchitecture.png)
+
+See [Deepthink architecture and context flow](Deepthink/DeepthinkDocs.md) for the complete agent contracts, repository schemas, mode behavior, iteration synchronization, and failure policy. The previous diagram remains archived at `Deepthink/OldSystemArchitecture.png`.
 
 
 
@@ -175,12 +157,16 @@ Use your lookback IP: http://127.0.0.1:1234 or http://localhost:1234 when you tu
 
 ### Mode-Specific Settings
 
-**Deepthink/Adaptive**:
-- Strategy count
-- Sub-strategy count
-- Hypothesis count
-- Red team aggressiveness
-- Iterative corrections toggle
+**Deepthink**:
+- Strategy and sub-strategy counts
+- Hypothesis count and injection mode
+- Single-pass refinement, critique synthesis, and full-solution context
+- Evolving DFS depth
+- PQF aggressiveness
+- Optional Python execution for eligible agents
+
+**Adaptive Deepthink**:
+- Agent-directed access to Deepthink tools and model settings
 
 
 ## Data Flow
@@ -202,13 +188,9 @@ User → Main Agent → [Tools/Sub-Agents] → Response Integration → History 
 
 ## Retry and Error Handling
 
-All modes implement exponential backoff retry logic:
-- Maximum 3 retry attempts
-- Initial delay: 20 seconds
-- Backoff factor: 4x
-- Graceful degradation on failure
+Retry behavior is mode-specific. Deepthink allows four total attempts per agent call, with 20, 40, and 80 second retry delays. Agents with a configured 15-minute timeout share that budget across all attempts and delays. Missing non-critical work is recorded on the affected branch; exhausted initial strategy, PQF, or strategy-update calls stop the Deepthink pipeline.
 
-Error states tracked per pipeline/iteration with detailed error messages and recovery options.
+Error states are tracked per pipeline, branch, agent, and iteration for UI inspection.
 
 ## Import/Export
 

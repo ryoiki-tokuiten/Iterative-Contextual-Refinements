@@ -6,7 +6,6 @@ import type {
     DeepthinkSolutionCritiqueData,
     DeepthinkSubStrategyData,
     DeepthinkHypothesisData,
-    DeepthinkRedTeamData,
     DeepthinkPostQualityFilterData,
     DeepthinkMainStrategyData,
     DeepthinkStructuredSolutionPoolAgentData,
@@ -17,7 +16,6 @@ export type {
     DeepthinkSolutionCritiqueData,
     DeepthinkSubStrategyData,
     DeepthinkHypothesisData,
-    DeepthinkRedTeamData,
     DeepthinkPostQualityFilterData,
     DeepthinkMainStrategyData,
     DeepthinkStructuredSolutionPoolAgentData,
@@ -74,11 +72,12 @@ export interface ExportedConfig {
         subStrategiesCount: number;
         textPlaceholder?: string;
         hypothesisCount: number;
-        redTeamAggressiveness: string;
+        pqfAggressiveness: string;
         refinementEnabled: boolean;
         skipSubStrategies: boolean;
         dissectedObservationsEnabled: boolean;
-        iterativeCorrectionsEnabled: boolean;
+        evolvingDfsEnabled: boolean;
+        evolvingDfsDepth: number;
         provideAllSolutionsToCorrectors: boolean;
     };
     // Solution pool versions for evolution view

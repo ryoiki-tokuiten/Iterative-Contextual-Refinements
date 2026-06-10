@@ -90,6 +90,15 @@ export class App {
             return;
         }
 
+        if (globalState.currentMode === 'contextual' && globalState.currentProblemImages.length > 0) {
+            const unsupportedFiles = globalState.currentProblemImages.filter(f => !f.mimeType.startsWith('image/'));
+            if (unsupportedFiles.length > 0) {
+                const unsupportedTypes = [...new Set(unsupportedFiles.map(f => f.mimeType))].join(', ');
+                alert(`Contextual Python virtual filesystem currently supports image files only.\n\nUnsupported file types detected: ${unsupportedTypes}`);
+                return;
+            }
+        }
+
         // Validate file compatibility with selected provider in Deepthink modes
         if ((globalState.currentMode === 'deepthink' || globalState.currentMode === 'adaptive-deepthink') &&
             globalState.currentProblemImages.length > 0) {

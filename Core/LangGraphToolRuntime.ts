@@ -183,6 +183,16 @@ function getGeminiPartsFromMessage(message: BaseMessage): GeminiPart[] {
             if ('text' in part && typeof part.text === 'string') {
                 parts.push({ text: part.text });
             }
+
+            if (
+                'inlineData' in part &&
+                part.inlineData &&
+                typeof part.inlineData === 'object' &&
+                'mimeType' in part.inlineData &&
+                'data' in part.inlineData
+            ) {
+                parts.push(cloneGeminiPart(part));
+            }
         }
     }
 

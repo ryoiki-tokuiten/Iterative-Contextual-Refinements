@@ -24,7 +24,6 @@ export type {
 // Export prompts
 export {
     createDefaultCustomPromptsDeepthink,
-    RED_TEAM_AGGRESSIVENESS_LEVELS
 } from './DeepthinkPrompts';
 
 export type {
@@ -36,7 +35,6 @@ export type {
     DeepthinkSolutionCritiqueData,
     DeepthinkSubStrategyData,
     DeepthinkHypothesisData,
-    DeepthinkRedTeamData,
     DeepthinkPostQualityFilterData,
     DeepthinkMainStrategyData,
     DeepthinkPipelineState

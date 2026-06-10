@@ -37,7 +37,7 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({ currentMode }) => 
                     className="api-call-warning"
                     id="api-call-warning"
                     style={{ display: 'none' }}
-                    title="Red Team enabled - may reduce calls"
+                    title="Evolution Filter status"
                 >
                     <Icon name="info" />
                 </span>
@@ -45,7 +45,7 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({ currentMode }) => 
                     className="api-call-warning"
                     id="api-call-pqf-warning"
                     style={{ display: 'none', marginLeft: '4px' }}
-                    title="PQF Enabled - avg run to worst case"
+                    title="Evolving DFS includes required PQF maintenance passes"
                 >
                     <Icon name="info" />
                 </span>

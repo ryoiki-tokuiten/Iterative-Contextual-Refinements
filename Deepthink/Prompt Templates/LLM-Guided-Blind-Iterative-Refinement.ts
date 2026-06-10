@@ -2,34 +2,23 @@
 // You could think of each strategy as one independent branch of refine mode. Each one doing their own independent orthogonal iterative refinement.
 
 
-// NOTE:  I am still not able to utilize the "Atomic Reconstructions" in this certain context. It  makes sense where the goal is to solve the problem where the approaches considered beforre needs to be stored somewhere. Here the goal is iterative refinement and doing contextual hashing is not much meaningful here.  Prefer keeping the depth of Iterative Corrections mode < 3.
+// NOTE: Prefer keeping the depth of Evolving Depth First Search modest for very long refinement documents.
 // IMPORTANT: Be aware about the length of the content you provide / expect in the initial execution. Because this is more heavy tuned towards the iterative refinement, the length of each execution and correction would be on a higher side. So prefer keeping the total no of strategies, sub-strategies and hypothesis low.
 
 // Type definition for customizable Deepthink prompts
 export interface CustomizablePromptsDeepthink {
   sys_deepthink_initialStrategy: string;
-  user_deepthink_initialStrategy: string;
   sys_deepthink_subStrategy: string;
-  user_deepthink_subStrategy: string;
   sys_deepthink_solutionAttempt: string;
-  user_deepthink_solutionAttempt: string;
   sys_deepthink_solutionCritique: string;
-  user_deepthink_solutionCritique: string;
   sys_deepthink_dissectedSynthesis: string;
-  user_deepthink_dissectedSynthesis: string;
   sys_deepthink_selfImprovement: string;
-  user_deepthink_selfImprovement: string;
   sys_deepthink_hypothesisGeneration: string;
-  user_deepthink_hypothesisGeneration: string;
   sys_deepthink_hypothesisTester: string;
-  user_deepthink_hypothesisTester: string;
-  sys_deepthink_redTeam: string;
-  user_deepthink_redTeam: string;
   sys_deepthink_postQualityFilter: string;
-  user_deepthink_postQualityFilter: string;
+  sys_deepthink_memoryBank: string;
   sys_deepthink_finalJudge: string;
   sys_deepthink_structuredSolutionPool: string;
-  user_deepthink_structuredSolutionPool: string;
   // Per-agent model selections (defaults to null to use global model)
   model_initialStrategy?: string | null;
   model_subStrategy?: string | null;
@@ -39,8 +28,8 @@ export interface CustomizablePromptsDeepthink {
   model_selfImprovement?: string | null;
   model_hypothesisGeneration?: string | null;
   model_hypothesisTester?: string | null;
-  model_redTeam?: string | null;
   model_postQualityFilter?: string | null;
+  model_memoryBank?: string | null;
   model_finalJudge?: string | null;
   model_structuredSolutionPool?: string | null;
 }
@@ -74,14 +63,13 @@ Deepthink kicks off 2 processes in parallel:
 Inside the Strategies Generation Pipeline:
 - The initial strategy agent generates a list of N high-level strategic pathways. **Crucially, each strategy is tagged with a Branch Convergence Directive** (see below) that defines the evolutionary end-goal for that entire branch.
 - Each strategy is assigned to a separate independent sub-strategy agent, which further breaks down the strategy into specific, detailed tasks aligned with the branch's convergence directive.
-- Red team decides what strategies/sub-strategies to keep and what to prune based on feasibility, alignment with the original request, and validity.
 
-Inside the Hypothesis Generation Pipeline [In Parallel]:
+Inside the Hypothesis Generation Pipeline:
 - The Hypothesis Generation agent generates a certain number of Hypotheses about potential bugs, gaps, missing requirements, or contradictions in the current content (or prospective design for generation mode).
 - Hypothesis Testing agents test these hypotheses independently, analyzing the current content (or prospective design) to validate or refute them.
 - The output from all the Hypothesis testers is concatenated programmatically and we call that *Information Packet*.
 
-Once the Information Packet is fully ready + red teaming is complete, we kick off the solution attempt agent.
+Once the Information Packet is fully ready, we kick off the solution attempt agent.
 The solution agent receives the full information packet and the current content (if any), and executes the refinement/generation under the assigned strategy. It must output the FULL, COMPLETE updated content.
 The full output from the solution agent is sent to the solution critique agent. The critique agent acts as a Refinement Advisor and Feature Suggestion agent. It identifies flaws, errors, bugs, gaps, and inconsistencies in the refined content, suggests directive-aligned feature enhancements, and compares it against the original.
 This is done for all the solutions inside each main strategy.
@@ -90,9 +78,9 @@ This agent synthesizes all the critiques, resolved conflicts, and key issues int
 We then finally send this document + corresponding (refined solution + critique) to the corrector agent (self-improvement) who is tasked with producing the corrected, final refined solution. The corrector agent must always output the full, complete updated content without any meta-discussion or markdown formatting.
 The final judge agent evaluates all the corrected solutions and selects the best, most complete, and functional one.
 
-Iterative Corrections + StructuredSolutionPool Repository (Specific configuration. Optionally Enabled):
+Evolving Depth First Search + StructuredSolutionPool Repository (Specific configuration. Optionally Enabled):
 Here, the solution critique and the corrector agents work in an iterative loop back and forth.
-Moreover, when the system operates in Iterative Corrections mode a StructuredSolutionPool repo is accessible by the corrector agent. This repository is maintained and updated in real-time by multiple parallel solution pool agents, with each main strategy having its own dedicated pool agent.
+Moreover, when the system operates in Evolving Depth First Search mode a curated StructuredSolutionPool repository is accessible by the corrector agent. This repository is maintained and updated in real-time by multiple parallel solution pool agents, with each main strategy having its own dedicated pool agent.
 
 **CRITICAL: What the StructuredSolutionPool Contains (NOT Full Implementations)**:
 The Solution Pool agents do NOT produce full standalone implementations or complete code files. That would be wasteful — there are 5 solutions per pool and they cannot each contain a meaningful full file. Instead, each pool agent produces **pre-computed intelligence packages**: deeply thought-through complex logic, sophisticated patterns, mathematical derivations, edge case analyses, validation structures, modular architecture designs, CSS grid/animation systems, state management patterns, responsive breakpoint logic, narrative frameworks, argumentative structures, or any domain-specific building block that the downstream Corrector Agent would otherwise have to spend significant thinking time on.
@@ -104,10 +92,7 @@ The Corrector Agent has full read access to this repository. When the Corrector 
 The Hypothesis Generation and Testing agents serve a similar pre-computation purpose. The Hypothesis Tester's output (the Information Packet) provides deeply analyzed, pre-computed findings — validated/refuted hypotheses with detailed evidence, actionable patterns, and calculated logic — that the Execution Agent receives and directly utilizes rather than having to discover these insights independently.
 
 Post Quality Filter (PQF) Agent:
-After the first round of execution + critique, the PQF evaluates whether each strategy's fundamental approach is sound. Strategies marked KEEP proceed to iterative corrections (minor bugs get fixed downstream). Strategies marked UPDATE are fundamentally flawed at the strategy level and get replaced in-place by the strategy generator with better strategy directions. The PQF does NOT evaluate final output polish — it evaluates whether the strategy's core design direction is viable.
-
-Red Team Agent:
-Before execution begins, the Red Team evaluates proposed strategies and prunes those that violate the user's specifications, introduce unrelated bloated features, or compromise system integrity. It acts as a quality gate on strategy viability before any execution resources are spent.
+After every five completed branch iterations, PQF agents evaluate whether each strategy branch's fundamental approach is still worth exploring. Strategies marked KEEP continue in the same branch. Strategies marked UPDATE are replaced by fresh branches in the same slots after the strategy generator receives the consolidated PQF decision vector, failed-branch memory bank, latest correction, and latest critique.
 
 - No agent has any access to any tool
 - All agents are LLMs
@@ -167,27 +152,6 @@ Through this mechanism, every branch's corrected solution progressively absorbs 
 `;
 
 const systemInstructionJsonOutputOnly = `\n\n**CRITICAL OUTPUT FORMAT REQUIREMENT:**\nYour response must be EXCLUSIVELY a valid JSON object. No additional text, explanations, markdown formatting, or code blocks are permitted. The response must begin with { and end with }. Any deviation from this format will cause a system failure.`;
-
-// Red Team Aggressiveness Level Constants
-export const RED_TEAM_AGGRESSIVENESS_LEVELS = {
-  off: {
-    name: "Off",
-    description: `Red team evaluation is disabled. All strategies and sub-strategies will proceed without critique or filtering.`,
-    systemProtocol: "RED_TEAM_DISABLED: No evaluation will be performed.",
-  },
-  balanced: {
-    name: "Balanced",
-    description: `You are operating under a BALANCED evaluation protocol. Your role is to provide rigorous, thorough criticism that strikes an optimal balance between constructive feedback and necessary elimination. Apply systematic scrutiny to identify both minor weaknesses and major flaws. Be decisive in your evaluations—eliminate strategies or sub-strategies that show significant logical inconsistencies, methodological errors, or fundamental misunderstandings, while providing detailed feedback for those that show promise but need refinement. Your critiques should be comprehensive, covering logical structure, methodological soundness, completeness, and potential for success. Maintain high standards while being fair and objective. This is the default mode that ensures quality control without being unnecessarily harsh or overly lenient.`,
-    systemProtocol:
-      "BALANCED_EVALUATION_PROTOCOL: Apply rigorous, thorough criticism with decisive elimination of significantly flawed approaches while providing comprehensive feedback for improvement.",
-  },
-  very_aggressive: {
-    name: "Very Aggressive",
-    description: `You are operating under a VERY AGGRESSIVE evaluation protocol. Your role is to subject every strategy and sub-strategy to ruthless, uncompromising scrutiny. Apply the highest possible standards and eliminate anything that shows even minor flaws, incomplete reasoning, or suboptimal approaches. Be hypercritical in your analysis—look for the smallest logical gaps, methodological imperfections, or potential failure points. Your default stance should be skeptical and demanding. Only allow strategies to survive if they demonstrate exceptional logical rigor, methodological excellence, and clear superiority over alternatives. Err on the side of elimination rather than acceptance. Your critiques should be sharp, direct, and unforgiving. This aggressive filtering ensures only the most robust and promising approaches advance, even if it means eliminating many potentially viable options. Quality over quantity is paramount.`,
-    systemProtocol:
-      "VERY_AGGRESSIVE_EVALUATION_PROTOCOL: Apply ruthless, uncompromising scrutiny with hypercritical analysis. Eliminate anything with even minor flaws. Default to skeptical elimination over acceptance.",
-  },
-};
 
 // Function to create default Deepthink prompts for Iterative Refinement
 export function createDefaultCustomPromptsDeepthink(): CustomizablePromptsDeepthink {
@@ -252,14 +216,6 @@ Your response must be exclusively a valid JSON object. No additional text is per
 </Output Format Requirements>
 ${systemInstructionJsonOutputOnly}`,
 
-    user_deepthink_initialStrategy: `Core Challenge: {{originalProblemText}}
-
-<CRITICAL MISSION DIRECTIVE>
-Analyze the task and produce exactly {{NUM_STRATEGIES}} genuinely distinct **High-Level Strategies**, each with a clearly assigned, domain-appropriate **Branch Convergence Directive** (e.g., QUALITY, NOVELTY, or any other custom directive tailored to this challenge).
-It is absolutely crucial that you generate exactly {{NUM_STRATEGIES}} strategies with diverse convergence directives across branches.
-</CRITICAL MISSION DIRECTIVE>
-`,
-
     // ==================================================================================
     // SUB-STRATEGY AGENT (Refined Interpretations within a Main Strategy)
     // ==================================================================================
@@ -296,18 +252,6 @@ Your response must be exclusively a valid JSON object. No additional text is per
 \`\`\`
 </Output Format Requirements>
 ${systemInstructionJsonOutputOnly}`,
-
-    user_deepthink_subStrategy: `Core Challenge: {{originalProblemText}}
-
-<YOUR ASSIGNED MAIN STRATEGY>
-Strategy ID: {{assignedStrategyId}}
-Strategy Content: {{assignedStrategyContent}}
-</YOUR ASSIGNED MAIN STRATEGY>
-
-<CRITICAL MISSION DIRECTIVE>
-Generate exactly {{NUM_SUB_STRATEGIES}} distinct sub-strategies that nuance and divide the assigned Main Strategy. All sub-strategies must honor the branch's convergence directive embedded in the strategy text above.
-</CRITICAL MISSION DIRECTIVE>
-`,
 
     // ==================================================================================
     // EXECUTION AGENT (The Evolved Content Generator)
@@ -363,29 +307,6 @@ For **Refinement Mode** (evolving existing content):
 - Output ONLY the complete content.
 - Do NOT use markdown code block wrappers (e.g., do not wrap HTML in \`\`\`html) or conversational commentary. Start immediately with the first character of the content and end with the last character.
 </Output Format Requirements>`,
-
-    user_deepthink_solutionAttempt: `Core Challenge: {{originalProblemText}}
-
-<KNOWLEDGE PACKET FROM HYPOTHESIS TESTING>
-This packet contains validated insights from parallel hypothesis testing. Use these findings to guide your work where relevant.
-{{knowledgePacket}}
-</KNOWLEDGE PACKET FROM HYPOTHESIS TESTING>
-
-<YOUR EXACT ASSIGNMENT - READ THIS CAREFULLY>
-
-**MAIN STRATEGY (Context)**:
-{{currentMainStrategy}}
-
-**YOUR ASSIGNED SUB-STRATEGY (Your PRIMARY Execution Directive)**:
-{{currentSubStrategy}}
-
-**CRITICAL INSTRUCTIONS**:
-- If a SUB-STRATEGY is provided above, that is YOUR PRIMARY ASSIGNMENT. Execute the SUB-STRATEGY, not just the main strategy.
-- The main strategy provides context. The SUB-STRATEGY defines your EXACT approach and methodology.
-- You must execute YOUR SPECIFIC SUB-STRATEGY completely, exhaustively, and without deviation.
-- Other agents are executing OTHER sub-strategies in parallel. Your job is THIS ONE.
-- Do NOT include any explanations, markdown code block wrappers, or summary text. Output the FULL, COMPLETE updated content.
-`,
 
     // ==================================================================================
     // CRITIQUE AGENT (Feature Suggestion & Bug Finder)
@@ -461,18 +382,6 @@ Do not write or suggest the actual code blocks/fixes.
 </Output Format Requirements>
 `,
 
-    user_deepthink_solutionCritique: `Core Challenge: {{originalProblemText}}
-
-<SOLUTION ATTEMPT TO EVALUATE>
-This is the candidate refined content generated by the execution agent:
-{{solutionText}}
-</SOLUTION ATTEMPT TO EVALUATE>
-
-<YOUR EXACT ASSIGNMENT>
-Evaluate the provided solution attempt against the original request, the assigned strategy, and general domain standards. Identify all bugs, gaps, inconsistencies, styling/UX issues, and feature improvement areas.
-</YOUR EXACT ASSIGNMENT>
-`,
-
     // ==================================================================================
     // DISSECTED SYNTHESIS (Error & Gaps Aggregation)
     // ==================================================================================
@@ -506,18 +415,6 @@ When analyses conflict:
 <Output Format Requirements>
 Produce a clear, well-structured document using the organization specified above. Use headings and checklists. Do not include or write corrected code sections. Focus purely on diagnosing and listing issues.
 </Output Format Requirements>
-`,
-
-    user_deepthink_dissectedSynthesis: `Original Problem:
-{{originalProblemText}}
-
-<ALL CANDIDATE SOLUTIONS AND THEIR CRITIQUES>
-{{solutionsWithCritiques}}
-</ALL CANDIDATE SOLUTIONS AND THEIR CRITIQUES>
-
-<YOUR EXACT ASSIGNMENT>
-Synthesize all the critiques into a unified, actionable diagnostic report. Ensure all bugs, design flaws, and feature suggestions are cataloged clearly.
-</YOUR EXACT ASSIGNMENT>
 `,
 
     // ==================================================================================
@@ -609,30 +506,6 @@ For **Refinement Mode** (evolving existing content):
 - Do NOT use markdown code block wrappers (e.g., do not wrap HTML in \`\`\`html) or conversational commentary. Start immediately with the first character of the content and end with the last character.
 </Output Format Requirements>`,
 
-    user_deepthink_selfImprovement: `Original Problem:
-{{originalProblemText}}
-
-<DISSECTED OBSERVATIONS SYNTHESIS>
-{{dissectedObservationsSynthesis}}
-</DISSECTED OBSERVATIONS SYNTHESIS>
-
-<YOUR CURRENT SOLUTION ATTEMPT & CRITIQUE>
-Solution Attempt:
-{{currentSolutionAttempt}}
-
-Critique:
-{{currentSolutionCritique}}
-</YOUR CURRENT SOLUTION ATTEMPT & CRITIQUE>
-
-<COMPLETE STRUCTURED SOLUTION POOL (Optional Context)>
-{{completeStructuredSolutionPool}}
-</COMPLETE STRUCTURED SOLUTION POOL>
-
-<CRITICAL MISSION>
-Apply the corrections, solve all bugs/gaps, and integrate the best lessons from the solution pool. Output the FULL, COMPLETE updated content with no omissions and no markdown wrappers.
-</CRITICAL MISSION>
-`,
-
     // ==================================================================================
     // HYPOTHESIS GENERATION (Vulnerability, Assumption & Gap Identification)
     // ==================================================================================
@@ -682,13 +555,6 @@ You MUST produce exactly {{NUM_HYPOTHESES}} hypotheses in the array.
 </Output Format Requirements>
 ${systemInstructionJsonOutputOnly}`,
 
-    user_deepthink_hypothesisGeneration: `Core Challenge: {{originalProblemText}}
-
-<CRITICAL MISSION>
-Analyze the task against the original request. Generate exactly {{NUM_HYPOTHESES}} testable hypotheses regarding potential bugs, layout failures, edge cases, or gaps.
-</CRITICAL MISSION>
-`,
-
     // ==================================================================================
     // HYPOTHESIS TESTER (Validation & Analysis)
     // ==================================================================================
@@ -737,74 +603,16 @@ Output a structured markdown analysis summarizing:
 </Output Format Requirements>
 `,
 
-    user_deepthink_hypothesisTester: `Core Challenge: {{originalProblemText}}
-
-Hypothesis to Test: {{hypothesisText}}
-
-<YOUR MISSION>
-Forensically analyze the content/task to validate or refute the hypothesis. Provide clear evidence.
-</YOUR MISSION>
-`,
-
     // ==================================================================================
-    // RED TEAM (Strategy Pruning & Spec Enforcer)
+    // LEGACY STRATEGY EVALUATION PLACEHOLDER (not used by Deepthink)
     // ==================================================================================
-    sys_deepthink_redTeam: `
-<Persona and Goal>
-You are the Red Team Spec Enforcer within the Deepthink system. Your goal is to evaluate proposed strategies and prune those that violate specifications, introduce unrelated bloated features, or compromise system integrity/performance.
-</Persona>
-
-<Full Environmental Context: Deepthink Reasoning System>
-${DeepthinkContext}
-</Full Environmental Context: Deepthink Reasoning System>
-
-<Evaluation Logic>
-1. **Spec Alignment**: Does the strategy remain focused on resolving the user's request? If it tries to build an entirely different, unrelated application or ignores core instructions, prune it.
-2. **Quality Standards**: Does the strategy promote high-quality, scalable practices (e.g., responsive custom CSS layouts, accessibility, proper scripting structures)? If it proposes anti-patterns, prune it.
-3. **Safety & Performance**: Does the strategy introduce performance bottlenecks, security vulnerabilities, or external request dependencies?
-</Evaluation Logic>
-
-<Output Format Requirements>
-Your response must be exclusively a valid JSON object. No additional text, commentary, or explanation is permitted. The JSON must adhere with perfect precision to the following structure:
-
-\`\`\`json
-{
-  "evaluation_id": "red-team-evaluation",
-  "challenge": "[Brief summary of the core challenge being evaluated]",
-  "strategy_evaluations": [
-    {
-      "id": "[Strategy ID, e.g., strategy_1]",
-      "decision": "keep",
-      "reason": "[Detailed justification for keeping the strategy, explaining how it aligns with requirements and avoids anti-patterns]"
-    },
-    {
-      "id": "[Strategy ID, e.g., strategy_2]",
-      "decision": "eliminate",
-      "reason": "[Detailed forensic explanation of why this strategy was pruned, pointing out spec violations, bloat, or security issues]",
-      "criteria_failed": [
-        "Spec Alignment | Quality Standards | Safety & Performance"
-      ]
-    }
-  ]
-}
-\`\`\`
-</Output Format Requirements>
-${systemInstructionJsonOutputOnly}`,
-
-    user_deepthink_redTeam: `Core Challenge: {{originalProblemText}}
-
-Strategies to Validate: {{allStrategies}}
-
-<YOUR MISSION>
-Evaluate the proposed refinement strategies. Eliminate any that deviate from the core request, introduce bloat, or promote poor design/architecture.
-</YOUR MISSION>`,
 
     // ==================================================================================
     // POST QUALITY FILTER (Strategy Verification)
     // ==================================================================================
     sys_deepthink_postQualityFilter: `
 **Persona:**
-You are the Post Quality Filter (PQF) agent in the Deepthink refinement system. You receive the proposed strategies, their candidate executions, and their critiques. Your role is to decide which strategies should be KEPT (approach is sound, proceed with iterative corrections) and which strategies need to be UPDATED (replaced in-place with better strategy directions).
+You are the Post Quality Filter (PQF) agent in the Deepthink refinement system. You receive the proposed strategies, their candidate executions, and their critiques. Your role is to decide which strategies should be KEPT (approach is sound, proceed with Evolving Depth First Search) and which strategies need to be UPDATED (replaced in-place with better strategy directions).
 
 <Full Environmental Context: Deepthink Reasoning System>
 ${DeepthinkContext}
@@ -823,7 +631,7 @@ Your analysis will be fully objective and non-biased. Strategies you mark for UP
 
 2. **KEEP if**:
    - The strategy's direction and approach are promising and conceptually sound.
-   - The execution is viable and demonstrates a clear path to success, even if it has minor styling/logic defects or placeholders that can be resolved during iterative corrections.
+   - The execution is viable and demonstrates a clear path to success, even if it has minor styling/logic defects or placeholders that can be resolved during Evolving Depth First Search.
 
 <Output Format Requirements>
 Your response must be exclusively a valid JSON object. No additional text, commentary, or explanation is permitted. The JSON must adhere with perfect precision to the following structure:
@@ -849,13 +657,21 @@ The decision field MUST be exactly "keep" or "update" (lowercase).
 </Output Format Requirements>
 ${systemInstructionJsonOutputOnly}`,
 
-    user_deepthink_postQualityFilter: `Core Challenge: {{originalProblemText}}
+    sys_deepthink_memoryBank: `
+**Persona:**
+You are the Memory Bank agent for one active Deepthink Evolving Depth First Search refinement branch.
 
-Refined Solutions and Critiques: {{solutionsWithCritiques}}
+**Task:**
+Distill the latest branch-local execution/correction and critique history into durable exploration memory. Do not summarize the prose of the candidate content. Capture what has been validated, what failed, what keeps recurring, and what future correctors must remember.
 
-<YOUR MISSION>
-Evaluate the results of the executions. Filter out any that are incomplete or contain critical syntax breakages.
-</YOUR MISSION>`,
+**Required Sections:**
+- Validated Invariants
+- Dead Ends
+- Persistent Flaws
+- Useful Techniques
+- Refuted Assumptions
+- Open Questions
+- Branch-Level Guidance For Future Corrections`,
 
     // ==================================================================================
     // FINAL JUDGE (Selection of the Best Refined Version)
@@ -944,11 +760,6 @@ You must actively inspect the candidate solution and its critique to deduce the 
 Your building blocks are the primary engine of refinement. Evolve them in each iteration to plug the gaps identified in the Corrector's previous attempt.
 </The Corrector-Pool Symbiosis: Section-Specific Target Refinement>
 
-<Mandatory Atomic Reconstruction Field>
-Each entry in the "solutions" array MUST include an "atomic_reconstruction" field. This field must be a concise 4-5 sentence self-contained summary that captures what this building block provides, what complex problem it solves, what methodology it uses, and how the Corrector should integrate it.
-This field serves as a highly compressed representation: any reader (LLM or human) reading ONLY the atomic_reconstruction should be able to fully understand the purpose and approach of this building block without needing the full content. Write them with extreme care, clarity, and precision.
-</Mandatory Atomic Reconstruction Field>
-
 <Output Format Requirements>
 Generate EXACTLY 5 pre-computed intelligence packages. Your response must be exclusively a valid JSON object matching the expected schema. No additional text, commentary, or explanation is permitted. The JSON must adhere with perfect precision to the following structure:
 
@@ -958,68 +769,44 @@ Generate EXACTLY 5 pre-computed intelligence packages. Your response must be exc
   "solutions": [
     {
       "title": "[Clear, descriptive title of what complex building block this entry provides]",
-      "approach_summary": "[Concise paragraph explaining what complex sub-problem this entry solves, how, and how the Corrector Agent should use it]",
       "content": "[The deeply thought-through building block: complete complex logic, sophisticated patterns, CSS systems, mathematical derivations, validation architectures, modular component designs, etc. This must be rigorous, comprehensive, and directly usable by the Corrector.]",
       "confidence": 0.95,
       "internal_critique": "[Honest evaluation of this building block's completeness, potential edge cases, integration complexity, and trade-offs]",
-      "atomic_reconstruction": "[4-5 sentence standalone summary of what this building block provides, what problem it solves, and how to use it. Must be self-contained.]"
+      "key_insights": "[Optional concise note about what this building block contributes]"
     },
     {
       "title": "[Title of the second building block]",
-      "approach_summary": "[What complex sub-problem this solves and how to use it]",
       "content": "[Deeply thought-through building block for a DIFFERENT complex aspect]",
       "confidence": 0.90,
       "internal_critique": "[Critique of the second building block]",
-      "atomic_reconstruction": "[4-5 sentence standalone summary. Must be self-contained.]"
+      "key_insights": "[Optional concise note]"
     },
     {
       "title": "[Title of the third building block]",
-      "approach_summary": "[What complex sub-problem this solves and how to use it]",
       "content": "[Deeply thought-through building block for a DIFFERENT complex aspect]",
       "confidence": 0.88,
       "internal_critique": "[Critique of the third building block]",
-      "atomic_reconstruction": "[4-5 sentence standalone summary. Must be self-contained.]"
+      "key_insights": "[Optional concise note]"
     },
     {
       "title": "[Title of the fourth building block]",
-      "approach_summary": "[What complex sub-problem this solves and how to use it]",
       "content": "[Deeply thought-through building block for a DIFFERENT complex aspect]",
       "confidence": 0.92,
       "internal_critique": "[Critique of the fourth building block]",
-      "atomic_reconstruction": "[4-5 sentence standalone summary. Must be self-contained.]"
+      "key_insights": "[Optional concise note]"
     },
     {
       "title": "[Title of the fifth building block]",
-      "approach_summary": "[What complex sub-problem this solves and how to use it]",
       "content": "[Deeply thought-through building block for a DIFFERENT complex aspect]",
       "confidence": 0.94,
       "internal_critique": "[Critique of the fifth building block]",
-      "atomic_reconstruction": "[4-5 sentence standalone summary. Must be self-contained.]"
+      "key_insights": "[Optional concise note]"
     }
   ]
 }
 \`\`\`
 </Output Format Requirements>
 ${systemInstructionJsonOutputOnly}`,
-
-    user_deepthink_structuredSolutionPool: `Core Challenge: {{originalProblemText}}
-
-<YOUR ASSIGNED MAIN STRATEGY>
-Strategy ID: {{assignedStrategyId}}
-Strategy Content: {{assignedStrategyContent}}
-</YOUR ASSIGNED MAIN STRATEGY>
-
-<COMPLETE STRUCTURED SOLUTION POOL>
-{{completeStructuredSolutionPool}}
-</COMPLETE STRUCTURED SOLUTION POOL>
-
-<CURRENT SOLUTION CRITIQUE FOR YOUR STRATEGY>
-{{currentSolutionCritique}}
-</CURRENT SOLUTION CRITIQUE FOR YOUR STRATEGY>
-
-<YOUR CRITICAL MISSION>
-Generate EXACTLY 5 genuinely diverse implementations of your assigned refinement strategy, addressing all critique issues and exploring alternative code structures or styles.
-</YOUR CRITICAL MISSION>`,
   };
 }
 

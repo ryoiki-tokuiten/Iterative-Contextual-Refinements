@@ -13,13 +13,13 @@ const MODE_DETAILS: Record<ApplicationMode, {
         title: 'Deepthink',
         buttonLabel: 'Deepthink',
         tags: ['Highest Quality', 'Highest Compute', 'Breadth-First-Search', 'Depth-First-Search'],
-        description: 'Parallel Strategies and Hypothesis Execution. Meta learning post quality filter to evolve the strategies themselves. Iterative corrections with solution pool and atomic reconstruction for depth-first-search across all branches.'
+        description: 'Parallel strategies and hypothesis execution with Evolving Depth First Search, branch-local solution pools, memory banks, and PQF strategy evolution.'
     },
     'adaptive-deepthink': {
         title: 'Adaptive Deepthink',
         buttonLabel: 'Adaptive Deepthink',
         tags: ['High Quality', 'Medium Compute', 'Orchestrator-Guided-Search'],
-        description: 'Deepthink mode given to an agent. Works as a red team agent, post quality filter to evolve the strategies. Doesn\'t support iterative corrections and solution pool.'
+        description: 'Deepthink mode given to an agent. Uses quality filtering to evolve strategies. Does not support Evolving DFS or solution pools.'
     },
     'dynamic-compute': {
         title: 'Dynamic Compute Allocation',
@@ -28,7 +28,7 @@ const MODE_DETAILS: Record<ApplicationMode, {
         description: 'Experimental. Setting dynamic budget to problems based on their complexity. Doesn\'t focuses on the quality of the output but rather on the diversity and uniqueness of each path. (Orthogonality)'
     },
     'contextual': {
-        title: 'Iterative Corrections (Solution Pool + Memory)',
+        title: 'Contextual (Solution Pool + Memory)',
         buttonLabel: 'Iterative Corrections',
         tags: ['Highest Quality (might be biased sometimes)', 'Highest Compute Budget', 'Depth-First-Search', 'Memory Bank Support'],
         description: 'Can work autonomously for hours.'
@@ -68,16 +68,16 @@ export const AppModeSelector: React.FC = () => {
         if (lower.includes('high quality')) return 'tag-quality-high';
         if (lower.includes('medium quality')) return 'tag-quality-medium';
         if (lower.includes('low quality')) return 'tag-quality-low';
-        
+
         if (lower.includes('highest compute') || lower.includes('highest compute budget')) return 'tag-compute-highest';
         if (lower.includes('medium compute')) return 'tag-compute-medium';
         if (lower.includes('low compute')) return 'tag-compute-low';
         if (lower.includes('dynamic compute')) return 'tag-compute-dynamic';
-        
+
         if (lower.includes('search')) return 'tag-search';
         if (lower.includes('memory bank')) return 'tag-feature-memory';
         if (lower.includes('no critique')) return 'tag-feature-nocritique';
-        
+
         return 'tag-default';
     };
 

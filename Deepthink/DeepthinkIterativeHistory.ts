@@ -1,547 +1,679 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
- * 
- * Conversation History Managers for Iterative Corrections in Deepthink Mode
- * Uses LangChain for managing conversation state
+ *
+ * Deterministic prompt and repository builders for Deepthink Evolving DFS.
+ * These helpers intentionally avoid external conversation-history managers.
  */
 
-import { ChatMessageHistory } from "@langchain/community/stores/message/in_memory";
-import { HumanMessage, AIMessage, BaseMessage } from "@langchain/core/messages";
+export type PromptMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
-// ========== SHARED HELPERS ==========
-
-type RoleContent = { role: 'system' | 'assistant' | 'user'; content: string };
-
-/** Serialize LangChain messages to plain role/content objects (shared by all exportState methods) */
-function serializeMessages(messages: BaseMessage[]): Array<{ role: string; content: unknown }> {
-    return messages.map(m => ({ role: m._getType(), content: m.content }));
+export interface StrategySnapshot {
+    id: string;
+    strategyText: string;
+    slotIndex: number;
+    branchVersion: number;
+    branchIterationCount: number;
+    globalIteration: number;
+    latestSolution?: string;
+    latestCorrection?: string;
+    latestCritique?: string;
+    latestPool?: string;
+    memoryBank?: string;
+    hypothesisPacket?: string;
+    replacedAtGlobalIteration?: number;
+    replacementReason?: string;
 }
 
-/** Convert ChatMessageHistory to role/content array for prompt building */
-function historyToRoleArray(messages: BaseMessage[]): RoleContent[] {
-    return messages.reduce<RoleContent[]>((acc, msg) => {
-        if (msg instanceof AIMessage) acc.push({ role: 'assistant', content: msg.content as string });
-        else if (msg instanceof HumanMessage) acc.push({ role: 'user', content: msg.content as string });
-        return acc;
-    }, []);
-}
-
-/**
- * Manages conversation history for Solution Critique Agent in Iterative Mode
- * Receives: System Prompt + Original Problem + Assigned Strategy + Executed Solution
- * Outputs: Solution Critique
- * Then receives corrected solutions and outputs new critiques (3 iterations total)
- */
-export class SolutionCritiqueHistoryManager {
-    private chatHistory: ChatMessageHistory;
-    private systemPrompt: string;
-    private originalProblem: string;
-    private assignedStrategy: string;
-    private initialSolution: string;
-    private iterationCount: number;
-
-    constructor(
-        systemPrompt: string,
-        originalProblem: string,
-        assignedStrategy: string,
-        initialSolution: string
-    ) {
-        this.chatHistory = new ChatMessageHistory();
-        this.systemPrompt = systemPrompt;
-        this.originalProblem = originalProblem;
-        this.assignedStrategy = assignedStrategy;
-        this.initialSolution = initialSolution;
-        this.iterationCount = 0;
-    }
-
-    async buildPromptForIteration(
-        solutionToAnalyze: string,
-        iterationNumber: number
-    ): Promise<Array<{ role: 'system' | 'assistant' | 'user'; content: string }>> {
-        this.iterationCount = iterationNumber;
-
-        // First iteration: Initial critique
-        if (iterationNumber === 1) {
-            const userPrompt = `Core Challenge: ${this.originalProblem}
-
-<INTERPRETIVE FRAMEWORK>
-"${this.assignedStrategy}"
-</INTERPRETIVE FRAMEWORK>
-
-<SOLUTION TO ANALYZE>
-${solutionToAnalyze}
-</SOLUTION TO ANALYZE>`;
-
-            return [{ role: 'user', content: userPrompt }];
-        }
-
-        // Subsequent iterations: Analyze corrected solution
-        const messages = await this.chatHistory.getMessages();
-        const result: RoleContent[] = [
-            { role: 'user', content: `Core Challenge: ${this.originalProblem}\n\n<INTERPRETIVE FRAMEWORK>\n"${this.assignedStrategy}"\n</INTERPRETIVE FRAMEWORK>` },
-            ...historyToRoleArray(messages),
-        ];
-
-        // Add current corrected solution to analyze
-        result.push({
-            role: 'user',
-            content: `<CORRECTED SOLUTION TO ANALYZE - Iteration ${iterationNumber}>\n${solutionToAnalyze}\n</CORRECTED SOLUTION TO ANALYZE>`
-        });
-
-        return result;
-    }
-
-    async addCritique(critique: string): Promise<void> {
-        await this.chatHistory.addMessage(new AIMessage(critique));
-    }
-
-    async addCorrectedSolution(correctedSolution: string, iterationNumber: number): Promise<void> {
-        await this.chatHistory.addMessage(
-            new HumanMessage(`Corrected Solution (Iteration ${iterationNumber}):\n${correctedSolution}`)
-        );
-    }
-
-    getIterationCount(): number {
-        return this.iterationCount;
-    }
-
-    async exportState(): Promise<any> {
-        const messages = await this.chatHistory.getMessages();
-        return {
-            systemPrompt: this.systemPrompt,
-            originalProblem: this.originalProblem,
-            assignedStrategy: this.assignedStrategy,
-            initialSolution: this.initialSolution,
-            iterationCount: this.iterationCount,
-            messages: serializeMessages(messages),
-        };
-    }
-}
-
-/**
- * Manages conversation history for Solution Correction Agent in Iterative Mode
- * NO ACTUAL CHAT HISTORY - just stores context and rebuilds prompt each time
- * All iterations: Challenge + Strategy + CurrentPool + Critique
- * The pool contains all previous corrected solutions and critiques
- */
-export class SolutionCorrectionHistoryManager {
-    private systemPrompt: string;
-    private originalProblem: string;
-    private assignedStrategy: string;
-    private initialSolution: string;
-    private initialCritique: string;
-    private iterationCount: number;
-    private subStrategyId: string;
-    private otherStrategiesSolutions: string | null;
-
-    constructor(
-        systemPrompt: string,
-        originalProblem: string,
-        assignedStrategy: string,
-        initialSolution: string,
-        initialCritique: string,
-        subStrategyId: string = '',
-        otherStrategiesSolutions: string | null = null
-    ) {
-        this.systemPrompt = systemPrompt;
-        this.originalProblem = originalProblem;
-        this.assignedStrategy = assignedStrategy;
-        this.initialSolution = initialSolution;
-        this.initialCritique = initialCritique;
-        this.iterationCount = 0;
-        this.subStrategyId = subStrategyId;
-        this.otherStrategiesSolutions = otherStrategiesSolutions;
-    }
-
-    async buildPromptForIteration(
-        _currentCritique: string,
-        iterationNumber: number,
-        currentFullPool?: string | null
-    ): Promise<Array<{ role: 'system' | 'assistant' | 'user'; content: string }>> {
-        this.iterationCount = iterationNumber;
-
-        // All iterations: Challenge + Strategy + CurrentPool (which includes Critique)
-        // NO conversation history - the pool contains everything!
-        let userPrompt = `Core Challenge: ${this.originalProblem}
-
-<INTERPRETIVE FRAMEWORK>
-"${this.assignedStrategy}"
-</INTERPRETIVE FRAMEWORK>
-
-<CURRENT FULL STRUCTURED SOLUTION POOL>
-This contains ALL solutions, critiques, corrections, and solution pools from ALL strategies.
-Your previous corrected solutions (if any) are in the pool below.
-
-${currentFullPool || this.otherStrategiesSolutions || ''}
-</CURRENT FULL STRUCTURED SOLUTION POOL>
-
-Your task: Produce a corrected solution that addresses all identified issues in the critique${iterationNumber > 1 ? ' while learning from all previous corrections and solutions in the pool' : ''}.`;
-
-        return [{ role: 'user', content: userPrompt }];
-    }
-
-    async addCorrectedSolution(_correctedSolution: string): Promise<void> {
-        // No-op: We don't store conversation history
-        // The pool itself contains all corrected solutions
-    }
-
-    async addNewCritique(_critique: string, _iterationNumber: number): Promise<void> {
-        // No-op: We don't store conversation history
-        // The pool itself contains all critiques
-    }
-
-    getIterationCount(): number {
-        return this.iterationCount;
-    }
-
-    async exportState(): Promise<any> {
-        return {
-            systemPrompt: this.systemPrompt,
-            originalProblem: this.originalProblem,
-            assignedStrategy: this.assignedStrategy,
-            initialSolution: this.initialSolution,
-            initialCritique: this.initialCritique,
-            iterationCount: this.iterationCount,
-            subStrategyId: this.subStrategyId,
-            otherStrategiesSolutions: this.otherStrategiesSolutions
-        };
-    }
-}
-
-/**
- * Stores iteration data for UI display
- */
-export interface IterativeCorrectionIteration {
-    iterationNumber: number;
+export interface BranchHistoryEntry {
+    globalIteration: number;
+    branchIteration: number;
+    branchVersion?: number;
+    label: string;
+    solution: string;
+    solutionDisplay?: string;
+    solutionFinal?: string;
     critique: string;
-    correctedSolution: string;
-    timestamp: number;
+    critiqueDisplay?: string;
+    critiqueFinal?: string;
 }
 
-/**
- * Manages conversation history for StructuredSolutionPool Agent in IterativeCorrections Mode
- * NO ACTUAL CHAT HISTORY - just stores context and rebuilds prompt each time
- * Iteration 1: Challenge + Strategy + InitializedPool + FirstCritique
- * Iteration 2+: Challenge + Strategy + FirstCritique + CurrentPool + NewCritique
- * The pool itself contains all history (previous 5-solution JSON outputs in each strategy's solution_pool field)
- */
-export class StructuredSolutionPoolHistoryManager {
-    private systemPrompt: string;
-    private originalProblem: string;
-    private assignedStrategyId: string;
-    private assignedStrategyContent: string;
-    private iterationCount: number;
-
-    constructor(
-        systemPrompt: string,
-        originalProblem: string,
-        assignedStrategyId: string,
-        assignedStrategyContent: string
-    ) {
-        this.systemPrompt = systemPrompt;
-        this.originalProblem = originalProblem;
-        this.assignedStrategyId = assignedStrategyId;
-        this.assignedStrategyContent = assignedStrategyContent;
-        this.iterationCount = 0;
-    }
-
-    async buildPromptForIteration(
-        completeStructuredSolutionPool: string,
-        _currentSolutionCritique: string,
-        iterationNumber: number
-    ): Promise<Array<{ role: 'system' | 'assistant' | 'user'; content: string }>> {
-        this.iterationCount = iterationNumber;
-
-        // Iteration 1 & 2+: Challenge + Strategy + CurrentPool (which includes LatestCritique)
-        let userPrompt = `Core Challenge: ${this.originalProblem}
-
-<YOUR ASSIGNED MAIN STRATEGY>
-Strategy ID: ${this.assignedStrategyId}
-Strategy Content: ${this.assignedStrategyContent}
-</YOUR ASSIGNED MAIN STRATEGY>
-
-<CURRENT STRUCTURED SOLUTION POOL>
-This contains ALL solutions, critiques, corrections, and solution pools from ALL strategies in JSON format.
-Your assigned strategy is identified by the Strategy ID above.
-Your previous output (if any) is stored in the "solution_pool" field of your strategy's JSON entry.
-
-${completeStructuredSolutionPool}
-</CURRENT STRUCTURED SOLUTION POOL>
-
-<YOUR CRITICAL MISSION>
-Generate EXACTLY 5 genuinely diverse, completely orthogonal solutions that:
-1. Execute YOUR assigned strategy (${this.assignedStrategyId}) faithfully
-2. Are fundamentally different from each other in approach and methodology
-3. Learn from ALL critiques and solutions across ALL strategies in the pool
-4. Address all issues identified in the latest critique (found in the "latest_critique" field or in the last iteration's "critique" field)
-5. ${iterationNumber > 1 ? 'Build upon and improve your previous solutions (visible in the "solution_pool" field of your strategy entry)' : 'Explore different corners of your strategy\'s solution space'}
-6. Include a mandatory "atomic_reconstruction" field for each solution — a 4-5 sentence standalone summary that fully captures the solution approach and conclusion
-${iterationNumber > 3 ? '\nNote: Older iterations may have been compressed for context efficiency. Use the atomic_reconstruction fields in your previous solution_pool outputs to recall earlier approaches.' : ''}
-
-Output ONLY the valid JSON object as specified in your system instructions.
-No introduction, no meta-commentary, no suggestions—just the JSON with 5 complete solution attempts.
-</YOUR CRITICAL MISSION>`;
-
-        return [{ role: 'user', content: userPrompt }];
-    }
-
-    async addPoolResponse(_poolResponse: string): Promise<void> {
-        // No-op: We don't store conversation history
-        // The pool itself contains the previous output in the solution_pool field
-    }
-
-    getIterationCount(): number {
-        return this.iterationCount;
-    }
-
-    async exportState(): Promise<any> {
-        return {
-            systemPrompt: this.systemPrompt,
-            originalProblem: this.originalProblem,
-            assignedStrategyId: this.assignedStrategyId,
-            assignedStrategyContent: this.assignedStrategyContent,
-            iterationCount: this.iterationCount
-        };
-    }
+export interface PoolHistoryEntry {
+    globalIteration: number;
+    branchIteration: number;
+    poolResponse: string;
 }
 
-/**
- * Stores the complete state for a strategy's iterative correction process
- */
-export interface IterativeCorrectionState {
+export interface PqfDecision {
     strategyId: string;
-    subStrategyId: string;
-    originalProblem: string;
-    assignedStrategy: string;
-    initialSolution: string;
-    iterations: IterativeCorrectionIteration[];
-    critiqueManager: SolutionCritiqueHistoryManager | null;
-    correctionManager: SolutionCorrectionHistoryManager | null;
-    status: 'idle' | 'processing' | 'completed' | 'error';
-    error?: string;
+    decision: 'keep' | 'update';
+    reasoning: string;
 }
 
-/**
- * Manages conversation history for PostQualityFilter Agent
- * Iteration 1: Receives all strategies with their full solutions and critiques
- * Iteration 2+: Receives conversation history + new strategies with their executions
- */
-export class PostQualityFilterHistoryManager {
-    private chatHistory: ChatMessageHistory;
-    private systemPrompt: string;
-    private originalProblem: string;
-    private seenStrategyIds: Set<string>;
+export interface StrategyUpdateRequest {
+    strategyId: string;
+    oldStrategyText: string;
+    latestSolution: string;
+    latestSolutionDisplay?: string;
+    latestSolutionFinal?: string;
+    latestCritique: string;
+    latestCritiqueDisplay?: string;
+    latestCritiqueFinal?: string;
+    memoryBank?: string;
+    pqfReasoning: string;
+}
 
-    constructor(
-        systemPrompt: string,
-        originalProblem: string
-    ) {
-        this.chatHistory = new ChatMessageHistory();
-        this.systemPrompt = systemPrompt;
-        this.originalProblem = originalProblem;
-        this.seenStrategyIds = new Set();
+export interface HypothesisRoundSnapshot {
+    roundNumber: number;
+    globalIteration: number;
+    packet: string;
+    strategyPackets: Record<string, string>;
+}
+
+function fence(label: string, content: string | undefined): string {
+    return `<${label}>\n${content || 'Not available.'}\n</${label}>`;
+}
+
+const REPOSITORY_CURRENT_CONTEXT_MARKER = '\n__DEEPTHINK_CURRENT_STRATEGY_CONTEXT__\n';
+const SECTION_SEPARATOR = '-------------------------------------------------------------------------------';
+
+function takeLast<T>(items: T[], count: number): T[] {
+    return items.slice(Math.max(0, items.length - count));
+}
+
+function formatHistoryEntries(entries: BranchHistoryEntry[]): string {
+    if (entries.length === 0) return 'No branch correction/critique history is available yet.';
+
+    return entries.map(entry => [
+        `<Iteration global="${entry.globalIteration}" branch="${entry.branchIteration}"${entry.branchVersion ? ` branchVersion="${entry.branchVersion}"` : ''} label="${entry.label}">`,
+        fence('SolutionOrCorrection', entry.solution),
+        fence('Critique', entry.critique),
+        '</Iteration>',
+    ].join('\n')).join('\n\n');
+}
+
+function formatPoolEntries(entries: PoolHistoryEntry[]): string {
+    if (entries.length === 0) return 'No previous solution pool output is available for this strategy yet.';
+
+    return entries.map(entry => [
+        `<SolutionPoolOutput global="${entry.globalIteration}" branch="${entry.branchIteration}">`,
+        entry.poolResponse?.trim() || 'No pool output available.',
+        '</SolutionPoolOutput>',
+    ].join('\n')).join('\n\n');
+}
+
+function latestSolutionOf(snapshot: StrategySnapshot): string {
+    return snapshot.latestCorrection || snapshot.latestSolution || 'No solution or correction is available.';
+}
+
+function splitRepositoryContext(repository: string): { otherContext: string; currentContext: string } {
+    const [otherContext, currentContext] = repository.split(REPOSITORY_CURRENT_CONTEXT_MARKER);
+    return {
+        otherContext: otherContext?.trim() || 'No cross-strategy context is available.',
+        currentContext: currentContext?.trim() || 'No current-strategy context is available.',
+    };
+}
+
+export function buildCritiquePrompt(args: {
+    challenge: string;
+    strategy: StrategySnapshot;
+    solutionToCritique: string;
+    globalIteration: number;
+    branchIteration: number;
+    previousHistory: BranchHistoryEntry[];
+}): PromptMessage[] {
+    const recentHistory = takeLast(args.previousHistory, 5);
+    const content = `Core Challenge:
+${args.challenge}
+
+<Assigned Strategy id="${args.strategy.id}" branchVersion="${args.strategy.branchVersion}">
+${args.strategy.strategyText}
+</Assigned Strategy>
+
+<Critique Target globalIteration="${args.globalIteration}" branchIteration="${args.branchIteration}">
+${args.solutionToCritique}
+</Critique Target>
+
+<Recent Branch History>
+${formatHistoryEntries(recentHistory)}
+</Recent Branch History>
+
+Your task is to critique the target solution only. Verify strategy fidelity first, then execution quality. Do not suggest fixes.`;
+
+    return [{ role: 'user', content }];
+}
+
+export function buildCorrectionRepository(args: {
+    current: StrategySnapshot;
+    currentHistory: BranchHistoryEntry[];
+    currentPoolHistory: PoolHistoryEntry[];
+    allStrategies: StrategySnapshot[];
+    maxHistoryEntries: number;
+}): string {
+    const currentHistory = takeLast(args.currentHistory, args.maxHistoryEntries);
+    const latestCurrentPool = takeLast(args.currentPoolHistory, 1)[0]?.poolResponse;
+
+    const otherSections = args.allStrategies
+        .filter(strategy => strategy.id !== args.current.id)
+        .map(strategy => {
+            const header = `<Strategy-${strategy.id} branchVersion="${strategy.branchVersion}">`;
+            const lines = [
+                header,
+                fence('StrategyText', strategy.strategyText),
+                fence('LatestCorrectionOrExecution', latestSolutionOf(strategy)),
+                fence('LatestCritique', strategy.latestCritique),
+            ];
+
+            lines.push(`</Strategy-${strategy.id}>`);
+            return lines.join('\n');
+        });
+
+    const currentLines = [
+        `<Strategy-${args.current.id} branchVersion="${args.current.branchVersion}" assigned="true">`,
+        fence('StrategyText', args.current.strategyText),
+    ];
+    if (args.current.memoryBank) currentLines.push(fence(`MemoryBank For Strategy ${args.current.id}`, args.current.memoryBank));
+    currentLines.push(fence('LatestCorrectionOrExecution', latestSolutionOf(args.current)));
+    currentLines.push(fence('LatestCritique', args.current.latestCritique));
+    currentLines.push(`<BranchHistory last="${args.maxHistoryEntries}">\n${formatHistoryEntries(currentHistory)}\n</BranchHistory>`);
+    currentLines.push(fence('LatestStrategySolutionPool', latestCurrentPool));
+    currentLines.push(`</Strategy-${args.current.id}>`);
+
+    return [
+        '<Context From Other Strategies For Cross-Learning, Synthesis, Gap Anticipation, Critique Anticipation, And Orthogonality>',
+        otherSections.length ? otherSections.join('\n\n') : 'No other strategy context is available.',
+        '</Context From Other Strategies For Cross-Learning, Synthesis, Gap Anticipation, Critique Anticipation, And Orthogonality>',
+        REPOSITORY_CURRENT_CONTEXT_MARKER,
+        '<Relevant Context For Your Current Strategy>',
+        'This is all the relevant context related to your current strategy. Treat this as your primary identity, branch memory, and correction anchor.',
+        SECTION_SEPARATOR,
+        currentLines.join('\n'),
+        '</Relevant Context For Your Current Strategy>',
+    ].join('\n');
+}
+
+export function buildCorrectionPrompt(args: {
+    challenge: string;
+    current: StrategySnapshot;
+    repository: string;
+    hypothesisPacket?: string;
+    globalIteration: number;
+    branchIteration: number;
+}): PromptMessage[] {
+    const repository = splitRepositoryContext(args.repository);
+    const content = `Core Challenge:
+${args.challenge}
+
+<Assigned Strategy Text>
+${args.current.strategyText}
+</Assigned Strategy Text>
+
+<EvolvingDepthFirstSearchCorrectionContext>
+Global iteration: ${args.globalIteration}
+Assigned strategy: ${args.current.id}
+Assigned branch version: ${args.current.branchVersion}
+Assigned branch-local iteration to produce: ${args.branchIteration}
+</EvolvingDepthFirstSearchCorrectionContext>
+
+<Correction Request>
+Produce the next corrected solution for the assigned strategy. Work inside the assigned strategy only. Use the current strategy's memory bank, branch history, latest critique, and latest solution pool when available. Other strategies are included only as latest correction plus latest critique for situational awareness.
+</Correction Request>
+
+${repository.otherContext}
+
+${SECTION_SEPARATOR}
+${fence('Strategy-Aware Selective Knowledge Packet', args.hypothesisPacket)}
+
+${SECTION_SEPARATOR}
+${repository.currentContext}`;
+
+    return [{ role: 'user', content }];
+}
+
+export function buildSolutionPoolRepository(args: {
+    current: StrategySnapshot;
+    currentHistory: BranchHistoryEntry[];
+    currentPoolHistory: PoolHistoryEntry[];
+    allStrategies: StrategySnapshot[];
+    maxPoolHistoryEntries: number;
+}): string {
+    const otherSections = args.allStrategies
+        .filter(strategy => strategy.id !== args.current.id)
+        .map(strategy => {
+            const header = `<Strategy-${strategy.id} branchVersion="${strategy.branchVersion}">`;
+            const lines = [
+                header,
+                fence('StrategyText', strategy.strategyText),
+                fence('LatestSolutionPool', strategy.latestPool),
+            ];
+
+            lines.push(`</Strategy-${strategy.id}>`);
+            return lines.join('\n');
+        });
+
+    const currentLines = [
+        `<Strategy-${args.current.id} branchVersion="${args.current.branchVersion}" assigned="true">`,
+        fence('StrategyText', args.current.strategyText),
+    ];
+    if (args.current.memoryBank) currentLines.push(fence(`MemoryBank For Strategy ${args.current.id}`, args.current.memoryBank));
+    currentLines.push(fence('LatestCorrectionOrExecution', latestSolutionOf(args.current)));
+    currentLines.push(fence('LatestCritique', args.current.latestCritique));
+    currentLines.push(`<PoolHistory last="${args.maxPoolHistoryEntries}">\n${formatPoolEntries(takeLast(args.currentPoolHistory, args.maxPoolHistoryEntries))}\n</PoolHistory>`);
+    if (args.currentHistory.length === 0) {
+        currentLines.push('<BranchHistory>Status: this branch has no completed correction history yet.</BranchHistory>');
     }
+    currentLines.push(`</Strategy-${args.current.id}>`);
 
-    async buildPromptForIteration(
-        strategiesWithExecutions: Array<{
-            strategyId: string;
-            strategyText: string;
-            solutionAttempt: string;
-            solutionCritique: string;
-        }>,
-        iterationNumber: number
-    ): Promise<Array<{ role: 'system' | 'assistant' | 'user'; content: string }>> {
-        const result: Array<{ role: 'system' | 'assistant' | 'user'; content: string }> = [];
+    return [
+        '<Context From Other Strategies For Cross-Learning, Synthesis, Gap Anticipation, Critique Anticipation, And Orthogonality>',
+        otherSections.length ? otherSections.join('\n\n') : 'No other strategy solution-pool context is available.',
+        '</Context From Other Strategies For Cross-Learning, Synthesis, Gap Anticipation, Critique Anticipation, And Orthogonality>',
+        REPOSITORY_CURRENT_CONTEXT_MARKER,
+        '<Relevant Context For Your Current Strategy>',
+        'This is all the relevant context related to your current strategy. Treat this as your primary identity, branch memory, and pool-generation anchor.',
+        SECTION_SEPARATOR,
+        currentLines.join('\n'),
+        '</Relevant Context For Your Current Strategy>',
+    ].join('\n');
+}
 
-        // First iteration: Send all strategies with full details
-        if (iterationNumber === 1) {
-            let userPrompt = `Core Challenge: ${this.originalProblem}\n\n`;
-            userPrompt += `<CURRENT ACTIVE STRATEGIES - Iteration ${iterationNumber}>\n`;
-            userPrompt += `Evaluate ONLY these ${strategiesWithExecutions.length} strategies listed below.\n`;
-            userPrompt += `For each strategy, decide: KEEP (strategy is good, continue as-is) or UPDATE (strategy is flawed, needs replacement).\n\n`;
-            userPrompt += `A strategy should be marked UPDATE if:\n`;
-            userPrompt += `- The execution shows it's severely flawed or way too complex\n`;
-            userPrompt += `- It's completely meaningless or off-topic\n`;
-            userPrompt += `- It doesn't fit the problem description\n`;
-            userPrompt += `- The critique shows fundamental issues that can't be fixed by execution alone\n\n`;
+export function buildSolutionPoolPrompt(args: {
+    challenge: string;
+    current: StrategySnapshot;
+    repository: string;
+    hypothesisPacket?: string;
+    globalIteration: number;
+    branchIteration: number;
+}): PromptMessage[] {
+    const repository = splitRepositoryContext(args.repository);
+    const content = `Core Challenge:
+${args.challenge}
 
-            strategiesWithExecutions.forEach((strategy) => {
-                userPrompt += `\n<Strategy ID: ${strategy.strategyId}>\n`;
-                userPrompt += `Strategy: ${strategy.strategyText}\n\n`;
-                userPrompt += `Full Solution:\n${strategy.solutionAttempt}\n\n`;
-                userPrompt += `Solution Critique:\n${strategy.solutionCritique}\n`;
-                userPrompt += `</Strategy ID: ${strategy.strategyId}>\n`;
+<Assigned Strategy Text>
+${args.current.strategyText}
+</Assigned Strategy Text>
 
-                // Mark as seen to prevent sending again
-                this.seenStrategyIds.add(strategy.strategyId);
+<EvolvingDepthFirstSearchSolutionPoolContext>
+Global iteration: ${args.globalIteration}
+Assigned strategy: ${args.current.id}
+Assigned branch version: ${args.current.branchVersion}
+Current branch-local iteration: ${args.branchIteration}
+</EvolvingDepthFirstSearchSolutionPoolContext>
+
+<Solution Pool Request>
+Generate the solution pool for the assigned strategy. Use only the assigned strategy's latest correction/execution, latest critique, memory bank if present, and last solution pool outputs for the assigned strategy. Other strategies are represented only by their latest full pool outputs.
+</Solution Pool Request>
+
+${repository.otherContext}
+
+${SECTION_SEPARATOR}
+${fence('Strategy-Aware Selective Knowledge Packet', args.hypothesisPacket)}
+
+${SECTION_SEPARATOR}
+${repository.currentContext}`;
+
+    return [{ role: 'user', content }];
+}
+
+export function buildMemoryBankPrompt(args: {
+    challenge: string;
+    strategy: StrategySnapshot;
+    previousMemoryBank?: string;
+    historyWindow: BranchHistoryEntry[];
+    windowStartBranchIteration: number;
+    windowEndBranchIteration: number;
+}): PromptMessage[] {
+    const content = `Core Challenge:
+${args.challenge}
+
+<Strategy id="${args.strategy.id}" branchVersion="${args.strategy.branchVersion}">
+${args.strategy.strategyText}
+</Strategy>
+
+${fence('Previous Memory Bank', args.previousMemoryBank)}
+
+<Raw Branch History To Distill branchIterations="${args.windowStartBranchIteration}-${args.windowEndBranchIteration}">
+${formatHistoryEntries(args.historyWindow)}
+</Raw Branch History To Distill>
+
+Create one unified memory bank for this strategy branch. Do not summarize the prose of solutions. Summarize the exploration space:
+- Validated Invariants
+- Dead Ends
+- Persistent Flaws
+- Useful Techniques
+- Refuted Assumptions
+- Open Questions
+- Branch-Level Guidance For Future Corrections
+
+If a previous memory bank is provided, recursively merge it with the new raw history so no earlier lessons are lost.`;
+
+    return [{ role: 'user', content }];
+}
+
+export function buildPqfPrompt(args: {
+    challenge: string;
+    groupIndex: number;
+    groupCount: number;
+    strategiesInGroup: StrategySnapshot[];
+    allActiveStrategies: StrategySnapshot[];
+    historyByStrategy: Record<string, BranchHistoryEntry[]>;
+    aggressiveness: string;
+}): PromptMessage[] {
+    const visibleStrategyNames = args.allActiveStrategies
+        .map(strategy => `${strategy.id}: ${strategy.strategyText}`)
+        .join('\n\n');
+
+    const strategySections = args.strategiesInGroup.map(strategy => [
+        `<StrategyForDecision id="${strategy.id}" branchVersion="${strategy.branchVersion}">`,
+        fence('StrategyText', strategy.strategyText),
+        `<FullRecentCorrectionCritiqueHistory>\n${formatHistoryEntries(args.historyByStrategy[strategy.id] || [])}\n</FullRecentCorrectionCritiqueHistory>`,
+        '</StrategyForDecision>',
+    ].join('\n')).join('\n\n');
+
+    const content = `Core Challenge:
+${args.challenge}
+
+<PQFAggressiveness>${args.aggressiveness}</PQFAggressiveness>
+
+<All Active Strategies For Awareness>
+${visibleStrategyNames}
+</All Active Strategies For Awareness>
+
+<PQF Group group="${args.groupIndex + 1}" totalGroups="${args.groupCount}">
+Evaluate only the strategies inside this group. You see full recent correction/critique history for these strategies only.
+${strategySections}
+</PQF Group>
+
+Return only JSON:
+{
+  "analysis_summary": "short summary",
+  "strategies": [
+    {
+      "strategy_id": "main1",
+      "decision": "keep",
+      "reasoning": "evidence-based reason"
+    }
+  ]
+}
+
+Decision must be exactly "keep" or "update". Mark update only when the branch's strategy should be replaced by a new branch, not when ordinary correction can fix execution errors.`;
+
+    return [{ role: 'user', content }];
+}
+
+export function buildStrategyUpdatePrompt(args: {
+    challenge: string;
+    decisionVector: PqfDecision[];
+    allCurrentStrategies: StrategySnapshot[];
+    previousStrategies: StrategySnapshot[];
+    updateRequests: StrategyUpdateRequest[];
+}): PromptMessage[] {
+    const allCurrent = args.allCurrentStrategies.map(strategy => `${strategy.id} (v${strategy.branchVersion}): ${strategy.strategyText}`).join('\n\n');
+    const previous = args.previousStrategies.length
+        ? args.previousStrategies.map(strategy => `${strategy.id} (v${strategy.branchVersion}, replaced at global ${strategy.replacedAtGlobalIteration ?? 'unknown'}): ${strategy.strategyText}`).join('\n\n')
+        : 'No prior replaced strategies yet.';
+
+    const failedContext = args.updateRequests.map(request => [
+        `<UpdateRequest strategyId="${request.strategyId}">`,
+        fence('Old Strategy Text', request.oldStrategyText),
+        fence('PQF Reasoning', request.pqfReasoning),
+        fence('Latest Correction Or Execution', request.latestSolution),
+        fence('Latest Critique', request.latestCritique),
+        fence('Memory Bank', request.memoryBank),
+        '</UpdateRequest>',
+    ].join('\n')).join('\n\n');
+
+    const content = `Core Challenge:
+${args.challenge}
+
+<Consolidated PQF Decision Vector>
+${JSON.stringify(args.decisionVector, null, 2)}
+</Consolidated PQF Decision Vector>
+
+<Current Active Strategies>
+${allCurrent}
+</Current Active Strategies>
+
+<Previously Replaced Strategies To Avoid Repeating>
+${previous}
+</Previously Replaced Strategies To Avoid Repeating>
+
+<Failed Strategy Context For Updates>
+${failedContext}
+</Failed Strategy Context For Updates>
+
+Generate exactly one replacement strategy for every strategy marked "update". Keep the same strategy_id slot, but the text must be a genuinely new branch that avoids the failed strategy's conceptual trap.
+
+Return only JSON:
+{
+  "strategies": [
+    {
+      "strategy_id": "main1",
+      "strategy": "Replacement strategy text"
+    }
+  ]
+}`;
+
+    return [{ role: 'user', content }];
+}
+
+export function buildHypothesisRefreshPrompt(args: {
+    challenge: string;
+    hypothesisCount: number;
+    completedGlobalIteration: number;
+    previousRounds: HypothesisRoundSnapshot[];
+    currentStrategies: StrategySnapshot[];
+    recentHistoryByStrategy: Record<string, BranchHistoryEntry[]>;
+    updatedStrategyIds: string[];
+}): PromptMessage[] {
+    const strategyIds = Array.from(new Set([
+        ...args.currentStrategies.map(strategy => strategy.id),
+        ...args.previousRounds.flatMap(round => Object.keys(round.strategyPackets || {})),
+    ]));
+
+    const formatMappings = (round: HypothesisRoundSnapshot): string => {
+        const byStrategy = new Map<string, string[]>();
+        strategyIds.forEach(id => byStrategy.set(id, []));
+
+        const packetRegex = /<Hypothesis\s+(\d+)>\s*[\s\S]*?Target Strategies:\s*([^\n]+)[\s\S]*?<\/Hypothesis\s+\d+>/g;
+        let packetMatch: RegExpExecArray | null;
+        while ((packetMatch = packetRegex.exec(round.packet || '')) !== null) {
+            const label = `Hypothesis ${packetMatch[1]}`;
+            const rawTargets = packetMatch[2].trim();
+            const targets = rawTargets.toLowerCase() === 'all'
+                ? strategyIds
+                : rawTargets.split(',').map(target => target.trim()).filter(Boolean);
+            targets.forEach(target => {
+                if (!byStrategy.has(target)) byStrategy.set(target, []);
+                byStrategy.get(target)!.push(label);
             });
-
-            userPrompt += `\n</CURRENT ACTIVE STRATEGIES>\n\n`;
-            userPrompt += `**IMPORTANT**: Return decisions ONLY for the ${strategiesWithExecutions.length} strategies listed above.\n`;
-            userPrompt += `Strategy IDs to evaluate: ${strategiesWithExecutions.map(s => s.strategyId).join(', ')}\n`;
-            userPrompt += `For each strategy, output: \"decision\": \"keep\" or \"decision\": \"update\"`;
-
-            result.push({ role: 'user', content: userPrompt });
-            return result;
         }
 
-        // Subsequent iterations: Send conversation history + new strategies only
-        const messages = await this.chatHistory.getMessages();
-        result.push(...historyToRoleArray(messages));
-
-        // Filter to ONLY NEW strategies (not seen before)
-        const newStrategies = strategiesWithExecutions.filter(s => !this.seenStrategyIds.has(s.strategyId));
-
-        if (newStrategies.length === 0) {
-            // All strategies already seen - just send a status update
-            let userPrompt = `<ITERATION ${iterationNumber} - NO NEW STRATEGIES>\n`;
-            userPrompt += `All ${strategiesWithExecutions.length} current active strategies were already evaluated in previous iterations.\n`;
-            userPrompt += `Active strategies: ${strategiesWithExecutions.map(s => s.strategyId).join(', ')}\n`;
-            userPrompt += `Do NOT re-evaluate these. They are already marked as KEEP.\n`;
-            userPrompt += `</ITERATION ${iterationNumber}>`;
-            result.push({ role: 'user', content: userPrompt });
-            return result;
+        if ([...byStrategy.values()].every(items => items.length === 0)) {
+            Object.entries(round.strategyPackets || {}).forEach(([strategyId, packet]) => {
+                const labels = Array.from(packet.matchAll(/<Hypothesis\s+([^>]+)>/g)).map(match => `Hypothesis ${match[1]}`);
+                byStrategy.set(strategyId, labels);
+            });
         }
 
-        // Build list of ALL current active strategies (for context)
-        const allActiveIds = strategiesWithExecutions.map(s => s.strategyId);
-        const keptFromBefore = strategiesWithExecutions.filter(s => this.seenStrategyIds.has(s.strategyId)).map(s => s.strategyId);
+        return strategyIds.map(strategyId => {
+            const labels = byStrategy.get(strategyId) || [];
+            return `${strategyId}: ${labels.length ? labels.join(', ') : 'None'}`;
+        }).join('\n');
+    };
 
-        // Add ONLY new strategies with their executions
-        let userPrompt = `<CURRENT ACTIVE STRATEGIES - Iteration ${iterationNumber}>\n`;
-        userPrompt += `Total active strategies: ${allActiveIds.length}\n`;
-        userPrompt += `- Already evaluated (KEPT from before): ${keptFromBefore.join(', ')}\n`;
-        userPrompt += `- UPDATED strategies to evaluate now: ${newStrategies.map(s => s.strategyId).join(', ')}\n\n`;
+    const previous = args.previousRounds.length
+        ? args.previousRounds.map(round => [
+            `<HypothesisRound round="${round.roundNumber}" globalIteration="${round.globalIteration}">`,
+            round.packet,
+            '<Resolved Hypothesis Mappings>',
+            formatMappings(round),
+            '</Resolved Hypothesis Mappings>',
+            '</HypothesisRound>',
+        ].join('\n')).join('\n\n')
+        : 'No previous hypothesis rounds are available.';
 
-        userPrompt += `**YOUR TASK**: Evaluate ONLY the ${newStrategies.length} UPDATED strategies listed below.\n`;
-        userPrompt += `These strategies were updated based on previous feedback. Decide if they should be KEPT or need another UPDATE.\n`;
-        userPrompt += `Do NOT re-evaluate or mention the already-kept strategies in your decision output.\n\n`;
+    const strategies = args.currentStrategies.map(strategy => [
+        `<Strategy id="${strategy.id}" branchVersion="${strategy.branchVersion}">`,
+        fence('StrategyText', strategy.strategyText),
+        `<LastTwoCorrectionCritiquePairs>\n${formatHistoryEntries(args.recentHistoryByStrategy[strategy.id] || [])}\n</LastTwoCorrectionCritiquePairs>`,
+        '</Strategy>',
+    ].join('\n')).join('\n\n');
 
-        newStrategies.forEach((strategy) => {
-            userPrompt += `\n<Strategy ID: ${strategy.strategyId}>\n`;
-            userPrompt += `Strategy: ${strategy.strategyText}\n\n`;
-            userPrompt += `Full Solution:\n${strategy.solutionAttempt}\n\n`;
-            userPrompt += `Solution Critique:\n${strategy.solutionCritique}\n`;
-            userPrompt += `</Strategy ID: ${strategy.strategyId}>\n`;
+    const updateNote = args.updatedStrategyIds.length
+        ? `Strategies recently updated and needing fresh targeted hypotheses: ${args.updatedStrategyIds.join(', ')}. Flush old slot-specific assumptions for these strategies.`
+        : 'No strategies were recently updated.';
 
-            // Mark as seen
-            this.seenStrategyIds.add(strategy.strategyId);
-        });
+    const content = `Core Challenge:
+${args.challenge}
 
-        userPrompt += `\n</CURRENT ACTIVE STRATEGIES>\n\n`;
-        userPrompt += `**CRITICAL**: Return decisions ONLY for these ${newStrategies.length} UPDATED strategies: ${newStrategies.map(s => s.strategyId).join(', ')}\n`;
-        userPrompt += `Do NOT include decisions for already-kept strategies: ${keptFromBefore.join(', ')}\n`;
-        userPrompt += `For each strategy, output: \"decision\": \"keep\" or \"decision\": \"update\"`;
+<Hypothesis Heartbeat>
+Completed global iteration: ${args.completedGlobalIteration}
+Generate exactly ${args.hypothesisCount} new or updated hypotheses.
+Mode: selective, strategy-aware routing only.
+</Hypothesis Heartbeat>
 
-        result.push({ role: 'user', content: userPrompt });
+<Previous Hypotheses And Testing Packets>
+${previous}
+</Previous Hypotheses And Testing Packets>
 
-        return result;
+<Current Active Strategies And Last Two Histories>
+${strategies}
+</Current Active Strategies And Last Two Histories>
+
+<Strategy Update Note>
+${updateNote}
+</Strategy Update Note>
+
+Return only JSON:
+{
+  "hypotheses": [
+    {
+      "text": "Hypothesis text",
+      "target_strategies": ["main1"]
     }
-
-    async addFilterDecision(filterResponse: string, userPrompt: string): Promise<void> {
-        // Add the user prompt first (the strategies we sent)
-        await this.chatHistory.addMessage(new HumanMessage(userPrompt));
-        // Then add the AI's filtering decision
-        await this.chatHistory.addMessage(new AIMessage(filterResponse));
-    }
-
-    markStrategiesAsUpdated(strategyIds: string[]): void {
-        // Remove updated strategies from seen set so they're re-evaluated in next iteration
-        strategyIds.forEach(id => {
-            const cleanId = String(id).trim().toLowerCase();
-            this.seenStrategyIds.delete(cleanId);
-        });
-    }
-
-    async exportState(): Promise<any> {
-        const messages = await this.chatHistory.getMessages();
-        return {
-            systemPrompt: this.systemPrompt,
-            originalProblem: this.originalProblem,
-            messages: serializeMessages(messages),
-        };
-    }
+  ]
 }
 
-/**
- * Manages conversation history for Strategies Generator Agent
- * Maintains history of what strategies were pruned/continued
- */
-export class StrategiesGeneratorHistoryManager {
-    private chatHistory: ChatMessageHistory;
-    private systemPrompt: string;
-    private originalProblem: string;
+Use empty target_strategies only for globally useful hypotheses. Do not solve the original challenge or embed assumed final answers.`;
 
+    return [{ role: 'user', content }];
+}
+
+export class SolutionCritiqueHistoryManager {
     constructor(
-        systemPrompt: string,
-        originalProblem: string
-    ) {
-        this.chatHistory = new ChatMessageHistory();
-        this.systemPrompt = systemPrompt;
-        this.originalProblem = originalProblem;
+        _systemPrompt: string,
+        private challenge: string,
+        private strategyText: string,
+        private initialSolution: string
+    ) { }
+
+    buildPromptForIteration(solutionToAnalyze: string, iterationNumber: number): Promise<PromptMessage[]> {
+        return Promise.resolve(buildCritiquePrompt({
+            challenge: this.challenge,
+            strategy: {
+                id: 'assigned',
+                strategyText: this.strategyText,
+                slotIndex: 0,
+                branchVersion: 1,
+                branchIterationCount: iterationNumber,
+                globalIteration: iterationNumber,
+                latestSolution: this.initialSolution,
+            },
+            solutionToCritique: solutionToAnalyze,
+            globalIteration: iterationNumber,
+            branchIteration: iterationNumber,
+            previousHistory: [],
+        }));
     }
 
-    async buildPromptForGeneration(
-        numStrategiesToGenerate: number,
-        prunedStrategyIds: string[],
-        continuedStrategyIds: string[],
-        iterationNumber: number
-    ): Promise<Array<{ role: 'system' | 'assistant' | 'user'; content: string }>> {
-        const result: Array<{ role: 'system' | 'assistant' | 'user'; content: string }> = [];
+    addCritique(_critique: string): Promise<void> { return Promise.resolve(); }
+    addCorrectedSolution(_correctedSolution: string, _iterationNumber: number): Promise<void> { return Promise.resolve(); }
+    getIterationCount(): number { return 0; }
+    exportState(): Promise<Record<string, unknown>> { return Promise.resolve({ challenge: this.challenge, strategyText: this.strategyText }); }
+}
 
-        // Add conversation history
-        const messages = await this.chatHistory.getMessages();
-        result.push(...historyToRoleArray(messages));
+export class SolutionCorrectionHistoryManager {
+    constructor(
+        _systemPrompt: string,
+        private challenge: string,
+        private strategyText: string,
+        private initialSolution: string,
+        private initialCritique: string,
+        private strategyId = 'assigned',
+        private repository: string | null = null
+    ) { }
 
-        // Build new prompt
-        let userPrompt = `Core Challenge: ${this.originalProblem}\n\n`;
-        userPrompt += `<FEEDBACK FROM POST QUALITY FILTER - Iteration ${iterationNumber}>\n`;
-        userPrompt += `The PostQualityFilter agent has evaluated your strategies based on their execution and critique.\n\n`;
-
-        if (prunedStrategyIds.length > 0) {
-            userPrompt += `Strategies that need UPDATE (flawed execution): ${prunedStrategyIds.join(', ')}\n`;
-            userPrompt += `These strategies have been executed and critiqued, but they show fundamental issues:\n`;
-            userPrompt += `- Severely flawed or way too complex to execute properly\n`;
-            userPrompt += `- Completely meaningless or off-topic\n`;
-            userPrompt += `- Don't fit the problem description\n`;
-            userPrompt += `- Have issues that can't be fixed by execution alone\n\n`;
-        }
-
-        if (continuedStrategyIds.length > 0) {
-            userPrompt += `Strategies that are KEPT (working well): ${continuedStrategyIds.join(', ')}\n`;
-        }
-
-        userPrompt += `\n</FEEDBACK FROM POST QUALITY FILTER>\n\n`;
-        userPrompt += `<YOUR TASK>\n`;
-        userPrompt += `UPDATE the ${numStrategiesToGenerate} flawed ${numStrategiesToGenerate === 1 ? 'strategy' : 'strategies'} listed above (${prunedStrategyIds.join(', ')}).\n`;
-        userPrompt += `For each strategy ID that needs update, provide a REPLACEMENT strategy that:\n`;
-        userPrompt += `- Fixes the fundamental flaws identified in the execution/critique\n`;
-        userPrompt += `- Takes a completely different approach if the original was off-topic or meaningless\n`;
-        userPrompt += `- Simplifies if the original was too complex\n`;
-        userPrompt += `- Better fits the problem description\n\n`;
-
-        userPrompt += `**CRITICAL**: Your updated strategies will REPLACE the old ones under the SAME IDs.\n`;
-        userPrompt += `Output the updated strategies using the EXACT SAME IDs: ${prunedStrategyIds.join(', ')}\n`;
-        userPrompt += `Do NOT create new IDs. Keep the same IDs so the strategies update in-place.\n`;
-        userPrompt += `</YOUR TASK>`;
-
-        result.push({ role: 'user', content: userPrompt });
-        return result;
+    buildPromptForIteration(_currentCritique: string, iterationNumber: number, currentRepository?: string | null): Promise<PromptMessage[]> {
+        return Promise.resolve(buildCorrectionPrompt({
+            challenge: this.challenge,
+            current: {
+                id: this.strategyId,
+                strategyText: this.strategyText,
+                slotIndex: 0,
+                branchVersion: 1,
+                branchIterationCount: iterationNumber,
+                globalIteration: iterationNumber,
+                latestSolution: this.initialSolution,
+                latestCritique: this.initialCritique,
+            },
+            repository: currentRepository || this.repository || '',
+            globalIteration: iterationNumber,
+            branchIteration: iterationNumber,
+        }));
     }
 
-    async addGeneratedStrategies(strategiesResponse: string, userPrompt: string): Promise<void> {
-        // Add user prompt first, then AI response (proper conversation flow)
-        await this.chatHistory.addMessage(new HumanMessage(userPrompt));
-        await this.chatHistory.addMessage(new AIMessage(strategiesResponse));
+    addCorrectedSolution(_correctedSolution: string): Promise<void> { return Promise.resolve(); }
+    addNewCritique(_critique: string, _iterationNumber: number): Promise<void> { return Promise.resolve(); }
+    getIterationCount(): number { return 0; }
+    exportState(): Promise<Record<string, unknown>> { return Promise.resolve({ challenge: this.challenge, strategyId: this.strategyId }); }
+}
+
+export class StructuredSolutionPoolHistoryManager {
+    constructor(
+        _systemPrompt: string,
+        private challenge: string,
+        private strategyId: string,
+        private strategyText: string
+    ) { }
+
+    buildPromptForIteration(repository: string, _currentCritique: string, iterationNumber: number): Promise<PromptMessage[]> {
+        return Promise.resolve(buildSolutionPoolPrompt({
+            challenge: this.challenge,
+            current: {
+                id: this.strategyId,
+                strategyText: this.strategyText,
+                slotIndex: 0,
+                branchVersion: 1,
+                branchIterationCount: iterationNumber,
+                globalIteration: iterationNumber,
+            },
+            repository,
+            globalIteration: iterationNumber,
+            branchIteration: iterationNumber,
+        }));
     }
 
-    async exportState(): Promise<any> {
-        const messages = await this.chatHistory.getMessages();
-        return {
-            systemPrompt: this.systemPrompt,
-            originalProblem: this.originalProblem,
-            messages: serializeMessages(messages),
-        };
+    addPoolResponse(_poolResponse: string): Promise<void> { return Promise.resolve(); }
+    getIterationCount(): number { return 0; }
+    exportState(): Promise<Record<string, unknown>> { return Promise.resolve({ challenge: this.challenge, strategyId: this.strategyId }); }
+}
+
+export class PostQualityFilterHistoryManager {
+    constructor(_systemPrompt: string, private challenge: string) { }
+    buildPromptForIteration(): Promise<PromptMessage[]> {
+        return Promise.resolve([{ role: 'user', content: `Core Challenge:\n${this.challenge}` }]);
     }
+    addFilterDecision(_filterResponse: string, _userPrompt: string): Promise<void> { return Promise.resolve(); }
+    markStrategiesAsUpdated(_strategyIds: string[]): void { }
+    exportState(): Promise<Record<string, unknown>> { return Promise.resolve({ challenge: this.challenge }); }
+}
+
+export class StrategiesGeneratorHistoryManager {
+    constructor(_systemPrompt: string, private challenge: string) { }
+    buildPromptForGeneration(): Promise<PromptMessage[]> {
+        return Promise.resolve([{ role: 'user', content: `Core Challenge:\n${this.challenge}` }]);
+    }
+    addGeneratedStrategies(_strategiesResponse: string, _userPrompt: string): Promise<void> { return Promise.resolve(); }
+    exportState(): Promise<Record<string, unknown>> { return Promise.resolve({ challenge: this.challenge }); }
 }

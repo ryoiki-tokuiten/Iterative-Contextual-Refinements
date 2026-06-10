@@ -9,7 +9,7 @@ interface ContextualPromptsContentProps {
 
 /**
  * Contextual Mode Prompts Content
- * Prompts for Contextual/Iterative Corrections mode
+ * Prompts for Contextual correction mode
  */
 export const ContextualPromptsContent: React.FC<ContextualPromptsContentProps> = ({ manager }) => {
     const [prompts, setPrompts] = useState<CustomizablePromptsContextual>(() => manager.getPrompts() || createDefaultCustomPromptsContextual());

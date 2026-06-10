@@ -18,7 +18,15 @@ export function getGeminiCodeExecutionEnabled(): boolean {
     return globalState.geminiCodeExecutionEnabled;
 }
 
+export function getPythonToolExecutionEnabled(): boolean {
+    return globalState.geminiCodeExecutionEnabled;
+}
+
 export function setGeminiCodeExecutionEnabled(enabled: boolean): void {
+    globalState.geminiCodeExecutionEnabled = enabled;
+}
+
+export function setPythonToolExecutionEnabled(enabled: boolean): void {
     globalState.geminiCodeExecutionEnabled = enabled;
 }
 
@@ -35,7 +43,7 @@ export function isContextualMode(mode: string): boolean {
 }
 
 export function shouldShowCodeExecutionToggle(currentMode: string): boolean {
-    return isContextualMode(currentMode) && isGeminiProvider();
+    return isContextualMode(currentMode);
 }
 
 export function setToggleChecked(checked: boolean): void {
@@ -77,7 +85,6 @@ export function updateCodeExecutionToggleVisibility(currentMode: string): void {
     console.log('[Code Execution] Visibility updated:', {
         currentMode,
         provider: getCurrentProvider(),
-        isGeminiProvider: isGeminiProvider(),
         shouldShow
     });
 }

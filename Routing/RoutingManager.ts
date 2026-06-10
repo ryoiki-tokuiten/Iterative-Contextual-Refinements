@@ -169,8 +169,8 @@ export class RoutingManager {
         return this.modelConfigManager.getHypothesisCount();
     }
 
-    public getRedTeamAggressiveness(): string {
-        return this.modelConfigManager.getRedTeamAggressiveness();
+    public getPqfAggressiveness(): string {
+        return this.modelConfigManager.getPqfAggressiveness();
     }
 
     public isRefinementEnabled(): boolean {
@@ -189,12 +189,12 @@ export class RoutingManager {
         return this.modelConfigManager.isShareHypothesesToDissected();
     }
 
-    public isIterativeCorrectionsEnabled(): boolean {
-        return this.modelConfigManager.isIterativeCorrectionsEnabled();
+    public isEvolvingDfsEnabled(): boolean {
+        return this.modelConfigManager.isEvolvingDfsEnabled();
     }
 
-    public getIterativeDepth(): number {
-        return this.modelConfigManager.getIterativeDepth();
+    public getEvolvingDfsDepth(): number {
+        return this.modelConfigManager.getEvolvingDfsDepth();
     }
 
     public isProvideAllSolutionsToCorrectors(): boolean {

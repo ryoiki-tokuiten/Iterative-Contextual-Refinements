@@ -111,79 +111,11 @@ export function downloadSolutionPoolAsJSON(pipelineId: string): void {
 // Data Extraction Helpers (consumed by React components)
 // ═══════════════════════════════════════════════════════════════════════
 
-export interface AtomicEntry {
-    title: string;
-    reconstruction: string;
-    confidence: number;
-}
-
-export interface AtomicGroup {
-    iterationTitle: string;
-    atomics: AtomicEntry[];
-}
-
 /** Computes the iteration count for the solution pool tab grid. */
 export function computeIterationCount(process: DeepthinkPipelineState): number {
-    const surviving = process.initialStrategies.filter(s => !s.isKilledByRedTeam);
-    const maxCritiques = surviving.reduce((max, strategy) => {
+    const maxCritiques = process.initialStrategies.reduce((max, strategy) => {
         const count = process.solutionCritiques.filter(c => c.mainStrategyId === strategy.id).length;
         return Math.max(max, count);
     }, 0);
     return Math.max(maxCritiques, 1);
-}
-
-/**
- * Extracts atomic reconstruction groups for the full repository view
- * of a given strategy within a pipeline.
- */
-export function extractAtomicGroups(
-    pipelineId: string,
-    strategyId: string,
-    parsedPool: SolutionPoolParsedResponse | null
-): AtomicGroup[] {
-    const versions = getSolutionPoolVersions(pipelineId);
-    const groups: AtomicGroup[] = [];
-
-    if (versions && versions.length > 1) {
-        // Use historical versions (all whole-integer iterations except the latest)
-        const wholeIterVersions = versions.filter(v => {
-            const match = v.title.match(/Iteration\s+([\d.]+)/);
-            if (!match) return false;
-            const num = parseFloat(match[1]);
-            return num >= 1 && Number.isInteger(num);
-        });
-        const pastVersions = wholeIterVersions.slice(0, Math.max(0, wholeIterVersions.length - 1));
-
-        pastVersions.forEach((version, vIdx) => {
-            try {
-                const versionData = JSON.parse(version.content);
-                const strat = versionData.strategies?.find((s: any) => s.strategy_id === strategyId);
-                if (strat?.solution_pool?.solutions) {
-                    const atomics = strat.solution_pool.solutions
-                        .filter((s: any) => s.atomic_reconstruction)
-                        .map((s: any, idx: number) => ({
-                            title: s.title || `Solution ${idx + 1}`,
-                            reconstruction: s.atomic_reconstruction,
-                            confidence: typeof s.confidence === 'number' ? s.confidence : 0.5,
-                        }));
-                    if (atomics.length > 0) {
-                        groups.push({ iterationTitle: version.title || `Pool ${vIdx + 1}`, atomics });
-                    }
-                }
-            } catch { /* skip unparseable versions */ }
-        });
-    } else if (parsedPool?.solutions) {
-        const atomics = parsedPool.solutions
-            .filter(s => s.atomic_reconstruction)
-            .map((s, idx) => ({
-                title: s.title || `Solution ${idx + 1}`,
-                reconstruction: s.atomic_reconstruction!,
-                confidence: s.confidence,
-            }));
-        if (atomics.length > 0) {
-            groups.push({ iterationTitle: 'Latest Pool', atomics });
-        }
-    }
-
-    return groups;
 }

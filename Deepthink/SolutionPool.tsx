@@ -15,8 +15,6 @@ import {
 import {
     SolutionPoolParsedSolution,
     SolutionPoolParsedResponse,
-    AtomicGroup,
-    extractAtomicGroups,
     computeIterationCount,
 } from './SolutionPool';
 import RenderMathMarkdown from '../Styles/Components/RenderMathMarkdown';
@@ -67,17 +65,13 @@ const SolutionCard: React.FC<{ solution: SolutionPoolParsedSolution; index: numb
             <ConfidenceBadge confidence={solution.confidence} />
         </div>
 
-        {solution.approach_summary && (
-            <p className="sp-approach-summary">{solution.approach_summary}</p>
-        )}
-
         <div className="sp-card-content-wrapper">
             <RenderMathMarkdown content={solution.content || ''} className="sp-card-content" />
         </div>
 
-        {solution.atomic_reconstruction && (
-            <Collapsible toggleClassName="sp-critique-toggle sp-atomic-toggle" icon="fingerprint" label="Atomic Reconstruction">
-                <RenderMathMarkdown content={solution.atomic_reconstruction} className="sp-atomic-body" />
+        {solution.key_insights && (
+            <Collapsible toggleClassName="sp-critique-toggle" icon="tips_and_updates" label="Key Insights">
+                <RenderMathMarkdown content={solution.key_insights} />
             </Collapsible>
         )}
 
@@ -161,10 +155,10 @@ const SolutionPoolModalContent: React.FC<{
                         {data.solutions.map((s: any, i: number) => (
                             <SolutionCard key={i} index={i} solution={{
                                 title: s.title || `Solution ${i + 1}`,
-                                approach_summary: s.approach_summary || '',
                                 content: s.content || '',
                                 confidence: typeof s.confidence === 'number' ? s.confidence : 0.5,
                                 internal_critique: s.internal_critique || '',
+                                key_insights: s.key_insights || '',
                             }} />
                         ))}
                     </div>
@@ -193,30 +187,106 @@ const PoolLabel: React.FC<{ icon: string; text: string; className?: string }> = 
     </div>
 );
 
-const AtomicList: React.FC<{ groups: AtomicGroup[] }> = ({ groups }) => (
-    <div className="sp-atomic-list">
-        {groups.map((group, gi) => (
-            <div key={gi} className="sp-atomic-iteration-group">
-                <div className="sp-atomic-iteration-title">{group.iterationTitle}</div>
-                {group.atomics.map((item, ai) => (
-                    <div key={ai} className="sp-atomic-entry">
-                        <div className="sp-atomic-entry-header">
-                            <span className="sp-atomic-entry-title">{item.title}</span>
-                            <ConfidenceBadge confidence={item.confidence} />
+type BranchCard = {
+    key: string;
+    strategyId: string;
+    branchVersion: number;
+    label: string;
+    strategyText: string;
+    isActive: boolean;
+    replacedAt?: number;
+    memoryBank?: string;
+};
+
+function buildBranchCards(process: DeepthinkPipelineState): BranchCard[] {
+    return process.initialStrategies.flatMap((strategy, strategyIndex) => {
+        const history = (strategy.replacementHistory || []).map(record => ({
+            key: `${strategy.id}-v${record.previousBranchVersion}`,
+            strategyId: strategy.id,
+            branchVersion: record.previousBranchVersion,
+            label: `${strategy.id.toUpperCase()} · Branch v${record.previousBranchVersion}`,
+            strategyText: record.previousStrategyText,
+            isActive: false,
+            replacedAt: record.replacedAtGlobalIteration,
+            memoryBank: record.memoryBank,
+        }));
+
+        return [
+            ...history,
+            {
+                key: `${strategy.id}-v${strategy.branchVersion || 1}-active-${strategyIndex}`,
+                strategyId: strategy.id,
+                branchVersion: strategy.branchVersion || 1,
+                label: `${strategy.id.toUpperCase()} · Branch v${strategy.branchVersion || 1}`,
+                strategyText: strategy.strategyText,
+                isActive: true,
+                memoryBank: strategy.memoryBank,
+            },
+        ];
+    });
+}
+
+const MemoryBankStrip: React.FC<{ branches: BranchCard[]; process: DeepthinkPipelineState }> = ({ branches, process }) => {
+    const memoryByBranch = new Map<string, BranchCard & { sourceIteration?: number }>();
+
+    branches.forEach(branch => {
+        if (branch.memoryBank?.trim()) {
+            memoryByBranch.set(`${branch.strategyId}-v${branch.branchVersion}`, branch);
+        }
+    });
+
+    (process.memoryBankAgents || []).forEach(agent => {
+        if (!agent.memoryBank?.trim()) return;
+        const branchVersion = agent.branchVersion || 1;
+        const key = `${agent.mainStrategyId}-v${branchVersion}`;
+        const existing = memoryByBranch.get(key);
+        memoryByBranch.set(key, {
+            key,
+            strategyId: agent.mainStrategyId,
+            branchVersion,
+            label: `${agent.mainStrategyId.toUpperCase()} · Branch v${branchVersion}`,
+            strategyText: existing?.strategyText || '',
+            isActive: existing?.isActive ?? false,
+            replacedAt: existing?.replacedAt,
+            memoryBank: agent.memoryBank,
+            sourceIteration: agent.globalIteration,
+        });
+    });
+
+    const cards = Array.from(memoryByBranch.values());
+    if (cards.length === 0) return null;
+
+    return (
+        <section className="sp-memory-bank-strip">
+            <div className="sp-memory-bank-strip-header">
+                <Icon name="database" />
+                <div>
+                    <h4>Strategy Memory Banks</h4>
+                    <p>Branch-local distilled learning, separated from solution pools.</p>
+                </div>
+            </div>
+            <div className="sp-memory-bank-grid">
+                {cards.map(card => (
+                    <div key={card.key} className={`sp-memory-bank-card${card.isActive ? '' : ' replaced'}`}>
+                        <div className="sp-memory-bank-card-header">
+                            <span>{card.label}</span>
+                            {card.isActive
+                                ? <span className="status-badge status-completed">Active</span>
+                                : <span className="status-badge status-pending">Replaced{card.replacedAt ? ` at ${card.replacedAt}` : ''}</span>}
                         </div>
-                        <RenderMathMarkdown content={item.reconstruction} className="sp-atomic-entry-text" />
+                        {card.sourceIteration && <div className="sp-memory-bank-meta">Updated at global iteration {card.sourceIteration}</div>}
+                        <RenderMathMarkdown content={card.memoryBank || ''} className="sp-memory-bank-content" />
                     </div>
                 ))}
             </div>
-        ))}
-    </div>
-);
+        </section>
+    );
+};
 
 const StrategySection: React.FC<{
     strategy: any;
     stratIdx: number;
-    pipelineId: string;
-}> = ({ strategy, stratIdx, pipelineId }) => {
+}> = ({ strategy, stratIdx }) => {
     const strategyText = strategy.strategy_text || '';
     const subtitle = strategyText.length > 120 ? strategyText.slice(0, 120) + '…' : strategyText;
 
@@ -224,8 +294,6 @@ const StrategySection: React.FC<{
         strategy.solution_pool && typeof strategy.solution_pool === 'object' && strategy.solution_pool.solutions
             ? strategy.solution_pool
             : null;
-
-    const atomicGroups = extractAtomicGroups(pipelineId, strategy.strategy_id, parsedPool);
 
     const firstCritique = strategy.iterations?.[0]?.critique;
     const lastIteration = strategy.iterations?.[strategy.iterations.length - 1];
@@ -255,15 +323,44 @@ const StrategySection: React.FC<{
                 </>
             )}
 
-            {/* 3. Atomic reconstructions */}
-            {atomicGroups.length > 0 && (
+            {/* 3. Memory bank */}
+            {strategy.memory_bank && (
                 <>
-                    <PoolLabel icon="fingerprint" text="Atomic Reconstructions" className="sp-pool-label sp-atomic-label" />
-                    <AtomicList groups={atomicGroups} />
+                    <PoolLabel icon="database" text="Current Memory Bank" className="sp-pool-label" />
+                    <TimelineSection content={strategy.memory_bank} className="sp-timeline-corrected" />
                 </>
             )}
 
-            {/* 4. Compressed iterations banner */}
+            {Array.isArray(strategy.replaced_branches) && strategy.replaced_branches.length > 0 && (
+                <>
+                    <PoolLabel icon="history" text="Replaced Branches Preserved" className="sp-pool-label" />
+                    <div className="sp-replaced-branches">
+                        {strategy.replaced_branches.map((branch: any) => (
+                            <div key={`${branch.strategy_id}-${branch.branch_version}`} className="sp-replaced-branch-card">
+                                <div className="sp-replaced-branch-header">
+                                    <strong>{String(branch.strategy_id || '').toUpperCase()} · Branch v{branch.branch_version}</strong>
+                                    <span>Replaced at iteration {branch.replaced_at_global_iteration}</span>
+                                </div>
+                                <TimelineSection content={branch.strategy_text || 'No previous strategy text recorded.'} className="sp-timeline-corrected" />
+                                {branch.memory_bank && (
+                                    <>
+                                        <PoolLabel icon="database" text="Retired Branch Memory Bank" className="sp-pool-label" />
+                                        <TimelineSection content={branch.memory_bank} className="sp-timeline-corrected" />
+                                    </>
+                                )}
+                                {branch.latest_critique && (
+                                    <>
+                                        <PoolLabel icon="rate_review" text="Final Retired Branch Critique" className="sp-pool-label sp-critique-label" />
+                                        <TimelineSection content={branch.latest_critique} className="sp-timeline-critique" />
+                                    </>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </>
+            )}
+
+            {/* 4. Compressed iterations banner (imported snapshots only) */}
             {strategy.compressed_iterations_note && (
                 <div className="sp-compressed-banner">
                     <Icon name="compress" />
@@ -302,14 +399,14 @@ const StrategySection: React.FC<{
     );
 };
 
-const CurrentSolutionPoolContent: React.FC<{ pipelineId: string; poolJson: string }> = ({ pipelineId, poolJson }) => {
+const CurrentSolutionPoolContent: React.FC<{ poolJson: string }> = ({ poolJson }) => {
     try {
         const poolData = JSON.parse(poolJson);
         if (poolData && Array.isArray(poolData.strategies)) {
             return (
                 <>
                     {poolData.strategies.map((strategy: any, idx: number) => (
-                        <StrategySection key={idx} strategy={strategy} stratIdx={idx} pipelineId={pipelineId} />
+                        <StrategySection key={idx} strategy={strategy} stratIdx={idx} />
                     ))}
                 </>
             );
@@ -333,7 +430,7 @@ export const SolutionPoolTabContent: React.FC<{ process: DeepthinkPipelineState 
                     <Icon name="block" className="disabled-icon" />
                     <h4>Structured Solution Pool Disabled</h4>
                     <p>This feature is currently disabled for this session.</p>
-                    <p className="disabled-hint">Enable "Iterative Corrections" in settings to use this feature.</p>
+                    <p className="disabled-hint">Enable "Evolving Depth First Search" in settings to use this feature.</p>
                 </div>
             </div>
         );
@@ -353,45 +450,55 @@ export const SolutionPoolTabContent: React.FC<{ process: DeepthinkPipelineState 
     }
 
     const poolAgents = process.structuredSolutionPoolAgents || [];
-    const survivingStrategies = process.initialStrategies.filter(s => !s.isKilledByRedTeam);
+    const branches = buildBranchCards(process);
     const iterationCount = computeIterationCount(process);
 
     return (
         <div className="solution-pool-container">
             <SolutionPoolHeader processId={process.id} />
             <div className="solution-pool-content-wrapper">
+                <MemoryBankStrip branches={branches} process={process} />
                 {Array.from({ length: iterationCount }, (_, i) => i + 1).map(iteration => (
                     <div key={iteration} className="pool-iteration-container">
                         <div className="pool-iteration-header">
                             <h4 className="pool-iteration-title">Iteration {iteration}</h4>
                         </div>
                         <div className="pool-iteration-content">
-                            <div className="red-team-agents-grid">
-                                {survivingStrategies.map(strategy => {
-                                    const poolAgent = poolAgents.find(a => a.mainStrategyId === strategy.id);
+                            <div className="agent-grid">
+                                {branches.map(branch => {
+                                    const poolAgent = poolAgents.find(a =>
+                                        a.mainStrategyId === branch.strategyId &&
+                                        (a.branchVersion || 1) === branch.branchVersion &&
+                                        a.globalIteration === iteration
+                                    );
                                     const hasPoolResponse = !!(poolAgent?.poolResponse?.trim());
                                     const isError = poolAgent?.status === 'error';
-                                    const critiquesCount = process.solutionCritiques.filter(c => c.mainStrategyId === strategy.id).length;
-                                    const hasPool = iteration <= critiquesCount && hasPoolResponse;
+                                    const hasPool = hasPoolResponse;
                                     const solutionCount = poolAgent?.parsedPoolResponse?.solutions?.length;
 
                                     return (
-                                        <div key={strategy.id} className={`red-team-agent-card${!hasPool ? ' pool-pending' : ''}`}>
-                                            <div className="red-team-agent-header">
-                                                <h4 className="red-team-agent-title">{strategy.id.toUpperCase()}</h4>
+                                        <div key={branch.key} className={`agent-card${!hasPool ? ' pool-pending' : ''}${branch.isActive ? '' : ' replaced-branch'}`}>
+                                            <div className="agent-header">
+                                                <h4 className="agent-title">{branch.label}</h4>
                                                 {hasPool
                                                     ? <span className="status-badge status-completed">Available</span>
                                                     : isError
                                                         ? <span className="status-badge status-error">Error</span>
-                                                        : <span className="status-badge status-pending">Pending</span>}
+                                                        : branch.isActive
+                                                            ? <span className="status-badge status-pending">Pending</span>
+                                                            : <span className="status-badge status-pending">No pool</span>}
                                             </div>
-                                            <div className="red-team-results">
+                                            <div className="sp-branch-card-subtitle">
+                                                {branch.isActive ? 'Current active branch' : `Retired at iteration ${branch.replacedAt || 'unknown'}`}
+                                            </div>
+                                            <div className="agent-results">
                                                 {hasPool ? (
                                                     <>
                                                         {solutionCount && <span className="sp-count-badge">{solutionCount} solutions</span>}
                                                         <button
                                                             className="view-argument-button view-pool-button"
-                                                            data-strategy-id={strategy.id}
+                                                            data-strategy-id={branch.strategyId}
+                                                            data-branch-version={branch.branchVersion}
                                                             data-iteration={iteration}
                                                         >
                                                             <Icon name="visibility" /> View Solution Pool
@@ -422,7 +529,7 @@ const SolutionPoolHeader: React.FC<{ processId: string }> = ({ processId }) => (
             <Icon name="workspaces" className="solution-pool-icon" />
             <div className="solution-pool-title-group">
                 <h3 className="solution-pool-title">Structured Solution Pool</h3>
-                <p className="solution-pool-subtitle">Cross-strategy collaborative solution repository</p>
+                <p className="solution-pool-subtitle">Curated branch-local pool snapshots and memory banks</p>
             </div>
         </div>
         <div className="solution-pool-header-buttons">
@@ -456,17 +563,19 @@ function unmountPanel(): void {
     }
 }
 
-export function openSolutionPoolModal(strategyId: string, iteration: number): void {
+export function openSolutionPoolModal(strategyId: string, iteration: number, branchVersion?: number): void {
     const pipeline = getActiveDeepthinkPipeline();
     if (!pipeline) return;
 
-    const poolAgent = pipeline.structuredSolutionPoolAgents?.find(a => a.mainStrategyId === strategyId);
+    const matchesBranch = (agent: any) => branchVersion === undefined || (agent.branchVersion || 1) === branchVersion;
+    const poolAgent = pipeline.structuredSolutionPoolAgents?.find(a => a.mainStrategyId === strategyId && a.globalIteration === iteration && matchesBranch(a))
+        || pipeline.structuredSolutionPoolAgents?.filter(a => a.mainStrategyId === strategyId && matchesBranch(a)).sort((a, b) => (b.globalIteration || 0) - (a.globalIteration || 0))[0];
     if (!poolAgent?.poolResponse) {
         alert('No solution pool available for this strategy.');
         return;
     }
 
-    const title = `${strategyId.toUpperCase()} — Iteration ${iteration} • Solution Pool`;
+    const title = `${strategyId.toUpperCase()}${branchVersion ? ` · Branch v${branchVersion}` : ''} — Iteration ${iteration} • Solution Pool`;
     const container = document.createElement('div');
     document.body.appendChild(container);
     unmountPanel();
@@ -507,8 +616,7 @@ export function openCurrentSolutionPool(pipelineId: string): void {
 
     panelRoot.render(
         <SolutionPoolPanel title="Solution Pool Repository" onClose={handleClose}>
-            <CurrentSolutionPoolContent pipelineId={pipelineId} poolJson={pipeline.structuredSolutionPool} />
+            <CurrentSolutionPoolContent poolJson={pipeline.structuredSolutionPool} />
         </SolutionPoolPanel>
     );
 }
-

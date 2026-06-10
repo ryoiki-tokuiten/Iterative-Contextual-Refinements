@@ -6,7 +6,7 @@ export interface ControlsDisabledState {
     exportConfigButton: boolean;
     importConfigInput: boolean;
     initialIdeaInput: boolean;
-    redTeamButtons: boolean;
+    pqfButtons: boolean;
     sliders: boolean;
     toggles: boolean;
     sidebarContent: boolean;
@@ -35,7 +35,7 @@ export function computeControlsDisabledState(): ControlsDisabledState {
         exportConfigButton: isGenerating,
         importConfigInput: isGenerating,
         initialIdeaInput: isGenerating,
-        redTeamButtons: isGenerating,
+        pqfButtons: isGenerating,
         sliders: isGenerating,
         toggles: isGenerating,
         sidebarContent: isGenerating,
@@ -65,9 +65,9 @@ export function updateControlsState(): void {
     }
     if (initialIdeaInput) initialIdeaInput.disabled = disabledState.initialIdeaInput;
 
-    const redTeamButtons = document.querySelectorAll('.red-team-button');
-    redTeamButtons.forEach(button => {
-        (button as HTMLButtonElement).disabled = disabledState.redTeamButtons;
+    const pqfButtons = document.querySelectorAll('.pqf-button');
+    pqfButtons.forEach(button => {
+        (button as HTMLButtonElement).disabled = disabledState.pqfButtons;
     });
 
     const sliders = document.querySelectorAll('.slider');

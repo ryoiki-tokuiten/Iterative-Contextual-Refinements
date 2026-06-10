@@ -29,17 +29,11 @@ export type AdaptiveDeepthinkToolCall =
 
 export interface AdaptiveDeepthinkToolPrompts {
     sys_deepthink_initialStrategy: string;
-    user_deepthink_initialStrategy: string;
     sys_deepthink_hypothesisGeneration: string;
-    user_deepthink_hypothesisGeneration: string;
     sys_deepthink_hypothesisTester: string;
-    user_deepthink_hypothesisTester: string;
     sys_deepthink_solutionAttempt: string;
-    user_deepthink_solutionAttempt: string;
     sys_deepthink_solutionCritique: string;
-    user_deepthink_solutionCritique: string;
     sys_deepthink_selfImprovement: string;
-    user_deepthink_selfImprovement: string;
     sys_deepthink_finalJudge: string;
 }
 
@@ -82,7 +76,6 @@ export async function executeAdaptiveDeepthinkTool(
                     toolCall.numStrategies,
                     toolCall.specialContext || '',
                     deepthinkPrompts.sys_deepthink_initialStrategy,
-                    deepthinkPrompts.user_deepthink_initialStrategy,
                     context,
                     images
                 );
@@ -108,7 +101,6 @@ export async function executeAdaptiveDeepthinkTool(
                     toolCall.numHypotheses,
                     toolCall.specialContext || '',
                     deepthinkPrompts.sys_deepthink_hypothesisGeneration,
-                    deepthinkPrompts.user_deepthink_hypothesisGeneration,
                     context,
                     images
                 );
@@ -135,7 +127,6 @@ export async function executeAdaptiveDeepthinkTool(
                     state.hypotheses,
                     toolCall.specialContext || '',
                     deepthinkPrompts.sys_deepthink_hypothesisTester,
-                    deepthinkPrompts.user_deepthink_hypothesisTester,
                     context,
                     images
                 );
@@ -170,7 +161,6 @@ export async function executeAdaptiveDeepthinkTool(
                     state.hypothesisTestings,
                     toolCall.specialContext || '',
                     deepthinkPrompts.sys_deepthink_solutionAttempt,
-                    deepthinkPrompts.user_deepthink_solutionAttempt,
                     context,
                     images
                 );
@@ -202,7 +192,6 @@ export async function executeAdaptiveDeepthinkTool(
                     state.executions,
                     toolCall.specialContext || '',
                     deepthinkPrompts.sys_deepthink_solutionCritique,
-                    deepthinkPrompts.user_deepthink_solutionCritique,
                     context,
                     images
                 );
@@ -230,7 +219,6 @@ export async function executeAdaptiveDeepthinkTool(
                     state.executions,
                     state.critiques,
                     deepthinkPrompts.sys_deepthink_selfImprovement,
-                    deepthinkPrompts.user_deepthink_selfImprovement,
                     context,
                     images
                 );
@@ -264,7 +252,6 @@ export async function executeAdaptiveDeepthinkTool(
                     toolCall.solutionIds,
                     state.correctedSolutions,
                     deepthinkPrompts.sys_deepthink_finalJudge,
-                    'Evaluate all provided solutions and select the best one. Provide your reasoning and the selected solution.\n\nCore Challenge: {{originalProblemText}}\n\n{{allSolutions}}',
                     context,
                     images
                 );

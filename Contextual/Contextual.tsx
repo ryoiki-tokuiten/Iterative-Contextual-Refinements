@@ -4,7 +4,7 @@
  */
 
 import { Root } from 'react-dom/client';
-import { renderContextualUI, updateContextualUI, renderIterativeCorrectionsUI, cleanupIterativeCorrectionsRoot } from './ContextualUI';
+import { renderContextualUI, updateContextualUI, renderEvolvingDfsUI, cleanupEvolvingDfsRoot } from './ContextualUI';
 import {
     startContextualProcess,
     stopContextualProcess,
@@ -13,7 +13,6 @@ import {
     setContextualStateUpdateCallback,
     ContextualState,
 } from './ContextualCore';
-import { extractPartsInOrder, formatPartsForDisplay } from '../Routing/ResponseParser';
 
 let contextualUIRoot: Root | null = null;
 let activeContextualContainer: HTMLElement | null = null;
@@ -24,10 +23,8 @@ export {
     stopContextualProcess,
     getContextualState,
     setContextualStateForImport,
-    renderIterativeCorrectionsUI,
-    cleanupIterativeCorrectionsRoot,
-    extractPartsInOrder,
-    formatPartsForDisplay
+    renderEvolvingDfsUI,
+    cleanupEvolvingDfsRoot
 };
 
 /**

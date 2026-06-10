@@ -328,6 +328,127 @@ body.light-mode .solution-pool-download-button {
     background: var(--bg-primary);
 }
 
+.sp-memory-bank-strip {
+    margin-bottom: 1.5rem;
+    padding: 1.25rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    background: var(--bg-secondary);
+}
+
+.sp-memory-bank-strip-header {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    margin-bottom: 1rem;
+}
+
+.sp-memory-bank-strip-header .icon-slot {
+    color: var(--accent-blue);
+    font-size: 1.35rem;
+}
+
+.sp-memory-bank-strip-header h4 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.sp-memory-bank-strip-header p {
+    margin: 0.15rem 0 0 0;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.sp-memory-bank-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 1rem;
+}
+
+.sp-memory-bank-card {
+    min-height: 190px;
+    max-height: 260px;
+    overflow: hidden;
+    padding: 1rem;
+    border: 1px solid rgba(var(--accent-blue-rgb), 0.18);
+    border-radius: var(--border-radius-sm);
+    background: rgba(var(--accent-blue-rgb), 0.045);
+}
+
+.sp-memory-bank-card.replaced {
+    border-color: rgba(var(--accent-purple-rgb), 0.18);
+    background: rgba(var(--accent-purple-rgb), 0.04);
+}
+
+.sp-memory-bank-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+.sp-memory-bank-meta {
+    margin-bottom: 0.6rem;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.sp-memory-bank-content {
+    max-height: 178px;
+    overflow-y: auto;
+    padding-right: 0.4rem;
+    font-size: 0.82rem;
+    line-height: 1.55;
+}
+
+.sp-branch-card-subtitle {
+    margin: -0.35rem 0 0.7rem 0;
+    color: var(--text-secondary);
+    font-size: 0.74rem;
+    font-weight: 600;
+}
+
+.agent-card.replaced-branch {
+    border-style: dashed;
+    opacity: 0.82;
+}
+
+.sp-replaced-branches {
+    display: grid;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+}
+
+.sp-replaced-branch-card {
+    padding: 1rem;
+    border: 1px dashed rgba(var(--accent-purple-rgb), 0.28);
+    border-radius: var(--border-radius-sm);
+    background: rgba(var(--accent-purple-rgb), 0.035);
+}
+
+.sp-replaced-branch-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+}
+
+.sp-replaced-branch-header span {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
 /* Scrollbar Styling — Refined Elegance */
 .solution-pool-content-wrapper::-webkit-scrollbar {
     width: 10px;
@@ -536,17 +657,17 @@ body.light-mode .pool-iteration-header {
 }
 
 /* Pool Pending State — Graceful Opacity */
-.red-team-agent-card.pool-pending {
+.agent-card.pool-pending {
     opacity: 0.6;
     transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.red-team-agent-card.pool-pending:hover {
+.agent-card.pool-pending:hover {
     opacity: 0.8;
 }
 
-/* Light Mode Override for Red Team Agent Card */
-body.light-mode .red-team-agent-card {
+/* Light Mode Override for shared agent cards */
+body.light-mode .agent-card {
     border-color: rgba(0, 0, 0, 0.15);
     background: rgba(255, 255, 255, 0.8);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
@@ -608,20 +729,20 @@ body.light-mode .sub-strategy-text-container {
 }
 
 /* Solution Pool Specific Grid Override — Compact Cards */
-.pool-iteration-content .red-team-agents-grid {
+.pool-iteration-content .agent-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     gap: 1rem;
 }
 
 @media (min-width: 1400px) {
-    .pool-iteration-content .red-team-agents-grid {
+    .pool-iteration-content .agent-grid {
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     }
 }
 
 @media (max-width: 768px) {
-    .pool-iteration-content .red-team-agents-grid {
+    .pool-iteration-content .agent-grid {
         grid-template-columns: 1fr;
     }
 }
@@ -889,18 +1010,6 @@ body.light-mode .sp-card-title {
     border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
-/* Approach Summary */
-.sp-approach-summary {
-    margin: 0;
-    padding: 0.625rem 1.125rem;
-    font-size: 0.8125rem;
-    color: var(--text-secondary);
-    line-height: 1.5;
-    font-weight: 500;
-    border-bottom: 1px solid rgba(var(--border-color-rgb, 128, 128, 128), 0.2);
-    font-style: italic;
-}
-
 /* Card Content */
 .sp-card-content-wrapper {
     flex: 1;
@@ -940,10 +1049,6 @@ body.light-mode .sp-card-content-wrapper::after {
     background: linear-gradient(to top, #ffffff, transparent);
 }
 
-body.light-mode .sp-approach-summary {
-    color: #4b5563;
-}
-
 .sp-card-content::-webkit-scrollbar {
     width: 6px;
 }
@@ -961,7 +1066,7 @@ body.light-mode .sp-approach-summary {
     background: rgba(var(--accent-purple-rgb), 0.3);
 }
 
-/* Internal Critique / Atomic Reconstruction — Collapsible Toggles */
+/* Internal Critique / Key Insights — Collapsible Toggles */
 .sp-critique-toggle {
     display: inline-flex;
     align-items: center;
@@ -1017,23 +1122,6 @@ body.light-mode .sp-approach-summary {
     border-top: none;
 }
 
-/* Atomic Reconstruction — Collapsible (teal accent) */
-.sp-atomic-toggle {
-    background: rgba(20, 184, 166, 0.04);
-    color: #14b8a6;
-    border-color: rgba(20, 184, 166, 0.2);
-}
-
-.sp-atomic-toggle:hover {
-    background: rgba(20, 184, 166, 0.08);
-    border-color: rgba(20, 184, 166, 0.4);
-}
-
-.sp-atomic-body {
-    border-color: rgba(20, 184, 166, 0.12);
-    background: rgba(20, 184, 166, 0.02);
-}
-
 /* Compressed Iterations Banner */
 .sp-compressed-banner {
     display: flex;
@@ -1059,76 +1147,6 @@ body.light-mode .sp-approach-summary {
 body.light-mode .sp-compressed-banner {
     background: rgba(var(--accent-blue-rgb), 0.08);
     border-color: rgba(var(--accent-blue-rgb), 0.2);
-}
-
-/* Atomic Reconstruction Compact List (Full Repo View) */
-.sp-atomic-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    padding: 0.75rem 1.25rem 1rem;
-}
-
-/* Iteration group within atomic list */
-.sp-atomic-iteration-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
-.sp-atomic-iteration-title {
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: rgba(20, 184, 166, 0.7);
-    padding: 0 0.25rem;
-}
-
-.sp-atomic-entry {
-    background: rgba(20, 184, 166, 0.04);
-    border: 1px solid rgba(20, 184, 166, 0.2);
-    border-radius: 14px;
-    padding: 0.75rem 1.125rem;
-    transition: all 0.2s ease;
-}
-
-.sp-atomic-entry:hover {
-    border-color: rgba(20, 184, 166, 0.4);
-    background: rgba(20, 184, 166, 0.07);
-}
-
-.sp-atomic-entry-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0.5rem;
-}
-
-.sp-atomic-entry-title {
-    font-size: 0.8125rem;
-    font-weight: 600;
-    color: #14b8a6;
-}
-
-.sp-atomic-entry-text {
-    font-size: 0.8125rem;
-    line-height: 1.6;
-    color: var(--text-secondary);
-}
-
-body.light-mode .sp-atomic-entry {
-    background: rgba(20, 184, 166, 0.05);
-    border-color: rgba(20, 184, 166, 0.25);
-}
-
-/* Pool label accents for new sections */
-.sp-atomic-label {
-    color: #14b8a6;
-}
-
-.sp-atomic-label .icon-slot {
-    color: #14b8a6;
 }
 
 .sp-corrected-label {

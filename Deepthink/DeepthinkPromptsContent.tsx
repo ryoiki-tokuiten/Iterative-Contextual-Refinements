@@ -8,10 +8,142 @@ export interface DeepthinkPromptsContentProps {
     availableModels?: string[];
 }
 
-/**
- * Deepthink Mode Prompts Content
- * Fully React-controlled — subscribes to DeepthinkPromptsManager for state.
- */
+type SystemPromptKey =
+    | 'sys_deepthink_initialStrategy'
+    | 'sys_deepthink_subStrategy'
+    | 'sys_deepthink_solutionAttempt'
+    | 'sys_deepthink_solutionCritique'
+    | 'sys_deepthink_dissectedSynthesis'
+    | 'sys_deepthink_selfImprovement'
+    | 'sys_deepthink_hypothesisGeneration'
+    | 'sys_deepthink_hypothesisTester'
+    | 'sys_deepthink_postQualityFilter'
+    | 'sys_deepthink_memoryBank'
+    | 'sys_deepthink_finalJudge'
+    | 'sys_deepthink_structuredSolutionPool';
+
+type ModelPromptKey =
+    | 'model_initialStrategy'
+    | 'model_subStrategy'
+    | 'model_solutionAttempt'
+    | 'model_solutionCritique'
+    | 'model_dissectedSynthesis'
+    | 'model_selfImprovement'
+    | 'model_hypothesisGeneration'
+    | 'model_hypothesisTester'
+    | 'model_postQualityFilter'
+    | 'model_memoryBank'
+    | 'model_finalJudge'
+    | 'model_structuredSolutionPool';
+
+interface SystemPaneDefinition {
+    promptKey: string;
+    title: string;
+    textareaId: string;
+    agentName: string;
+    systemKey: SystemPromptKey;
+    modelKey: ModelPromptKey;
+}
+
+const SYSTEM_PROMPT_PANES: SystemPaneDefinition[] = [
+    {
+        promptKey: 'deepthink-initial-strategy',
+        title: 'Initial Strategy Generation',
+        textareaId: 'sys-deepthink-initial-strategy',
+        agentName: 'initialStrategy',
+        systemKey: 'sys_deepthink_initialStrategy',
+        modelKey: 'model_initialStrategy',
+    },
+    {
+        promptKey: 'deepthink-sub-strategy',
+        title: 'Sub-Strategy Generation',
+        textareaId: 'sys-deepthink-sub-strategy',
+        agentName: 'subStrategy',
+        systemKey: 'sys_deepthink_subStrategy',
+        modelKey: 'model_subStrategy',
+    },
+    {
+        promptKey: 'deepthink-solution-attempt',
+        title: 'Solution Attempt',
+        textareaId: 'sys-deepthink-solution-attempt',
+        agentName: 'solutionAttempt',
+        systemKey: 'sys_deepthink_solutionAttempt',
+        modelKey: 'model_solutionAttempt',
+    },
+    {
+        promptKey: 'deepthink-solution-critique',
+        title: 'Solution Critique',
+        textareaId: 'sys-deepthink-solution-critique',
+        agentName: 'solutionCritique',
+        systemKey: 'sys_deepthink_solutionCritique',
+        modelKey: 'model_solutionCritique',
+    },
+    {
+        promptKey: 'deepthink-dissected-synthesis',
+        title: 'Dissected Observations Synthesis',
+        textareaId: 'sys-deepthink-dissected-synthesis',
+        agentName: 'dissectedSynthesis',
+        systemKey: 'sys_deepthink_dissectedSynthesis',
+        modelKey: 'model_dissectedSynthesis',
+    },
+    {
+        promptKey: 'deepthink-self-improvement',
+        title: 'Self-Improvement / Correction',
+        textareaId: 'sys-deepthink-self-improvement',
+        agentName: 'selfImprovement',
+        systemKey: 'sys_deepthink_selfImprovement',
+        modelKey: 'model_selfImprovement',
+    },
+    {
+        promptKey: 'deepthink-hypothesis-generation',
+        title: 'Hypothesis Generation',
+        textareaId: 'sys-deepthink-hypothesis-generation',
+        agentName: 'hypothesisGeneration',
+        systemKey: 'sys_deepthink_hypothesisGeneration',
+        modelKey: 'model_hypothesisGeneration',
+    },
+    {
+        promptKey: 'deepthink-hypothesis-tester',
+        title: 'Hypothesis Testing',
+        textareaId: 'sys-deepthink-hypothesis-tester',
+        agentName: 'hypothesisTester',
+        systemKey: 'sys_deepthink_hypothesisTester',
+        modelKey: 'model_hypothesisTester',
+    },
+    {
+        promptKey: 'deepthink-post-quality-filter',
+        title: 'Post Quality Filter',
+        textareaId: 'sys-deepthink-post-quality-filter',
+        agentName: 'postQualityFilter',
+        systemKey: 'sys_deepthink_postQualityFilter',
+        modelKey: 'model_postQualityFilter',
+    },
+    {
+        promptKey: 'deepthink-memory-bank',
+        title: 'Memory Bank',
+        textareaId: 'sys-deepthink-memory-bank',
+        agentName: 'memoryBank',
+        systemKey: 'sys_deepthink_memoryBank',
+        modelKey: 'model_memoryBank',
+    },
+    {
+        promptKey: 'deepthink-final-judge',
+        title: 'Final Judge',
+        textareaId: 'sys-deepthink-final-judge',
+        agentName: 'finalJudge',
+        systemKey: 'sys_deepthink_finalJudge',
+        modelKey: 'model_finalJudge',
+    },
+    {
+        promptKey: 'deepthink-structured-solution-pool',
+        title: 'Structured Solution Pool Agent',
+        textareaId: 'sys-deepthink-structured-solution-pool',
+        agentName: 'structuredSolutionPool',
+        systemKey: 'sys_deepthink_structuredSolutionPool',
+        modelKey: 'model_structuredSolutionPool',
+    },
+];
+
 export const DeepthinkPromptsContent: React.FC<DeepthinkPromptsContentProps> = ({
     promptsManager,
     availableModels = []
@@ -19,9 +151,7 @@ export const DeepthinkPromptsContent: React.FC<DeepthinkPromptsContentProps> = (
     const [prompts, setPrompts] = useState<CustomizablePromptsDeepthink>(promptsManager.getPrompts());
 
     useEffect(() => {
-        const unsubscribe = promptsManager.subscribe((newPrompts) => {
-            setPrompts(newPrompts);
-        });
+        const unsubscribe = promptsManager.subscribe(setPrompts);
         return unsubscribe;
     }, [promptsManager]);
 
@@ -35,272 +165,20 @@ export const DeepthinkPromptsContent: React.FC<DeepthinkPromptsContentProps> = (
 
     return (
         <div id="deepthink-prompts-container" className="prompts-mode-container">
-            {/* Initial Strategy Generation */}
-            <PromptPane promptKey="deepthink-initial-strategy" title="Initial Strategy Generation">
-                <PromptCard
-                    title="System Instruction"
-                    textareaId="sys-deepthink-initial-strategy"
-                    agentName="initialStrategy"
-                    value={prompts.sys_deepthink_initialStrategy}
-                    onChange={onPromptChange('sys_deepthink_initialStrategy')}
-                    modelValue={(prompts.model_initialStrategy as string) || ''}
-                    onModelChange={onModelChange('model_initialStrategy')}
-                    availableModels={availableModels}
-                />
-                <PromptCard
-                    title="User Prompt Template"
-                    textareaId="user-deepthink-initial-strategy"
-                    rows={4}
-                    placeholders='Variables: <code>{{originalProblemText}}</code>'
-                    value={prompts.user_deepthink_initialStrategy}
-                    onChange={onPromptChange('user_deepthink_initialStrategy')}
-                />
-            </PromptPane>
-
-            {/* Sub-Strategy Generation */}
-            <PromptPane promptKey="deepthink-sub-strategy" title="Sub-Strategy Generation">
-                <PromptCard
-                    title="System Instruction"
-                    textareaId="sys-deepthink-sub-strategy"
-                    agentName="subStrategy"
-                    value={prompts.sys_deepthink_subStrategy}
-                    onChange={onPromptChange('sys_deepthink_subStrategy')}
-                    modelValue={(prompts.model_subStrategy as string) || ''}
-                    onModelChange={onModelChange('model_subStrategy')}
-                    availableModels={availableModels}
-                />
-                <PromptCard
-                    title="User Prompt Template"
-                    textareaId="user-deepthink-sub-strategy"
-                    rows={4}
-                    placeholders='Variables: <code>{{originalProblemText}}</code>, <code>{{currentMainStrategy}}</code>, <code>{{otherMainStrategiesStr}}</code>'
-                    value={prompts.user_deepthink_subStrategy}
-                    onChange={onPromptChange('user_deepthink_subStrategy')}
-                />
-            </PromptPane>
-
-            {/* Solution Attempt */}
-            <PromptPane promptKey="deepthink-solution-attempt" title="Solution Attempt">
-                <PromptCard
-                    title="System Instruction"
-                    textareaId="sys-deepthink-solution-attempt"
-                    agentName="solutionAttempt"
-                    value={prompts.sys_deepthink_solutionAttempt}
-                    onChange={onPromptChange('sys_deepthink_solutionAttempt')}
-                    modelValue={(prompts.model_solutionAttempt as string) || ''}
-                    onModelChange={onModelChange('model_solutionAttempt')}
-                    availableModels={availableModels}
-                />
-                <PromptCard
-                    title="User Prompt Template"
-                    textareaId="user-deepthink-solution-attempt"
-                    rows={4}
-                    placeholders='Variables: <code>{{originalProblemText}}</code>, <code>{{currentSubStrategy}}</code>, <code>{{knowledgePacket}}</code>'
-                    value={prompts.user_deepthink_solutionAttempt}
-                    onChange={onPromptChange('user_deepthink_solutionAttempt')}
-                />
-            </PromptPane>
-
-            {/* Solution Critique */}
-            <PromptPane promptKey="deepthink-solution-critique" title="Solution Critique">
-                <PromptCard
-                    title="System Instruction"
-                    textareaId="sys-deepthink-solution-critique"
-                    agentName="solutionCritique"
-                    value={prompts.sys_deepthink_solutionCritique}
-                    onChange={onPromptChange('sys_deepthink_solutionCritique')}
-                    modelValue={(prompts.model_solutionCritique as string) || ''}
-                    onModelChange={onModelChange('model_solutionCritique')}
-                    availableModels={availableModels}
-                />
-                <PromptCard
-                    title="User Prompt Template"
-                    textareaId="user-deepthink-solution-critique"
-                    rows={4}
-                    placeholders='Variables: <code>{{originalProblemText}}</code>, <code>{{currentMainStrategy}}</code>, <code>{{allSubStrategiesAndSolutions}}</code>'
-                    value={prompts.user_deepthink_solutionCritique}
-                    onChange={onPromptChange('user_deepthink_solutionCritique')}
-                />
-            </PromptPane>
-
-            {/* Dissected Observations Synthesis */}
-            <PromptPane promptKey="deepthink-dissected-synthesis" title="Dissected Observations Synthesis">
-                <PromptCard
-                    title="System Instruction"
-                    textareaId="sys-deepthink-dissected-synthesis"
-                    agentName="dissectedSynthesis"
-                    value={prompts.sys_deepthink_dissectedSynthesis}
-                    onChange={onPromptChange('sys_deepthink_dissectedSynthesis')}
-                    modelValue={(prompts.model_dissectedSynthesis as string) || ''}
-                    onModelChange={onModelChange('model_dissectedSynthesis')}
-                    availableModels={availableModels}
-                />
-                <PromptCard
-                    title="User Prompt Template"
-                    textareaId="user-deepthink-dissected-synthesis"
-                    rows={4}
-                    placeholders='Variables: <code>{{originalProblemText}}</code>, <code>{{knowledgePacket}}</code>, <code>{{dissectedObservations}}</code>'
-                    value={prompts.user_deepthink_dissectedSynthesis}
-                    onChange={onPromptChange('user_deepthink_dissectedSynthesis')}
-                />
-            </PromptPane>
-
-            {/* Self-Improvement */}
-            <PromptPane promptKey="deepthink-self-improvement" title="Self-Improvement">
-                <PromptCard
-                    title="System Instruction"
-                    textareaId="sys-deepthink-self-improvement"
-                    agentName="selfImprovement"
-                    value={prompts.sys_deepthink_selfImprovement}
-                    onChange={onPromptChange('sys_deepthink_selfImprovement')}
-                    modelValue={(prompts.model_selfImprovement as string) || ''}
-                    onModelChange={onModelChange('model_selfImprovement')}
-                    availableModels={availableModels}
-                />
-                <PromptCard
-                    title="User Prompt Template"
-                    textareaId="user-deepthink-self-improvement"
-                    rows={4}
-                    placeholders='Variables: <code>{{originalProblemText}}</code>, <code>{{currentSubStrategy}}</code>, <code>{{solutionAttempt}}</code>, <code>{{knowledgePacket}}</code>'
-                    value={prompts.user_deepthink_selfImprovement}
-                    onChange={onPromptChange('user_deepthink_selfImprovement')}
-                />
-            </PromptPane>
-
-            {/* Hypothesis Generation */}
-            <PromptPane promptKey="deepthink-hypothesis-generation" title="Hypothesis Generation">
-                <PromptCard
-                    title="System Instruction"
-                    textareaId="sys-deepthink-hypothesis-generation"
-                    agentName="hypothesisGeneration"
-                    value={prompts.sys_deepthink_hypothesisGeneration}
-                    onChange={onPromptChange('sys_deepthink_hypothesisGeneration')}
-                    modelValue={(prompts.model_hypothesisGeneration as string) || ''}
-                    onModelChange={onModelChange('model_hypothesisGeneration')}
-                    availableModels={availableModels}
-                />
-                <PromptCard
-                    title="User Prompt Template"
-                    textareaId="user-deepthink-hypothesis-generation"
-                    rows={4}
-                    placeholders='Variables: <code>{{originalProblemText}}</code>'
-                    value={prompts.user_deepthink_hypothesisGeneration}
-                    onChange={onPromptChange('user_deepthink_hypothesisGeneration')}
-                />
-            </PromptPane>
-
-            {/* Hypothesis Testing */}
-            <PromptPane promptKey="deepthink-hypothesis-tester" title="Hypothesis Testing">
-                <PromptCard
-                    title="System Instruction"
-                    textareaId="sys-deepthink-hypothesis-tester"
-                    agentName="hypothesisTester"
-                    value={prompts.sys_deepthink_hypothesisTester}
-                    onChange={onPromptChange('sys_deepthink_hypothesisTester')}
-                    modelValue={(prompts.model_hypothesisTester as string) || ''}
-                    onModelChange={onModelChange('model_hypothesisTester')}
-                    availableModels={availableModels}
-                />
-                <PromptCard
-                    title="User Prompt Template"
-                    textareaId="user-deepthink-hypothesis-tester"
-                    rows={4}
-                    placeholders='Variables: <code>{{originalProblemText}}</code>, <code>{{hypothesisText}}</code>'
-                    value={prompts.user_deepthink_hypothesisTester}
-                    onChange={onPromptChange('user_deepthink_hypothesisTester')}
-                />
-            </PromptPane>
-
-            {/* Red Team Evaluation */}
-            <PromptPane promptKey="deepthink-red-team" title="Red Team Evaluation">
-                <PromptCard
-                    title="System Instruction"
-                    textareaId="sys-deepthink-red-team"
-                    agentName="redTeam"
-                    value={prompts.sys_deepthink_redTeam}
-                    onChange={onPromptChange('sys_deepthink_redTeam')}
-                    modelValue={(prompts.model_redTeam as string) || ''}
-                    onModelChange={onModelChange('model_redTeam')}
-                    availableModels={availableModels}
-                />
-                <PromptCard
-                    title="User Prompt Template"
-                    textareaId="user-deepthink-red-team"
-                    rows={4}
-                    placeholders='Variables: <code>{{originalProblemText}}</code>, <code>{{assignedStrategy}}</code>, <code>{{subStrategies}}</code>'
-                    value={prompts.user_deepthink_redTeam}
-                    onChange={onPromptChange('user_deepthink_redTeam')}
-                />
-            </PromptPane>
-
-            {/* Post Quality Filter */}
-            <PromptPane promptKey="deepthink-post-quality-filter" title="Post Quality Filter">
-                <PromptCard
-                    title="System Instruction"
-                    textareaId="sys-deepthink-post-quality-filter"
-                    agentName="postQualityFilter"
-                    value={prompts.sys_deepthink_postQualityFilter}
-                    onChange={onPromptChange('sys_deepthink_postQualityFilter')}
-                    modelValue={(prompts.model_postQualityFilter as string) || ''}
-                    onModelChange={onModelChange('model_postQualityFilter')}
-                    availableModels={availableModels}
-                />
-                <PromptCard
-                    title="User Prompt Template"
-                    textareaId="user-deepthink-post-quality-filter"
-                    rows={4}
-                    placeholders='Variables: <code>{{originalProblemText}}</code>, <code>{{strategiesWithExecutionsAndCritiques}}</code>'
-                    value={prompts.user_deepthink_postQualityFilter}
-                    onChange={onPromptChange('user_deepthink_postQualityFilter')}
-                />
-            </PromptPane>
-
-            {/* Judge (Intra-Strategy) */}
-            <PromptPane promptKey="deepthink-judge" title="Judge (Intra-Strategy)">
-                <PromptCard
-                    title="System Instruction"
-                    textareaId="sys-deepthink-judge"
-                    agentName="judge"
-                    value={prompts.sys_deepthink_finalJudge}
-                    onChange={onPromptChange('sys_deepthink_finalJudge')}
-                />
-            </PromptPane>
-
-            {/* Final Judge (Cross-Strategy) */}
-            <PromptPane promptKey="deepthink-final-judge" title="Final Judge (Cross-Strategy)">
-                <PromptCard
-                    title="System Instruction"
-                    textareaId="sys-deepthink-final-judge"
-                    agentName="finalJudge"
-                    value={prompts.sys_deepthink_finalJudge}
-                    onChange={onPromptChange('sys_deepthink_finalJudge')}
-                    modelValue={(prompts.model_finalJudge as string) || ''}
-                    onModelChange={onModelChange('model_finalJudge')}
-                    availableModels={availableModels}
-                />
-            </PromptPane>
-
-            {/* Structured Solution Pool Agent */}
-            <PromptPane promptKey="deepthink-structured-solution-pool" title="Structured Solution Pool Agent">
-                <PromptCard
-                    title="System Instruction"
-                    textareaId="sys-deepthink-structured-solution-pool"
-                    agentName="structuredSolutionPool"
-                    value={prompts.sys_deepthink_structuredSolutionPool}
-                    onChange={onPromptChange('sys_deepthink_structuredSolutionPool')}
-                    modelValue={(prompts.model_structuredSolutionPool as string) || ''}
-                    onModelChange={onModelChange('model_structuredSolutionPool')}
-                    availableModels={availableModels}
-                />
-                <PromptCard
-                    title="User Prompt Template"
-                    textareaId="user-deepthink-structured-solution-pool"
-                    rows={4}
-                    placeholders='Variables: <code>{{currentPool}}</code>, <code>{{newCritique}}</code>'
-                    value={prompts.user_deepthink_structuredSolutionPool}
-                    onChange={onPromptChange('user_deepthink_structuredSolutionPool')}
-                />
-            </PromptPane>
+            {SYSTEM_PROMPT_PANES.map(pane => (
+                <PromptPane key={pane.promptKey} promptKey={pane.promptKey} title={pane.title}>
+                    <PromptCard
+                        title="System Instruction"
+                        textareaId={pane.textareaId}
+                        agentName={pane.agentName}
+                        value={prompts[pane.systemKey]}
+                        onChange={onPromptChange(pane.systemKey)}
+                        modelValue={(prompts[pane.modelKey] as string) || ''}
+                        onModelChange={onModelChange(pane.modelKey)}
+                        availableModels={availableModels}
+                    />
+                </PromptPane>
+            ))}
         </div>
     );
 };

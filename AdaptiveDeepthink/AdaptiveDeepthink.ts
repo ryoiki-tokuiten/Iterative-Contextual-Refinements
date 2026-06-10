@@ -223,12 +223,10 @@ function createInitialDeepthinkPipelineState(question: string): DeepthinkPipelin
         initialStrategies: [],
         hypotheses: [],
         solutionCritiques: [],
-        redTeamEvaluations: [],
         postQualityFilterAgents: [],
         structuredSolutionPoolAgents: [],
         strategicSolverComplete: false,
         hypothesisExplorerComplete: false,
-        redTeamComplete: false,
         knowledgePacket: '',
         finalJudgingStatus: 'pending',
         isStopRequested: false,
@@ -413,17 +411,11 @@ function parseToolResultAndUpdateState(toolCall: AdaptiveDeepthinkToolCall, tool
 function createDeepthinkPrompts(customPrompts: CustomizablePromptsAdaptiveDeepthink): AdaptiveDeepthinkToolPrompts {
     return {
         sys_deepthink_initialStrategy: customPrompts.sys_adaptiveDeepthink_strategyGeneration,
-        user_deepthink_initialStrategy: '',
         sys_deepthink_hypothesisGeneration: customPrompts.sys_adaptiveDeepthink_hypothesisGeneration,
-        user_deepthink_hypothesisGeneration: '',
         sys_deepthink_hypothesisTester: customPrompts.sys_adaptiveDeepthink_hypothesisTesting,
-        user_deepthink_hypothesisTester: '',
         sys_deepthink_solutionAttempt: customPrompts.sys_adaptiveDeepthink_execution,
-        user_deepthink_solutionAttempt: '',
         sys_deepthink_solutionCritique: customPrompts.sys_adaptiveDeepthink_solutionCritique,
-        user_deepthink_solutionCritique: '',
         sys_deepthink_selfImprovement: customPrompts.sys_adaptiveDeepthink_corrector,
-        user_deepthink_selfImprovement: '',
         sys_deepthink_finalJudge: customPrompts.sys_adaptiveDeepthink_finalJudge
     };
 }

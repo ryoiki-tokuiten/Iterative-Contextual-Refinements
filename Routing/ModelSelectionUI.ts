@@ -30,7 +30,7 @@ export class ModelSelectionUI {
         refinementToggle: HTMLInputElement | null;
         skipSubStrategiesToggle: HTMLInputElement | null;
         dissectedObservationsToggle: HTMLInputElement | null;
-        iterativeCorrectionsToggle: HTMLInputElement | null;
+        evolvingDfsToggle: HTMLInputElement | null;
         provideAllSolutionsToggle: HTMLInputElement | null;
         postQualityFilterToggle: HTMLInputElement | null;
         temperatureValue: HTMLSpanElement | null;
@@ -56,7 +56,7 @@ export class ModelSelectionUI {
             refinementToggle: null,
             skipSubStrategiesToggle: null,
             dissectedObservationsToggle: null,
-            iterativeCorrectionsToggle: null,
+            evolvingDfsToggle: null,
             provideAllSolutionsToggle: null,
             postQualityFilterToggle: null,
             temperatureValue: null,
@@ -80,7 +80,7 @@ export class ModelSelectionUI {
             refinementToggle: document.getElementById('refinement-toggle') as HTMLInputElement,
             skipSubStrategiesToggle: document.getElementById('skip-sub-strategies-toggle') as HTMLInputElement,
             dissectedObservationsToggle: document.getElementById('dissected-observations-toggle') as HTMLInputElement,
-            iterativeCorrectionsToggle: document.getElementById('iterative-corrections-toggle') as HTMLInputElement,
+            evolvingDfsToggle: document.getElementById('evolving-dfs-toggle') as HTMLInputElement,
             provideAllSolutionsToggle: document.getElementById('provide-all-solutions-toggle') as HTMLInputElement,
             postQualityFilterToggle: document.getElementById('post-quality-filter-toggle') as HTMLInputElement,
             temperatureValue: document.getElementById('temperature-value') as HTMLSpanElement,
@@ -624,14 +624,14 @@ export class ModelSelectionUI {
             });
         }
 
-        // Iterative corrections toggle - delegate to controller
-        if (this.elements.iterativeCorrectionsToggle) {
-            this.elements.iterativeCorrectionsToggle.addEventListener('change', () => {
-                const isEnabled = this.elements.iterativeCorrectionsToggle!.checked;
+        // Evolving DFS toggle - delegate to controller
+        if (this.elements.evolvingDfsToggle) {
+            this.elements.evolvingDfsToggle.addEventListener('change', () => {
+                const isEnabled = this.elements.evolvingDfsToggle!.checked;
                 if (this.deepthinkConfig) {
-                    this.deepthinkConfig.setIterativeCorrectionsEnabled(isEnabled);
+                    this.deepthinkConfig.setEvolvingDfsEnabled(isEnabled);
                 } else {
-                    this.modelConfig.updateParameter('iterativeCorrectionsEnabled', isEnabled);
+                    this.modelConfig.updateParameter('evolvingDfsEnabled', isEnabled);
                 }
             });
         }
@@ -660,8 +660,8 @@ export class ModelSelectionUI {
             });
         }
 
-        // Red team buttons
-        this.initializeRedTeamButtons();
+        // PQF buttons
+        this.initializePqfButtons();
 
         // Hypothesis toggle
         this.initializeHypothesisToggle();
@@ -669,17 +669,17 @@ export class ModelSelectionUI {
         // Subscribe to controller events for UI synchronization
         this.subscribeToControllerEvents();
     }
-    private initializeRedTeamButtons(): void {
-        const redTeamButtons = document.querySelectorAll('.red-team-button');
-        redTeamButtons.forEach(button => {
+    private initializePqfButtons(): void {
+        const pqfButtons = document.querySelectorAll('.pqf-button');
+        pqfButtons.forEach(button => {
             button.addEventListener('click', () => {
                 // Remove active class from all buttons
-                redTeamButtons.forEach(btn => btn.classList.remove('active'));
+                pqfButtons.forEach(btn => btn.classList.remove('active'));
                 // Add active class to clicked button
                 button.classList.add('active');
                 // Update model config
                 const value = (button as HTMLElement).dataset.value || 'balanced';
-                this.modelConfig.updateParameter('redTeamAggressiveness', value);
+                this.modelConfig.updateParameter('pqfAggressiveness', value);
             });
         });
     }
@@ -796,11 +796,11 @@ export class ModelSelectionUI {
             }
         }
 
-        // Update red team buttons
-        const redTeamButtons = document.querySelectorAll('.red-team-button');
-        redTeamButtons.forEach(button => {
+        // Update PQF aggressiveness buttons
+        const pqfButtons = document.querySelectorAll('.pqf-button');
+        pqfButtons.forEach(button => {
             const buttonValue = (button as HTMLElement).dataset.value;
-            if (buttonValue === params.redTeamAggressiveness) {
+            if (buttonValue === params.pqfAggressiveness && this.modelConfig.isEvolvingDfsEnabled()) {
                 button.classList.add('active');
             } else {
                 button.classList.remove('active');
@@ -852,18 +852,18 @@ export class ModelSelectionUI {
         hypothesisCount: number;
         skipSubStrategies: boolean;
         hypothesisEnabled: boolean;
-        redTeamMode: string;
+        pqfMode: string;
         postQualityFilterEnabled: boolean;
         refinementEnabled: boolean;
         dissectedObservationsEnabled: boolean;
-        iterativeCorrectionsEnabled: boolean;
+        evolvingDfsEnabled: boolean;
         provideAllSolutionsEnabled: boolean;
     }): void {
         // Update strategies slider
         if (this.elements.strategiesSlider && this.elements.strategiesValue) {
             this.elements.strategiesSlider.value = state.strategiesCount.toString();
             this.elements.strategiesValue.textContent = state.strategiesCount.toString();
-            // Update max based on iterative corrections state
+            // Update max based on Evolving Depth First Search state
             if (this.deepthinkConfig) {
                 this.elements.strategiesSlider.max = this.deepthinkConfig.getMaxStrategies().toString();
             }
@@ -873,7 +873,7 @@ export class ModelSelectionUI {
         if (this.elements.subStrategiesSlider && this.elements.subStrategiesValue) {
             this.elements.subStrategiesSlider.value = state.subStrategiesCount.toString();
             this.elements.subStrategiesValue.textContent = state.subStrategiesCount.toString();
-            this.elements.subStrategiesSlider.disabled = state.iterativeCorrectionsEnabled || state.skipSubStrategies;
+            this.elements.subStrategiesSlider.disabled = state.evolvingDfsEnabled || state.skipSubStrategies;
             // Note: Don't toggle 'disabled' class on parent container - it affects unrelated sliders
         }
 
@@ -893,38 +893,38 @@ export class ModelSelectionUI {
         if (this.elements.skipSubStrategiesToggle) {
             // UI shows "Enable Sub-strategies", so checked=true means skip=false
             this.elements.skipSubStrategiesToggle.checked = !state.skipSubStrategies;
-            this.elements.skipSubStrategiesToggle.disabled = state.iterativeCorrectionsEnabled;
+            this.elements.skipSubStrategiesToggle.disabled = state.evolvingDfsEnabled;
         }
 
         // Update dissected observations toggle
         if (this.elements.dissectedObservationsToggle) {
             this.elements.dissectedObservationsToggle.checked = state.dissectedObservationsEnabled;
-            this.elements.dissectedObservationsToggle.disabled = !state.refinementEnabled || state.iterativeCorrectionsEnabled;
+            this.elements.dissectedObservationsToggle.disabled = !state.refinementEnabled || state.evolvingDfsEnabled;
         }
 
-        // Update iterative corrections toggle
-        if (this.elements.iterativeCorrectionsToggle) {
-            this.elements.iterativeCorrectionsToggle.checked = state.iterativeCorrectionsEnabled;
-            this.elements.iterativeCorrectionsToggle.disabled = !state.refinementEnabled;
+        // Update Evolving Depth First Search toggle
+        if (this.elements.evolvingDfsToggle) {
+            this.elements.evolvingDfsToggle.checked = state.evolvingDfsEnabled;
+            this.elements.evolvingDfsToggle.disabled = !state.refinementEnabled;
         }
 
         // Update provide all solutions toggle
         if (this.elements.provideAllSolutionsToggle) {
             this.elements.provideAllSolutionsToggle.checked = state.provideAllSolutionsEnabled;
-            this.elements.provideAllSolutionsToggle.disabled = !state.refinementEnabled || state.iterativeCorrectionsEnabled;
+            this.elements.provideAllSolutionsToggle.disabled = !state.refinementEnabled || state.evolvingDfsEnabled;
         }
 
         // Update post quality filter toggle
         if (this.elements.postQualityFilterToggle) {
             this.elements.postQualityFilterToggle.checked = state.postQualityFilterEnabled;
-            this.elements.postQualityFilterToggle.disabled = !state.iterativeCorrectionsEnabled;
+            this.elements.postQualityFilterToggle.disabled = !state.evolvingDfsEnabled;
         }
 
-        // Update red team buttons
-        const redTeamButtons = document.querySelectorAll('.red-team-button');
-        redTeamButtons.forEach(button => {
+        // Update PQF aggressiveness buttons
+        const pqfButtons = document.querySelectorAll('.pqf-button');
+        pqfButtons.forEach(button => {
             const value = (button as HTMLElement).dataset.value;
-            if (value === state.redTeamMode) {
+            if (value === state.pqfMode && state.evolvingDfsEnabled && state.refinementEnabled) {
                 button.classList.add('active');
             } else {
                 button.classList.remove('active');
@@ -949,17 +949,17 @@ export class ModelSelectionUI {
             const params = this.modelConfig.getParameters();
             const isRefinementEnabled = params.refinementEnabled;
 
-            // Set initial state of dissected observations and iterative corrections toggles
+            // Set initial state of dissected observations and Evolving Depth First Search toggles
             if (this.elements.dissectedObservationsToggle) {
                 this.elements.dissectedObservationsToggle.checked = params.dissectedObservationsEnabled;
-                // Disable if refinement is off OR if iterative corrections is on
-                this.elements.dissectedObservationsToggle.disabled = !isRefinementEnabled || params.iterativeCorrectionsEnabled;
+                // Disable if refinement is off OR if Evolving Depth First Search is on
+                this.elements.dissectedObservationsToggle.disabled = !isRefinementEnabled || params.evolvingDfsEnabled;
             }
 
-            if (this.elements.iterativeCorrectionsToggle) {
-                this.elements.iterativeCorrectionsToggle.checked = params.iterativeCorrectionsEnabled;
+            if (this.elements.evolvingDfsToggle) {
+                this.elements.evolvingDfsToggle.checked = params.evolvingDfsEnabled;
                 // Disable if refinement is off
-                this.elements.iterativeCorrectionsToggle.disabled = !isRefinementEnabled;
+                this.elements.evolvingDfsToggle.disabled = !isRefinementEnabled;
             }
 
             if (this.elements.provideAllSolutionsToggle) {
@@ -968,8 +968,8 @@ export class ModelSelectionUI {
                 this.elements.provideAllSolutionsToggle.disabled = !isRefinementEnabled;
             }
 
-            // If iterative corrections is enabled, ensure sub-strategies is forced off and disabled
-            if (params.iterativeCorrectionsEnabled && this.elements.skipSubStrategiesToggle) {
+            // If Evolving Depth First Search is enabled, ensure sub-strategies is forced off and disabled
+            if (params.evolvingDfsEnabled && this.elements.skipSubStrategiesToggle) {
                 this.elements.skipSubStrategiesToggle.checked = false;
                 this.elements.skipSubStrategiesToggle.disabled = true;
             }

@@ -24,7 +24,7 @@ export const GeminiCodeExecutionToggle: React.FC<CodeExecutionToggleProps> = ({ 
                         onChange?.(e.target.checked);
                     }}
                 />
-                <span>Enable Code Execution</span>
+                <span>Enable Python Tool Environment</span>
             </label>
         </div>
     );

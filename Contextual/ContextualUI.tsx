@@ -159,7 +159,7 @@ const CurrentBestGenerationPanel: React.FC<{ content: string; originalContent: s
                         <Icon name="movie" />
                         Evolutions
                     </button>
-                    {state.id !== 'iterative-corrections' && (
+                    {state.id !== 'evolving-dfs' && (
                         <>
                             <button
                                 className="action-btn"
@@ -295,8 +295,6 @@ const AgentActivityPanel: React.FC<{ state: ContextualState; onStop: () => void 
 
 // Minimal Message Card (similar to verification report in Agentic mode)
 const MinimalMessageCard: React.FC<{ message: ContextualMessage; allMessages: ContextualMessage[] }> = ({ message, allMessages }) => {
-    const [expanded, setExpanded] = useState(false);
-
     const getRoleLabel = (role: string) => {
         switch (role) {
             case 'main_generator': return 'Execution';
@@ -336,10 +334,6 @@ const MinimalMessageCard: React.FC<{ message: ContextualMessage; allMessages: Co
         return baseClass + statusClass;
     };
 
-    const lines = message.content.split('\n');
-    const needsCollapse = lines.length > 30;
-    const preview = needsCollapse && !expanded ? lines.slice(0, 30).join('\n') : message.content;
-
     return (
         <div className={`minimal-message-card ${getRoleClass(message.role)}`}>
             <div className="minimal-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -358,17 +352,7 @@ const MinimalMessageCard: React.FC<{ message: ContextualMessage; allMessages: Co
                 </button>
             </div>
             <div className="minimal-card-content scrollbar-compact">
-                <RenderMathMarkdown content={preview} />
-                {needsCollapse && (
-                    <>
-                        {!expanded && (
-                            <div className="content-truncated">... {lines.length - 30} more lines ...</div>
-                        )}
-                        <button className="action-btn" onClick={() => setExpanded(!expanded)}>
-                            {expanded ? 'Show less' : 'Show all'}
-                        </button>
-                    </>
-                )}
+                <RenderMathMarkdown content={message.content} />
             </div>
         </div>
     );
@@ -402,15 +386,15 @@ export function updateContextualUI(
 }
 
 /**
- * Render iterative corrections UI (for Deepthink mode)
+ * Render Evolving DFS correction UI (for Deepthink mode)
  * Uses the same UI as Contextual mode
  */
-export function cleanupIterativeCorrectionsRoot() {
+export function cleanupEvolvingDfsRoot() {
     // Root cleanup is handled automatically by WeakMap when containers are GC'd
-    // This function is kept for backward compatibility
+    // This function is kept for shared timeline rendering
 }
 
-export function renderIterativeCorrectionsUI(
+export function renderEvolvingDfsUI(
     container: HTMLElement,
     originalSolution: string,
     finalSolution: string,
@@ -475,10 +459,10 @@ export function renderIterativeCorrectionsUI(
     }
 
     const mockState: ContextualState = {
-        id: 'iterative-corrections',
+        id: 'evolving-dfs',
         initialUserRequest: '',
         initialMainGeneration: originalSolution || 'Processing...',
-        currentBestGeneration: finalSolution || 'Processing iterative corrections...',
+        currentBestGeneration: finalSolution || 'Processing Evolving DFS corrections...',
         currentBestSuggestions: '',
         allIterativeSuggestions: [],
         mainGeneratorHistory: [],

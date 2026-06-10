@@ -245,7 +245,7 @@ export class PromptsModal {
                 },
                 {
                     groupTitle: "4. EVALUATION & JUDGMENT",
-                    prompts: ["deepthink-red-team", "deepthink-post-quality-filter", "deepthink-final-judge"]
+                    prompts: ["deepthink-post-quality-filter", "deepthink-memory-bank", "deepthink-final-judge"]
                 }
             ],
             agentic: [
@@ -423,7 +423,8 @@ export class PromptsModal {
             'selfImprovement': 'sys-deepthink-self-improvement',
             'hypothesisGeneration': 'sys-deepthink-hypothesis-generation',
             'hypothesisTester': 'sys-deepthink-hypothesis-tester',
-            'redTeam': 'sys-deepthink-red-team',
+            'postQualityFilter': 'sys-deepthink-post-quality-filter',
+            'memoryBank': 'sys-deepthink-memory-bank',
             'finalJudge': 'sys-deepthink-final-judge',
             'structuredSolutionPool': 'sys-deepthink-structured-solution-pool'
         };
@@ -755,7 +756,8 @@ export class PromptsModal {
             'selfImprovement': 'sys-deepthink-self-improvement',
             'hypothesisGeneration': 'sys-deepthink-hypothesis-generation',
             'hypothesisTester': 'sys-deepthink-hypothesis-tester',
-            'redTeam': 'sys-deepthink-red-team',
+            'postQualityFilter': 'sys-deepthink-post-quality-filter',
+            'memoryBank': 'sys-deepthink-memory-bank',
             'finalJudge': 'sys-deepthink-final-judge',
             'structuredSolutionPool': 'sys-deepthink-structured-solution-pool'
         };

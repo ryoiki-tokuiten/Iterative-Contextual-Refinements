@@ -15,9 +15,9 @@ import { globalState } from "../Core/State";
 export interface StructuredMessage {
     role: 'system' | 'assistant' | 'user';
     content: string;
-    /** Optional: raw Gemini Parts for model turns from code execution.
-     *  Passed directly to the API to preserve inlineData images, executableCode,
-     *  codeExecutionResult, and thought_signature for correct multi-turn context. */
+    /** Optional: raw Gemini Parts for model turns with native function calling.
+     *  Passed directly to the API to preserve inlineData images, function
+     *  calls/responses, and thought_signature for correct multi-turn context. */
     rawParts?: any[];
 }
 
@@ -25,7 +25,6 @@ export interface ThinkingConfig {
     thinkingBudget?: number;  // -1 for dynamic, 0 to disable, or specific token count
     thinkingLevel?: 'low' | 'medium' | 'high' | 'minimal';  // Gemini 3 thinking level control
     tools?: any[];  // Function declarations to enable thought signatures
-    codeExecution?: boolean;  // Enable Gemini native code execution tool
 }
 
 
@@ -225,7 +224,7 @@ function buildAnthropicMessages(
 /**
  * Sanitize Gemini contents array right before the API call.
  * Walks every content entry and strips embedded base64 image data from text Parts.
- * This is the single chokepoint that prevents token overflow from code execution
+ * This is the single chokepoint that prevents token overflow from tool-generated
  * images, regardless of which mode (Deepthink, Contextual, etc.) produced the text.
  */
 function sanitizeContentsForApi(contents: any[]): any[] {
@@ -233,7 +232,7 @@ function sanitizeContentsForApi(contents: any[]): any[] {
     return contents.map((entry: any) => {
         if (!entry?.parts || !Array.isArray(entry.parts)) return entry;
         const sanitizedParts = entry.parts.map((part: any) => {
-            // Only sanitize text parts; leave inlineData, executableCode, etc. untouched
+            // Only sanitize text parts; leave inlineData and tool-call parts untouched
             if (part && typeof part.text === 'string' && part.text.includes('<!-- EXECUTION_IMAGE_START -->')) {
                 return {
                     ...part,
@@ -298,7 +297,7 @@ function isTransientGoogleApiError(error: ParsedGoogleApiError): boolean {
         || error.status === 'DEADLINE_EXCEEDED';
 }
 
-function normalizeGoogleApiError(error: any, modelToUse: string, hadCodeExecution: boolean): Error {
+function normalizeGoogleApiError(error: any, modelToUse: string): Error {
     const parsed = parseGoogleApiError(error);
     const code = parsed.code ?? (typeof error?.status === 'number' ? error.status : undefined);
     const status = parsed.status ? ` ${parsed.status}` : '';
@@ -309,9 +308,7 @@ function normalizeGoogleApiError(error: any, modelToUse: string, hadCodeExecutio
         message += ' This is a provider-side failure.';
     }
 
-    if (hadCodeExecution && isTransientGoogleApiError(parsed)) {
-        message += ' If this keeps happening, disable Deepthink code execution and retry.';
-    } else if (isTransientGoogleApiError(parsed)) {
+    if (isTransientGoogleApiError(parsed)) {
         message += ' Retry the run, and if it repeats switch to a stable non-preview Gemini model.';
     }
 
@@ -419,9 +416,9 @@ export class GoogleAIProvider implements AIProvider {
                     });
                 } else if (msg.role === 'assistant') {
                     // Assistant messages go to model role
-                    // If rawParts are present (code execution turn), pass them directly
-                    // This preserves inlineData images, executableCode, codeExecutionResult,
-                    // and thought_signature — required for correct multi-turn code execution.
+                    // If rawParts are present (tool-calling turn), pass them directly
+                    // This preserves inlineData images, function calls/responses,
+                    // and thought_signature.
                     if (msg.rawParts && msg.rawParts.length > 0) {
                         geminiContents.push({
                             role: 'model',
@@ -494,11 +491,7 @@ export class GoogleAIProvider implements AIProvider {
             config.thinkingBudget = thinkingConfig.thinkingBudget;
         }
 
-        // codeExecution and functionDeclarations are mutually exclusive in Gemini.
-        if (thinkingConfig?.codeExecution) {
-            config.tools = [{ codeExecution: {} }];
-            console.log('[Gemini] Code execution enabled (function calling disabled)');
-        } else if (thinkingConfig?.tools && thinkingConfig.tools.length > 0) {
+        if (thinkingConfig?.tools && thinkingConfig.tools.length > 0) {
             let toolsToPass = thinkingConfig.tools;
 
             // Strip dummy reasoning tool that conflicts with native thinking on Gemini 2.0+
@@ -526,36 +519,7 @@ export class GoogleAIProvider implements AIProvider {
 
             return result as any;
         } catch (error: any) {
-            const parsedError = parseGoogleApiError(error);
-            const hadCodeExecution = !!thinkingConfig?.codeExecution;
-
-            if (hadCodeExecution && isTransientGoogleApiError(parsedError)) {
-                const fallbackConfig = { ...config };
-
-                if (Array.isArray(fallbackConfig.tools)) {
-                    fallbackConfig.tools = fallbackConfig.tools.filter((tool: any) => !tool?.codeExecution);
-                    if (fallbackConfig.tools.length === 0) {
-                        delete fallbackConfig.tools;
-                    }
-                }
-
-                console.warn(`[Gemini] ${modelToUse} failed with native code execution enabled. Retrying once without code execution.`, {
-                    status: parsedError.status,
-                    code: parsedError.code,
-                });
-
-                try {
-                    const fallbackResult = await this.client.models.generateContent({
-                        ...requestOptions,
-                        config: fallbackConfig
-                    });
-                    return fallbackResult as any;
-                } catch (fallbackError: any) {
-                    throw normalizeGoogleApiError(fallbackError, modelToUse, hadCodeExecution);
-                }
-            }
-
-            throw normalizeGoogleApiError(error, modelToUse, hadCodeExecution);
+            throw normalizeGoogleApiError(error, modelToUse);
         }
     }
 

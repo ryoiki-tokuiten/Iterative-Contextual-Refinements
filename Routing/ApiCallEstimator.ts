@@ -10,15 +10,13 @@ import { ModelConfigManager, type ModelParameters } from './ModelConfig';
  * Returns { min, max } to account for variable retry loops.
  */
 export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): { min: number; max: number } {
-    const strategiesCount = params.strategiesCount;
+    const evolvingDfsEnabled = params.refinementEnabled && params.evolvingDfsEnabled;
+    const strategiesCount = evolvingDfsEnabled ? Math.min(params.strategiesCount, 5) : params.strategiesCount;
     const subStrategiesCount = params.subStrategiesCount;
     const hypothesisCount = params.hypothesisCount;
-    const skipSubStrategies = params.skipSubStrategies;
+    const skipSubStrategies = evolvingDfsEnabled ? true : params.skipSubStrategies;
     const refinementEnabled = params.refinementEnabled;
     const dissectedObservationsEnabled = params.dissectedObservationsEnabled;
-    const iterativeCorrectionsEnabled = params.iterativeCorrectionsEnabled;
-    const postQualityFilterEnabled = params.postQualityFilterEnabled;
-    const redTeamEnabled = params.redTeamAggressiveness !== 'off';
 
     let minCalls = 0;
     let maxCalls = 0;
@@ -28,52 +26,50 @@ export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): {
     maxCalls += 1;
 
     // 2. Sub-Strategy Generation (N calls - one per strategy, if not skipped)
-    if (!skipSubStrategies) {
+    if (!skipSubStrategies && !evolvingDfsEnabled) {
         minCalls += strategiesCount;
         maxCalls += strategiesCount;
     }
 
-    // 3. Solution Attempts
     const solutionCount = skipSubStrategies ? strategiesCount : (strategiesCount * subStrategiesCount);
-    minCalls += solutionCount;
-    maxCalls += solutionCount;
 
-    // 4-5. Hypothesis Track (only if hypothesis count > 0)
-    if (hypothesisCount > 0) {
-        // 4. Hypothesis Generation (1 call)
-        minCalls += 1;
-        maxCalls += 1;
+    if (evolvingDfsEnabled) {
+        const evolvingDfsDepth = Math.max(1, Math.min(params.evolvingDfsDepth, 10));
 
-        // 5. Hypothesis Testing (H calls - one per hypothesis)
-        minCalls += hypothesisCount;
-        maxCalls += hypothesisCount;
-    }
+        // Initial hypothesis round, plus a heartbeat at every even completed global iteration.
+        if (hypothesisCount > 0) {
+            const hypothesisRounds = 1 + Math.floor(evolvingDfsDepth / 2);
+            minCalls += hypothesisRounds * (1 + hypothesisCount);
+            maxCalls += hypothesisRounds * (1 + hypothesisCount);
+        }
 
-    // 7-9. Refinement Track (only if refinement enabled)
-    if (refinementEnabled) {
-        if (iterativeCorrectionsEnabled) {
-            // Initial critiques for all strategies (when skip sub-strategies is enabled)
-            if (skipSubStrategies) {
-                minCalls += strategiesCount;
-                maxCalls += strategiesCount;
+        // For each active strategy branch:
+        // depth 1: execution + critique + pool
+        // later depths: correction + critique + pool
+        minCalls += strategiesCount * evolvingDfsDepth * 3;
+        maxCalls += strategiesCount * evolvingDfsDepth * 3;
 
-                if (postQualityFilterEnabled) {
-                    const typicalReplacementCount = Math.ceil(strategiesCount * 0.5);
-                    minCalls += 1 + typicalReplacementCount + typicalReplacementCount + typicalReplacementCount;
+        // Every five completed branch iterations: memory per branch + ceil(N/2) PQF agents.
+        // If PQF requests updates, one strategy-update call plus execution+critique for each updated branch.
+        const maintenancePasses = Math.floor(evolvingDfsDepth / 5);
+        const pqfAgentCount = Math.ceil(strategiesCount / 2);
+        minCalls += maintenancePasses * (strategiesCount + pqfAgentCount);
+        maxCalls += maintenancePasses * (strategiesCount + pqfAgentCount + 1 + (strategiesCount * 2));
+    } else {
+        // 3. Solution Attempts
+        minCalls += solutionCount;
+        maxCalls += solutionCount;
 
-                    const postQFIterations = 3;
-                    maxCalls += postQFIterations * (1 + strategiesCount + strategiesCount + strategiesCount);
-                }
-            }
+        // 4-5. Hypothesis Track (only if hypothesis count > 0)
+        if (hypothesisCount > 0) {
+            minCalls += 1 + hypothesisCount;
+            maxCalls += 1 + hypothesisCount;
+        }
 
-            const iterativeDepth = params.iterativeDepth;
-            const callsPerSolution = iterativeDepth * 3;
-            minCalls += solutionCount * callsPerSolution;
-            maxCalls += solutionCount * callsPerSolution;
-        } else {
+        if (refinementEnabled) {
             // Standard Refinement Mode
-            minCalls += strategiesCount;
-            maxCalls += strategiesCount;
+            minCalls += solutionCount;
+            maxCalls += solutionCount;
 
             if (dissectedObservationsEnabled) {
                 minCalls += 1;
@@ -85,13 +81,7 @@ export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): {
         }
     }
 
-    // 10. Red Team Evaluation (1 call - consolidated agent)
-    if (redTeamEnabled) {
-        minCalls += 1;
-        maxCalls += 1;
-    }
-
-    // 11. Final Judging (1 call to select best solution)
+    // Final Judging (1 call to select best solution)
     minCalls += 1;
     maxCalls += 1;
 
@@ -129,8 +119,7 @@ export class ApiCallEstimator {
     public updateApiCallDisplay(): void {
         const { min, max } = this.calculateDeepthinkApiCalls();
         const params = this.modelConfig.getParameters();
-        const redTeamEnabled = params.redTeamAggressiveness !== 'off';
-        const postQualityFilterEnabled = params.postQualityFilterEnabled;
+        const evolvingDfsEnabled = params.refinementEnabled && params.evolvingDfsEnabled;
 
         // Update the count display
         if (this.countElement) {
@@ -141,18 +130,14 @@ export class ApiCallEstimator {
             }
         }
 
-        // Show/hide the red team warning icon
+        // The evaluation warning is no longer shown.
         if (this.warningElement) {
-            if (redTeamEnabled) {
-                this.warningElement.style.display = 'block';
-            } else {
-                this.warningElement.style.display = 'none';
-            }
+            this.warningElement.style.display = 'none';
         }
 
         // Show/hide the PQF warning icon
         if (this.pqfWarningElement) {
-            if (postQualityFilterEnabled) {
+            if (evolvingDfsEnabled) {
                 this.pqfWarningElement.style.display = 'block';
             } else {
                 this.pqfWarningElement.style.display = 'none';
@@ -169,7 +154,7 @@ export class ApiCallEstimator {
             'strategies-slider',
             'sub-strategies-slider',
             'hypothesis-slider',
-            'dt-iteration-depth-slider'
+            'dt-evolving-dfs-depth-slider'
         ];
 
         sliders.forEach(id => {
@@ -184,8 +169,7 @@ export class ApiCallEstimator {
             'refinement-toggle',
             'skip-sub-strategies-toggle',
             'dissected-observations-toggle',
-            'iterative-corrections-toggle',
-            'post-quality-filter-toggle',
+            'evolving-dfs-toggle',
             'hypothesis-toggle'
         ];
 
@@ -196,20 +180,11 @@ export class ApiCallEstimator {
             }
         });
 
-        // Listen to red team button clicks - only update if on/off state changes
-        const redTeamButtons = document.querySelectorAll('.red-team-button');
-        let previousRedTeamEnabled = this.modelConfig.getParameters().redTeamAggressiveness !== 'off';
-
-        redTeamButtons.forEach(button => {
+        // Listen to PQF aggressiveness button clicks
+        const pqfButtons = document.querySelectorAll('.pqf-button');
+        pqfButtons.forEach(button => {
             button.addEventListener('click', () => {
-                setTimeout(() => {
-                    const currentRedTeamEnabled = this.modelConfig.getParameters().redTeamAggressiveness !== 'off';
-                    // Only update if the enabled state changed (off <-> on), not aggressiveness level
-                    if (currentRedTeamEnabled !== previousRedTeamEnabled) {
-                        previousRedTeamEnabled = currentRedTeamEnabled;
-                        this.updateApiCallDisplay();
-                    }
-                }, 50);
+                setTimeout(() => this.updateApiCallDisplay(), 50);
             });
         });
 

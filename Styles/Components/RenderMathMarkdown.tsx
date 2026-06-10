@@ -503,8 +503,13 @@ const PreviewableImage: React.FC<{
     imageClassName?: string;
     onPreview: (data: ImagePreviewData) => void;
 }> = ({ src, alt, format, wrapperTag = 'div', extraClassName = '', imageClassName = '', onPreview }) => {
-    const [hasError, setHasError] = useState(false);
+    const [failedSrc, setFailedSrc] = useState<string | null>(null);
+    const hasError = failedSrc === src;
     const Wrapper = wrapperTag;
+
+    useEffect(() => {
+        setFailedSrc(null);
+    }, [src]);
 
     const handleOpen = () => {
         if (hasError) return;
@@ -512,9 +517,11 @@ const PreviewableImage: React.FC<{
     };
 
     if (hasError) {
+        const ErrorMessageTag = wrapperTag === 'span' ? 'span' : 'div';
+
         return (
             <Wrapper className={['exec-image-item', 'exec-image-error-item', extraClassName].filter(Boolean).join(' ')}>
-                <div className="exec-image-error">Failed to render image</div>
+                <ErrorMessageTag className="exec-image-error" title={src}>Failed to render image</ErrorMessageTag>
             </Wrapper>
         );
     }
@@ -537,7 +544,9 @@ const PreviewableImage: React.FC<{
                 alt={alt}
                 className={['exec-rendered-image', imageClassName].filter(Boolean).join(' ')}
                 loading="lazy"
-                onError={() => setHasError(true)}
+                onError={() => {
+                    setFailedSrc(src);
+                }}
             />
         </Wrapper>
     );

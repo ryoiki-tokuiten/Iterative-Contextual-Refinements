@@ -45,6 +45,84 @@ function appendContext(prompt: string, specialContext: string): string {
         : prompt;
 }
 
+function buildStrategyPrompt(question: string, numStrategies: number): string {
+    return `Core Challenge: ${question}
+
+Generate exactly ${numStrategies} distinct high-level strategic interpretations. Return JSON with a "strategies" array. Do not solve the challenge.`;
+}
+
+function buildHypothesisGenerationPrompt(question: string, numHypotheses: number): string {
+    return `Core Challenge: ${question}
+
+Generate exactly ${numHypotheses} hypotheses worth testing. Return JSON with a "hypotheses" array. Do not solve the challenge.`;
+}
+
+function buildHypothesisTestingPrompt(question: string, hypothesis: string): string {
+    return `Core Challenge: ${question}
+
+<Hypothesis To Test>
+${hypothesis}
+</Hypothesis To Test>
+
+Test only this hypothesis. Return the full investigation and final classification.`;
+}
+
+function buildExecutionPrompt(question: string, strategy: string, informationPacket: string): string {
+    return `Core Challenge: ${question}
+
+<Assigned Strategy>
+${strategy}
+</Assigned Strategy>
+
+<Information Packet>
+${informationPacket}
+</Information Packet>
+
+Execute the assigned strategy faithfully and completely.`;
+}
+
+function buildCritiquePrompt(question: string, strategy: string, execution: string): string {
+    return `Core Challenge: ${question}
+
+<Assigned Strategy>
+${strategy}
+</Assigned Strategy>
+
+<Solution Attempt>
+${execution}
+</Solution Attempt>
+
+Critique the solution attempt. Identify errors, gaps, unjustified claims, and strategy-fidelity issues. Do not fix the solution.`;
+}
+
+function buildCorrectionPrompt(question: string, strategy: string, execution: string, critique: string): string {
+    return `Core Challenge: ${question}
+
+<Assigned Strategy>
+${strategy}
+</Assigned Strategy>
+
+<Previous Solution Attempt>
+${execution}
+</Previous Solution Attempt>
+
+<Critique>
+${critique}
+</Critique>
+
+Produce a corrected solution that addresses the critique while remaining faithful to the assigned strategy.`;
+}
+
+function buildFinalJudgePrompt(question: string, allSolutions: string): string {
+    return `Core Challenge: ${question}
+
+<Candidate Solutions>
+${allSolutions}
+</Candidate Solutions>
+
+Select the best solution and return it clearly.`;
+}
+
 /** Executes a single AI call: builds parts, calls the model, cleans output. */
 async function callAgent(
     promptText: string,
@@ -84,17 +162,11 @@ export async function generateStrategiesAgent(
     numStrategies: number,
     specialContext: string,
     systemPrompt: string,
-    userPromptTemplate: string,
     context: AgentExecutionContext,
     images: ImageInput = []
 ): Promise<AgentResponse> {
     return wrapAgent(async () => {
-        const prompt = appendContext(
-            userPromptTemplate
-                .replace('{{originalProblemText}}', question)
-                .replace(/\$\{NUM_INITIAL_STRATEGIES_DEEPTHINK\}/g, numStrategies.toString()),
-            specialContext
-        );
+        const prompt = appendContext(buildStrategyPrompt(question, numStrategies), specialContext);
         const rawText = await callAgent(prompt, images, context, systemPrompt, true);
         const parsed = context.parseJsonSafe(rawText, 'GenerateStrategies');
 
@@ -114,17 +186,11 @@ export async function generateHypothesesAgent(
     numHypotheses: number,
     specialContext: string,
     systemPrompt: string,
-    userPromptTemplate: string,
     context: AgentExecutionContext,
     images: ImageInput = []
 ): Promise<AgentResponse> {
     return wrapAgent(async () => {
-        const prompt = appendContext(
-            userPromptTemplate
-                .replace('{{originalProblemText}}', question)
-                .replace(/\$\{NUM_HYPOTHESES\}/g, numHypotheses.toString()),
-            specialContext
-        );
+        const prompt = appendContext(buildHypothesisGenerationPrompt(question, numHypotheses), specialContext);
         const rawText = await callAgent(prompt, images, context, systemPrompt, true);
         const parsed = context.parseJsonSafe(rawText, 'GenerateHypotheses');
 
@@ -145,7 +211,6 @@ export async function testHypothesesAgent(
     hypothesesData: Map<string, { text: string }>,
     specialContext: string,
     systemPrompt: string,
-    userPromptTemplate: string,
     context: AgentExecutionContext,
     images: ImageInput = []
 ): Promise<AgentResponse> {
@@ -155,12 +220,7 @@ export async function testHypothesesAgent(
                 const hypothesis = hypothesesData.get(id);
                 if (!hypothesis) return { id, success: false, error: 'Hypothesis not found' };
 
-                const prompt = appendContext(
-                    userPromptTemplate
-                        .replace('{{originalProblemText}}', question)
-                        .replace('{{hypothesisText}}', hypothesis.text),
-                    specialContext
-                );
+                const prompt = appendContext(buildHypothesisTestingPrompt(question, hypothesis.text), specialContext);
                 const testing = await callAgent(prompt, images, context, systemPrompt, false);
                 return { id, success: true, hypothesis: hypothesis.text, testing };
             })
@@ -180,7 +240,6 @@ export async function executeStrategiesAgent(
     hypothesisTestingResults: Map<string, { hypothesis: string; testing: string }>,
     specialContext: string,
     systemPrompt: string,
-    userPromptTemplate: string,
     context: AgentExecutionContext,
     images: ImageInput = []
 ): Promise<AgentResponse> {
@@ -191,13 +250,7 @@ export async function executeStrategiesAgent(
                 if (!strategy) return { id: exec.strategyId, success: false, error: 'Strategy not found' };
 
                 const informationPacket = buildInformationPacket(exec.hypothesisIds, hypothesisTestingResults);
-                const prompt = appendContext(
-                    userPromptTemplate
-                        .replace('{{originalProblemText}}', question)
-                        .replace('{{assignedStrategy}}', strategy.text)
-                        .replace('{{knowledgePacket}}', informationPacket),
-                    specialContext
-                );
+                const prompt = appendContext(buildExecutionPrompt(question, strategy.text, informationPacket), specialContext);
                 const execution = await callAgent(prompt, images, context, systemPrompt, false);
                 return { id: exec.strategyId, success: true, strategy: strategy.text, execution };
             })
@@ -233,7 +286,6 @@ export async function solutionCritiqueAgent(
     executionsData: Map<string, { strategy: string; execution: string }>,
     specialContext: string,
     systemPrompt: string,
-    userPromptTemplate: string,
     context: AgentExecutionContext,
     images: ImageInput = []
 ): Promise<AgentResponse> {
@@ -243,13 +295,7 @@ export async function solutionCritiqueAgent(
                 const execution = executionsData.get(id);
                 if (!execution) return { id, success: false, error: 'Execution not found' };
 
-                const prompt = appendContext(
-                    userPromptTemplate
-                        .replace('{{originalProblemText}}', question)
-                        .replace('{{assignedStrategy}}', execution.strategy)
-                        .replace('{{solutionAttempt}}', execution.execution),
-                    specialContext
-                );
+                const prompt = appendContext(buildCritiquePrompt(question, execution.strategy, execution.execution), specialContext);
                 const critique = await callAgent(prompt, images, context, systemPrompt, false);
                 return { id, success: true, critique };
             })
@@ -268,7 +314,6 @@ export async function correctedSolutionsAgent(
     executionsData: Map<string, { strategy: string; execution: string }>,
     critiquesData: Map<string, { critique: string }>,
     systemPrompt: string,
-    userPromptTemplate: string,
     context: AgentExecutionContext,
     images: ImageInput = []
 ): Promise<AgentResponse> {
@@ -279,11 +324,7 @@ export async function correctedSolutionsAgent(
                 const critique = critiquesData.get(id);
                 if (!execution || !critique) return { id, success: false, error: 'Execution or critique not found' };
 
-                const prompt = userPromptTemplate
-                    .replace('{{originalProblemText}}', question)
-                    .replace('{{assignedStrategy}}', execution.strategy)
-                    .replace('{{solutionAttempt}}', execution.execution)
-                    .replace('{{solutionCritique}}', critique.critique);
+                const prompt = buildCorrectionPrompt(question, execution.strategy, execution.execution, critique.critique);
                 const correctedSolution = await callAgent(prompt, images, context, systemPrompt, false);
                 return { id, success: true, correctedSolution };
             })
@@ -301,7 +342,6 @@ export async function selectBestSolutionAgent(
     solutionIds: string[],
     solutionsData: Map<string, { strategy: string; correctedSolution: string }>,
     systemPrompt: string,
-    userPromptTemplate: string,
     context: AgentExecutionContext,
     images: ImageInput = []
 ): Promise<AgentResponse> {
@@ -316,9 +356,7 @@ export async function selectBestSolutionAgent(
             .filter(Boolean)
             .join('\n');
 
-        const prompt = userPromptTemplate
-            .replace('{{originalProblemText}}', question)
-            .replace('{{allSolutions}}', allSolutions);
+        const prompt = buildFinalJudgePrompt(question, allSolutions);
         const selection = await callAgent(prompt, images, context, systemPrompt, false);
         return { success: true, data: { selection }, rawResponse: selection };
     });

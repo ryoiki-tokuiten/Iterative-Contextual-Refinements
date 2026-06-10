@@ -41,7 +41,7 @@ export const Sidebar: React.FC = () => {
         };
     }, []);
 
-    const showFileUpload = getShowFileUploadForMode(currentMode) && modelProvider === 'gemini';
+    const showFileUpload = currentMode === 'contextual' || (getShowFileUploadForMode(currentMode) && modelProvider === 'gemini');
 
     let labelText = 'Core Challenge:';
     let placeholderText = 'E.g., "Design a sustainable urban transportation system", "Analyze the impact of remote work on company culture"...';

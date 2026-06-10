@@ -78,8 +78,8 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process }) =
         if (name.includes('critique') || desc.includes('critique') || name.includes('critic') || desc.includes('critic')) {
             return 'critique'; // Yellow
         }
-        // Red Team / Attack
-        if (name.includes('red team') || desc.includes('red team') || name.includes('redteam') || name.includes('attack') || desc.includes('attack')) {
+        // Evolution filter / adversarial review
+        if (name.includes('evolution filter') || desc.includes('evolution filter') || name.includes('postqualityfilter') || desc.includes('postqualityfilter') || name.includes('attack') || desc.includes('attack')) {
             return 'redteam'; // Red
         }
         // Correction / Refinement / Dissect / Quality filter / PostQF
@@ -306,8 +306,8 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process }) =
                                         </span>
                                     )}
                                     {selectedEvent.codeExecutionEnabled && (
-                                        <span className="config-badge exec" title="Code Execution Enabled">
-                                            CodeExec
+                                        <span className="config-badge exec" title="Python Tool Enabled">
+                                            PythonTool
                                         </span>
                                     )}
                                 </div>

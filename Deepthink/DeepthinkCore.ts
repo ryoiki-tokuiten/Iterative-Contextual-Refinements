@@ -1,42 +1,63 @@
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
- * 
- * Deepthink Core - Core business logic for Deepthink mode
- * Contains state management, pipeline processing, and core algorithms
+ *
+ * Deepthink Core - Evolving Depth First Search implementation.
  */
 
-import { Part, GenerateContentResponse } from "@google/genai";
-import { AIProvider, ThinkingConfig } from '../Routing/AIProvider';
-import { CustomizablePromptsDeepthink, RED_TEAM_AGGRESSIVENESS_LEVELS } from './DeepthinkPrompts';
-import { SolutionCritiqueHistoryManager, SolutionCorrectionHistoryManager, StructuredSolutionPoolHistoryManager, PostQualityFilterHistoryManager, StrategiesGeneratorHistoryManager } from './DeepthinkIterativeHistory';
-import { addSolutionPoolVersion } from './SolutionPool';
-import { extractPartsInOrder, formatPartsForDisplay } from '../Routing/ResponseParser';
+import { GenerateContentResponse, Part } from "@google/genai";
+import { AIMessage, BaseMessage, HumanMessage } from '@langchain/core/messages';
 import { nanoid } from 'nanoid';
-
-// ========== TYPE DEFINITIONS ==========
+import { AIProvider, ThinkingConfig } from '../Routing/AIProvider';
+import { runPythonToolAgent, type SeedImage } from '../Contextual/ContextualPythonToolRuntime';
+import { CustomizablePromptsDeepthink } from './DeepthinkPrompts';
+import { addSolutionPoolVersion } from './SolutionPool';
+import {
+    BranchHistoryEntry,
+    HypothesisRoundSnapshot,
+    PoolHistoryEntry,
+    PqfDecision,
+    StrategySnapshot,
+    StrategyUpdateRequest,
+    buildCorrectionPrompt,
+    buildCorrectionRepository,
+    buildCritiquePrompt,
+    buildHypothesisRefreshPrompt,
+    buildMemoryBankPrompt,
+    buildPqfPrompt,
+    buildSolutionPoolPrompt,
+    buildSolutionPoolRepository,
+    buildStrategyUpdatePrompt,
+} from './DeepthinkIterativeHistory';
 
 export type HypothesisInjectionMode = 'parallel' | 'strategy_aware' | 'selective_injection';
+
+type AgentStatus = 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
 
 export interface DeepthinkSolutionCritiqueData {
     id: string;
     subStrategyId: string;
     mainStrategyId: string;
+    branchVersion?: number;
+    strategyTextSnapshot?: string;
     requestPrompt?: string;
     critiqueResponse?: string;
-    status: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
+    critiqueResponseDisplay?: string;
+    critiqueResponseFinal?: string;
+    status: AgentStatus;
     error?: string;
     retryAttempt?: number;
     isDetailsOpen?: boolean;
+    globalIteration?: number;
+    branchIteration?: number;
 }
 
 export interface SolutionPoolParsedSolution {
     title: string;
-    approach_summary: string;
     content: string;
     confidence: number;
     internal_critique: string;
-    atomic_reconstruction?: string;
+    key_insights?: string;
 }
 
 export interface SolutionPoolParsedResponse {
@@ -47,13 +68,16 @@ export interface SolutionPoolParsedResponse {
 export interface DeepthinkStructuredSolutionPoolAgentData {
     id: string;
     mainStrategyId: string;
+    branchVersion?: number;
     requestPrompt?: string;
     poolResponse?: string;
     parsedPoolResponse?: SolutionPoolParsedResponse;
-    status: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
+    status: AgentStatus;
     error?: string;
     retryAttempt?: number;
     isDetailsOpen?: boolean;
+    globalIteration?: number;
+    branchIteration?: number;
 }
 
 export interface DeepthinkSubStrategyData {
@@ -61,30 +85,43 @@ export interface DeepthinkSubStrategyData {
     subStrategyText: string;
     requestPromptSolutionAttempt?: string;
     solutionAttempt?: string;
+    solutionAttemptDisplay?: string;
+    solutionAttemptFinal?: string;
     requestPromptSolutionCritique?: string;
     solutionCritique?: string;
-    solutionCritiqueStatus?: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
+    solutionCritiqueDisplay?: string;
+    solutionCritiqueFinal?: string;
+    solutionCritiqueStatus?: AgentStatus;
     solutionCritiqueError?: string;
     solutionCritiqueRetryAttempt?: number;
     requestPromptSelfImprovement?: string;
     refinedSolution?: string;
-    selfImprovementStatus?: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
+    refinedSolutionDisplay?: string;
+    refinedSolutionFinal?: string;
+    selfImprovementStatus?: AgentStatus;
     selfImprovementError?: string;
     selfImprovementRetryAttempt?: number;
-    isKilledByRedTeam?: boolean;
-    redTeamReason?: string;
-    status: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
+    status: AgentStatus;
     error?: string;
     isDetailsOpen?: boolean;
     retryAttempt?: number;
     subStrategyFormat?: string;
-    iterativeCorrections?: {
+    branchIterationCount?: number;
+    evolvingDfs?: {
         enabled: boolean;
         iterations: Array<{
             iterationNumber: number;
+            globalIteration?: number;
+            branchIteration?: number;
+            branchVersion?: number;
             critique: string;
+            critiqueDisplay?: string;
+            critiqueFinal?: string;
             correctedSolution: string;
+            correctedSolutionDisplay?: string;
+            correctedSolutionFinal?: string;
             timestamp: number;
+            label?: string;
         }>;
         status: 'idle' | 'processing' | 'completed' | 'error';
         error?: string;
@@ -96,25 +133,14 @@ export interface DeepthinkHypothesisData {
     hypothesisText: string;
     testerRequestPrompt?: string;
     testerAttempt?: string;
-    testerStatus: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
+    testerAttemptDisplay?: string;
+    testerAttemptFinal?: string;
+    testerStatus: AgentStatus;
     testerError?: string;
     isDetailsOpen?: boolean;
-    targetStrategyIds?: string[];  // Mode 3 (selective_injection): which strategies this hypothesis maps to
-}
-
-export interface DeepthinkRedTeamData {
-    id: string;
-    assignedStrategyId: string;
-    requestPrompt?: string;
-    evaluationResponse?: string;
-    killedStrategyIds: string[];
-    killedSubStrategyIds: string[];
-    reasoning?: string;
-    rawResponse?: string;
-    status: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
-    error?: string;
-    isDetailsOpen?: boolean;
-    retryAttempt?: number;
+    targetStrategyIds?: string[];
+    roundNumber?: number;
+    globalIteration?: number;
 }
 
 export interface DeepthinkPostQualityFilterData {
@@ -126,10 +152,45 @@ export interface DeepthinkPostQualityFilterData {
     continuedStrategyIds: string[];
     reasoning?: string;
     rawResponse?: string;
-    status: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
+    status: AgentStatus;
     error?: string;
     isDetailsOpen?: boolean;
     retryAttempt?: number;
+    groupIndex?: number;
+    groupStrategyIds?: string[];
+}
+
+export interface DeepthinkMemoryBankAgentData {
+    id: string;
+    mainStrategyId: string;
+    branchVersion?: number;
+    requestPrompt?: string;
+    memoryBank?: string;
+    status: AgentStatus;
+    error?: string;
+    retryAttempt?: number;
+    globalIteration: number;
+    branchIterationStart: number;
+    branchIterationEnd: number;
+}
+
+export interface DeepthinkStrategyReplacementRecord {
+    strategyId: string;
+    previousStrategyText: string;
+    replacementStrategyText: string;
+    replacedAtGlobalIteration: number;
+    previousBranchVersion: number;
+    newBranchVersion: number;
+    pqfReasoning: string;
+    memoryBank?: string;
+    latestSolution?: string;
+    latestSolutionDisplay?: string;
+    latestSolutionFinal?: string;
+    latestCritique?: string;
+    latestCritiqueDisplay?: string;
+    latestCritiqueFinal?: string;
+    branchHistory?: BranchHistoryEntry[];
+    poolHistory?: PoolHistoryEntry[];
 }
 
 export interface DeepthinkMainStrategyData {
@@ -137,21 +198,23 @@ export interface DeepthinkMainStrategyData {
     strategyText: string;
     requestPromptSubStrategyGen?: string;
     subStrategies: DeepthinkSubStrategyData[];
-    status: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
+    status: AgentStatus;
     error?: string;
     isDetailsOpen?: boolean;
     retryAttempt?: number;
-    isKilledByRedTeam?: boolean;
-    redTeamReason?: string;
     strategyFormat?: string;
     generatedByPostQualityFilter?: boolean;
     updatedByPostQualityFilter?: boolean;
     postQualityFilterIteration?: number;
+    branchVersion?: number;
+    branchIterationCount?: number;
+    memoryBank?: string;
+    replacementHistory?: DeepthinkStrategyReplacementRecord[];
     judgedBestSubStrategyId?: string;
     judgedBestSolution?: string;
     judgingRequestPrompt?: string;
     judgingResponseText?: string;
-    judgingStatus?: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
+    judgingStatus?: AgentStatus;
     judgingError?: string;
     judgingRetryAttempt?: number;
 }
@@ -172,7 +235,9 @@ export interface DeepthinkPipelineState {
     initialStrategies: DeepthinkMainStrategyData[];
     requestPromptHypothesisGen?: string;
     hypotheses: DeepthinkHypothesisData[];
-    hypothesisGenStatus?: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
+    hypothesisHistory?: DeepthinkHypothesisData[][];
+    hypothesisRounds?: HypothesisRoundSnapshot[];
+    hypothesisGenStatus?: AgentStatus;
     hypothesisGenError?: string;
     hypothesisGenRetryAttempt?: number;
     knowledgePacket?: string;
@@ -181,24 +246,21 @@ export interface DeepthinkPipelineState {
     solutionCritiquesError?: string;
     dissectedObservationsSynthesis?: string;
     dissectedSynthesisRequestPrompt?: string;
-    dissectedSynthesisStatus?: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
+    dissectedSynthesisStatus?: AgentStatus;
     dissectedSynthesisError?: string;
     dissectedSynthesisRetryAttempt?: number;
-    redTeamEvaluations: DeepthinkRedTeamData[];
-    redTeamStatus?: 'pending' | 'processing' | 'completed' | 'error' | 'cancelled';
-    redTeamError?: string;
     postQualityFilterAgents: DeepthinkPostQualityFilterData[];
     postQualityFilterStatus?: 'pending' | 'processing' | 'completed' | 'error' | 'cancelled';
     postQualityFilterError?: string;
     postQualityFilterIterationCount?: number;
+    memoryBankAgents?: DeepthinkMemoryBankAgentData[];
     strategicSolverComplete?: boolean;
     hypothesisExplorerComplete?: boolean;
-    redTeamComplete?: boolean;
     finalJudgedBestStrategyId?: string;
     finalJudgedBestSolution?: string;
     finalJudgingRequestPrompt?: string;
     finalJudgingResponseText?: string;
-    finalJudgingStatus?: 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
+    finalJudgingStatus?: AgentStatus;
     finalJudgingError?: string;
     finalJudgingRetryAttempt?: number;
     finalJudgingStatusDescription?: string;
@@ -207,10 +269,9 @@ export interface DeepthinkPipelineState {
     structuredSolutionPoolAgents: DeepthinkStructuredSolutionPoolAgentData[];
     structuredSolutionPoolStatus?: 'pending' | 'processing' | 'completed' | 'error' | 'cancelled';
     structuredSolutionPoolError?: string;
-    // Hypothesis injection mode tracking
     hypothesisInjectionMode?: HypothesisInjectionMode;
-    strategySpecificKnowledgePackets?: Record<string, string>; // Mode 3: per-strategy packets
-    liveEvents?: DeepthinkLiveEvent[]; // Real-time pipeline events
+    strategySpecificKnowledgePackets?: Record<string, string>;
+    liveEvents?: DeepthinkLiveEvent[];
 }
 
 export interface DeepthinkLiveEvent {
@@ -230,40 +291,6 @@ export interface DeepthinkLiveEvent {
     codeExecutionEnabled?: boolean;
 }
 
-export function addLiveEvent(
-    process: DeepthinkPipelineState, 
-    agentName: string, 
-    stepDescription: string, 
-    eventType: 'info' | 'agent_start' | 'agent_complete' | 'agent_error' | 'agent_retry', 
-    details?: { 
-        systemInstruction?: string; 
-        prompt?: string; 
-        response?: string; 
-        error?: string; 
-        attempt?: number;
-        modelName?: string;
-        temperature?: number;
-        topP?: number;
-        codeExecutionEnabled?: boolean;
-    }
-) {
-    if (!process.liveEvents) {
-        process.liveEvents = [];
-    }
-    const event: DeepthinkLiveEvent = {
-        id: `ev-${nanoid(8)}`,
-        timestamp: Date.now(),
-        agentName,
-        stepDescription,
-        eventType,
-        ...details
-    };
-    process.liveEvents.push(event);
-    render();
-}
-
-// ========== ERROR CLASSES ==========
-
 export class PipelineStopRequestedError extends Error {
     constructor(message: string) {
         super(message);
@@ -271,15 +298,10 @@ export class PipelineStopRequestedError extends Error {
     }
 }
 
-// ========== STATE MANAGEMENT ==========
-
 export let activeDeepthinkPipeline: DeepthinkPipelineState | null = null;
 let setActiveDeepthinkPipeline: ((pipeline: DeepthinkPipelineState | null) => void) | null = null;
-
-/** No-op default so call sites never need null-checks */
 let render: () => void = () => { };
 
-// Dependency references stored as a single object after initialization
 export interface DeepthinkCoreDeps {
     getAIProvider: () => AIProvider | null;
     callGemini: (parts: Part[], temperature: number, modelToUse: string, systemInstruction?: string, isJson?: boolean, topP?: number, thinkingConfig?: ThinkingConfig) => Promise<GenerateContentResponse>;
@@ -291,16 +313,15 @@ export interface DeepthinkCoreDeps {
     getSelectedSubStrategiesCount: () => number;
     getRefinementEnabled: () => boolean;
     getSelectedHypothesisCount: () => number;
-    getSelectedRedTeamAggressiveness: () => string;
+    getSelectedPqfAggressiveness: () => string;
     getSkipSubStrategies: () => boolean;
     getDissectedObservationsEnabled: () => boolean;
     getShareHypothesesToDissected: () => boolean;
-    getIterativeCorrectionsEnabled: () => boolean;
-    getIterativeDepth: () => number;
+    getEvolvingDfsEnabled: () => boolean;
+    getEvolvingDfsDepth: () => number;
     getProvideAllSolutionsToCorrectors: () => boolean;
     getPostQualityFilterEnabled: () => boolean;
     getDeepthinkCodeExecutionEnabled: () => boolean;
-    getModelProvider: () => string;
     getHypothesisInjectionMode: () => HypothesisInjectionMode;
     escapeHtml: (unsafe: string) => string;
     cleanTextOutput: (text: string) => string;
@@ -311,14 +332,16 @@ export interface DeepthinkCoreDeps {
 
 let deps: DeepthinkCoreDeps = null!;
 
-// ========== CONSTANTS ==========
-
-const MAX_RETRIES = 3;
-const INITIAL_DELAY_MS = 20000;
+const MAX_API_ATTEMPTS = 4;
+const INITIAL_RETRY_DELAY_MS = 20000;
 const BACKOFF_FACTOR = 2;
-const STRUCTURED_SOLUTION_POOL_TIMEOUT_MS = 900000;
+const AGENT_TIMEOUT_MS = 15 * 60 * 1000;
+const POOL_HISTORY_WINDOW = 5;
+const CORRECTION_HISTORY_WINDOW = 5;
+const MEMORY_INTERVAL = 5;
+const PQF_GROUP_SIZE = 2;
+const HYPOTHESIS_HEARTBEAT_INTERVAL = 2;
 
-/** Model routing: maps step description keywords to prompt-state model keys */
 const MODEL_MAP: [string, keyof CustomizablePromptsDeepthink][] = [
     ['Initial Strategy Generation', 'model_initialStrategy'],
     ['Sub-Strategy Generation', 'model_subStrategy'],
@@ -326,31 +349,457 @@ const MODEL_MAP: [string, keyof CustomizablePromptsDeepthink][] = [
     ['Solution Critique', 'model_solutionCritique'],
     ['Dissected Observations Synthesis', 'model_dissectedSynthesis'],
     ['Self-Improvement', 'model_selfImprovement'],
-    ['Self Improvement', 'model_selfImprovement'],
+    ['Solution Correction', 'model_selfImprovement'],
     ['Hypothesis Generation', 'model_hypothesisGeneration'],
     ['Hypothesis Testing', 'model_hypothesisTester'],
-    ['Red Team', 'model_redTeam'],
     ['PostQualityFilter', 'model_postQualityFilter'],
-    ['Final Judge', 'model_finalJudge'],
+    ['Strategy Updates', 'model_initialStrategy'],
+    ['Memory Bank', 'model_memoryBank'],
+    ['Structured Solution Pool', 'model_structuredSolutionPool'],
+    ['Final Judging', 'model_finalJudge'],
 ];
 
-/** Agents eligible for code execution */
-const CODE_EXEC_AGENTS = new Set([
-    'Hypothesis Testing', 'Solution Attempt', 'Solution Critique',
-    'Self-Improvement', 'Self Improvement', 'Structured Solution Pool',
+const PYTHON_TOOL_AGENTS = new Set<DeepthinkPythonAgentKind>([
+    'Hypothesis Testing',
+    'Solution Attempt',
+    'Solution Critique',
+    'Self-Improvement',
+    'Solution Correction',
 ]);
 
-// ========== UTILITY HELPERS ==========
+type DeepthinkPythonAgentKind =
+    | 'Hypothesis Testing'
+    | 'Solution Attempt'
+    | 'Solution Critique'
+    | 'Self-Improvement'
+    | 'Solution Correction';
 
-/** Build image inline data parts from optional base64 + mimeType */
+interface DeepthinkPythonAgentAccess {
+    kind: DeepthinkPythonAgentKind;
+    agentName: string;
+    sessionId: string;
+    historyKey?: string;
+}
+
+interface DeepthinkAgentCallOutput {
+    contextText: string;
+    displayText: string;
+    finalText: string;
+}
+
+const deepthinkPythonHistories = new Map<string, BaseMessage[]>();
+
+interface BranchRuntime {
+    strategyId: string;
+    branchVersion: number;
+    branchIterationCount: number;
+    globalIteration: number;
+    history: BranchHistoryEntry[];
+    poolHistory: PoolHistoryEntry[];
+    memoryBank?: string;
+    lastMemoryHistoryCount: number;
+    lastHypothesisFlushGlobalIteration?: number;
+}
+
 function buildImageParts(imageBase64?: string | null, imageMimeType?: string | null): Part[] {
     return (imageBase64 && imageMimeType)
         ? [{ inlineData: { mimeType: imageMimeType, data: imageBase64 } }]
         : [];
 }
 
+function extensionForMimeType(mimeType: string): string {
+    switch (mimeType) {
+        case 'image/jpeg':
+            return '.jpg';
+        case 'image/gif':
+            return '.gif';
+        case 'image/webp':
+            return '.webp';
+        case 'image/bmp':
+            return '.bmp';
+        case 'image/tiff':
+            return '.tiff';
+        case 'image/png':
+        default:
+            return '.png';
+    }
+}
 
-// ========== INITIALIZATION ==========
+function getDeepthinkSeedImages(process: DeepthinkPipelineState): SeedImage[] {
+    if (!process.challengeImageBase64 || !process.challengeImageMimeType?.startsWith('image/')) return [];
+    return [{
+        name: `deepthink-uploaded-image${extensionForMimeType(process.challengeImageMimeType)}`,
+        mimeType: process.challengeImageMimeType,
+        base64: process.challengeImageBase64,
+    }];
+}
+
+function safeSessionSegment(value: string | number | undefined, fallback: string): string {
+    const normalized = String(value ?? fallback)
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+    return (normalized || fallback).slice(0, 28);
+}
+
+function buildDeepthinkPythonSessionId(process: DeepthinkPipelineState, parts: Array<string | number | undefined>): string {
+    const segments = [
+        'dtpy',
+        safeSessionSegment(process.id, 'run'),
+        ...parts.map((part, index) => safeSessionSegment(part, `p${index + 1}`)),
+    ];
+    return segments.join('-').slice(0, 80);
+}
+
+function getDeepthinkPythonFilesystemRules(): string[] {
+    return [
+        '- Deepthink Python access is available only to Hypothesis Testing, Solution Attempt, Solution Critique, Self-Improvement, and Solution Correction agents.',
+        '- Solution Attempt agents keep isolated Python memory and virtual filesystems by assigned strategy/sub-strategy branch version.',
+        '- Solution Critique agents keep isolated Python memory and virtual filesystems by assigned strategy/sub-strategy branch version.',
+        '- Self-Improvement and Solution Correction agents keep isolated Python memory and virtual filesystems by assigned strategy/sub-strategy branch version across correction iterations.',
+        '- Strategy branches that survive post-quality filtering keep the same Python memory and virtual filesystem.',
+        '- Updated/replaced strategies start as new agents with fresh Python memory and a fresh virtual filesystem because their branch version changes.',
+        '- Hypothesis Testing agents receive isolated per-hypothesis sessions; do not assume files or Python variables persist across hypothesis refresh rounds.',
+    ];
+}
+
+function createPersistentPythonAccess(args: {
+    process: DeepthinkPipelineState;
+    kind: Exclude<DeepthinkPythonAgentKind, 'Hypothesis Testing'>;
+    strategyId: string;
+    subStrategyId?: string;
+    branchVersion?: number;
+}): DeepthinkPythonAgentAccess {
+    const sessionId = buildDeepthinkPythonSessionId(args.process, [
+        args.kind,
+        args.strategyId,
+        args.subStrategyId || 'direct',
+        `v${args.branchVersion || 1}`,
+    ]);
+    return {
+        kind: args.kind,
+        agentName: `${args.kind} Agent`,
+        sessionId,
+        historyKey: sessionId,
+    };
+}
+
+function createHypothesisPythonAccess(process: DeepthinkPipelineState, hypothesis: DeepthinkHypothesisData): DeepthinkPythonAgentAccess {
+    return {
+        kind: 'Hypothesis Testing',
+        agentName: 'Hypothesis Testing Agent',
+        sessionId: buildDeepthinkPythonSessionId(process, [
+            'hypothesis-testing',
+            hypothesis.id,
+            `round-${hypothesis.roundNumber || 1}`,
+            `global-${hypothesis.globalIteration || 0}`,
+        ]),
+    };
+}
+
+function textAgentOutput(text: string): DeepthinkAgentCallOutput {
+    return {
+        contextText: text,
+        displayText: text,
+        finalText: text,
+    };
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function messageText(messages: Array<{ content: string }>): string {
+    return messages.map(message => message.content).join('\n\n');
+}
+
+function cleanJsonText(raw: string): string {
+    const trimmed = raw.trim().replace(/```json\s*/g, '').replace(/```\s*/g, '');
+    const start = trimmed.indexOf('{');
+    const end = trimmed.lastIndexOf('}');
+    if (start === -1 || end === -1 || start >= end) {
+        throw new Error('No valid JSON object boundaries found');
+    }
+    return trimmed.slice(start, end + 1);
+}
+
+function parseJson(raw: string, context: string): any {
+    try {
+        return deps.parseJsonSafe(raw, context);
+    } catch {
+        return JSON.parse(cleanJsonText(raw));
+    }
+}
+
+function asStringArray(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value.map(item => {
+        if (typeof item === 'string') return item;
+        if (item && typeof item === 'object') {
+            const record = item as Record<string, unknown>;
+            return String(record.strategy || record.text || record.content || '');
+        }
+        return String(item ?? '');
+    }).filter(Boolean);
+}
+
+function buildInitialStrategyPrompt(challengeText: string, strategyCount: number): string {
+    return `Core Challenge:
+${challengeText}
+
+<Initial Strategy Generation Request>
+Generate exactly ${strategyCount} genuinely novel, fundamentally distinct high-level strategic interpretations for the Core Challenge.
+Each strategy must be a single concise, information-dense paragraph.
+Do not solve the challenge. Do not include final answers, conclusions, calculations, code, or detailed execution steps.
+Return only JSON:
+{
+  "strategies": [
+    "Strategy 1: ..."
+  ]
+}
+</Initial Strategy Generation Request>`;
+}
+
+function buildSubStrategyPrompt(args: {
+    challengeText: string;
+    currentMainStrategy: string;
+    otherMainStrategies: string;
+    subStrategyCount: number;
+}): string {
+    return `Core Challenge:
+${args.challengeText}
+
+<Assigned Main Strategy>
+${args.currentMainStrategy}
+</Assigned Main Strategy>
+
+<Other Main Strategies For Awareness>
+${args.otherMainStrategies}
+</Other Main Strategies For Awareness>
+
+<Sub-Strategy Generation Request>
+Generate exactly ${args.subStrategyCount} genuinely distinct high-level sub-strategy interpretations within the assigned main strategy.
+Do not solve the challenge. Do not output detailed execution plans.
+Return only JSON:
+{
+  "sub_strategies": [
+    "Sub-strategy 1: ..."
+  ]
+}
+</Sub-Strategy Generation Request>`;
+}
+
+function buildHypothesisGenerationPrompt(args: {
+    challengeText: string;
+    count: number;
+    mode: HypothesisInjectionMode;
+    strategyContext: string;
+}): string {
+    const mappingInstruction = args.mode === 'selective_injection'
+        ? `Each hypothesis must include "target_strategies" as an array of strategy IDs. Use an empty array only for globally useful hypotheses.`
+        : `Hypotheses may be globally useful and do not need strategy mappings.`;
+
+    return `Core Challenge:
+${args.challengeText}
+
+<Current Strategies>
+${args.strategyContext || 'Strategy context is not required for this hypothesis mode.'}
+</Current Strategies>
+
+<Hypothesis Generation Request>
+Generate exactly ${args.count} hypotheses to investigate before execution.
+Do not solve the Core Challenge and do not include final answers.
+${mappingInstruction}
+Return only JSON:
+{
+  "hypotheses": [
+    {
+      "text": "Hypothesis text",
+      "target_strategies": ["main1"]
+    }
+  ]
+}
+</Hypothesis Generation Request>`;
+}
+
+function buildHypothesisTesterPrompt(challengeText: string, hypothesisText: string): string {
+    return `Core Challenge:
+${challengeText}
+
+<Assigned Hypothesis To Test>
+${hypothesisText}
+</Assigned Hypothesis To Test>
+
+<Hypothesis Testing Request>
+Investigate this hypothesis rigorously and independently. Attempt validation and refutation, test edge cases, and report only findings about the hypothesis.
+Do not solve the Core Challenge unless the hypothesis explicitly requires checking a proposed answer.
+</Hypothesis Testing Request>`;
+}
+
+function buildSolutionAttemptPrompt(args: {
+    challengeText: string;
+    mainStrategy: string;
+    subStrategy: string;
+    knowledgePacket: string;
+    otherStrategyContext?: string;
+    branchContext?: string;
+}): string {
+    return `Core Challenge:
+${args.challengeText}
+
+<Assigned Strategy Text>
+${args.mainStrategy}
+</Assigned Strategy Text>
+
+-------------------------------------------------------------------------------
+<Context From Other Strategies>
+${args.otherStrategyContext || 'No cross-strategy context is available for this execution.'}
+</Context From Other Strategies>
+
+-------------------------------------------------------------------------------
+<Strategy-Aware Selective Knowledge Packet>
+${args.knowledgePacket}
+</Strategy-Aware Selective Knowledge Packet>
+
+<Execution Request>
+Execute the assigned framework completely and faithfully. Do not switch strategies. Produce the full solution attempt for this assigned framework.
+</Execution Request>
+
+-------------------------------------------------------------------------------
+<Relevant Context For Your Current Strategy>
+This is all the relevant context related to your current strategy. Treat this as your primary identity, constraint set, and final context anchor.
+
+<Assigned Main Strategy>
+${args.mainStrategy}
+</Assigned Main Strategy>
+
+<Assigned Sub-Strategy Or Direct Strategy>
+${args.subStrategy}
+</Assigned Sub-Strategy Or Direct Strategy>
+
+${args.branchContext || 'No prior branch-local execution context exists yet.'}
+</Relevant Context For Your Current Strategy>`;
+}
+
+function buildNonIterativeCritiquePrompt(args: {
+    challengeText: string;
+    mainStrategy: string;
+    subStrategyId: string;
+    subStrategyText: string;
+    solution: string;
+}): string {
+    return `Core Challenge:
+${args.challengeText}
+
+<Main Strategy>
+${args.mainStrategy}
+</Main Strategy>
+
+<Sub-Strategy id="${args.subStrategyId}">
+${args.subStrategyText}
+</Sub-Strategy>
+
+<Solution Attempt To Critique>
+${args.solution}
+</Solution Attempt To Critique>
+
+<Critique Request>
+Critique this solution attempt for correctness, rigor, completeness, strategy fidelity, and unresolved issues. Do not produce the corrected solution.
+</Critique Request>`;
+}
+
+function buildDissectedSynthesisPrompt(args: {
+    challengeText: string;
+    knowledgePacket: string;
+    solutionsWithCritiques: string;
+}): string {
+    return `Original Problem:
+${args.challengeText}
+
+<Information Packet>
+${args.knowledgePacket}
+</Information Packet>
+
+<Solutions With Critiques>
+${args.solutionsWithCritiques || 'No solution attempts available.'}
+</Solutions With Critiques>
+
+<Synthesis Request>
+Synthesize the critiques into a concise, rigorous correction brief. Resolve conflicts by prioritizing the most concrete, logically supported critique. Do not solve from scratch.
+</Synthesis Request>`;
+}
+
+function buildSelfImprovementPrompt(args: {
+    challengeText: string;
+    mainStrategy: string;
+    subStrategy: string;
+    solutionAttempt: string;
+    solutionSection: string;
+}): string {
+    return `Original Problem:
+${args.challengeText}
+
+<Assigned Main Strategy>
+${args.mainStrategy}
+</Assigned Main Strategy>
+
+<Assigned Sub-Strategy>
+${args.subStrategy}
+</Assigned Sub-Strategy>
+
+<Original Solution Attempt>
+${args.solutionAttempt}
+</Original Solution Attempt>
+
+<Correction Context>
+${args.solutionSection}
+</Correction Context>
+
+<Self-Improvement Request>
+Produce the corrected final solution for this assigned strategy/sub-strategy. Address the critique directly. Preserve strategy fidelity and output the full corrected solution.
+</Self-Improvement Request>`;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, description: string): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Timeout after ${Math.round(timeoutMs / 60000)} minutes: ${description}`)), timeoutMs);
+    });
+    return Promise.race([promise, timeout]).finally(() => {
+        if (timer) clearTimeout(timer);
+    });
+}
+
+function isPythonToolEnabledFor(access: DeepthinkPythonAgentAccess | undefined): boolean {
+    return !!access && PYTHON_TOOL_AGENTS.has(access.kind) && deps.getDeepthinkCodeExecutionEnabled();
+}
+
+function modelFor(stepDescription: string): string {
+    const matched = MODEL_MAP.find(([key]) => stepDescription.includes(key));
+    if (!matched) return deps.getSelectedModel();
+    return (deps.customPromptsDeepthinkState[matched[1]] as string | null | undefined) || deps.getSelectedModel();
+}
+
+function addLiveEvent(
+    process: DeepthinkPipelineState,
+    agentName: string,
+    stepDescription: string,
+    eventType: DeepthinkLiveEvent['eventType'],
+    details?: Partial<DeepthinkLiveEvent>
+) {
+    if (!process.liveEvents) process.liveEvents = [];
+    process.liveEvents.push({
+        id: `ev-${nanoid(8)}`,
+        timestamp: Date.now(),
+        agentName,
+        stepDescription,
+        eventType,
+        ...details,
+    });
+    render();
+}
+
+export { addLiveEvent };
 
 export function initializeDeepthinkCore(dependencies: DeepthinkCoreDeps & {
     setActiveDeepthinkPipeline: (pipeline: DeepthinkPipelineState | null) => void;
@@ -362,187 +811,183 @@ export function initializeDeepthinkCore(dependencies: DeepthinkCoreDeps & {
     render = renderFn;
 }
 
-// Export for external use
 export function getActiveDeepthinkPipeline() {
     return activeDeepthinkPipeline;
 }
 
 export function setActiveDeepthinkPipelineForImport(pipeline: DeepthinkPipelineState | null) {
     activeDeepthinkPipeline = pipeline;
-    if (setActiveDeepthinkPipeline) {
-        setActiveDeepthinkPipeline(pipeline);
-    }
+    if (setActiveDeepthinkPipeline) setActiveDeepthinkPipeline(pipeline);
 }
 
 export function setActiveDeepthinkPipelineInternal(pipeline: DeepthinkPipelineState | null) {
     activeDeepthinkPipeline = pipeline;
 }
 
-// ========== RED TEAM EVALUATION FUNCTIONS ==========
+async function callDeepthinkPythonToolAgent(args: {
+    process: DeepthinkPipelineState;
+    promptText: string;
+    systemInstruction: string;
+    modelName: string;
+    temperature: number;
+    topP?: number;
+    access: DeepthinkPythonAgentAccess;
+}): Promise<DeepthinkAgentCallOutput> {
+    const previousMessages = args.access.historyKey
+        ? deepthinkPythonHistories.get(args.access.historyKey) || []
+        : [];
+    const promptMessage = new HumanMessage(args.promptText);
 
-export function applyRedTeamResults(currentProcess: DeepthinkPipelineState): void {
-    currentProcess.redTeamEvaluations.forEach(redTeamAgent => {
-        if (redTeamAgent.status === 'completed') {
-            const reasonMap = (redTeamAgent as any).killedReasonMap || {};
-            const fallbackReason = `Eliminated by Red Team Agent ${redTeamAgent.id}`;
-
-            redTeamAgent.killedStrategyIds.forEach(strategyId => {
-                const strategy = currentProcess.initialStrategies.find(s => s.id === strategyId);
-                if (strategy) {
-                    strategy.isKilledByRedTeam = true;
-                    strategy.redTeamReason = reasonMap[strategyId] || fallbackReason;
-                }
-            });
-
-            redTeamAgent.killedSubStrategyIds.forEach(subStrategyId => {
-                currentProcess.initialStrategies.forEach(strategy => {
-                    const subStrategy = strategy.subStrategies.find(sub => sub.id === subStrategyId);
-                    if (subStrategy) {
-                        subStrategy.isKilledByRedTeam = true;
-                        subStrategy.redTeamReason = reasonMap[subStrategyId] || fallbackReason;
-                    }
-                });
-            });
-        }
+    const result = await runPythonToolAgent({
+        agentName: args.access.agentName,
+        sessionId: args.access.sessionId,
+        messages: [...previousMessages, promptMessage],
+        systemPrompt: args.systemInstruction,
+        modelName: args.modelName,
+        temperature: args.temperature,
+        topP: args.topP,
+        seedImages: getDeepthinkSeedImages(args.process),
+        runScopeDescription: 'same Deepthink run',
+        agentFilesystemRules: getDeepthinkPythonFilesystemRules(),
     });
-}
 
-export async function runConsolidatedRedTeamAnalysis(
-    currentProcess: DeepthinkPipelineState,
-    strategies: DeepthinkMainStrategyData[],
-    problemText: string,
-    imageBase64: string | null | undefined,
-    imageMimeType: string | null | undefined,
-    makeDeepthinkApiCall: any,
-    aggressiveness: string
-): Promise<void> {
-    if (!strategies || strategies.length === 0) return;
-
-    const redTeamAgent: DeepthinkRedTeamData = {
-        id: `redteam-consolidated`,
-        assignedStrategyId: 'all',
-        killedStrategyIds: [],
-        killedSubStrategyIds: [],
-        status: 'pending',
-        isDetailsOpen: true
-    };
-    currentProcess.redTeamEvaluations = [redTeamAgent];
-    render();
-
-    if (currentProcess.isStopRequested) {
-        redTeamAgent.status = 'cancelled';
-        return;
+    if (args.access.historyKey) {
+        deepthinkPythonHistories.set(args.access.historyKey, [
+            ...previousMessages,
+            promptMessage,
+            ...(result.loopMessages || [new AIMessage(result.finalText || result.text)]),
+        ]);
     }
 
-    try {
-        redTeamAgent.status = 'processing';
+    return {
+        contextText: result.executionTraceText || result.finalText || result.promptText || result.text,
+        displayText: result.text,
+        finalText: result.finalText || result.promptText || result.text,
+    };
+}
+
+async function callAgent(args: {
+    process: DeepthinkPipelineState;
+    parts: Part[];
+    systemInstruction: string;
+    isJson: boolean;
+    stepDescription: string;
+    target: any;
+    retryField: string;
+    timeoutMs?: number;
+    critical: boolean;
+    pythonAccess?: DeepthinkPythonAgentAccess;
+}): Promise<DeepthinkAgentCallOutput> {
+    const promptText = args.parts.map(part => part.text || (part.inlineData ? `[Attached Image: ${part.inlineData.mimeType}]` : '')).join('\n');
+    const startedAt = Date.now();
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= MAX_API_ATTEMPTS; attempt++) {
+        if (args.process.isStopRequested) throw new PipelineStopRequestedError(`Stop requested before API call: ${args.stepDescription}`);
+
+        const agentModel = modelFor(args.stepDescription);
+        const temperature = deps.getSelectedTemperature();
+        const topP = deps.getSelectedTopP();
+        const pythonToolEnabled = isPythonToolEnabledFor(args.pythonAccess);
+        const thinkingConfig: ThinkingConfig = {
+            thinkingLevel: deps.getSelectedThinkingLevel ? deps.getSelectedThinkingLevel() : 'high',
+        };
+
+        args.target[args.retryField] = attempt - 1;
         render();
 
-        const allStrategiesText = strategies.map(mainStrategy => {
-            const subStrategiesText = mainStrategy.subStrategies
-                .map((sub) => `  - Sub-Strategy [ID: ${sub.id}]: ${sub.subStrategyText}`)
-                .join('\n');
-            return `Main Strategy [ID: ${mainStrategy.id}]:\n${mainStrategy.strategyText}\nSub-Strategies:\n${subStrategiesText}`;
-        }).join('\n\n' + '='.repeat(40) + '\n\n');
-
-        const aggressivenessConfig = RED_TEAM_AGGRESSIVENESS_LEVELS[aggressiveness as keyof typeof RED_TEAM_AGGRESSIVENESS_LEVELS] || RED_TEAM_AGGRESSIVENESS_LEVELS.balanced;
-        const redTeamPrompt = deps.customPromptsDeepthinkState.user_deepthink_redTeam
-            .replace('{{originalProblemText}}', problemText)
-            .replace('{{allStrategies}}', allStrategiesText)
-            .replace(/\{\{RED_TEAM_AGGRESSIVENESS\}\}/g, aggressivenessConfig.description);
-        const redTeamSysPrompt = deps.customPromptsDeepthinkState.sys_deepthink_redTeam
-            .replace(/\{\{RED_TEAM_AGGRESSIVENESS\}\}/g, aggressivenessConfig.description);
-
-        const redTeamPromptParts: Part[] = [...buildImageParts(imageBase64, imageMimeType), { text: redTeamPrompt }];
-        redTeamAgent.requestPrompt = redTeamPrompt + (imageBase64 ? "\n[Image Provided]" : "");
-
-        const redTeamResponse = await makeDeepthinkApiCall(
-            redTeamPromptParts,
-            redTeamSysPrompt,
-            true,
-            `Red Team Evaluation`,
-            redTeamAgent,
-            'retryAttempt'
-        );
-
-        redTeamAgent.evaluationResponse = deps.cleanTextOutput(redTeamResponse);
-        redTeamAgent.rawResponse = redTeamResponse;
+        addLiveEvent(args.process, args.stepDescription, `Invoking agent model (Attempt ${attempt}/${MAX_API_ATTEMPTS})`, 'agent_start', {
+            systemInstruction: args.systemInstruction,
+            prompt: promptText,
+            attempt,
+            modelName: agentModel,
+            temperature,
+            topP,
+            codeExecutionEnabled: pythonToolEnabled,
+        });
 
         try {
-            let cleanedResponse = redTeamResponse.trim();
-            cleanedResponse = cleanedResponse.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+            const call = pythonToolEnabled
+                ? callDeepthinkPythonToolAgent({
+                    process: args.process,
+                    promptText,
+                    systemInstruction: args.systemInstruction,
+                    modelName: agentModel,
+                    temperature,
+                    topP,
+                    access: args.pythonAccess!,
+                })
+                : deps.callGemini(args.parts, temperature, agentModel, args.systemInstruction, args.isJson, topP, thinkingConfig)
+                    .then(response => {
+                        const text = response.text || '';
+                        return textAgentOutput(text);
+                    });
+            const remaining = args.timeoutMs ? Math.max(1, args.timeoutMs - (Date.now() - startedAt)) : undefined;
+            const responseOutput = remaining ? await withTimeout(call, remaining, args.stepDescription) : await call;
+            const responseText = responseOutput.contextText;
 
-            const jsonStart = cleanedResponse.indexOf('{');
-            const jsonEnd = cleanedResponse.lastIndexOf('}');
-            if (jsonStart === -1 || jsonEnd === -1 || jsonStart >= jsonEnd) {
-                throw new Error(`No valid JSON object boundaries found`);
-            }
-            cleanedResponse = cleanedResponse.substring(jsonStart, jsonEnd + 1);
+            if (!responseText.trim()) throw new Error('Empty response from API');
 
-            const parsed = JSON.parse(cleanedResponse);
-            redTeamAgent.reasoning = JSON.stringify(parsed, null, 2);
+            addLiveEvent(args.process, args.stepDescription, 'Agent completed successfully', 'agent_complete', {
+                response: responseOutput.displayText,
+                systemInstruction: args.systemInstruction,
+                prompt: promptText,
+                modelName: agentModel,
+                temperature,
+                topP,
+                codeExecutionEnabled: pythonToolEnabled,
+            });
 
-            const killedStrategyIds: string[] = [];
-            const killedSubStrategyIds: string[] = [];
-            const reasonMap: { [key: string]: string } = {};
+            return responseOutput;
+        } catch (error: any) {
+            lastError = error;
+            addLiveEvent(args.process, args.stepDescription, `Agent attempt failed: ${error.message || String(error)}`, attempt === MAX_API_ATTEMPTS ? 'agent_error' : 'agent_retry', {
+                error: error.message || String(error),
+                attempt,
+                systemInstruction: args.systemInstruction,
+                prompt: promptText,
+                modelName: agentModel,
+                temperature,
+                topP,
+                codeExecutionEnabled: pythonToolEnabled,
+            });
 
-            if (Array.isArray(parsed.strategy_evaluations)) {
-                parsed.strategy_evaluations.forEach((evaluation: any) => {
-                    if (!evaluation || typeof evaluation !== 'object') return;
-                    const decision = String(evaluation.decision || '').toLowerCase();
-                    const id = typeof evaluation.id === 'string' ? evaluation.id : '';
-                    if (!id) return;
-                    if (decision === 'eliminate') {
-                        if (id.includes('main')) {
-                            if (id.includes('sub')) {
-                                killedSubStrategyIds.push(id);
-                            } else {
-                                killedStrategyIds.push(id);
-                            }
-                        }
-                        const reason = evaluation.reason || 'No reason provided';
-                        reasonMap[id] = reason;
-                    }
-                });
-            }
+            if (attempt === MAX_API_ATTEMPTS) break;
 
-            redTeamAgent.killedStrategyIds = killedStrategyIds;
-            redTeamAgent.killedSubStrategyIds = killedSubStrategyIds;
-            (redTeamAgent as any).killedReasonMap = reasonMap;
-            redTeamAgent.status = 'completed';
+            if (args.timeoutMs && Date.now() - startedAt >= args.timeoutMs) break;
+
+            if ('status' in args.target) args.target.status = 'retrying';
+            args.target[args.retryField] = attempt;
             render();
 
-        } catch (e: any) {
-            console.error("Error parsing Red Team JSON:", e);
-            redTeamAgent.status = 'error';
-            redTeamAgent.error = "Failed to parse Red Team response: " + e.message;
+            const delay = INITIAL_RETRY_DELAY_MS * Math.pow(BACKOFF_FACTOR, attempt - 1);
+            const deadlineRemaining = args.timeoutMs ? args.timeoutMs - (Date.now() - startedAt) : delay;
+            await sleep(Math.max(0, Math.min(delay, deadlineRemaining)));
+
+            if ('status' in args.target) args.target.status = 'processing';
             render();
         }
-    } catch (error: any) {
-        redTeamAgent.status = 'error';
-        redTeamAgent.error = error.message || "Red Team evaluation failed";
-        render();
     }
+
+    const message = lastError instanceof Error ? lastError.message : String(lastError || 'Unknown API failure');
+    if (args.critical) throw new Error(message);
+    throw new Error(message);
 }
 
-// ========== MAIN PIPELINE FUNCTION ==========
-
-export async function startDeepthinkAnalysisProcess(challengeText: string, imageBase64?: string | null, imageMimeType?: string | null) {
-    const currentAIProvider = deps.getAIProvider();
-    if (!currentAIProvider) {
-        alert("AI provider not initialized. Please check your API key configuration.");
-        return;
-    }
-
-    activeDeepthinkPipeline = {
+function createPipeline(challengeText: string, imageBase64?: string | null, imageMimeType?: string | null): DeepthinkPipelineState {
+    return {
         id: `deepthink-${nanoid(12)}`,
         challenge: challengeText,
-        challengeText: challengeText,
+        challengeText,
+        challengeImageBase64: imageBase64,
+        challengeImageMimeType: imageMimeType || undefined,
         initialStrategies: [],
         hypotheses: [],
+        hypothesisHistory: [],
+        hypothesisRounds: [],
         solutionCritiques: [],
-        redTeamEvaluations: [],
         postQualityFilterAgents: [],
+        memoryBankAgents: [],
         structuredSolutionPoolAgents: [],
         status: 'processing',
         isStopRequested: false,
@@ -550,1889 +995,1734 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
         activeStrategyTab: 0,
         strategicSolverComplete: false,
         hypothesisExplorerComplete: false,
-        redTeamComplete: false,
         knowledgePacket: '',
         finalJudgingStatus: 'pending',
         structuredSolutionPoolEnabled: false,
-        liveEvents: []
+        structuredSolutionPoolStatus: 'pending',
+        liveEvents: [],
     };
+}
 
-    addLiveEvent(activeDeepthinkPipeline, "Orchestrator", "Initializing Multi-Agent Pipeline", "info");
+function directSubFor(strategy: DeepthinkMainStrategyData): DeepthinkSubStrategyData | undefined {
+    return strategy.subStrategies[0];
+}
 
-    if (setActiveDeepthinkPipeline) {
-        setActiveDeepthinkPipeline(activeDeepthinkPipeline);
+function activeStrategies(process: DeepthinkPipelineState): DeepthinkMainStrategyData[] {
+    return process.initialStrategies;
+}
+
+function ensureDirectSubStrategy(strategy: DeepthinkMainStrategyData): DeepthinkSubStrategyData {
+    let sub = directSubFor(strategy);
+    if (!sub) {
+        sub = {
+            id: `${strategy.id}-direct`,
+            subStrategyText: strategy.strategyText,
+            status: 'pending',
+            isDetailsOpen: false,
+            subStrategyFormat: 'markdown',
+        };
+        strategy.subStrategies = [sub];
     }
+    return sub;
+}
 
-    deps.updateControlsState({ isGenerating: true });
-    render();
-
-    const currentProcess = activeDeepthinkPipeline!;
-
-    const makeDeepthinkApiCall = async (
-        parts: Part[],
-        systemInstruction: string,
-        isJson: boolean,
-        stepDescription: string,
-        targetStatusField: DeepthinkMainStrategyData | DeepthinkSubStrategyData | DeepthinkPipelineState | DeepthinkHypothesisData | DeepthinkSolutionCritiqueData | DeepthinkRedTeamData | DeepthinkPostQualityFilterData,
-        retryAttemptField: 'retryAttempt' | 'selfImprovementRetryAttempt' | 'testerRetryAttempt' | 'hypothesisGenRetryAttempt' | 'solutionCritiqueRetryAttempt' | 'dissectedSynthesisRetryAttempt'
-    ): Promise<string> => {
-        if (!currentProcess || currentProcess.isStopRequested) throw new PipelineStopRequestedError(`Stop requested before API call: ${stepDescription}`);
-        let responseText = "";
-        const promptText = parts.map(p => p.text || (p.inlineData ? `[Attached Image: ${p.inlineData.mimeType}]` : '')).join('\n');
-
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-            if (currentProcess.isStopRequested) throw new PipelineStopRequestedError(`Stop requested during retry for: ${stepDescription}`);
-
-            try {
-                (targetStatusField as any)[retryAttemptField] = attempt;
-                render();
-
-                // Route to per-agent model via MODEL_MAP lookup
-                const matched = MODEL_MAP.find(([key]) => stepDescription.includes(key));
-                const agentModel = matched
-                    ? (deps.customPromptsDeepthinkState[matched[1]] as string) || deps.getSelectedModel()
-                    : deps.getSelectedModel();
-
-                // Check code execution eligibility
-                const isCodeExecutionAgent = [...CODE_EXEC_AGENTS].some(agent => stepDescription.includes(agent));
-                const isGeminiProvider = deps.getModelProvider() === 'gemini';
-                const shouldEnableCodeExecution = isCodeExecutionAgent && isGeminiProvider && deps.getDeepthinkCodeExecutionEnabled();
-
-                const currentTemp = deps.getSelectedTemperature();
-                const currentTopP = deps.getSelectedTopP();
-
-                addLiveEvent(currentProcess, stepDescription, `Invoking agent model (Attempt ${attempt + 1}/${MAX_RETRIES + 1})`, "agent_start", {
-                    systemInstruction,
-                    prompt: promptText,
-                    attempt: attempt + 1,
-                    modelName: agentModel,
-                    temperature: currentTemp,
-                    topP: currentTopP,
-                    codeExecutionEnabled: shouldEnableCodeExecution
-                });
-
-                const selectedThinkingLevel = deps.getSelectedThinkingLevel ? deps.getSelectedThinkingLevel() : 'high';
-                const thinkingConfig: ThinkingConfig = {
-                    codeExecution: shouldEnableCodeExecution,
-                    thinkingLevel: selectedThinkingLevel
-                };
-
-                const strategyResponse = await deps.callGemini(parts, currentTemp, agentModel, systemInstruction, isJson, currentTopP, thinkingConfig);
-
-                // Handle code execution responses specially to preserve code blocks and output
-                if (shouldEnableCodeExecution && strategyResponse?.candidates?.[0]?.content?.parts) {
-                    const orderedParts = extractPartsInOrder(strategyResponse);
-                    responseText = formatPartsForDisplay(orderedParts);
-                } else {
-                    responseText = strategyResponse.text || "";
-                }
-
-                if (responseText && responseText.trim() !== "") {
-                    addLiveEvent(currentProcess, stepDescription, `Agent completed successfully`, "agent_complete", {
-                        response: responseText,
-                        systemInstruction,
-                        prompt: promptText,
-                        modelName: agentModel,
-                        temperature: currentTemp,
-                        topP: currentTopP,
-                        codeExecutionEnabled: shouldEnableCodeExecution
-                    });
-                    break;
-                } else {
-                    throw new Error("Empty response from API");
-                }
-            } catch (error: any) {
-                const matched = MODEL_MAP.find(([key]) => stepDescription.includes(key));
-                const agentModel = matched
-                    ? (deps.customPromptsDeepthinkState[matched[1]] as string) || deps.getSelectedModel()
-                    : deps.getSelectedModel();
-                const isCodeExecutionAgent = [...CODE_EXEC_AGENTS].some(agent => stepDescription.includes(agent));
-                const isGeminiProvider = deps.getModelProvider() === 'gemini';
-                const shouldEnableCodeExecution = isCodeExecutionAgent && isGeminiProvider && deps.getDeepthinkCodeExecutionEnabled();
-                const currentTemp = deps.getSelectedTemperature();
-                const currentTopP = deps.getSelectedTopP();
-
-                if (attempt === MAX_RETRIES) {
-                    addLiveEvent(currentProcess, stepDescription, `Agent failed permanently: ${error.message || String(error)}`, "agent_error", {
-                        error: error.message || String(error),
-                        systemInstruction,
-                        prompt: promptText,
-                        modelName: agentModel,
-                        temperature: currentTemp,
-                        topP: currentTopP,
-                        codeExecutionEnabled: shouldEnableCodeExecution
-                    });
-                    throw error;
-                } else {
-                    addLiveEvent(currentProcess, stepDescription, `Agent attempt failed: ${error.message || String(error)}`, "agent_retry", {
-                        error: error.message || String(error),
-                        attempt: attempt + 1,
-                        systemInstruction,
-                        prompt: promptText,
-                        modelName: agentModel,
-                        temperature: currentTemp,
-                        topP: currentTopP,
-                        codeExecutionEnabled: shouldEnableCodeExecution
-                    });
-
-                    if ('status' in targetStatusField) {
-                        (targetStatusField as any).status = 'retrying';
-                    }
-                    (targetStatusField as any)[retryAttemptField] = attempt + 1;
-                    render();
-
-                    const delay = INITIAL_DELAY_MS * Math.pow(BACKOFF_FACTOR, attempt);
-                    console.log(`[Deepthink] ${stepDescription} failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}). Retrying in ${delay / 1000}s...`);
-
-                    const chunks = Math.ceil(delay / 500);
-                    for (let i = 0; i < chunks; i++) {
-                        if (currentProcess.isStopRequested) {
-                            throw new PipelineStopRequestedError(`Stop requested during retry delay for: ${stepDescription}`);
-                        }
-                        await new Promise(resolve => setTimeout(resolve, Math.min(500, delay - i * 500)));
-                    }
-
-                    if ('status' in targetStatusField) {
-                        (targetStatusField as any).status = 'processing';
-                    }
-                    render();
-                }
-            }
-        }
-
-        return responseText;
+function createRuntime(strategy: DeepthinkMainStrategyData): BranchRuntime {
+    return {
+        strategyId: strategy.id,
+        branchVersion: strategy.branchVersion || 1,
+        branchIterationCount: strategy.branchIterationCount || 0,
+        globalIteration: 0,
+        history: [],
+        poolHistory: [],
+        memoryBank: strategy.memoryBank,
+        lastMemoryHistoryCount: 0,
     };
+}
 
-    const strategiesFinalizedSignal = {
-        resolve: undefined as (() => void) | undefined
+function runtimeSnapshot(
+    process: DeepthinkPipelineState,
+    strategy: DeepthinkMainStrategyData,
+    runtime: BranchRuntime,
+    slotIndex: number
+): StrategySnapshot {
+    const directSub = ensureDirectSubStrategy(strategy);
+    const latestHistory = runtime.history[runtime.history.length - 1];
+    const latestPool = runtime.poolHistory[runtime.poolHistory.length - 1];
+    return {
+        id: strategy.id,
+        strategyText: strategy.strategyText,
+        slotIndex,
+        branchVersion: runtime.branchVersion,
+        branchIterationCount: runtime.branchIterationCount,
+        globalIteration: runtime.globalIteration,
+        latestSolution: directSub.solutionAttempt,
+        latestCorrection: latestHistory?.solution || directSub.refinedSolution,
+        latestCritique: latestHistory?.critique || directSub.solutionCritique,
+        latestPool: latestPool?.poolResponse,
+        memoryBank: runtime.memoryBank,
+        hypothesisPacket: process.strategySpecificKnowledgePackets?.[strategy.id],
     };
-    const strategiesFinalizedPromise = new Promise<void>((resolve) => {
-        strategiesFinalizedSignal.resolve = () => resolve();
+}
+
+function allSnapshots(process: DeepthinkPipelineState, runtimes: Map<string, BranchRuntime>): StrategySnapshot[] {
+    return activeStrategies(process).map((strategy, index) => {
+        const runtime = runtimes.get(strategy.id) || createRuntime(strategy);
+        return runtimeSnapshot(process, strategy, runtime, index);
+    });
+}
+
+function buildStructuredSolutionPool(process: DeepthinkPipelineState, runtimes: Map<string, BranchRuntime>): string {
+    const strategies = activeStrategies(process).map((strategy, index) => {
+        const runtime = runtimes.get(strategy.id) || createRuntime(strategy);
+        const directSub = ensureDirectSubStrategy(strategy);
+        const history = runtime.history.map(entry => ({
+            global_iteration: entry.globalIteration,
+            branch_iteration: entry.branchIteration,
+            label: entry.label,
+            critique: entry.critique,
+            corrected_solution: entry.solution,
+        }));
+        const poolAgent = process.structuredSolutionPoolAgents
+            .filter(agent => agent.mainStrategyId === strategy.id && (agent.branchVersion || 1) === runtime.branchVersion)
+            .sort((a, b) => (b.globalIteration || 0) - (a.globalIteration || 0))[0];
+        return {
+            strategy_id: strategy.id,
+            slot_index: index + 1,
+            branch_version: runtime.branchVersion,
+            branch_iteration_count: runtime.branchIterationCount,
+            strategy_text: strategy.strategyText,
+            memory_bank: runtime.memoryBank || strategy.memoryBank || null,
+            original_solution: directSub.solutionAttempt || '',
+            latest_critique: directSub.solutionCritique || runtime.history[runtime.history.length - 1]?.critique || '',
+            iterations: history,
+            solution_pool: poolAgent?.parsedPoolResponse || poolAgent?.poolResponse || null,
+            pool_history: runtime.poolHistory.map(entry => ({
+                global_iteration: entry.globalIteration,
+                branch_iteration: entry.branchIteration,
+                pool: entry.poolResponse,
+            })),
+            replaced_branches: (strategy.replacementHistory || []).map(record => ({
+                strategy_id: record.strategyId,
+                branch_version: record.previousBranchVersion,
+                replaced_at_global_iteration: record.replacedAtGlobalIteration,
+                strategy_text: record.previousStrategyText,
+                replacement_strategy_text: record.replacementStrategyText,
+                replacement_reason: record.pqfReasoning,
+                memory_bank: record.memoryBank || null,
+                latest_solution: record.latestSolution || '',
+                latest_critique: record.latestCritique || '',
+                iterations: (record.branchHistory || []).map(entry => ({
+                    global_iteration: entry.globalIteration,
+                    branch_iteration: entry.branchIteration,
+                    label: entry.label,
+                    critique: entry.critique,
+                    corrected_solution: entry.solution,
+                })),
+                pool_history: (record.poolHistory || []).map(entry => ({
+                    global_iteration: entry.globalIteration,
+                    branch_iteration: entry.branchIteration,
+                    pool: entry.poolResponse,
+                })),
+            })),
+        };
     });
 
-    const mode = deps.getHypothesisInjectionMode();
-    currentProcess.hypothesisInjectionMode = mode;
+    return JSON.stringify({ schema: 'deepthink-evolving-dfs-solution-pool-v1', strategies }, null, 2);
+}
 
+function parsePoolResponse(raw: string, strategyId: string): SolutionPoolParsedResponse | undefined {
     try {
-        // Track B: Hypothesis Explorer
-        const trackBPromise = (async () => {
-            try {
-                const currentHypothesisCount = deps.getSelectedHypothesisCount();
-
-                if (currentHypothesisCount === 0) {
-                    currentProcess.hypothesisGenStatus = 'completed';
-                    currentProcess.hypotheses = [];
-                    currentProcess.knowledgePacket = "<Full Information Packet>\nHYPOTHESIS EXPLORATION: Disabled - No hypotheses generated.\n</Full Information Packet>";
-                    currentProcess.hypothesisExplorerComplete = true;
-                    render();
-                    return;
-                }
-
-                // If strategy-aware or selective injection, wait for Track A to finalize strategies
-                if (mode !== 'parallel') {
-                    console.log('[Deepthink] Hypothesis injection mode is strategy-aware. Track B waiting for strategies to finalize...');
-                    await strategiesFinalizedPromise;
-                    if (currentProcess.isStopRequested || currentProcess.status === 'error') {
-                        return;
-                    }
-                    console.log('[Deepthink] Track B starting hypothesis generation.');
-                }
-
-                let hypothesisPrompt = deps.customPromptsDeepthinkState.user_deepthink_hypothesisGeneration
-                    .replace('{{originalProblemText}}', challengeText)
-                    .replace(/\{\{NUM_HYPOTHESES\}\}/g, deps.getSelectedHypothesisCount().toString());
-
-                if (mode !== 'parallel') {
-                    const activeStrategies = currentProcess.initialStrategies.filter(s => !s.isKilledByRedTeam);
-                    const activeStrategiesText = activeStrategies.map(mainStrategy => {
-                        const activeSub = mainStrategy.subStrategies.filter(sub => !sub.isKilledByRedTeam);
-                        const subStrategiesText = activeSub
-                            .map((sub) => `  - Sub-Strategy [ID: ${sub.id}]: ${sub.subStrategyText}`)
-                            .join('\n');
-                        return `Main Strategy [ID: ${mainStrategy.id}]:\n${mainStrategy.strategyText}\nSub-Strategies:\n${subStrategiesText}`;
-                    }).join('\n\n' + '='.repeat(40) + '\n\n');
-
-                    const strategiesContextStr = `
-<Finalized Strategies Context>
-Below are the finalized strategies/sub-strategies that will be executed downstream. Generate hypotheses and reconnaissance targets specifically tailored to support, validate, or explore risks/feasibility for these strategies.
-Do not generate generic or irrelevant hypotheses. Tailor your inquiries directly to the paths represented by these Strategy/Sub-Strategy IDs.
-
-${activeStrategiesText}
-</Finalized Strategies Context>`;
-
-                    if (hypothesisPrompt.includes('{{strategiesContext}}')) {
-                        hypothesisPrompt = hypothesisPrompt.replace('{{strategiesContext}}', strategiesContextStr);
-                    } else {
-                        hypothesisPrompt = hypothesisPrompt + '\n' + strategiesContextStr;
-                    }
-                }
-
-                currentProcess.requestPromptHypothesisGen = hypothesisPrompt;
-                currentProcess.hypothesisGenStatus = 'processing';
-                render();
-
-                const parts: Part[] = buildImageParts(imageBase64, imageMimeType);
-
-                let hypothesisSysPrompt = deps.customPromptsDeepthinkState.sys_deepthink_hypothesisGeneration
-                    .replace(/\{\{NUM_HYPOTHESES\}\}/g, deps.getSelectedHypothesisCount().toString());
-
-                if (mode === 'selective_injection') {
-                    const originalFormatSection = `<Output Format Requirements>
-Your response must be exclusively a valid JSON object. No additional text, commentary, or explanation is permitted. This is an absolute system requirement for programmatic parsing. Any deviation will result in a fatal error. The JSON must adhere with perfect precision to the following structure:
-
-\`\`\`json
-{
-  "hypotheses": [
-    "Hypothesis 1: [A clear, precise, testable statement probing a critical unknown...]",
-    "Hypothesis 2: [...]",
-    "... up to Hypothesis {{NUM_HYPOTHESES}}"
-  ]
-}
-\`\`\`
-You MUST produce exactly {{NUM_HYPOTHESES}} hypotheses in the array.
-</Output Format Requirements>`;
-
-                    const newFormatSection = `<Output Format Requirements>
-Your response must be exclusively a valid JSON object. No additional text, commentary, or explanation is permitted. This is an absolute system requirement for programmatic parsing. Any deviation will result in a fatal error. The JSON must adhere with perfect precision to the following structure:
-
-\`\`\`json
-{
-  "hypotheses": [
-    {
-      "text": "Hypothesis 1: [A clear, precise, testable statement probing a critical unknown...]",
-      "target_strategies": ["main1", "main2"] 
-    },
-    {
-      "text": "Hypothesis 2: [...]",
-      "target_strategies": ["main1"]
+        const parsed = parseJson(raw, `SolutionPool-${strategyId}`);
+        if (!parsed || !Array.isArray(parsed.solutions)) return undefined;
+        return {
+            strategy_id: parsed.strategy_id || strategyId,
+            solutions: parsed.solutions.map((solution: any) => ({
+                title: String(solution.title || 'Untitled Solution'),
+                content: String(solution.content || solution.solution || ''),
+                confidence: typeof solution.confidence === 'number' ? solution.confidence : 0.5,
+                internal_critique: String(solution.internal_critique || solution.critique || ''),
+                key_insights: solution.key_insights ? String(solution.key_insights) : undefined,
+            })),
+        };
+    } catch {
+        return undefined;
     }
-  ]
 }
-\`\`\`
-For "target_strategies", provide an array of Main Strategy IDs (e.g., "main1", "main2") to which this hypothesis is relevant. If a hypothesis is globally applicable to all strategies, or you cannot decide, return an empty array [] or include all strategy IDs.
-You MUST produce exactly {{NUM_HYPOTHESES}} hypothesis objects in the array.
-</Output Format Requirements>`;
 
-                    if (hypothesisSysPrompt.includes(originalFormatSection)) {
-                        hypothesisSysPrompt = hypothesisSysPrompt.replace(originalFormatSection, newFormatSection);
-                    } else {
-                        hypothesisSysPrompt += `\n\n<CRITICAL FORMAT OVERRIDE FOR SELECTIVE INJECTION>
-You must return the hypotheses as objects containing "text" and "target_strategies" (an array of Main Strategy IDs like ["main1", "main2"] that this hypothesis is tailored for).
-Example structure:
-{
-  "hypotheses": [
-    {
-      "text": "Hypothesis Text here",
-      "target_strategies": ["main1"]
+async function generateStrategies(process: DeepthinkPipelineState, parts: Part[], challengeText: string, evolvingDfsMode: boolean): Promise<void> {
+    const requestedCount = evolvingDfsMode
+        ? Math.min(deps.getSelectedStrategiesCount(), 5)
+        : deps.getSelectedStrategiesCount();
+    const prompt = buildInitialStrategyPrompt(challengeText, requestedCount);
+
+    process.requestPromptInitialStrategyGen = prompt;
+    render();
+
+    const responseOutput = await callAgent({
+        process,
+        parts: parts.concat([{ text: prompt }]),
+        systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_initialStrategy,
+        isJson: true,
+        stepDescription: 'Initial Strategy Generation',
+        target: process,
+        retryField: 'retryAttempt',
+        critical: true,
+    });
+    const response = responseOutput.contextText;
+
+    const parsed = parseJson(response, 'Initial Strategy Generation');
+    const strategies = asStringArray(parsed.strategies || parsed.features || parsed.suggestions).slice(0, requestedCount || undefined);
+
+    if (strategies.length === 0) {
+        throw new Error('Initial strategy generation returned no strategies.');
     }
-  ]
+
+    process.initialStrategies = strategies.map((strategyText, index) => ({
+        id: `main${index + 1}`,
+        strategyText,
+        subStrategies: [],
+        status: 'pending',
+        isDetailsOpen: false,
+        strategyFormat: 'markdown',
+        branchVersion: 1,
+        branchIterationCount: 0,
+        replacementHistory: [],
+    }));
+
+    render();
 }
-</CRITICAL FORMAT OVERRIDE FOR SELECTIVE INJECTION>`;
-                    }
-                }
 
-                const hypothesisResponse = await makeDeepthinkApiCall(
-                    parts.concat([{ text: hypothesisPrompt }]),
-                    hypothesisSysPrompt,
-                    true,
-                    "Hypothesis Generation",
-                    currentProcess,
-                    'hypothesisGenRetryAttempt'
-                );
-
-                const hypothesisData = deps.parseJsonSafe(hypothesisResponse, 'Hypothesis Generation');
-                const hypotheses = hypothesisData.hypotheses || [];
-
-                for (let i = 0; i < hypotheses.length; i++) {
-                    let hypothesisText = "";
-                    let targetStrategyIds: string[] | undefined = undefined;
-
-                    const rawHyp = hypotheses[i];
-                    if (typeof rawHyp === 'object' && rawHyp !== null) {
-                        hypothesisText = rawHyp.text || "";
-                        if (Array.isArray(rawHyp.target_strategies)) {
-                            targetStrategyIds = rawHyp.target_strategies.map((id: any) => String(id).trim());
-                        }
-                    } else {
-                        hypothesisText = String(rawHyp);
-                    }
-
-                    const hypothesis: DeepthinkHypothesisData = {
-                        id: `hyp${i + 1}`,
-                        hypothesisText: hypothesisText,
-                        testerStatus: 'pending',
-                        isDetailsOpen: false,
-                        targetStrategyIds: targetStrategyIds
-                    };
-                    currentProcess.hypotheses.push(hypothesis);
-                }
-
-                currentProcess.hypothesisGenStatus = 'completed';
-                render();
-
-                const hypothesisTestingPromises = currentProcess.hypotheses.map(async (hypothesis) => {
-                    if (currentProcess.isStopRequested) {
-                        hypothesis.testerStatus = 'cancelled';
-                        return;
-                    }
-
-                    hypothesis.testerStatus = 'processing';
-                    render();
-
-                    try {
-                        const testerPrompt = deps.customPromptsDeepthinkState.user_deepthink_hypothesisTester
-                            .replace('{{originalProblemText}}', challengeText)
-                            .replace('{{hypothesisText}}', hypothesis.hypothesisText);
-
-                        hypothesis.testerRequestPrompt = testerPrompt;
-
-                        const testerResponse = await makeDeepthinkApiCall(
-                            parts.concat([{ text: testerPrompt }]),
-                            deps.customPromptsDeepthinkState.sys_deepthink_hypothesisTester,
-                            false,
-                            `Hypothesis Testing for ${hypothesis.id}`,
-                            hypothesis,
-                            'testerRetryAttempt'
-                        );
-
-                        hypothesis.testerAttempt = testerResponse;
-                        hypothesis.testerStatus = 'completed';
-
-                        render();
-                    } catch (error: any) {
-                        hypothesis.testerStatus = 'error';
-                        hypothesis.testerError = error.message || "Hypothesis testing failed";
-                        render();
-                    }
-                });
-
-                await Promise.allSettled(hypothesisTestingPromises);
-
-                // 1. Build global/full knowledge packet
-                let knowledgePacket = "<Full Information Packet>\n";
-                currentProcess.hypotheses.forEach((hypothesis, index) => {
-                    knowledgePacket += `<Hypothesis ${index + 1}>\n`;
-                    knowledgePacket += `Hypothesis: ${hypothesis.hypothesisText}\n`;
-                    knowledgePacket += `Hypothesis Testing: ${hypothesis.testerAttempt || 'No testing output available'}\n`;
-                    knowledgePacket += `</Hypothesis ${index + 1}>\n`;
-                });
-                knowledgePacket += "</Full Information Packet>";
-                currentProcess.knowledgePacket = knowledgePacket;
-
-                // 2. Build strategy-specific knowledge packets (Mode 3)
-                if (mode === 'selective_injection') {
-                    const strategyPackets: Record<string, string> = {};
-                    const activeStrategies = currentProcess.initialStrategies.filter(s => !s.isKilledByRedTeam);
-
-                    activeStrategies.forEach((strat) => {
-                        const stratId = strat.id; // e.g. "main1"
-                        const relevantHyps = currentProcess.hypotheses.filter(hyp => {
-                            if (!hyp.targetStrategyIds || hyp.targetStrategyIds.length === 0) {
-                                return true; // Global by default
-                            }
-                            return hyp.targetStrategyIds.includes(stratId);
-                        });
-
-                        let stratPacket = `<Strategy-Specific Information Packet for Strategy ${stratId}>\n`;
-                        if (relevantHyps.length === 0) {
-                            stratPacket += "No strategy-specific hypotheses were generated or mapped to this strategy.\n";
-                        } else {
-                            relevantHyps.forEach((hypothesis) => {
-                                stratPacket += `<Hypothesis ${hypothesis.id}>\n`;
-                                stratPacket += `Hypothesis: ${hypothesis.hypothesisText}\n`;
-                                stratPacket += `Hypothesis Testing: ${hypothesis.testerAttempt || 'No testing output available'}\n`;
-                                stratPacket += `</Hypothesis ${hypothesis.id}>\n`;
-                            });
-                        }
-                        stratPacket += `</Strategy-Specific Information Packet for Strategy ${stratId}>`;
-                        strategyPackets[stratId] = stratPacket;
-                    });
-
-                    currentProcess.strategySpecificKnowledgePackets = strategyPackets;
-                }
-
-                currentProcess.hypothesisExplorerComplete = true;
-                render();
-
-            } catch (error: any) {
-                if (!(error instanceof PipelineStopRequestedError)) {
-                    currentProcess.hypothesisGenStatus = 'error';
-                    currentProcess.hypothesisGenError = `Hypothesis exploration failed: ${error.message}`;
-                    render();
-                }
-                throw error;
-            }
-        })();
-
-        // Track A: Strategic Solver - PART 1
-        const trackAPromise = (async () => {
-            try {
-                currentProcess.status = 'processing';
-                render();
-
-                const parts: Part[] = buildImageParts(imageBase64, imageMimeType);
-
-                const strategiesPrompt = deps.customPromptsDeepthinkState.user_deepthink_initialStrategy
-                    .replace('{{originalProblemText}}', challengeText)
-                    .replace(/\{\{NUM_STRATEGIES\}\}/g, deps.getSelectedStrategiesCount().toString());
-                currentProcess.requestPromptInitialStrategyGen = strategiesPrompt;
-
-                const strategiesResponse = await makeDeepthinkApiCall(
-                    parts.concat([{ text: strategiesPrompt }]),
-                    deps.customPromptsDeepthinkState.sys_deepthink_initialStrategy,
-                    true,
-                    "Initial Strategy Generation",
-                    currentProcess,
-                    'retryAttempt'
-                );
-
-                const parsedStrategies = deps.parseJsonSafe(strategiesResponse, 'Initial Strategy Generation');
-                const strategies: string[] = parsedStrategies.strategies || parsedStrategies.features || parsedStrategies.suggestions || [];
-
-                for (let i = 0; i < strategies.length; i++) {
-                    const strategy: DeepthinkMainStrategyData = {
-                        id: `main${i + 1}`,
-                        strategyText: strategies[i],
-                        subStrategies: [],
-                        status: 'pending',
-                        isDetailsOpen: false,
-                        strategyFormat: 'markdown'
-                    };
-                    currentProcess.initialStrategies.push(strategy);
-                }
-
-                render();
-
-                const skipSubStrategies = deps.getSkipSubStrategies();
-                const currentRedTeamAggressiveness = deps.getSelectedRedTeamAggressiveness();
-
-                currentProcess.redTeamEvaluations = [];
-                if (currentRedTeamAggressiveness !== 'off') {
-                    currentProcess.redTeamStatus = 'processing';
-                } else {
-                    currentProcess.redTeamStatus = 'completed';
-                    currentProcess.redTeamComplete = true;
-                }
-                render();
-
-                if (skipSubStrategies) {
-                    currentProcess.initialStrategies.forEach((mainStrategy) => {
-                        const subStrategy: DeepthinkSubStrategyData = {
-                            id: `${mainStrategy.id}-direct`,
-                            subStrategyText: mainStrategy.strategyText,
-                            status: 'pending',
-                            isDetailsOpen: false,
-                            subStrategyFormat: 'markdown'
-                        };
-                        mainStrategy.subStrategies.push(subStrategy);
-                    });
-                    render();
-                } else {
-                    await Promise.allSettled(currentProcess.initialStrategies.map(async (mainStrategy) => {
-                        if (currentProcess.isStopRequested) {
-                            mainStrategy.status = 'cancelled';
-                            mainStrategy.error = "Process stopped by user.";
-                            return;
-                        }
-
-                        try {
-                            mainStrategy.status = 'processing';
-                            render();
-
-                            const otherStrategies = currentProcess.initialStrategies
-                                .filter(s => s.id !== mainStrategy.id)
-                                .map(s => s.strategyText);
-                            const otherMainStrategiesStr = otherStrategies.length > 0
-                                ? otherStrategies.map((s, idx) => `Strategy ${idx + 1}: ${s}`).join('\n\n')
-                                : "No other strategies.";
-
-                            const subStrategyPrompt = deps.customPromptsDeepthinkState.user_deepthink_subStrategy
-                                .replace('{{originalProblemText}}', challengeText)
-                                .replace('{{currentMainStrategy}}', mainStrategy.strategyText)
-                                .replace('{{otherMainStrategiesStr}}', otherMainStrategiesStr)
-                                .replace(/\{\{NUM_SUB_STRATEGIES\}\}/g, deps.getSelectedSubStrategiesCount().toString());
-
-                            mainStrategy.requestPromptSubStrategyGen = subStrategyPrompt;
-
-                            const subStrategyResponse = await makeDeepthinkApiCall(
-                                parts.concat([{ text: subStrategyPrompt }]),
-                                deps.customPromptsDeepthinkState.sys_deepthink_subStrategy,
-                                true,
-                                `Sub-Strategy Generation for ${mainStrategy.id}`,
-                                mainStrategy,
-                                'retryAttempt'
-                            );
-
-                            const parsedSub = deps.parseJsonSafe(subStrategyResponse, `Sub-Strategy Generation for ${mainStrategy.id}`);
-                            const subStrategies: string[] = parsedSub.sub_strategies || parsedSub.subStrategies || parsedSub.strategies || [];
-
-                            for (let j = 0; j < subStrategies.length; j++) {
-                                const subStrategy: DeepthinkSubStrategyData = {
-                                    id: `${mainStrategy.id}-sub${j + 1}`,
-                                    subStrategyText: subStrategies[j],
-                                    status: 'pending',
-                                    isDetailsOpen: false,
-                                    subStrategyFormat: 'markdown'
-                                };
-                                mainStrategy.subStrategies.push(subStrategy);
-                            }
-
-                        } catch (error: any) {
-                            mainStrategy.status = 'error';
-                            mainStrategy.error = error.message || "Sub-strategy generation failed";
-                            render();
-                        }
-                    }));
-                }
-
-                if (currentProcess.isStopRequested) throw new PipelineStopRequestedError("Stopped after sub-strategy generation.");
-
-                if (currentRedTeamAggressiveness !== 'off') {
-                    await runConsolidatedRedTeamAnalysis(
-                        currentProcess,
-                        currentProcess.initialStrategies,
-                        challengeText,
-                        imageBase64,
-                        imageMimeType,
-                        makeDeepthinkApiCall,
-                        currentRedTeamAggressiveness
-                    );
-                    currentProcess.redTeamComplete = true;
-                    currentProcess.redTeamStatus = 'completed';
-                    render();
-
-                    applyRedTeamResults(currentProcess);
-                    render();
-
-                    // Signal that strategies are finalized
-                    if (strategiesFinalizedSignal.resolve) {
-                        strategiesFinalizedSignal.resolve();
-                    }
-
-                    const remainingStrategies = currentProcess.initialStrategies.filter(s => !s.isKilledByRedTeam);
-                    const remainingSubStrategies = currentProcess.initialStrategies.flatMap(s => s.subStrategies.filter(sub => !sub.isKilledByRedTeam));
-                    if (remainingStrategies.length === 0) {
-                        currentProcess.status = 'completed';
-                        currentProcess.error = "All strategies were eliminated by Red Team evaluation. No solution attempts can be made.";
-                        render();
-                        return;
-                    }
-                    if (remainingSubStrategies.length === 0) {
-                        currentProcess.status = 'completed';
-                        currentProcess.error = "All sub-strategies were eliminated by Red Team evaluation. No solution attempts can be made.";
-                        render();
-                        return;
-                    }
-                } else {
-                    // Signal that strategies are finalized (since Red Team is off)
-                    if (strategiesFinalizedSignal.resolve) {
-                        strategiesFinalizedSignal.resolve();
-                    }
-                }
-
-                const hypothesisCount = deps.getSelectedHypothesisCount();
-                if (hypothesisCount > 0) {
-                    console.log('[Deepthink] Waiting for hypothesis exploration to complete before executing solutions...');
-                    await trackBPromise;
-                    console.log('[Deepthink] Hypothesis exploration complete. Proceeding to solution execution...');
-                }
-
-                if (currentProcess.isStopRequested) {
-                    throw new PipelineStopRequestedError("Stopped while waiting for hypothesis exploration.");
-                }
-
-                const refinementEnabled = deps.getRefinementEnabled();
-                const iterativeCorrectionsEnabled = deps.getIterativeCorrectionsEnabled();
-                const dissectedObservationsEnabled = deps.getDissectedObservationsEnabled();
-
-                currentProcess.solutionCritiques = [];
-                if (!iterativeCorrectionsEnabled && refinementEnabled) {
-                    currentProcess.solutionCritiquesStatus = 'processing';
-                }
-
-                const critiquePromisesPerStrategy: Promise<void>[] = [];
-
-                const strategyExecutionPromises = currentProcess.initialStrategies.map(async (mainStrategy) => {
-                    const activeSubStrategies = mainStrategy.subStrategies.filter(sub => !sub.isKilledByRedTeam);
-                    if (activeSubStrategies.length === 0) return;
-
-                    const subStrategyExecutions = activeSubStrategies.map(async (subStrategy) => {
-                        if (currentProcess.isStopRequested) {
-                            subStrategy.status = 'cancelled';
-                            subStrategy.error = "Process stopped by user.";
-                            return;
-                        }
-
-                        try {
-                            subStrategy.status = 'processing';
-                            render();
-
-                            let injectedPacket = currentProcess.knowledgePacket || 'No hypothesis exploration performed.';
-                            if (mode === 'selective_injection' && currentProcess.strategySpecificKnowledgePackets) {
-                                injectedPacket = currentProcess.strategySpecificKnowledgePackets[mainStrategy.id] || injectedPacket;
-                            }
-
-                            const solutionPrompt = deps.customPromptsDeepthinkState.user_deepthink_solutionAttempt
-                                .replace('{{originalProblemText}}', challengeText)
-                                .replace('{{currentMainStrategy}}', mainStrategy.strategyText)
-                                .replace('{{currentSubStrategy}}', subStrategy.subStrategyText)
-                                .replace('{{knowledgePacket}}', injectedPacket);
-
-                            subStrategy.requestPromptSolutionAttempt = solutionPrompt;
-
-                            const solutionResponse = await makeDeepthinkApiCall(
-                                parts.concat([{ text: solutionPrompt }]),
-                                deps.customPromptsDeepthinkState.sys_deepthink_solutionAttempt,
-                                false,
-                                `Solution Attempt for ${subStrategy.id}`,
-                                subStrategy,
-                                'retryAttempt'
-                            );
-
-                            subStrategy.solutionAttempt = solutionResponse;
-                            subStrategy.status = 'completed';
-                            render();
-                        } catch (error: any) {
-                            subStrategy.status = 'error';
-                            subStrategy.error = error.message || "Solution attempt failed";
-                            render();
-                        }
-                    });
-
-                    await Promise.allSettled(subStrategyExecutions);
-
-                    if (!iterativeCorrectionsEnabled && refinementEnabled) {
-                        const completedSubStrategies = mainStrategy.subStrategies.filter(
-                            sub => !sub.isKilledByRedTeam && sub.solutionAttempt
-                        );
-
-                        if (completedSubStrategies.length > 0) {
-                            const critiquePromise = (async () => {
-                                const critiqueData: DeepthinkSolutionCritiqueData = {
-                                    id: `critique-${mainStrategy.id}`,
-                                    subStrategyId: '',
-                                    mainStrategyId: mainStrategy.id,
-                                    status: 'pending',
-                                    isDetailsOpen: true
-                                };
-                                currentProcess.solutionCritiques.push(critiqueData);
-                                render();
-
-                                if (currentProcess.isStopRequested) {
-                                    critiqueData.status = 'cancelled';
-                                    critiqueData.error = "Process stopped by user.";
-                                    return;
-                                }
-
-                                try {
-                                    critiqueData.status = 'processing';
-                                    render();
-
-                                    const solutionsText = completedSubStrategies.map(sub =>
-                                        `${sub.id}:\nSub-Strategy: ${sub.subStrategyText}\n\nSolution Attempt:\n${sub.solutionAttempt}`
-                                    ).join('\n\n---\n\n');
-
-                                    const critiquePrompt = deps.customPromptsDeepthinkState.user_deepthink_solutionCritique
-                                        .replace('{{originalProblemText}}', challengeText)
-                                        .replace('{{currentMainStrategy}}', mainStrategy.strategyText)
-                                        .replace('{{allSubStrategiesAndSolutions}}', solutionsText);
-
-                                    critiqueData.requestPrompt = critiquePrompt;
-
-                                    const critiqueResponse = await makeDeepthinkApiCall(
-                                        parts.concat([{ text: critiquePrompt }]),
-                                        deps.customPromptsDeepthinkState.sys_deepthink_solutionCritique,
-                                        false,
-                                        `Solution Critique for ${mainStrategy.id}`,
-                                        critiqueData,
-                                        'retryAttempt'
-                                    );
-
-                                    critiqueData.critiqueResponse = critiqueResponse;
-
-                                    completedSubStrategies.forEach(sub => {
-                                        sub.solutionCritique = critiqueResponse;
-                                        sub.solutionCritiqueStatus = 'completed';
-                                    });
-
-                                    critiqueData.status = 'completed';
-                                    render();
-                                } catch (error: any) {
-                                    critiqueData.status = 'error';
-                                    critiqueData.error = error.message || "Solution critique failed";
-
-                                    completedSubStrategies.forEach(sub => {
-                                        sub.solutionCritiqueStatus = 'error';
-                                        sub.solutionCritiqueError = error.message || "Solution critique failed";
-                                    });
-
-                                    render();
-                                }
-                            })();
-
-                            critiquePromisesPerStrategy.push(critiquePromise);
-                        }
-                    }
-                });
-
-                console.log('[Deepthink] Waiting for all solution executions to complete...');
-                await Promise.allSettled(strategyExecutionPromises);
-                console.log('[Deepthink] All solution executions complete.');
-
-                if (!iterativeCorrectionsEnabled && refinementEnabled && dissectedObservationsEnabled) {
-                    console.log('[Deepthink] Dissected observations enabled - waiting for all critiques to complete...');
-                    await Promise.allSettled(critiquePromisesPerStrategy);
-                    currentProcess.solutionCritiquesStatus = 'completed';
-                    render();
-                    console.log('[Deepthink] All critiques complete.');
-                } else if (!iterativeCorrectionsEnabled && refinementEnabled && !dissectedObservationsEnabled) {
-                    console.log('[Deepthink] Dissected observations disabled - critiques running in background, correctors starting immediately.');
-                }
-
-                if (currentProcess.isStopRequested) throw new PipelineStopRequestedError("Stopped during solution attempts or critiques.");
-
-                if (!refinementEnabled) {
-                    currentProcess.initialStrategies.forEach((mainStrategy) => {
-                        mainStrategy.subStrategies.forEach((subStrategy) => {
-                            if (subStrategy.isKilledByRedTeam || !subStrategy.solutionAttempt) return;
-                            subStrategy.refinedSolution = subStrategy.solutionAttempt;
-                            subStrategy.selfImprovementStatus = 'completed';
-                        });
-                    });
-                    render();
-                } else if (iterativeCorrectionsEnabled) {
-                    // PostQualityFilter workflow - only when sub-strategies are disabled
-                    const skipSubStrategies = deps.getSkipSubStrategies();
-                    const postQualityFilterEnabled = deps.getPostQualityFilterEnabled();
-                    if (skipSubStrategies) {
-                        // Only run PostQualityFilter if enabled
-                        // Initial critiques are needed for PQF to evaluate strategies
-                        // When PQF is disabled, the main iteration loop handles critiques at iteration 1
-                        if (postQualityFilterEnabled) {
-                            console.log('[Deepthink] Generating initial critiques for PostQualityFilter...');
-
-                            // Generate initial critiques for all strategies
-                            const initialCritiquePromises: Promise<void>[] = [];
-                            currentProcess.initialStrategies.forEach((mainStrategy) => {
-                                if (mainStrategy.isKilledByRedTeam) return;
-                                const directSub = mainStrategy.subStrategies[0];
-                                if (!directSub || directSub.isKilledByRedTeam || !directSub.solutionAttempt) return;
-
-                                const critiquePromise = (async () => {
-                                    try {
-                                        directSub.solutionCritiqueStatus = 'processing';
-                                        render();
-
-                                        const solutionsText = `${directSub.id}:\nSub-Strategy: ${directSub.subStrategyText}\n\nSolution Attempt:\n${directSub.solutionAttempt}`;
-
-                                        const critiquePrompt = deps.customPromptsDeepthinkState.user_deepthink_solutionCritique
-                                            .replace(/\{\{originalProblemText\}\}/g, challengeText)
-                                            .replace(/\{\{currentMainStrategy\}\}/g, mainStrategy.strategyText)
-                                            .replace(/\{\{allSubStrategiesAndSolutions\}\}/g, solutionsText);
-
-                                        const critiqueResponse = await makeDeepthinkApiCall(
-                                            parts.concat([{ text: critiquePrompt }]),
-                                            deps.customPromptsDeepthinkState.sys_deepthink_solutionCritique,
-                                            false,
-                                            `Initial Solution Critique for ${mainStrategy.id}`,
-                                            directSub,
-                                            'solutionCritiqueRetryAttempt'
-                                        );
-
-                                        directSub.solutionCritique = deps.cleanTextOutput(critiqueResponse);
-                                        directSub.solutionCritiqueStatus = 'completed';
-                                        render();
-                                    } catch (error: any) {
-                                        directSub.solutionCritiqueStatus = 'error';
-                                        directSub.solutionCritiqueError = error.message || "Initial critique failed";
-                                        console.error(`[Deepthink] Initial critique failed for ${mainStrategy.id}:`, error.message);
-                                        render();
-                                    }
-                                })();
-
-                                initialCritiquePromises.push(critiquePromise);
-                            });
-
-                            await Promise.allSettled(initialCritiquePromises);
-                            console.log('[Deepthink] Initial critiques complete');
-                            console.log('[Deepthink] Starting PostQualityFilter workflow...');
-                            currentProcess.postQualityFilterStatus = 'processing';
-                            currentProcess.postQualityFilterIterationCount = 0;
-                            render();
-
-                            // Initialize history managers
-                            const postQualityFilterHistoryManager = new PostQualityFilterHistoryManager(
-                                deps.customPromptsDeepthinkState.sys_deepthink_postQualityFilter,
-                                challengeText
-                            );
-                            const strategiesGeneratorHistoryManager = new StrategiesGeneratorHistoryManager(
-                                deps.customPromptsDeepthinkState.sys_deepthink_initialStrategy,
-                                challengeText
-                            );
-
-
-
-                            // Run PostQualityFilter iterations (max 3)
-                            for (let pqfIteration = 1; pqfIteration <= 3; pqfIteration++) {
-                                if (currentProcess.isStopRequested) break;
-                                console.log(`[Deepthink] PostQualityFilter iteration ${pqfIteration}...`);
-                                currentProcess.postQualityFilterIterationCount = pqfIteration;
-
-                                // Get all strategies with their solutions and critiques
-                                const strategiesWithExecutions: Array<{
-                                    strategyId: string;
-                                    strategyText: string;
-                                    solutionAttempt: string;
-                                    solutionCritique: string;
-                                }> = [];
-
-                                currentProcess.initialStrategies.forEach(mainStrategy => {
-                                    if (mainStrategy.isKilledByRedTeam) return;
-                                    const directSub = mainStrategy.subStrategies[0];
-                                    if (!directSub || !directSub.solutionAttempt || !directSub.solutionCritique) return;
-
-                                    strategiesWithExecutions.push({
-                                        strategyId: mainStrategy.id,
-                                        strategyText: mainStrategy.strategyText,
-                                        solutionAttempt: directSub.solutionAttempt,
-                                        solutionCritique: directSub.solutionCritique
-                                    });
-                                });
-
-                                if (strategiesWithExecutions.length === 0) {
-                                    console.log('[Deepthink] No strategies available for PostQualityFilter');
-                                    break;
-                                }
-
-                                // Build prompt using history manager
-                                const pqfPromptMessages = await postQualityFilterHistoryManager.buildPromptForIteration(
-                                    strategiesWithExecutions,
-                                    pqfIteration
-                                );
-                                const pqfPrompt = pqfPromptMessages.map(m => m.content).join('\n\n');
-
-                                // Create PostQualityFilter agent
-                                const pqfAgent: DeepthinkPostQualityFilterData = {
-                                    id: `postqf-${pqfIteration}`,
-                                    iterationNumber: pqfIteration,
-                                    requestPrompt: pqfPrompt,
-                                    prunedStrategyIds: [],
-                                    continuedStrategyIds: [],
-                                    status: 'processing',
-                                    isDetailsOpen: true
-                                };
-                                currentProcess.postQualityFilterAgents.push(pqfAgent);
-                                render();
-
-                                try {
-                                    // Call PostQualityFilter agent
-                                    const pqfResponse = await makeDeepthinkApiCall(
-                                        parts.concat([{ text: pqfPrompt }]),
-                                        deps.customPromptsDeepthinkState.sys_deepthink_postQualityFilter,
-                                        true,
-                                        `PostQualityFilter Iteration ${pqfIteration}`,
-                                        pqfAgent,
-                                        'retryAttempt'
-                                    );
-
-                                    pqfAgent.evaluationResponse = deps.cleanTextOutput(pqfResponse);
-                                    pqfAgent.rawResponse = pqfResponse;
-
-                                    // Parse JSON response
-                                    let cleanedResponse = pqfResponse.trim();
-                                    cleanedResponse = cleanedResponse.replace(/```json\s*/g, '').replace(/```\s*/g, '');
-                                    const jsonStart = cleanedResponse.indexOf('{');
-                                    const jsonEnd = cleanedResponse.lastIndexOf('}');
-                                    if (jsonStart === -1 || jsonEnd === -1 || jsonStart >= jsonEnd) {
-                                        throw new Error('No valid JSON object boundaries found');
-                                    }
-                                    cleanedResponse = cleanedResponse.substring(jsonStart, jsonEnd + 1);
-                                    const parsed = JSON.parse(cleanedResponse);
-
-                                    // Extract decisions
-                                    const updateIds: string[] = []; // Strategies that need updating
-                                    const keepIds: string[] = []; // Strategies that are good
-
-                                    // Create set of valid strategy IDs that were sent for evaluation
-                                    const validStrategyIds = new Set(strategiesWithExecutions.map(s => s.strategyId.trim().toLowerCase()));
-
-                                    if (Array.isArray(parsed.strategies)) {
-                                        parsed.strategies.forEach((strategyEval: any) => {
-                                            const decision = String(strategyEval.decision || '').toLowerCase();
-                                            const id = strategyEval.strategy_id || '';
-
-                                            // CRITICAL: Validate that this strategy was actually sent for evaluation
-                                            const cleanId = String(id).trim().toLowerCase();
-                                            if (!validStrategyIds.has(cleanId)) {
-                                                console.log(`[Deepthink] PostQualityFilter returned decision for unexpected strategy "${id}" - IGNORING`);
-                                                return; // Skip this decision
-                                            }
-
-                                            if (decision === 'update') {
-                                                updateIds.push(id);
-                                            } else if (decision === 'keep') {
-                                                keepIds.push(id);
-                                            }
-                                        });
-                                    }
-
-                                    pqfAgent.reasoning = JSON.stringify(parsed, null, 2);
-                                    pqfAgent.prunedStrategyIds = updateIds; // Reusing this field for updateIds
-                                    pqfAgent.continuedStrategyIds = keepIds; // Reusing this field for keepIds
-                                    pqfAgent.status = 'completed';
-
-                                    // Add to history (both user prompt and AI response)
-                                    await postQualityFilterHistoryManager.addFilterDecision(pqfResponse, pqfPrompt);
-
-                                    console.log(`[Deepthink] PostQualityFilter: ${updateIds.length} strategies need update, ${keepIds.length} kept`);
-
-                                    // If no strategies need update, stop
-                                    if (updateIds.length === 0) {
-                                        console.log('[Deepthink] No strategies need update - stopping PostQualityFilter workflow');
-                                        break;
-                                    }
-
-                                    // If this is the 3rd iteration, don't update strategies
-                                    if (pqfIteration === 3) {
-                                        console.log('[Deepthink] Reached max PostQualityFilter iterations (3) - stopping');
-                                        break;
-                                    }
-
-                                    // Generate UPDATED strategies (same IDs, new text)
-                                    console.log(`[Deepthink] Updating ${updateIds.length} flawed strategies...`);
-
-                                    const strategiesGenPromptMessages = await strategiesGeneratorHistoryManager.buildPromptForGeneration(
-                                        updateIds.length,
-                                        updateIds,
-                                        keepIds,
-                                        pqfIteration
-                                    );
-                                    const strategiesGenPrompt = strategiesGenPromptMessages.map(m => m.content).join('\n\n');
-
-                                    const updatedStrategiesResponse = await makeDeepthinkApiCall(
-                                        parts.concat([{ text: strategiesGenPrompt }]),
-                                        deps.customPromptsDeepthinkState.sys_deepthink_initialStrategy,
-                                        true,
-                                        `Strategy Updates (PostQualityFilter Iteration ${pqfIteration})`,
-                                        currentProcess,
-                                        'retryAttempt'
-                                    );
-
-                                    const parsedUpdated = deps.parseJsonSafe(updatedStrategiesResponse, `Strategy Updates (PostQualityFilter Iteration ${pqfIteration})`);
-                                    const updatedStrategies: string[] = parsedUpdated.strategies || parsedUpdated.features || parsedUpdated.suggestions || Object.values(parsedUpdated) || [];
-
-                                    // Add to history (user prompt + AI response)
-                                    await strategiesGeneratorHistoryManager.addGeneratedStrategies(updatedStrategiesResponse, strategiesGenPrompt);
-
-                                    // Update existing strategies IN-PLACE (same IDs)
-                                    const updatedStrategyObjects: DeepthinkMainStrategyData[] = [];
-                                    for (let i = 0; i < Math.min(updatedStrategies.length, updateIds.length); i++) {
-                                        const strategyId = updateIds[i];
-                                        const cleanId = String(strategyId).trim().toLowerCase();
-                                        const existingStrategy = currentProcess.initialStrategies.find(s =>
-                                            s.id.trim().toLowerCase() === cleanId
-                                        );
-
-                                        if (existingStrategy) {
-                                            // Update strategy text IN-PLACE
-                                            existingStrategy.strategyText = updatedStrategies[i];
-                                            existingStrategy.updatedByPostQualityFilter = true;
-                                            existingStrategy.postQualityFilterIteration = pqfIteration;
-
-                                            // Reset sub-strategy for re-execution
-                                            const directSub = existingStrategy.subStrategies[0];
-                                            if (directSub) {
-                                                directSub.subStrategyText = updatedStrategies[i];
-                                                directSub.status = 'pending';
-                                                directSub.solutionAttempt = undefined;
-                                                directSub.solutionCritique = undefined;
-                                                directSub.solutionCritiqueStatus = undefined;
-                                            }
-
-                                            updatedStrategyObjects.push(existingStrategy);
-                                        }
-                                    }
-
-                                    render();
-
-                                    // Re-execute solutions for updated strategies
-                                    console.log(`[Deepthink] Re-executing solutions for ${updatedStrategyObjects.length} updated strategies...`);
-                                    const updatedStrategyExecutionPromises = updatedStrategyObjects.map(async (strategy) => {
-                                        const directSub = strategy.subStrategies[0];
-                                        if (!directSub) return;
-
-                                        try {
-                                            directSub.status = 'processing';
-                                            render();
-
-                                            let injectedPacket = currentProcess.knowledgePacket || '';
-                                            if (mode === 'selective_injection' && currentProcess.strategySpecificKnowledgePackets) {
-                                                injectedPacket = currentProcess.strategySpecificKnowledgePackets[strategy.id] || injectedPacket;
-                                            }
-
-                                            const solutionPrompt = deps.customPromptsDeepthinkState.user_deepthink_solutionAttempt
-                                                .replace('{{originalProblemText}}', challengeText)
-                                                .replace('{{assignedStrategy}}', strategy.strategyText)
-                                                .replace('{{knowledgePacket}}', injectedPacket);
-
-                                            directSub.requestPromptSolutionAttempt = solutionPrompt;
-
-                                            const solutionResponse = await makeDeepthinkApiCall(
-                                                parts.concat([{ text: solutionPrompt }]),
-                                                deps.customPromptsDeepthinkState.sys_deepthink_solutionAttempt,
-                                                false,
-                                                `Solution Execution for ${strategy.id} (Updated)`,
-                                                directSub,
-                                                'retryAttempt'
-                                            );
-
-                                            directSub.solutionAttempt = deps.cleanTextOutput(solutionResponse);
-                                            directSub.status = 'completed';
-                                            render();
-
-                                            // Generate critique immediately
-                                            directSub.solutionCritiqueStatus = 'processing';
-                                            render();
-
-                                            const solutionsText = `${directSub.id}:\nSub-Strategy: ${directSub.subStrategyText}\n\nSolution Attempt:\n${directSub.solutionAttempt}`;
-
-                                            const critiquePrompt = deps.customPromptsDeepthinkState.user_deepthink_solutionCritique
-                                                .replace('{{originalProblemText}}', challengeText)
-                                                .replace('{{currentMainStrategy}}', strategy.strategyText)
-                                                .replace('{{allSubStrategiesAndSolutions}}', solutionsText);
-
-                                            directSub.requestPromptSolutionCritique = critiquePrompt;
-
-                                            const critiqueResponse = await makeDeepthinkApiCall(
-                                                parts.concat([{ text: critiquePrompt }]),
-                                                deps.customPromptsDeepthinkState.sys_deepthink_solutionCritique,
-                                                false,
-                                                `Solution Critique for ${strategy.id} (Updated)`,
-                                                directSub,
-                                                'solutionCritiqueRetryAttempt'
-                                            );
-
-                                            directSub.solutionCritique = deps.cleanTextOutput(critiqueResponse);
-                                            directSub.solutionCritiqueStatus = 'completed';
-                                            render();
-
-                                        } catch (error: any) {
-                                            directSub.status = 'error';
-                                            directSub.error = error.message || 'Solution execution failed';
-                                            render();
-                                        }
-                                    });
-
-                                    await Promise.allSettled(updatedStrategyExecutionPromises);
-                                    console.log(`[Deepthink] Completed re-execution for updated strategies`);
-
-                                    // CRITICAL: Mark updated strategies so PQF re-evaluates them with new executions
-                                    postQualityFilterHistoryManager.markStrategiesAsUpdated(updateIds);
-                                    console.log(`[Deepthink] Marked ${updateIds.length} strategies as updated for re-evaluation`);
-
-                                    render();
-
-                                } catch (error: any) {
-                                    pqfAgent.status = 'error';
-                                    pqfAgent.error = error.message || 'PostQualityFilter failed';
-                                    console.error(`[Deepthink] PostQualityFilter error:`, error.message);
-                                    render();
-                                    break;
-                                }
-                            }
-
-                            currentProcess.postQualityFilterStatus = 'completed';
-                            console.log('[Deepthink] PostQualityFilter workflow complete');
-                            render();
-                        } else {
-                            // PostQualityFilter is disabled - proceed directly with current strategies
-                            console.log('[Deepthink] PostQualityFilter disabled - proceeding with current strategies');
-                            currentProcess.postQualityFilterStatus = 'completed';
-                        }
-                    }
-
-                    // StructuredSolutionPool mode enabled
-                    currentProcess.structuredSolutionPoolEnabled = true;
-                    currentProcess.structuredSolutionPoolStatus = 'processing';
-                    console.log('[Deepthink] Starting StructuredSolutionPool mode with iterative corrections...');
-
-                    // Get active main strategies (sub-strategies are disabled in this mode)
-                    const activeMainStrategies = currentProcess.initialStrategies.filter(s => !s.isKilledByRedTeam);
-
-                    if (activeMainStrategies.length === 0) {
-                        console.log('[Deepthink] No active main strategies. Skipping StructuredSolutionPool.');
-                        currentProcess.structuredSolutionPoolStatus = 'completed';
-                    } else {
-                        // Helper function to build StructuredSolutionPool string
-                        const buildStructuredSolutionPool = (): string => {
-                            const poolData: {
-                                strategies: Array<{
-                                    strategy_id: string;
-                                    strategy_text: string;
-                                    original_solution: string;
-                                    iterations: Array<{
-                                        iteration_number: number;
-                                        critique: string;
-                                        corrected_solution: string;
-                                    }>;
-                                    latest_critique?: string;
-                                    solution_pool?: any;
-                                }>;
-                            } = { strategies: [] };
-
-                            activeMainStrategies.forEach((mainStrategy) => {
-                                const directSub = mainStrategy.subStrategies[0];
-                                if (!directSub || directSub.isKilledByRedTeam || !directSub.solutionAttempt) return;
-
-                                const strategyEntry: any = {
-                                    strategy_id: mainStrategy.id,
-                                    strategy_text: mainStrategy.strategyText,
-                                    original_solution: directSub.solutionAttempt,
-                                    iterations: []
-                                };
-
-                                // Add critiques and corrected solutions from COMPLETED iterations
-                                // History compression: only keep the last 3 iterations in full detail
-                                const iterations = (directSub as any).iterativeCorrections?.iterations || [];
-                                const compressionThreshold = 3;
-                                const totalIterations = iterations.length;
-                                if (totalIterations > compressionThreshold) {
-                                    strategyEntry.compressed_iterations_note = `Iterations 1-${totalIterations - compressionThreshold} completed and compressed. See atomic_reconstruction in solution_pool for summaries.`;
-                                }
-                                const startIdx = Math.max(0, totalIterations - compressionThreshold);
-                                iterations.forEach((iter: any, idx: number) => {
-                                    if (idx >= startIdx) {
-                                        strategyEntry.iterations.push({
-                                            iteration_number: idx + 1,
-                                            critique: iter.critique,
-                                            corrected_solution: iter.correctedSolution
-                                        });
-                                    }
-                                });
-
-                                // CRITICAL FIX: Add the LATEST critique if it exists but isn't in the iterations array yet
-                                if (directSub.solutionCritique && directSub.solutionCritiqueStatus === 'completed') {
-                                    const lastIter = iterations.length > 0 ? iterations[iterations.length - 1] : null;
-                                    if (!lastIter || lastIter.critique !== directSub.solutionCritique) {
-                                        strategyEntry.latest_critique = directSub.solutionCritique;
-                                    }
-                                }
-
-                                // Add solution pool output if exists
-                                const poolAgent = currentProcess.structuredSolutionPoolAgents.find(a => a.mainStrategyId === mainStrategy.id);
-                                if (poolAgent && poolAgent.poolResponse) {
-                                    // Try to use parsed pool response if available, otherwise include raw
-                                    strategyEntry.solution_pool = poolAgent.parsedPoolResponse || poolAgent.poolResponse;
-                                }
-
-                                poolData.strategies.push(strategyEntry);
-                            });
-
-                            return JSON.stringify(poolData, null, 2);
-                        };
-
-                        // Helper function to make API call with timeout
-                        const makeDeepthinkApiCallWithTimeout = async (
-                            parts: Part[],
-                            systemInstruction: string,
-                            isJson: boolean,
-                            stepDescription: string,
-                            targetStatusField: any,
-                            retryAttemptField: 'retryAttempt' | 'selfImprovementRetryAttempt' | 'testerRetryAttempt' | 'hypothesisGenRetryAttempt' | 'solutionCritiqueRetryAttempt' | 'dissectedSynthesisRetryAttempt'
-                        ): Promise<string> => {
-                            return Promise.race([
-                                makeDeepthinkApiCall(parts, systemInstruction, isJson, stepDescription, targetStatusField, retryAttemptField),
-                                new Promise<string>((_, reject) =>
-                                    setTimeout(() => reject(new Error(`Timeout after ${STRUCTURED_SOLUTION_POOL_TIMEOUT_MS / 1000 / 60} minutes`)),
-                                        STRUCTURED_SOLUTION_POOL_TIMEOUT_MS)
-                                )
-                            ]);
-                        };
-
-                        // Initialize iterative corrections for all active strategies
-                        activeMainStrategies.forEach((mainStrategy) => {
-                            const directSub = mainStrategy.subStrategies[0];
-                            if (directSub && !directSub.isKilledByRedTeam && directSub.solutionAttempt) {
-                                (directSub as any).iterativeCorrections = {
-                                    iterations: [],
-                                    status: 'processing'
-                                };
-                            }
-                        });
-
-                        // Initialize StructuredSolutionPool
-                        currentProcess.structuredSolutionPool = buildStructuredSolutionPool();
-                        console.log('[Deepthink] Initialized StructuredSolutionPool');
-
-                        // Track initial version for evolution viewer
-                        if (currentProcess.structuredSolutionPool) {
-                            addSolutionPoolVersion(currentProcess.id, currentProcess.structuredSolutionPool, 0);
-                        }
-
-                        render();
-
-                        // Initialize history managers for critiques, pool agents, and correctors
-                        const critiqueHistoryManagers = new Map<string, SolutionCritiqueHistoryManager>();
-                        const poolHistoryManagers = new Map<string, StructuredSolutionPoolHistoryManager>();
-                        const correctionHistoryManagers = new Map<string, SolutionCorrectionHistoryManager>();
-
-                        activeMainStrategies.forEach((mainStrategy) => {
-                            const directSub = mainStrategy.subStrategies[0];
-                            if (!directSub || directSub.isKilledByRedTeam || !directSub.solutionAttempt) return;
-
-                            // Create critique history manager with original solution
-                            critiqueHistoryManagers.set(
-                                mainStrategy.id,
-                                new SolutionCritiqueHistoryManager(
-                                    deps.customPromptsDeepthinkState.sys_deepthink_solutionCritique,
-                                    challengeText,
-                                    mainStrategy.strategyText,
-                                    directSub.solutionAttempt
-                                )
-                            );
-
-                            // Create pool history manager
-                            poolHistoryManagers.set(
-                                mainStrategy.id,
-                                new StructuredSolutionPoolHistoryManager(
-                                    deps.customPromptsDeepthinkState.sys_deepthink_structuredSolutionPool,
-                                    challengeText,
-                                    mainStrategy.id,
-                                    mainStrategy.strategyText
-                                )
-                            );
-                        });
-
-                        // Main iteration loop (configurable depth)
-                        const iterativeDepth = deps.getIterativeDepth();
-                        for (let iterNum = 1; iterNum <= iterativeDepth; iterNum++) {
-                            if (currentProcess.isStopRequested) break;
-                            console.log(`[Deepthink] Starting StructuredSolutionPool iteration ${iterNum}...`);
-
-                            // PHASE 1: Generate critiques for all strategies in parallel
-                            // For iteration 1, reuse the initial critiques already generated before PQF
-                            // to avoid duplicate critique API calls at the start of the pipeline
-                            console.log(`[Deepthink] Phase 1: Generating critiques for iteration ${iterNum}...`);
-                            const critiquePromises = activeMainStrategies.map(async (mainStrategy) => {
-                                const directSub = mainStrategy.subStrategies[0];
-                                if (!directSub || directSub.isKilledByRedTeam || !directSub.solutionAttempt) return;
-
-                                if (currentProcess.isStopRequested) {
-                                    directSub.solutionCritiqueStatus = 'cancelled';
-                                    return;
-                                }
-
-                                try {
-                                    // Get history manager for this strategy
-                                    const critiqueHistoryManager = critiqueHistoryManagers.get(mainStrategy.id);
-                                    if (!critiqueHistoryManager) throw new Error(`No critique history manager for ${mainStrategy.id}`);
-
-                                    // Iteration 1: Reuse initial critique (already generated before PQF)
-                                    if (iterNum === 1 && directSub.solutionCritique && directSub.solutionCritiqueStatus === 'completed') {
-                                        console.log(`[Deepthink] Reusing existing initial critique for ${mainStrategy.id}`);
-                                        // Seed the history manager with the existing critique for proper conversation history
-                                        await critiqueHistoryManager.addCritique(directSub.solutionCritique);
-                                        render();
-                                        return;
-                                    }
-
-                                    directSub.solutionCritiqueStatus = 'processing';
-                                    render();
-
-                                    // Get the current solution to critique
-                                    let currentSolution: string;
-                                    const iterations = (directSub as any).iterativeCorrections?.iterations || [];
-                                    if (iterations.length > 0) {
-                                        currentSolution = iterations[iterations.length - 1].correctedSolution;
-                                    } else {
-                                        currentSolution = directSub.solutionAttempt || '';
-                                    }
-
-                                    // Build critique prompt using history manager
-                                    const critiquePromptMessages = await critiqueHistoryManager.buildPromptForIteration(
-                                        currentSolution,
-                                        iterNum
-                                    );
-
-                                    const critiquePrompt = critiquePromptMessages.map(m => m.content).join('\n\n');
-                                    directSub.requestPromptSolutionCritique = critiquePrompt;
-
-                                    const critiqueResponse = await makeDeepthinkApiCallWithTimeout(
-                                        parts.concat([{ text: critiquePrompt }]),
-                                        deps.customPromptsDeepthinkState.sys_deepthink_solutionCritique,
-                                        false,
-                                        `Solution Critique Iteration ${iterNum} for ${mainStrategy.id}`,
-                                        directSub,
-                                        'solutionCritiqueRetryAttempt'
-                                    );
-
-                                    // Add critique to history
-                                    await critiqueHistoryManager.addCritique(critiqueResponse);
-
-                                    // Add corrected solution to history if this isn't the first iteration
-                                    if (iterNum > 1 && iterations.length > 0) {
-                                        await critiqueHistoryManager.addCorrectedSolution(
-                                            iterations[iterations.length - 1].correctedSolution,
-                                            iterNum
-                                        );
-                                    }
-
-                                    directSub.solutionCritique = critiqueResponse;
-                                    directSub.solutionCritiqueStatus = 'completed';
-                                    render();
-
-                                    const critiqueData: DeepthinkSolutionCritiqueData = {
-                                        id: `critique-${mainStrategy.id}-iter${iterNum}`,
-                                        subStrategyId: directSub.id,
-                                        mainStrategyId: mainStrategy.id,
-                                        requestPrompt: critiquePrompt,
-                                        critiqueResponse: critiqueResponse,
-                                        status: 'completed',
-                                        isDetailsOpen: true,
-                                        retryAttempt: iterNum
-                                    };
-                                    currentProcess.solutionCritiques.push(critiqueData);
-                                    render();
-
-                                } catch (error: any) {
-                                    directSub.solutionCritiqueStatus = 'error';
-                                    directSub.solutionCritiqueError = error.message || "Critique failed";
-                                    console.error(`[Deepthink] Critique failed for ${mainStrategy.id}:`, error.message);
-                                    render();
-                                }
-                            });
-
-                            await Promise.allSettled(critiquePromises);
-                            console.log(`[Deepthink] All critiques completed for iteration ${iterNum}`);
-
-                            // Update StructuredSolutionPool to include the new critiques
-                            currentProcess.structuredSolutionPool = buildStructuredSolutionPool();
-                            console.log(`[Deepthink] Updated StructuredSolutionPool after critique generation`);
-                            render();
-
-                            // PHASE 2: Generate solution pools for all strategies in parallel
-                            console.log(`[Deepthink] Phase 2: Generating solution pools for iteration ${iterNum}...`);
-                            const poolPromises = activeMainStrategies.map(async (mainStrategy) => {
-                                const directSub = mainStrategy.subStrategies[0];
-                                if (!directSub || directSub.isKilledByRedTeam || !directSub.solutionAttempt) return;
-                                if (directSub.solutionCritiqueStatus !== 'completed' || !directSub.solutionCritique) return;
-
-                                if (currentProcess.isStopRequested) return;
-
-                                // Find or create pool agent for this strategy
-                                let poolAgent = currentProcess.structuredSolutionPoolAgents.find(a => a.mainStrategyId === mainStrategy.id);
-                                if (!poolAgent) {
-                                    poolAgent = {
-                                        id: `pool-${mainStrategy.id}`,
-                                        mainStrategyId: mainStrategy.id,
-                                        status: 'pending',
-                                        isDetailsOpen: true
-                                    };
-                                    currentProcess.structuredSolutionPoolAgents.push(poolAgent);
-                                }
-
-                                try {
-                                    poolAgent.status = 'processing';
-                                    render();
-
-                                    // Get history manager for this strategy
-                                    const poolHistoryManager = poolHistoryManagers.get(mainStrategy.id);
-                                    if (!poolHistoryManager) throw new Error(`No history manager for ${mainStrategy.id}`);
-
-                                    // Build prompt using history manager
-                                    const poolPromptMessages = await poolHistoryManager.buildPromptForIteration(
-                                        currentProcess.structuredSolutionPool || '',
-                                        directSub.solutionCritique || '',
-                                        iterNum
-                                    );
-
-                                    const poolPrompt = poolPromptMessages.map(m => m.content).join('\n\n');
-                                    poolAgent.requestPrompt = poolPrompt;
-
-                                    const poolResponse = await makeDeepthinkApiCallWithTimeout(
-                                        parts.concat([{ text: poolPrompt }]),
-                                        deps.customPromptsDeepthinkState.sys_deepthink_structuredSolutionPool,
-                                        true,
-                                        `StructuredSolutionPool Agent for ${mainStrategy.id} Iteration ${iterNum}`,
-                                        poolAgent,
-                                        'retryAttempt'
-                                    );
-
-                                    // Add response to history
-                                    await poolHistoryManager.addPoolResponse(poolResponse);
-
-                                    poolAgent.poolResponse = poolResponse;
-
-                                    // Parse JSON response for UI consumption
-                                    try {
-                                        const parsed = deps.parseJsonSafe(poolResponse, `SolutionPool-${mainStrategy.id}`);
-                                        if (parsed && Array.isArray(parsed.solutions)) {
-                                            poolAgent.parsedPoolResponse = {
-                                                strategy_id: parsed.strategy_id || mainStrategy.id,
-                                                solutions: parsed.solutions.map((s: any) => ({
-                                                    title: s.title || 'Untitled Solution',
-                                                    approach_summary: s.approach_summary || '',
-                                                    content: s.content || '',
-                                                    confidence: typeof s.confidence === 'number' ? s.confidence : 0.5,
-                                                    internal_critique: s.internal_critique || '',
-                                                    atomic_reconstruction: s.atomic_reconstruction || ''
-                                                }))
-                                            };
-                                        }
-                                    } catch (parseError: any) {
-                                        console.warn(`[Deepthink] Failed to parse pool JSON for ${mainStrategy.id}, raw text will be used:`, parseError.message);
-                                    }
-
-                                    poolAgent.status = 'completed';
-                                    render();
-
-                                } catch (error: any) {
-                                    poolAgent.status = 'error';
-                                    poolAgent.error = error.message || "Solution pool generation failed";
-                                    console.error(`[Deepthink] Solution pool failed for ${mainStrategy.id}:`, error.message);
-                                    render();
-                                }
-                            });
-
-                            await Promise.allSettled(poolPromises);
-                            console.log(`[Deepthink] All solution pools completed for iteration ${iterNum}`);
-
-                            // Update the StructuredSolutionPool with new pool outputs
-                            currentProcess.structuredSolutionPool = buildStructuredSolutionPool();
-                            console.log(`[Deepthink] Updated StructuredSolutionPool after pool generation`);
-
-                            // Track version for evolution viewer
-                            if (currentProcess.structuredSolutionPool) {
-                                addSolutionPoolVersion(currentProcess.id, currentProcess.structuredSolutionPool, iterNum);
-                            }
-
-                            render();
-
-                            // PHASE 3: Generate corrected solutions for all strategies in parallel
-                            console.log(`[Deepthink] Phase 3: Generating corrected solutions for iteration ${iterNum}...`);
-                            const correctionPromises = activeMainStrategies.map(async (mainStrategy) => {
-                                const directSub = mainStrategy.subStrategies[0];
-                                if (!directSub || directSub.isKilledByRedTeam || !directSub.solutionAttempt) return;
-                                if (directSub.solutionCritiqueStatus !== 'completed' || !directSub.solutionCritique) return;
-
-                                if (currentProcess.isStopRequested) {
-                                    directSub.selfImprovementStatus = 'cancelled';
-                                    return;
-                                }
-
-                                try {
-                                    directSub.selfImprovementStatus = 'processing';
-                                    render();
-
-                                    // Get or create correction history manager for this strategy
-                                    let correctionManager = correctionHistoryManagers.get(mainStrategy.id);
-
-                                    // Get current solution to correct
-                                    let currentSolution: string;
-                                    const iterations = (directSub as any).iterativeCorrections?.iterations || [];
-                                    if (iterations.length > 0) {
-                                        currentSolution = iterations[iterations.length - 1].correctedSolution;
-                                    } else {
-                                        currentSolution = directSub.solutionAttempt || '';
-                                    }
-
-                                    if (iterNum === 1) {
-                                        // Create manager with pool context on first iteration
-                                        correctionManager = new SolutionCorrectionHistoryManager(
-                                            deps.customPromptsDeepthinkState.sys_deepthink_selfImprovement,
-                                            challengeText,
-                                            mainStrategy.strategyText,
-                                            currentSolution,
-                                            directSub.solutionCritique || '',
-                                            mainStrategy.id,
-                                            currentProcess.structuredSolutionPool || null // Pass full pool as context
-                                        );
-                                        correctionHistoryManagers.set(mainStrategy.id, correctionManager);
-                                    } else {
-                                        // Add new critique to existing manager
-                                        if (correctionManager) {
-                                            await correctionManager.addNewCritique(directSub.solutionCritique || '', iterNum);
-                                        }
-                                    }
-
-                                    if (!correctionManager) throw new Error(`No correction manager for ${mainStrategy.id}`);
-
-                                    // Build correction prompt using history manager (pass current pool for iterations 2+)
-                                    const correctionPromptMessages = await correctionManager.buildPromptForIteration(
-                                        directSub.solutionCritique || '',
-                                        iterNum,
-                                        iterNum > 1 ? currentProcess.structuredSolutionPool : null
-                                    );
-
-                                    const correctionPrompt = correctionPromptMessages.map(m => m.content).join('\n\n');
-                                    directSub.requestPromptSelfImprovement = correctionPrompt;
-
-                                    const correctedSolution = await makeDeepthinkApiCallWithTimeout(
-                                        parts.concat([{ text: correctionPrompt }]),
-                                        deps.customPromptsDeepthinkState.sys_deepthink_selfImprovement,
-                                        false,
-                                        `Solution Correction Iteration ${iterNum} for ${mainStrategy.id}`,
-                                        directSub,
-                                        'selfImprovementRetryAttempt'
-                                    );
-
-                                    // Add corrected solution to history
-                                    await correctionManager.addCorrectedSolution(correctedSolution);
-
-                                    directSub.refinedSolution = correctedSolution;
-                                    directSub.selfImprovementStatus = 'completed';
-
-                                    // Add to iterations
-                                    (directSub as any).iterativeCorrections.iterations.push({
-                                        iterationNumber: iterNum,
-                                        critique: directSub.solutionCritique || '',
-                                        correctedSolution: correctedSolution,
-                                        timestamp: Date.now()
-                                    });
-
-                                    render();
-
-                                } catch (error: any) {
-                                    directSub.selfImprovementStatus = 'error';
-                                    directSub.selfImprovementError = error.message || "Correction failed";
-                                    console.error(`[Deepthink] Correction failed for ${mainStrategy.id}:`, error.message);
-                                    render();
-                                }
-                            });
-
-                            await Promise.allSettled(correctionPromises);
-                            console.log(`[Deepthink] All corrections completed for iteration ${iterNum}`);
-
-                            // Update the StructuredSolutionPool with new corrected solutions
-                            currentProcess.structuredSolutionPool = buildStructuredSolutionPool();
-                            console.log(`[Deepthink] Updated StructuredSolutionPool after corrections`);
-
-                            // Track version for evolution viewer (final state for this iteration)
-                            if (currentProcess.structuredSolutionPool) {
-                                addSolutionPoolVersion(currentProcess.id, currentProcess.structuredSolutionPool, iterNum + 0.5);
-                            }
-
-                            render();
-                        }
-
-                        // Mark all iterative corrections as completed
-                        activeMainStrategies.forEach((mainStrategy) => {
-                            const directSub = mainStrategy.subStrategies[0];
-                            if (directSub && (directSub as any).iterativeCorrections) {
-                                (directSub as any).iterativeCorrections.status = 'completed';
-                            }
-                        });
-
-                        currentProcess.structuredSolutionPoolStatus = 'completed';
-                        console.log('[Deepthink] StructuredSolutionPool mode completed');
-                        render();
-                    }
-
-                } else {
-                    // Non-iterative refinement mode with dissected observations synthesis
-                    if (dissectedObservationsEnabled) {
-                        currentProcess.dissectedSynthesisStatus = 'processing';
-                        render();
-
-                        try {
-                            const solutionsWithCritiques = currentProcess.initialStrategies
-                                .filter(mainStrategy => !mainStrategy.isKilledByRedTeam)
-                                .map(mainStrategy => {
-                                    const activeSubStrategies = mainStrategy.subStrategies
-                                        .filter(sub => !sub.isKilledByRedTeam && sub.solutionAttempt);
-
-                                    if (activeSubStrategies.length === 0) {
-                                        return '';
-                                    }
-
-                                    const critiqueData = currentProcess.solutionCritiques.find(c => c.mainStrategyId === mainStrategy.id);
-                                    const strategyCritique = critiqueData?.critiqueResponse || 'No critique available';
-
-                                    const subStrategiesSolutions = activeSubStrategies
-                                        .map(sub => {
-                                            return `
-═══════════════════════════════════════════════════════════════
-SUB-STRATEGY:
-${sub.subStrategyText}
-
-THE EXECUTION:
-${sub.solutionAttempt}
-═══════════════════════════════════════════════════════════════`;
-                                        })
-                                        .join('\n\n');
-
-                                    return `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STRATEGY:
-${mainStrategy.strategyText}
-
-${subStrategiesSolutions}
-
-ITS CRITIQUE (covers all sub-strategies above):
-${strategyCritique}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
-                                })
-                                .filter(section => section.trim().length > 0)
-                                .join('\n\n\n');
-
-                            const shareHypotheses = deps.getShareHypothesesToDissected();
-                            const packetToUse = shareHypotheses ? (currentProcess.knowledgePacket || 'No hypothesis exploration performed.') : 'Hypothesis exploration sharing is disabled for dissected observations.';
-
-                            const synthesisPrompt = deps.customPromptsDeepthinkState.user_deepthink_dissectedSynthesis
-                                .replace('{{originalProblemText}}', challengeText)
-                                .replace('{{knowledgePacket}}', packetToUse)
-                                .replace('{{solutionsWithCritiques}}', solutionsWithCritiques || 'No solution attempts available.');
-
-                            currentProcess.dissectedSynthesisRequestPrompt = synthesisPrompt;
-
-                            const synthesisResponse = await makeDeepthinkApiCall(
-                                parts.concat([{ text: synthesisPrompt }]),
-                                deps.customPromptsDeepthinkState.sys_deepthink_dissectedSynthesis,
-                                false,
-                                'Dissected Observations Synthesis',
-                                currentProcess,
-                                'dissectedSynthesisRetryAttempt'
-                            );
-
-                            currentProcess.dissectedObservationsSynthesis = synthesisResponse;
-                            currentProcess.dissectedSynthesisStatus = 'completed';
-                            render();
-                        } catch (error: any) {
-                            currentProcess.dissectedSynthesisStatus = 'error';
-                            currentProcess.dissectedSynthesisError = error.message || "Dissected synthesis failed";
-                            render();
-                        }
-
-                        if (currentProcess.isStopRequested) throw new PipelineStopRequestedError("Stopped during dissected synthesis.");
-                    }
-
-                    const improvementPromises: Promise<void>[] = [];
-
-                    currentProcess.initialStrategies.forEach((mainStrategy) => {
-                        mainStrategy.subStrategies.forEach((subStrategy) => {
-                            if (subStrategy.isKilledByRedTeam || !subStrategy.solutionAttempt) return;
-
-                            improvementPromises.push((async () => {
-                                if (currentProcess.isStopRequested) {
-                                    subStrategy.selfImprovementStatus = 'cancelled';
-                                    subStrategy.selfImprovementError = "Process stopped by user.";
-                                    return;
-                                }
-
-                                try {
-                                    subStrategy.selfImprovementStatus = 'processing';
-                                    render();
-
-                                    const provideAllSolutions = deps.getProvideAllSolutionsToCorrectors();
-
-                                    let solutionSection: string;
-
-                                    if (provideAllSolutions) {
-                                        const allSolutionsWithCritiques = currentProcess.initialStrategies
-                                            .filter(strat => !strat.isKilledByRedTeam)
-                                            .map(strat => {
-                                                const activeSubs = strat.subStrategies
-                                                    .filter(sub => !sub.isKilledByRedTeam && sub.solutionAttempt);
-
-                                                if (activeSubs.length === 0) return '';
-
-                                                const critiqueData = currentProcess.solutionCritiques.find(c => c.mainStrategyId === strat.id);
-                                                const stratCritique = critiqueData?.critiqueResponse || 'No critique available';
-
-                                                const subsSection = activeSubs
-                                                    .map(sub => {
-                                                        return `
-═══════════════════════════════════════════════════════════════
-SUB-STRATEGY: ${sub.id}${sub.id === subStrategy.id ? ' ← YOUR ASSIGNED SUB-STRATEGY' : ''}
-${sub.subStrategyText}
-
-THE EXECUTION:
-${sub.solutionAttempt}
-═══════════════════════════════════════════════════════════════`;
-                                                    })
-                                                    .join('\n\n');
-
-                                                return `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-STRATEGY: ${strat.id}${strat.id === mainStrategy.id ? ' ← YOUR ASSIGNED STRATEGY' : ''}
-${strat.strategyText}
-
-${subsSection}
-
-ITS CRITIQUE (covers all sub-strategies above):
-${stratCritique}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
-                                            })
-                                            .filter(section => section.trim().length > 0)
-                                            .join('\n\n\n');
-
-                                        solutionSection = `<ALL SOLUTION ATTEMPTS WITH THEIR CRITIQUES ACROSS ALL STRATEGIES>
-You are correcting the solution for sub-strategy: ${subStrategy.id}
-Below you can see all solutions attempted across all strategies and sub-strategies with their critiques. Your assigned sub-strategy is marked clearly.
-
-${allSolutionsWithCritiques}
-</ALL SOLUTION ATTEMPTS WITH THEIR CRITIQUES ACROSS ALL STRATEGIES>`;
-                                    } else {
-                                        const strategyCritique = currentProcess.solutionCritiques.find(
-                                            c => c.mainStrategyId === mainStrategy.id && c.status === 'completed'
-                                        );
-
-                                        solutionSection = `<Solution Critique For Your Provided Main Framework>
-This analysis identifies problems in the specific solution attempt you have received as well as the problems in other solutions attempted in parallel inside this framework.
-You have received the executed solution from the ${subStrategy.id}. You must take those findings seriously as well as learn from the other parallel critique in the same framework.
-${strategyCritique?.critiqueResponse || 'No critique available for this strategy.'}
-</Solution Critique For Your Provided Main Framework>
-
-<ORIGINAL SOLUTION ATTEMPT>
-${subStrategy.solutionAttempt || ''}
-</ORIGINAL SOLUTION ATTEMPT>`;
-                                    }
-
-                                    if (dissectedObservationsEnabled && currentProcess.dissectedObservationsSynthesis) {
-                                        solutionSection += `\n\n<DISSECTED OBSERVATIONS SYNTHESIS>
-This synthesis consolidates diagnostic intelligence across ALL solutions, identifies patterns of failure, documents proven impossibilities, and provides correction guidance. Learn from mistakes made across all solution attempts, not just the solution you received. This is the most critical piece of synthesis and you must genuinely accept these findings and correct the solution.
-${currentProcess.dissectedObservationsSynthesis}
-</DISSECTED OBSERVATIONS SYNTHESIS>`;
-                                    }
-
-                                    const improvementPrompt = deps.customPromptsDeepthinkState.user_deepthink_selfImprovement
-                                        .replace('{{originalProblemText}}', challengeText)
-                                        .replace('{{currentMainStrategy}}', mainStrategy.strategyText)
-                                        .replace('{{currentSubStrategy}}', subStrategy.subStrategyText)
-                                        .replace('{{solutionAttempt}}', subStrategy.solutionAttempt || 'No solution attempt available')
-                                        .replace('{{solutionCritique}}', subStrategy.solutionCritique || 'No critique available');
-
-                                    subStrategy.requestPromptSelfImprovement = improvementPrompt;
-
-                                    const improvementResponse = await makeDeepthinkApiCall(
-                                        parts.concat([{ text: improvementPrompt }]),
-                                        deps.customPromptsDeepthinkState.sys_deepthink_selfImprovement,
-                                        false,
-                                        `Self-Improvement for ${subStrategy.id}`,
-                                        subStrategy,
-                                        'selfImprovementRetryAttempt'
-                                    );
-
-                                    subStrategy.refinedSolution = improvementResponse;
-                                    subStrategy.selfImprovementStatus = 'completed';
-                                    render();
-                                } catch (error: any) {
-                                    subStrategy.selfImprovementStatus = 'error';
-                                    subStrategy.selfImprovementError = error.message || "Self-improvement failed";
-                                    render();
-                                }
-                            })());
-                        });
-                    });
-
-                    await Promise.allSettled(improvementPromises);
-                }
-
-                if (currentProcess.isStopRequested) throw new PipelineStopRequestedError("Stopped during self-improvement.");
-
-                currentProcess.strategicSolverComplete = true;
-                render();
-
-            } catch (error: any) {
-                if (strategiesFinalizedSignal.resolve) {
-                    strategiesFinalizedSignal.resolve();
-                }
-                if (!(error instanceof PipelineStopRequestedError)) {
-                    currentProcess.status = 'error';
-                    currentProcess.error = `Strategic Solver failed: ${error.message}`;
-                    render();
-                }
-                throw error;
-            }
-        })();
-
-        await Promise.all([trackAPromise, trackBPromise]);
-
-        currentProcess.finalJudgingStatus = 'processing';
+async function generateSubStrategies(process: DeepthinkPipelineState, parts: Part[], challengeText: string): Promise<void> {
+    if (deps.getSkipSubStrategies() || deps.getEvolvingDfsEnabled()) {
+        process.initialStrategies.forEach(strategy => {
+            strategy.subStrategies = [{
+                id: `${strategy.id}-direct`,
+                subStrategyText: strategy.strategyText,
+                status: 'pending',
+                isDetailsOpen: false,
+                subStrategyFormat: 'markdown',
+            }];
+            strategy.status = 'completed';
+        });
+        render();
+        return;
+    }
+
+    await Promise.allSettled(process.initialStrategies.map(async strategy => {
+        strategy.status = 'processing';
         render();
 
-        const allSolutions: Array<{ id: string, solution: string, mainStrategyId: string, subStrategyText: string }> = [];
+        try {
+            const otherStrategies = process.initialStrategies
+                .filter(candidate => candidate.id !== strategy.id)
+                .map((candidate, index) => `Strategy ${index + 1}: ${candidate.strategyText}`)
+                .join('\n\n') || 'No other strategies.';
 
-        currentProcess.initialStrategies.forEach(mainStrategy => {
-            if (mainStrategy.isKilledByRedTeam) return;
+            const prompt = buildSubStrategyPrompt({
+                challengeText,
+                currentMainStrategy: strategy.strategyText,
+                otherMainStrategies: otherStrategies,
+                subStrategyCount: deps.getSelectedSubStrategiesCount(),
+            });
 
-            mainStrategy.subStrategies.forEach(subStrategy => {
-                if (subStrategy.isKilledByRedTeam) return;
+            strategy.requestPromptSubStrategyGen = prompt;
+            const responseOutput = await callAgent({
+                process,
+                parts: parts.concat([{ text: prompt }]),
+                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_subStrategy,
+                isJson: true,
+                stepDescription: `Sub-Strategy Generation for ${strategy.id}`,
+                target: strategy,
+                retryField: 'retryAttempt',
+                critical: false,
+            });
+            const response = responseOutput.contextText;
 
-                const solution = subStrategy.refinedSolution || subStrategy.solutionAttempt;
-                if (solution && subStrategy.selfImprovementStatus === 'completed') {
-                    allSolutions.push({
-                        id: subStrategy.id,
-                        solution: solution,
-                        mainStrategyId: mainStrategy.id,
-                        subStrategyText: subStrategy.subStrategyText
-                    });
+            const parsed = parseJson(response, `Sub-Strategy Generation for ${strategy.id}`);
+            const subStrategies = asStringArray(parsed.sub_strategies || parsed.subStrategies || parsed.strategies);
+            strategy.subStrategies = subStrategies.map((subStrategyText, index) => ({
+                id: `${strategy.id}-sub${index + 1}`,
+                subStrategyText,
+                status: 'pending',
+                isDetailsOpen: false,
+                subStrategyFormat: 'markdown',
+            }));
+            if (strategy.subStrategies.length === 0) ensureDirectSubStrategy(strategy);
+            strategy.status = 'completed';
+        } catch (error: any) {
+            strategy.status = 'error';
+            strategy.error = error.message || 'Sub-strategy generation failed';
+            ensureDirectSubStrategy(strategy);
+        }
+        render();
+    }));
+}
+
+function initialHypothesisPrompt(process: DeepthinkPipelineState, challengeText: string, mode: HypothesisInjectionMode, count: number): string {
+    const strategyContext = mode === 'parallel'
+        ? ''
+        : activeStrategies(process).map(strategy => {
+            const subText = strategy.subStrategies.map(sub => `- ${sub.id}: ${sub.subStrategyText}`).join('\n');
+            return `<Strategy id="${strategy.id}">\n${strategy.strategyText}\n${subText}\n</Strategy>`;
+        }).join('\n\n');
+
+    return buildHypothesisGenerationPrompt({
+        challengeText,
+        count,
+        mode,
+        strategyContext,
+    });
+}
+
+async function runHypothesisRound(args: {
+    process: DeepthinkPipelineState;
+    parts: Part[];
+    challengeText: string;
+    mode: HypothesisInjectionMode;
+    roundNumber: number;
+    globalIteration: number;
+    prompt?: string;
+    activeStrategyIdsToFlush?: string[];
+}): Promise<void> {
+    const count = deps.getSelectedHypothesisCount();
+    if (count <= 0) {
+        args.process.hypotheses = [];
+        args.process.knowledgePacket = '<Full Information Packet>\nHYPOTHESIS EXPLORATION: Disabled.\n</Full Information Packet>';
+        args.process.strategySpecificKnowledgePackets = {};
+        args.process.hypothesisGenStatus = 'completed';
+        args.process.hypothesisExplorerComplete = true;
+        render();
+        return;
+    }
+
+    args.process.hypothesisGenStatus = 'processing';
+    const existing = args.process.hypotheses.length ? [...args.process.hypotheses] : [];
+    if (existing.length) args.process.hypothesisHistory?.push(existing);
+    args.process.hypotheses = [];
+    render();
+
+    const prompt = args.prompt || initialHypothesisPrompt(args.process, args.challengeText, args.mode, count);
+    args.process.requestPromptHypothesisGen = prompt;
+
+    let systemInstruction = deps.customPromptsDeepthinkState.sys_deepthink_hypothesisGeneration
+        .replace(/\{\{NUM_HYPOTHESES\}\}/g, String(count));
+
+    if (args.mode === 'selective_injection') {
+        systemInstruction += `\n\nReturn only JSON. Each hypothesis must be an object with "text" and "target_strategies".`;
+    }
+
+    try {
+        const responseOutput = await callAgent({
+            process: args.process,
+            parts: args.parts.concat([{ text: prompt }]),
+            systemInstruction,
+            isJson: true,
+            stepDescription: args.roundNumber === 1 ? 'Hypothesis Generation' : `Hypothesis Generation Heartbeat ${args.roundNumber}`,
+            target: args.process,
+            retryField: 'hypothesisGenRetryAttempt',
+            timeoutMs: AGENT_TIMEOUT_MS,
+            critical: false,
+        });
+        const response = responseOutput.contextText;
+
+        const parsed = parseJson(response, 'Hypothesis Generation');
+        const hypotheses = Array.isArray(parsed.hypotheses) ? parsed.hypotheses : [];
+
+        args.process.hypotheses = hypotheses.slice(0, count).map((raw: any, index: number) => {
+            const isObject = raw && typeof raw === 'object';
+            const targetIds = isObject && Array.isArray(raw.target_strategies)
+                ? raw.target_strategies.map((value: unknown) => String(value).trim()).filter(Boolean)
+                : undefined;
+            return {
+                id: `hyp${args.roundNumber}-${index + 1}`,
+                hypothesisText: isObject ? String(raw.text || '') : String(raw || ''),
+                testerStatus: 'pending',
+                isDetailsOpen: false,
+                targetStrategyIds: args.mode === 'selective_injection' ? targetIds : undefined,
+                roundNumber: args.roundNumber,
+                globalIteration: args.globalIteration,
+            };
+        }).filter((hypothesis: DeepthinkHypothesisData) => hypothesis.hypothesisText.trim());
+
+        args.process.hypothesisGenStatus = 'completed';
+        render();
+
+        await Promise.allSettled(args.process.hypotheses.map(async hypothesis => {
+            hypothesis.testerStatus = 'processing';
+            render();
+
+            try {
+                const testerPrompt = buildHypothesisTesterPrompt(args.challengeText, hypothesis.hypothesisText);
+                hypothesis.testerRequestPrompt = testerPrompt;
+
+                const testerResponse = await callAgent({
+                    process: args.process,
+                    parts: args.parts.concat([{ text: testerPrompt }]),
+                    systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_hypothesisTester,
+                    isJson: false,
+                    stepDescription: `Hypothesis Testing for ${hypothesis.id}`,
+                    target: hypothesis,
+                    retryField: 'testerRetryAttempt',
+                    timeoutMs: AGENT_TIMEOUT_MS,
+                    critical: false,
+                    pythonAccess: createHypothesisPythonAccess(args.process, hypothesis),
+                });
+
+                hypothesis.testerAttempt = testerResponse.contextText;
+                hypothesis.testerAttemptDisplay = testerResponse.displayText;
+                hypothesis.testerAttemptFinal = testerResponse.finalText;
+                hypothesis.testerStatus = 'completed';
+            } catch (error: any) {
+                hypothesis.testerStatus = 'error';
+                hypothesis.testerError = error.message || 'Hypothesis testing failed';
+                hypothesis.testerAttempt = 'No testing output available.';
+            }
+            render();
+        }));
+
+        const fullPacket = [
+            '<Full Information Packet>',
+            ...args.process.hypotheses.map((hypothesis, index) => [
+                `<Hypothesis ${index + 1}>`,
+                `Hypothesis: ${hypothesis.hypothesisText}`,
+                `Target Strategies: ${hypothesis.targetStrategyIds?.join(', ') || 'All'}`,
+                `Hypothesis Testing: ${hypothesis.testerAttempt || 'No testing output available'}`,
+                `</Hypothesis ${index + 1}>`,
+            ].join('\n')),
+            '</Full Information Packet>',
+        ].join('\n');
+
+        const strategyPackets: Record<string, string> = {};
+        activeStrategies(args.process).forEach(strategy => {
+            const relevant = args.mode === 'selective_injection'
+                ? args.process.hypotheses.filter(hypothesis => {
+                    if (args.activeStrategyIdsToFlush?.includes(strategy.id)) return false;
+                    if (!hypothesis.targetStrategyIds || hypothesis.targetStrategyIds.length === 0) return true;
+                    return hypothesis.targetStrategyIds.includes(strategy.id);
+                })
+                : args.process.hypotheses;
+
+            strategyPackets[strategy.id] = [
+                `<Strategy-Specific Information Packet for Strategy ${strategy.id}>`,
+                relevant.length
+                    ? relevant.map(hypothesis => [
+                        `<Hypothesis ${hypothesis.id}>`,
+                        `Hypothesis: ${hypothesis.hypothesisText}`,
+                        `Hypothesis Testing: ${hypothesis.testerAttempt || 'No testing output available'}`,
+                        `</Hypothesis ${hypothesis.id}>`,
+                    ].join('\n')).join('\n\n')
+                    : 'No active strategy-specific hypotheses are currently available for this strategy.',
+                `</Strategy-Specific Information Packet for Strategy ${strategy.id}>`,
+            ].join('\n');
+        });
+
+        args.process.knowledgePacket = fullPacket;
+        args.process.strategySpecificKnowledgePackets = strategyPackets;
+        args.process.hypothesisRounds?.push({
+            roundNumber: args.roundNumber,
+            globalIteration: args.globalIteration,
+            packet: fullPacket,
+            strategyPackets,
+        });
+        args.process.hypothesisExplorerComplete = true;
+    } catch (error: any) {
+        args.process.hypothesisGenStatus = 'error';
+        args.process.hypothesisGenError = error.message || 'Hypothesis exploration failed';
+    }
+    render();
+}
+
+async function executeSolutionAttempt(args: {
+    process: DeepthinkPipelineState;
+    parts: Part[];
+    challengeText: string;
+    strategy: DeepthinkMainStrategyData;
+    subStrategy: DeepthinkSubStrategyData;
+    critical: boolean;
+}): Promise<void> {
+    args.subStrategy.status = 'processing';
+    render();
+
+    const injectedPacket = args.process.hypothesisInjectionMode === 'selective_injection'
+        ? args.process.strategySpecificKnowledgePackets?.[args.strategy.id] || args.process.knowledgePacket || 'No hypothesis exploration performed.'
+        : args.process.knowledgePacket || 'No hypothesis exploration performed.';
+    const otherStrategyContext = activeStrategies(args.process)
+        .filter(strategy => strategy.id !== args.strategy.id)
+        .map(strategy => `<Strategy-${strategy.id} branchVersion="${strategy.branchVersion || 1}">\n${strategy.strategyText}\n</Strategy-${strategy.id}>`)
+        .join('\n\n');
+    const branchContext = args.strategy.branchVersion
+        ? `<BranchIdentity strategy="${args.strategy.id}" branchVersion="${args.strategy.branchVersion}" branchIterationCount="${args.strategy.branchIterationCount || 0}" />`
+        : undefined;
+
+    const prompt = buildSolutionAttemptPrompt({
+        challengeText: args.challengeText,
+        mainStrategy: args.strategy.strategyText,
+        subStrategy: args.subStrategy.subStrategyText,
+        knowledgePacket: injectedPacket,
+        otherStrategyContext,
+        branchContext,
+    });
+
+    args.subStrategy.requestPromptSolutionAttempt = prompt;
+
+    try {
+        const response = await callAgent({
+            process: args.process,
+            parts: args.parts.concat([{ text: prompt }]),
+            systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_solutionAttempt,
+            isJson: false,
+            stepDescription: `Solution Attempt for ${args.subStrategy.id}`,
+            target: args.subStrategy,
+            retryField: 'retryAttempt',
+            timeoutMs: AGENT_TIMEOUT_MS,
+            critical: args.critical,
+            pythonAccess: createPersistentPythonAccess({
+                process: args.process,
+                kind: 'Solution Attempt',
+                strategyId: args.strategy.id,
+                subStrategyId: args.subStrategy.id,
+                branchVersion: args.strategy.branchVersion || 1,
+            }),
+        });
+        args.subStrategy.solutionAttempt = response.contextText;
+        args.subStrategy.solutionAttemptDisplay = response.displayText;
+        args.subStrategy.solutionAttemptFinal = response.finalText;
+        args.subStrategy.status = 'completed';
+    } catch (error: any) {
+        args.subStrategy.status = 'error';
+        args.subStrategy.error = error.message || 'Solution attempt failed';
+        if (args.critical) throw error;
+    }
+    render();
+}
+
+async function critiqueSolution(args: {
+    process: DeepthinkPipelineState;
+    parts: Part[];
+    challengeText: string;
+    strategy: DeepthinkMainStrategyData;
+    subStrategy: DeepthinkSubStrategyData;
+    solution: string;
+    runtime?: BranchRuntime;
+    globalIteration?: number;
+    branchIteration?: number;
+}): Promise<string | null> {
+    args.subStrategy.solutionCritiqueStatus = 'processing';
+    render();
+
+    const prompt = args.runtime && args.globalIteration && args.branchIteration
+        ? messageText(buildCritiquePrompt({
+            challenge: args.challengeText,
+            strategy: runtimeSnapshot(args.process, args.strategy, args.runtime, args.process.initialStrategies.indexOf(args.strategy)),
+            solutionToCritique: args.solution,
+            globalIteration: args.globalIteration,
+            branchIteration: args.branchIteration,
+            previousHistory: args.runtime.history,
+        }))
+        : buildNonIterativeCritiquePrompt({
+            challengeText: args.challengeText,
+            mainStrategy: args.strategy.strategyText,
+            subStrategyId: args.subStrategy.id,
+            subStrategyText: args.subStrategy.subStrategyText,
+            solution: args.solution,
+        });
+
+    args.subStrategy.requestPromptSolutionCritique = prompt;
+
+    const critiqueData: DeepthinkSolutionCritiqueData = {
+        id: `critique-${args.strategy.id}-${args.globalIteration || 'initial'}-${nanoid(4)}`,
+        subStrategyId: args.subStrategy.id,
+        mainStrategyId: args.strategy.id,
+        branchVersion: args.runtime?.branchVersion || args.strategy.branchVersion || 1,
+        strategyTextSnapshot: args.strategy.strategyText,
+        requestPrompt: prompt,
+        status: 'processing',
+        isDetailsOpen: true,
+        globalIteration: args.globalIteration,
+        branchIteration: args.branchIteration,
+    };
+    args.process.solutionCritiques.push(critiqueData);
+    render();
+
+    try {
+        const response = await callAgent({
+            process: args.process,
+            parts: args.parts.concat([{ text: prompt }]),
+            systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_solutionCritique,
+            isJson: false,
+            stepDescription: `Solution Critique for ${args.strategy.id}${args.globalIteration ? ` Iteration ${args.globalIteration}` : ''}`,
+            target: args.subStrategy,
+            retryField: 'solutionCritiqueRetryAttempt',
+            timeoutMs: AGENT_TIMEOUT_MS,
+            critical: false,
+            pythonAccess: createPersistentPythonAccess({
+                process: args.process,
+                kind: 'Solution Critique',
+                strategyId: args.strategy.id,
+                subStrategyId: args.subStrategy.id,
+                branchVersion: args.runtime?.branchVersion || args.strategy.branchVersion || 1,
+            }),
+        });
+
+        args.subStrategy.solutionCritique = response.contextText;
+        args.subStrategy.solutionCritiqueDisplay = response.displayText;
+        args.subStrategy.solutionCritiqueFinal = response.finalText;
+        args.subStrategy.solutionCritiqueStatus = 'completed';
+        critiqueData.critiqueResponse = response.contextText;
+        critiqueData.critiqueResponseDisplay = response.displayText;
+        critiqueData.critiqueResponseFinal = response.finalText;
+        critiqueData.status = 'completed';
+        return response.contextText;
+    } catch (error: any) {
+        args.subStrategy.solutionCritiqueStatus = 'error';
+        args.subStrategy.solutionCritiqueError = error.message || 'Solution critique failed';
+        critiqueData.status = 'error';
+        critiqueData.error = args.subStrategy.solutionCritiqueError;
+        return null;
+    } finally {
+        render();
+    }
+}
+
+async function runInitialExecutionsAndCritiques(args: {
+    process: DeepthinkPipelineState;
+    parts: Part[];
+    challengeText: string;
+    runtimes: Map<string, BranchRuntime>;
+    evolvingDfsMode: boolean;
+}): Promise<void> {
+    args.process.solutionCritiquesStatus = 'processing';
+    render();
+
+    await Promise.allSettled(activeStrategies(args.process).flatMap(strategy => {
+        const subs = args.evolvingDfsMode ? [ensureDirectSubStrategy(strategy)] : strategy.subStrategies;
+        return subs.map(async subStrategy => {
+            await executeSolutionAttempt({
+                process: args.process,
+                parts: args.parts,
+                challengeText: args.challengeText,
+                strategy,
+                subStrategy,
+                critical: false,
+            });
+
+            if (!subStrategy.solutionAttempt || !deps.getRefinementEnabled()) {
+                subStrategy.refinedSolution = subStrategy.solutionAttempt;
+                subStrategy.refinedSolutionDisplay = subStrategy.solutionAttemptDisplay;
+                subStrategy.refinedSolutionFinal = subStrategy.solutionAttemptFinal;
+                subStrategy.selfImprovementStatus = 'completed';
+                return;
+            }
+
+            const runtime = args.runtimes.get(strategy.id);
+            const branchIteration = args.evolvingDfsMode ? 1 : undefined;
+            const critique = await critiqueSolution({
+                process: args.process,
+                parts: args.parts,
+                challengeText: args.challengeText,
+                strategy,
+                subStrategy,
+                solution: subStrategy.solutionAttempt,
+                runtime,
+                globalIteration: args.evolvingDfsMode ? 1 : undefined,
+                branchIteration,
+            });
+
+            if (args.evolvingDfsMode && runtime && critique) {
+                runtime.history.push({
+                    globalIteration: 1,
+                    branchIteration: 1,
+                    branchVersion: runtime.branchVersion,
+                    label: 'Initial Execution',
+                    solution: subStrategy.solutionAttempt || '',
+                    solutionDisplay: subStrategy.solutionAttemptDisplay,
+                    solutionFinal: subStrategy.solutionAttemptFinal,
+                    critique,
+                    critiqueDisplay: subStrategy.solutionCritiqueDisplay,
+                    critiqueFinal: subStrategy.solutionCritiqueFinal,
+                });
+                subStrategy.evolvingDfs = {
+                    enabled: true,
+                    status: 'processing',
+                    iterations: [{
+                        iterationNumber: 1,
+                        globalIteration: 1,
+                        branchIteration: 1,
+                        branchVersion: runtime.branchVersion,
+                        critique,
+                        critiqueDisplay: subStrategy.solutionCritiqueDisplay,
+                        critiqueFinal: subStrategy.solutionCritiqueFinal,
+                        correctedSolution: subStrategy.solutionAttempt || '',
+                        correctedSolutionDisplay: subStrategy.solutionAttemptDisplay,
+                        correctedSolutionFinal: subStrategy.solutionAttemptFinal,
+                        timestamp: Date.now(),
+                        label: 'Initial Execution',
+                    }],
+                };
+                subStrategy.refinedSolution = subStrategy.solutionAttempt;
+                subStrategy.refinedSolutionDisplay = subStrategy.solutionAttemptDisplay;
+                subStrategy.refinedSolutionFinal = subStrategy.solutionAttemptFinal;
+                subStrategy.selfImprovementStatus = 'completed';
+            }
+        });
+    }));
+
+    args.process.solutionCritiquesStatus = 'completed';
+    render();
+}
+
+async function runSolutionPools(args: {
+    process: DeepthinkPipelineState;
+    parts: Part[];
+    challengeText: string;
+    runtimes: Map<string, BranchRuntime>;
+    globalIteration: number;
+}): Promise<void> {
+    args.process.structuredSolutionPoolEnabled = true;
+    args.process.structuredSolutionPoolStatus = 'processing';
+    args.process.structuredSolutionPool = buildStructuredSolutionPool(args.process, args.runtimes);
+    render();
+
+    const snapshots = allSnapshots(args.process, args.runtimes);
+
+    await Promise.allSettled(activeStrategies(args.process).map(async strategy => {
+        const runtime = args.runtimes.get(strategy.id);
+        if (!runtime) return;
+
+        const currentSnapshot = runtimeSnapshot(args.process, strategy, runtime, args.process.initialStrategies.indexOf(strategy));
+        const agent: DeepthinkStructuredSolutionPoolAgentData = {
+            id: `pool-${strategy.id}-v${runtime.branchVersion}-g${args.globalIteration}`,
+            mainStrategyId: strategy.id,
+            branchVersion: runtime.branchVersion,
+            status: 'processing',
+            isDetailsOpen: true,
+            globalIteration: args.globalIteration,
+            branchIteration: runtime.branchIterationCount || 1,
+        };
+        args.process.structuredSolutionPoolAgents.push(agent);
+        render();
+
+        const repository = buildSolutionPoolRepository({
+            current: currentSnapshot,
+            currentHistory: runtime.history,
+            currentPoolHistory: runtime.poolHistory,
+            allStrategies: snapshots,
+            maxPoolHistoryEntries: POOL_HISTORY_WINDOW,
+        });
+
+        const prompt = messageText(buildSolutionPoolPrompt({
+            challenge: args.challengeText,
+            current: currentSnapshot,
+            repository,
+            hypothesisPacket: args.process.strategySpecificKnowledgePackets?.[strategy.id],
+            globalIteration: args.globalIteration,
+            branchIteration: Math.max(1, runtime.branchIterationCount),
+        }));
+        agent.requestPrompt = prompt;
+
+        try {
+            const responseOutput = await callAgent({
+                process: args.process,
+                parts: args.parts.concat([{ text: prompt }]),
+                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_structuredSolutionPool,
+                isJson: true,
+                stepDescription: `Structured Solution Pool for ${strategy.id} Iteration ${args.globalIteration}`,
+                target: agent,
+                retryField: 'retryAttempt',
+                timeoutMs: AGENT_TIMEOUT_MS,
+                critical: false,
+            });
+            const response = responseOutput.contextText;
+
+            agent.poolResponse = response;
+            agent.parsedPoolResponse = parsePoolResponse(response, strategy.id);
+            agent.status = 'completed';
+            runtime.poolHistory.push({
+                globalIteration: args.globalIteration,
+                branchIteration: Math.max(1, runtime.branchIterationCount),
+                poolResponse: response,
+            });
+            runtime.branchIterationCount = Math.max(runtime.branchIterationCount, runtime.history.length);
+            strategy.branchIterationCount = runtime.branchIterationCount;
+            directSubFor(strategy)!.branchIterationCount = runtime.branchIterationCount;
+        } catch (error: any) {
+            agent.status = 'error';
+            agent.error = error.message || 'Solution pool generation failed';
+        }
+        render();
+    }));
+
+    args.process.structuredSolutionPool = buildStructuredSolutionPool(args.process, args.runtimes);
+    addSolutionPoolVersion(args.process.id, args.process.structuredSolutionPool, args.globalIteration);
+    args.process.structuredSolutionPoolStatus = 'completed';
+    render();
+}
+
+async function runCorrectionIteration(args: {
+    process: DeepthinkPipelineState;
+    parts: Part[];
+    challengeText: string;
+    runtimes: Map<string, BranchRuntime>;
+    globalIteration: number;
+}): Promise<void> {
+    const snapshots = allSnapshots(args.process, args.runtimes);
+
+    await Promise.allSettled(activeStrategies(args.process).map(async strategy => {
+        const runtime = args.runtimes.get(strategy.id);
+        const subStrategy = ensureDirectSubStrategy(strategy);
+        if (!runtime) return;
+
+        const nextBranchIteration = runtime.history.length + 1;
+        const currentSnapshot = runtimeSnapshot(args.process, strategy, runtime, args.process.initialStrategies.indexOf(strategy));
+        const repository = buildCorrectionRepository({
+            current: currentSnapshot,
+            currentHistory: runtime.history,
+            currentPoolHistory: runtime.poolHistory,
+            allStrategies: snapshots,
+            maxHistoryEntries: CORRECTION_HISTORY_WINDOW,
+        });
+
+        const prompt = messageText(buildCorrectionPrompt({
+            challenge: args.challengeText,
+            current: currentSnapshot,
+            repository,
+            hypothesisPacket: args.process.strategySpecificKnowledgePackets?.[strategy.id],
+            globalIteration: args.globalIteration,
+            branchIteration: nextBranchIteration,
+        }));
+
+        subStrategy.requestPromptSelfImprovement = prompt;
+        subStrategy.selfImprovementStatus = 'processing';
+        render();
+
+        try {
+            const corrected = await callAgent({
+                process: args.process,
+                parts: args.parts.concat([{ text: prompt }]),
+                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_selfImprovement,
+                isJson: false,
+                stepDescription: `Solution Correction for ${strategy.id} Iteration ${args.globalIteration}`,
+                target: subStrategy,
+                retryField: 'selfImprovementRetryAttempt',
+                timeoutMs: AGENT_TIMEOUT_MS,
+                critical: false,
+                pythonAccess: createPersistentPythonAccess({
+                    process: args.process,
+                    kind: 'Solution Correction',
+                    strategyId: strategy.id,
+                    subStrategyId: subStrategy.id,
+                    branchVersion: runtime.branchVersion,
+                }),
+            });
+
+            subStrategy.refinedSolution = corrected.contextText;
+            subStrategy.refinedSolutionDisplay = corrected.displayText;
+            subStrategy.refinedSolutionFinal = corrected.finalText;
+            subStrategy.selfImprovementStatus = 'completed';
+
+            const critique = await critiqueSolution({
+                process: args.process,
+                parts: args.parts,
+                challengeText: args.challengeText,
+                strategy,
+                subStrategy,
+                solution: corrected.contextText,
+                runtime,
+                globalIteration: args.globalIteration,
+                branchIteration: nextBranchIteration,
+            });
+
+            runtime.history.push({
+                globalIteration: args.globalIteration,
+                branchIteration: nextBranchIteration,
+                branchVersion: runtime.branchVersion,
+                label: `Correction ${nextBranchIteration}`,
+                solution: corrected.contextText,
+                solutionDisplay: corrected.displayText,
+                solutionFinal: corrected.finalText,
+                critique: critique || 'No critique output available.',
+                critiqueDisplay: subStrategy.solutionCritiqueDisplay,
+                critiqueFinal: subStrategy.solutionCritiqueFinal,
+            });
+            runtime.globalIteration = args.globalIteration;
+            runtime.branchIterationCount = runtime.history.length;
+            strategy.branchIterationCount = runtime.branchIterationCount;
+            strategy.memoryBank = runtime.memoryBank;
+            subStrategy.branchIterationCount = runtime.branchIterationCount;
+            subStrategy.evolvingDfs = subStrategy.evolvingDfs || { enabled: true, status: 'processing', iterations: [] };
+            subStrategy.evolvingDfs.iterations.push({
+                iterationNumber: args.globalIteration,
+                globalIteration: args.globalIteration,
+                branchIteration: nextBranchIteration,
+                branchVersion: runtime.branchVersion,
+                critique: critique || 'No critique output available.',
+                critiqueDisplay: subStrategy.solutionCritiqueDisplay,
+                critiqueFinal: subStrategy.solutionCritiqueFinal,
+                correctedSolution: corrected.contextText,
+                correctedSolutionDisplay: corrected.displayText,
+                correctedSolutionFinal: corrected.finalText,
+                timestamp: Date.now(),
+                label: `Correction ${nextBranchIteration}`,
+            });
+        } catch (error: any) {
+            subStrategy.selfImprovementStatus = 'error';
+            subStrategy.selfImprovementError = error.message || 'Correction failed';
+        }
+        render();
+    }));
+}
+
+async function runMemoryAgents(args: {
+    process: DeepthinkPipelineState;
+    parts: Part[];
+    challengeText: string;
+    runtimes: Map<string, BranchRuntime>;
+    strategies: DeepthinkMainStrategyData[];
+    globalIteration: number;
+}): Promise<void> {
+    await Promise.allSettled(args.strategies.map(async strategy => {
+        const runtime = args.runtimes.get(strategy.id);
+        if (!runtime) return;
+        const newHistory = runtime.history.slice(runtime.lastMemoryHistoryCount, runtime.lastMemoryHistoryCount + MEMORY_INTERVAL);
+        if (newHistory.length < MEMORY_INTERVAL) return;
+
+        const agent: DeepthinkMemoryBankAgentData = {
+            id: `memory-${strategy.id}-g${args.globalIteration}`,
+            mainStrategyId: strategy.id,
+            branchVersion: runtime.branchVersion,
+            status: 'processing',
+            globalIteration: args.globalIteration,
+            branchIterationStart: newHistory[0].branchIteration,
+            branchIterationEnd: newHistory[newHistory.length - 1].branchIteration,
+        };
+        args.process.memoryBankAgents?.push(agent);
+        render();
+
+        const prompt = messageText(buildMemoryBankPrompt({
+            challenge: args.challengeText,
+            strategy: runtimeSnapshot(args.process, strategy, runtime, args.process.initialStrategies.indexOf(strategy)),
+            previousMemoryBank: runtime.memoryBank,
+            historyWindow: newHistory,
+            windowStartBranchIteration: newHistory[0].branchIteration,
+            windowEndBranchIteration: newHistory[newHistory.length - 1].branchIteration,
+        }));
+        agent.requestPrompt = prompt;
+
+        try {
+            const responseOutput = await callAgent({
+                process: args.process,
+                parts: args.parts.concat([{ text: prompt }]),
+                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_memoryBank,
+                isJson: false,
+                stepDescription: `Memory Bank for ${strategy.id} Iteration ${args.globalIteration}`,
+                target: agent,
+                retryField: 'retryAttempt',
+                timeoutMs: AGENT_TIMEOUT_MS,
+                critical: false,
+            });
+            const response = responseOutput.contextText;
+            agent.memoryBank = response;
+            agent.status = 'completed';
+            runtime.memoryBank = response;
+            runtime.lastMemoryHistoryCount += newHistory.length;
+            strategy.memoryBank = response;
+        } catch (error: any) {
+            agent.status = 'error';
+            agent.error = error.message || 'Memory bank generation failed';
+        }
+        render();
+    }));
+}
+
+function grouped<T>(items: T[], size: number): T[][] {
+    const result: T[][] = [];
+    for (let i = 0; i < items.length; i += size) result.push(items.slice(i, i + size));
+    return result;
+}
+
+function pqfAggressivenessText(mode: string): string {
+    if (mode === 'very_aggressive') {
+        return 'Very aggressive: update strategies whenever the branch shows persistent conceptual weakness, repeated unresolved critique classes, domain-inappropriate execution, or low-value exploration.';
+    }
+    return 'Balanced: update only strategies with evidence of fundamental strategic failure. Keep strategies whose issues can plausibly be handled by correction.';
+}
+
+async function runPqfAgents(args: {
+    process: DeepthinkPipelineState;
+    parts: Part[];
+    challengeText: string;
+    runtimes: Map<string, BranchRuntime>;
+    strategies: DeepthinkMainStrategyData[];
+    globalIteration: number;
+}): Promise<PqfDecision[]> {
+    const groups = grouped(args.strategies, PQF_GROUP_SIZE);
+    const decisions: PqfDecision[] = [];
+    const allActive = allSnapshots(args.process, args.runtimes);
+    const historyByStrategy = Object.fromEntries(args.strategies.map(strategy => {
+        const runtime = args.runtimes.get(strategy.id);
+        return [strategy.id, runtime?.history.slice(-MEMORY_INTERVAL) || []];
+    }));
+
+    args.process.postQualityFilterStatus = 'processing';
+    args.process.postQualityFilterIterationCount = args.globalIteration;
+    render();
+
+    await Promise.all(groups.map(async (group, groupIndex) => {
+        const groupSnapshots = group.map(strategy => {
+            const runtime = args.runtimes.get(strategy.id) || createRuntime(strategy);
+            return runtimeSnapshot(args.process, strategy, runtime, args.process.initialStrategies.indexOf(strategy));
+        });
+
+        const prompt = messageText(buildPqfPrompt({
+            challenge: args.challengeText,
+            groupIndex,
+            groupCount: groups.length,
+            strategiesInGroup: groupSnapshots,
+            allActiveStrategies: allActive,
+            historyByStrategy,
+            aggressiveness: pqfAggressivenessText(deps.getSelectedPqfAggressiveness()),
+        }));
+
+        const agent: DeepthinkPostQualityFilterData = {
+            id: `postqf-g${args.globalIteration}-${groupIndex + 1}`,
+            iterationNumber: args.globalIteration,
+            requestPrompt: prompt,
+            prunedStrategyIds: [],
+            continuedStrategyIds: [],
+            status: 'processing',
+            isDetailsOpen: true,
+            groupIndex,
+            groupStrategyIds: group.map(strategy => strategy.id),
+        };
+        args.process.postQualityFilterAgents.push(agent);
+        render();
+
+        try {
+            const responseOutput = await callAgent({
+                process: args.process,
+                parts: args.parts.concat([{ text: prompt }]),
+                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_postQualityFilter,
+                isJson: true,
+                stepDescription: `PostQualityFilter Group ${groupIndex + 1} Iteration ${args.globalIteration}`,
+                target: agent,
+                retryField: 'retryAttempt',
+                critical: true,
+            });
+            const response = responseOutput.contextText;
+
+            const parsed = parseJson(response, `PostQualityFilter Group ${groupIndex + 1}`);
+            const validIds = new Set(group.map(strategy => strategy.id));
+            const parsedDecisions = Array.isArray(parsed.strategies) ? parsed.strategies : [];
+            parsedDecisions.forEach((item: any) => {
+                const strategyId = String(item.strategy_id || item.id || '').trim();
+                const decision = String(item.decision || '').toLowerCase() === 'update' ? 'update' : 'keep';
+                if (!validIds.has(strategyId)) return;
+                decisions.push({
+                    strategyId,
+                    decision,
+                    reasoning: String(item.reasoning || item.reason || 'No reasoning provided.'),
+                });
+            });
+
+            agent.evaluationResponse = response;
+            agent.rawResponse = response;
+            agent.reasoning = JSON.stringify(parsed, null, 2);
+            agent.prunedStrategyIds = decisions.filter(decision => decision.decision === 'update' && validIds.has(decision.strategyId)).map(decision => decision.strategyId);
+            agent.continuedStrategyIds = decisions.filter(decision => decision.decision === 'keep' && validIds.has(decision.strategyId)).map(decision => decision.strategyId);
+            agent.status = 'completed';
+        } catch (error: any) {
+            agent.status = 'error';
+            agent.error = error.message || 'PostQualityFilter failed';
+            throw error;
+        } finally {
+            render();
+        }
+    }));
+
+    args.process.postQualityFilterStatus = 'completed';
+    render();
+    return decisions;
+}
+
+async function updateStrategiesFromPqf(args: {
+    process: DeepthinkPipelineState;
+    parts: Part[];
+    challengeText: string;
+    runtimes: Map<string, BranchRuntime>;
+    decisions: PqfDecision[];
+    globalIteration: number;
+}): Promise<string[]> {
+    const updateDecisions = args.decisions.filter(decision => decision.decision === 'update');
+    if (updateDecisions.length === 0) return [];
+
+    const currentSnapshots = allSnapshots(args.process, args.runtimes);
+    const previousSnapshots: StrategySnapshot[] = [];
+    activeStrategies(args.process).forEach((strategy, index) => {
+        (strategy.replacementHistory || []).forEach(record => {
+            previousSnapshots.push({
+                id: record.strategyId,
+                strategyText: record.previousStrategyText,
+                slotIndex: index,
+                branchVersion: record.previousBranchVersion,
+                branchIterationCount: 0,
+                globalIteration: record.replacedAtGlobalIteration,
+                latestSolution: record.latestSolution,
+                latestCritique: record.latestCritique,
+                memoryBank: record.memoryBank,
+                replacedAtGlobalIteration: record.replacedAtGlobalIteration,
+                replacementReason: record.pqfReasoning,
+            });
+        });
+    });
+
+    const updateRequests: StrategyUpdateRequest[] = updateDecisions.map(decision => {
+        const strategy = args.process.initialStrategies.find(candidate => candidate.id === decision.strategyId)!;
+        const runtime = args.runtimes.get(strategy.id)!;
+        const latest = runtime.history[runtime.history.length - 1];
+        const directSub = directSubFor(strategy);
+        return {
+            strategyId: strategy.id,
+            oldStrategyText: strategy.strategyText,
+            latestSolution: latest?.solution || directSub?.solutionAttempt || '',
+            latestSolutionDisplay: latest?.solutionDisplay || directSub?.solutionAttemptDisplay,
+            latestSolutionFinal: latest?.solutionFinal || directSub?.solutionAttemptFinal,
+            latestCritique: latest?.critique || directSub?.solutionCritique || '',
+            latestCritiqueDisplay: latest?.critiqueDisplay || directSub?.solutionCritiqueDisplay,
+            latestCritiqueFinal: latest?.critiqueFinal || directSub?.solutionCritiqueFinal,
+            memoryBank: runtime.memoryBank,
+            pqfReasoning: decision.reasoning,
+        };
+    });
+
+    const prompt = messageText(buildStrategyUpdatePrompt({
+        challenge: args.challengeText,
+        decisionVector: args.decisions,
+        allCurrentStrategies: currentSnapshots,
+        previousStrategies: previousSnapshots,
+        updateRequests,
+    }));
+
+    const responseOutput = await callAgent({
+        process: args.process,
+        parts: args.parts.concat([{ text: prompt }]),
+        systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_initialStrategy,
+        isJson: true,
+        stepDescription: `Strategy Updates after PQF Iteration ${args.globalIteration}`,
+        target: args.process,
+        retryField: 'retryAttempt',
+        critical: true,
+    });
+    const response = responseOutput.contextText;
+
+    const parsed = parseJson(response, 'Strategy Updates');
+    const replacementItems = Array.isArray(parsed.strategies) ? parsed.strategies : [];
+    const updatedIds: string[] = [];
+
+    updateRequests.forEach((request, index) => {
+        const replacement = replacementItems.find((item: any) => String(item.strategy_id || item.id || '').trim() === request.strategyId) || replacementItems[index];
+        const replacementText = typeof replacement === 'string'
+            ? replacement
+            : String(replacement?.strategy || replacement?.strategyText || replacement?.text || '');
+        if (!replacementText.trim()) return;
+
+        const strategy = args.process.initialStrategies.find(candidate => candidate.id === request.strategyId);
+        const runtime = strategy ? args.runtimes.get(strategy.id) : undefined;
+        if (!strategy || !runtime) return;
+
+        const previousVersion = runtime.branchVersion;
+        const record: DeepthinkStrategyReplacementRecord = {
+            strategyId: strategy.id,
+            previousStrategyText: strategy.strategyText,
+            replacementStrategyText: replacementText,
+            replacedAtGlobalIteration: args.globalIteration,
+            previousBranchVersion: previousVersion,
+            newBranchVersion: previousVersion + 1,
+            pqfReasoning: request.pqfReasoning,
+            memoryBank: runtime.memoryBank,
+            latestSolution: request.latestSolution,
+            latestSolutionDisplay: request.latestSolutionDisplay,
+            latestSolutionFinal: request.latestSolutionFinal,
+            latestCritique: request.latestCritique,
+            latestCritiqueDisplay: request.latestCritiqueDisplay,
+            latestCritiqueFinal: request.latestCritiqueFinal,
+            branchHistory: runtime.history.map(entry => ({ ...entry })),
+            poolHistory: runtime.poolHistory.map(entry => ({ ...entry })),
+        };
+
+        strategy.replacementHistory = [...(strategy.replacementHistory || []), record];
+        strategy.strategyText = replacementText;
+        strategy.updatedByPostQualityFilter = true;
+        strategy.postQualityFilterIteration = args.globalIteration;
+        strategy.branchVersion = previousVersion + 1;
+        strategy.branchIterationCount = 0;
+        strategy.memoryBank = undefined;
+
+        const sub = ensureDirectSubStrategy(strategy);
+        sub.subStrategyText = replacementText;
+        sub.solutionAttempt = undefined;
+        sub.solutionAttemptDisplay = undefined;
+        sub.solutionAttemptFinal = undefined;
+        sub.refinedSolution = undefined;
+        sub.refinedSolutionDisplay = undefined;
+        sub.refinedSolutionFinal = undefined;
+        sub.solutionCritique = undefined;
+        sub.solutionCritiqueDisplay = undefined;
+        sub.solutionCritiqueFinal = undefined;
+        sub.status = 'pending';
+        sub.selfImprovementStatus = 'pending';
+        sub.solutionCritiqueStatus = 'pending';
+        sub.evolvingDfs = { enabled: true, status: 'processing', iterations: [] };
+        sub.branchIterationCount = 0;
+
+        runtime.branchVersion += 1;
+        runtime.branchIterationCount = 0;
+        runtime.history = [];
+        runtime.poolHistory = [];
+        runtime.memoryBank = undefined;
+        runtime.lastMemoryHistoryCount = 0;
+        runtime.lastHypothesisFlushGlobalIteration = args.globalIteration;
+
+        if (args.process.strategySpecificKnowledgePackets) {
+            args.process.strategySpecificKnowledgePackets[strategy.id] = `<Strategy-Specific Information Packet for Strategy ${strategy.id}>\nThis strategy branch was replaced at global iteration ${args.globalIteration}. Previous selective hypothesis packets for this slot were flushed. Fresh hypotheses will be injected after the next hypothesis heartbeat.\n</Strategy-Specific Information Packet for Strategy ${strategy.id}>`;
+        }
+
+        updatedIds.push(strategy.id);
+    });
+
+    render();
+    return updatedIds;
+}
+
+async function runPostFiveIterationMaintenance(args: {
+    process: DeepthinkPipelineState;
+    parts: Part[];
+    challengeText: string;
+    runtimes: Map<string, BranchRuntime>;
+    globalIteration: number;
+}): Promise<string[]> {
+    const dueStrategies = activeStrategies(args.process).filter(strategy => {
+        const runtime = args.runtimes.get(strategy.id);
+        if (!runtime) return false;
+        return runtime.history.length - runtime.lastMemoryHistoryCount >= MEMORY_INTERVAL;
+    });
+
+    if (dueStrategies.length === 0) return [];
+
+    const memoryPromise = runMemoryAgents({
+        process: args.process,
+        parts: args.parts,
+        challengeText: args.challengeText,
+        runtimes: args.runtimes,
+        strategies: dueStrategies,
+        globalIteration: args.globalIteration,
+    });
+
+    const pqfPromise = runPqfAgents({
+        process: args.process,
+        parts: args.parts,
+        challengeText: args.challengeText,
+        runtimes: args.runtimes,
+        strategies: dueStrategies,
+        globalIteration: args.globalIteration,
+    });
+
+    const [pqfResult] = await Promise.all([pqfPromise, memoryPromise]);
+    const updatedIds = await updateStrategiesFromPqf({
+        process: args.process,
+        parts: args.parts,
+        challengeText: args.challengeText,
+        runtimes: args.runtimes,
+        decisions: pqfResult,
+        globalIteration: args.globalIteration,
+    });
+
+    await Promise.allSettled(updatedIds.map(async strategyId => {
+        const strategy = args.process.initialStrategies.find(candidate => candidate.id === strategyId);
+        const runtime = strategy ? args.runtimes.get(strategy.id) : undefined;
+        const subStrategy = strategy ? ensureDirectSubStrategy(strategy) : undefined;
+        if (!strategy || !runtime || !subStrategy) return;
+
+        await executeSolutionAttempt({
+            process: args.process,
+            parts: args.parts,
+            challengeText: args.challengeText,
+            strategy,
+            subStrategy,
+            critical: true,
+        });
+        if (!subStrategy.solutionAttempt) return;
+        const critique = await critiqueSolution({
+            process: args.process,
+            parts: args.parts,
+            challengeText: args.challengeText,
+            strategy,
+            subStrategy,
+            solution: subStrategy.solutionAttempt,
+            runtime,
+            globalIteration: args.globalIteration,
+            branchIteration: 1,
+        });
+        subStrategy.solutionCritique = critique || 'No critique output available.';
+        subStrategy.solutionCritiqueDisplay = subStrategy.solutionCritiqueDisplay || critique || 'No critique output available.';
+        subStrategy.refinedSolution = subStrategy.solutionAttempt;
+        subStrategy.refinedSolutionDisplay = subStrategy.solutionAttemptDisplay;
+        subStrategy.refinedSolutionFinal = subStrategy.solutionAttemptFinal;
+        subStrategy.selfImprovementStatus = 'completed';
+
+        runtime.history.push({
+            globalIteration: args.globalIteration,
+            branchIteration: 1,
+            branchVersion: runtime.branchVersion,
+            label: `Branch v${runtime.branchVersion} Initial Execution`,
+            solution: subStrategy.solutionAttempt || '',
+            solutionDisplay: subStrategy.solutionAttemptDisplay,
+            solutionFinal: subStrategy.solutionAttemptFinal,
+            critique: critique || 'No critique output available.',
+            critiqueDisplay: subStrategy.solutionCritiqueDisplay,
+            critiqueFinal: subStrategy.solutionCritiqueFinal,
+        });
+        runtime.globalIteration = args.globalIteration;
+        runtime.branchIterationCount = 1;
+        strategy.branchIterationCount = 1;
+        strategy.memoryBank = runtime.memoryBank;
+        subStrategy.branchIterationCount = 1;
+        subStrategy.evolvingDfs = {
+            enabled: true,
+            status: 'processing',
+            iterations: [{
+                iterationNumber: args.globalIteration,
+                globalIteration: args.globalIteration,
+                branchIteration: 1,
+                branchVersion: runtime.branchVersion,
+                critique: critique || 'No critique output available.',
+                critiqueDisplay: subStrategy.solutionCritiqueDisplay,
+                critiqueFinal: subStrategy.solutionCritiqueFinal,
+                correctedSolution: subStrategy.solutionAttempt || '',
+                correctedSolutionDisplay: subStrategy.solutionAttemptDisplay,
+                correctedSolutionFinal: subStrategy.solutionAttemptFinal,
+                timestamp: Date.now(),
+                label: `Branch v${runtime.branchVersion} Initial Execution`,
+            }],
+        };
+    }));
+
+    if (updatedIds.length > 0) {
+        args.process.structuredSolutionPool = buildStructuredSolutionPool(args.process, args.runtimes);
+        render();
+    }
+
+    return updatedIds;
+}
+
+async function runHypothesisHeartbeatIfDue(args: {
+    process: DeepthinkPipelineState;
+    parts: Part[];
+    challengeText: string;
+    runtimes: Map<string, BranchRuntime>;
+    globalIteration: number;
+    updatedStrategyIds: string[];
+}): Promise<void> {
+    if (deps.getSelectedHypothesisCount() <= 0) return;
+    if (args.globalIteration % HYPOTHESIS_HEARTBEAT_INTERVAL !== 0) return;
+
+    const snapshots = allSnapshots(args.process, args.runtimes);
+    const recentHistoryByStrategy = Object.fromEntries(snapshots.map(snapshot => {
+        const runtime = args.runtimes.get(snapshot.id);
+        return [snapshot.id, runtime?.history.slice(-2) || []];
+    }));
+
+    const prompt = messageText(buildHypothesisRefreshPrompt({
+        challenge: args.challengeText,
+        hypothesisCount: deps.getSelectedHypothesisCount(),
+        completedGlobalIteration: args.globalIteration,
+        previousRounds: args.process.hypothesisRounds || [],
+        currentStrategies: snapshots,
+        recentHistoryByStrategy,
+        updatedStrategyIds: args.updatedStrategyIds,
+    }));
+
+    await runHypothesisRound({
+        process: args.process,
+        parts: args.parts,
+        challengeText: args.challengeText,
+        mode: 'selective_injection',
+        roundNumber: (args.process.hypothesisRounds?.length || 0) + 1,
+        globalIteration: args.globalIteration,
+        prompt,
+    });
+}
+
+async function runEvolvingDepthFirstSearch(args: {
+    process: DeepthinkPipelineState;
+    parts: Part[];
+    challengeText: string;
+}): Promise<void> {
+    args.process.structuredSolutionPoolEnabled = true;
+    args.process.postQualityFilterStatus = 'pending';
+    args.process.hypothesisInjectionMode = 'selective_injection';
+    render();
+
+    const runtimes = new Map<string, BranchRuntime>();
+    activeStrategies(args.process).forEach(strategy => {
+        ensureDirectSubStrategy(strategy);
+        strategy.branchVersion = 1;
+        strategy.branchIterationCount = 0;
+        runtimes.set(strategy.id, createRuntime(strategy));
+    });
+
+    await runHypothesisRound({
+        process: args.process,
+        parts: args.parts,
+        challengeText: args.challengeText,
+        mode: 'selective_injection',
+        roundNumber: 1,
+        globalIteration: 0,
+    });
+
+    await runInitialExecutionsAndCritiques({
+        process: args.process,
+        parts: args.parts,
+        challengeText: args.challengeText,
+        runtimes,
+        evolvingDfsMode: true,
+    });
+
+    await runSolutionPools({
+        process: args.process,
+        parts: args.parts,
+        challengeText: args.challengeText,
+        runtimes,
+        globalIteration: 1,
+    });
+
+    const evolvingDfsDepth = Math.min(Math.max(deps.getEvolvingDfsDepth(), 1), 10);
+    let recentlyUpdatedStrategyIds: string[] = [];
+
+    for (let globalIteration = 2; globalIteration <= evolvingDfsDepth; globalIteration++) {
+        if (args.process.isStopRequested) throw new PipelineStopRequestedError('Evolving DFS stopped by user.');
+
+        await runCorrectionIteration({
+            process: args.process,
+            parts: args.parts,
+            challengeText: args.challengeText,
+            runtimes,
+            globalIteration,
+        });
+
+        const poolPromise = runSolutionPools({
+            process: args.process,
+            parts: args.parts,
+            challengeText: args.challengeText,
+            runtimes,
+            globalIteration,
+        });
+
+        const hypothesisPromise = runHypothesisHeartbeatIfDue({
+            process: args.process,
+            parts: args.parts,
+            challengeText: args.challengeText,
+            runtimes,
+            globalIteration,
+            updatedStrategyIds: recentlyUpdatedStrategyIds,
+        });
+
+        await Promise.all([poolPromise, hypothesisPromise]);
+
+        recentlyUpdatedStrategyIds = await runPostFiveIterationMaintenance({
+            process: args.process,
+            parts: args.parts,
+            challengeText: args.challengeText,
+            runtimes,
+            globalIteration,
+        });
+    }
+
+    activeStrategies(args.process).forEach(strategy => {
+        const sub = ensureDirectSubStrategy(strategy);
+        if (sub.evolvingDfs) sub.evolvingDfs.status = 'completed';
+    });
+    args.process.structuredSolutionPool = buildStructuredSolutionPool(args.process, runtimes);
+    args.process.structuredSolutionPoolStatus = 'completed';
+    render();
+}
+
+async function runNonIterativeRefinement(args: {
+    process: DeepthinkPipelineState;
+    parts: Part[];
+    challengeText: string;
+}): Promise<void> {
+    await runInitialExecutionsAndCritiques({
+        process: args.process,
+        parts: args.parts,
+        challengeText: args.challengeText,
+        runtimes: new Map(),
+        evolvingDfsMode: false,
+    });
+
+    if (!deps.getRefinementEnabled()) {
+        activeStrategies(args.process).forEach(strategy => {
+            strategy.subStrategies.forEach(sub => {
+                if (sub.solutionAttempt) {
+                    sub.refinedSolution = sub.solutionAttempt;
+                    sub.refinedSolutionDisplay = sub.solutionAttemptDisplay;
+                    sub.refinedSolutionFinal = sub.solutionAttemptFinal;
+                    sub.selfImprovementStatus = 'completed';
                 }
             });
         });
+        render();
+        return;
+    }
 
-        if (allSolutions.length === 0) {
-            currentProcess.finalJudgingStatus = 'error';
-            currentProcess.finalJudgingError = "No completed solutions available for final review.";
-        } else {
-            const sysPromptFinalJudge = deps.customPromptsDeepthinkState.sys_deepthink_finalJudge;
-
-            const finalSolutionsText = allSolutions.map((sol, i) =>
-                `<SOLUTION_${i + 1}>\n` +
-                `ID: ${sol.id}\n` +
-                `Main Strategy: ${sol.mainStrategyId}\n` +
-                `Sub-Strategy: ${sol.subStrategyText.substring(0, 100)}...\n` +
-                `Solution Text:\n${sol.solution}\n` +
-                `</SOLUTION_${i + 1}>`
-            ).join('\n\n');
-
-            const userPromptFinalJudge = `Original Challenge: ${challengeText}\n\nBelow are ${allSolutions.length} candidate solutions from different strategic approaches and sub-strategies. Your task is to select the SINGLE OVERALL BEST solution based on correctness, efficiency, elegance, and clarity.\n\nPresent your final verdict as a JSON object with the following structure: \`{"best_solution_id": "ID of the winning solution", "final_solution_text": "The full text of the absolute best solution", "final_reasoning": "Your detailed reasoning for why this solution is the ultimate winner"}\`\n\n${finalSolutionsText}`;
-
-            currentProcess.finalJudgingRequestPrompt = userPromptFinalJudge;
-
-            try {
-                const finalJudgingResponseText = await makeDeepthinkApiCall(
-                    [{ text: userPromptFinalJudge }],
-                    sysPromptFinalJudge,
-                    true,
-                    'Final Judging',
-                    currentProcess,
-                    'retryAttempt'
-                );
-                currentProcess.finalJudgingResponseText = finalJudgingResponseText;
-                const parsed = deps.parseJsonSafe(finalJudgingResponseText, 'Final Judge');
-
-                if (!parsed.best_solution_id || !parsed.final_reasoning) {
-                    throw new Error("Final Judge LLM response is missing critical fields (best_solution_id, final_reasoning).");
-                }
-
-                const winningSolution = allSolutions.find(sol => sol.id === parsed.best_solution_id);
-                const solutionTitle = winningSolution ?
-                    `Sub-Strategy "${winningSolution.subStrategyText.substring(0, 60)}..." from Main Strategy ${winningSolution.mainStrategyId}` :
-                    `Solution ${parsed.best_solution_id}`;
-
-                currentProcess.finalJudgedBestStrategyId = winningSolution?.id || parsed.best_solution_id;
-                currentProcess.finalJudgedBestSolution = `**Solution ID:** <span class="sub-strategy-purple-id">${parsed.best_solution_id}</span>\n\n**Origin:** ${solutionTitle}\n\n**Final Reasoning:**\n${parsed.final_reasoning}\n\n---\n\n**Definitive Solution:**\n${winningSolution?.solution || parsed.final_solution_text || 'Solution not found'}`;
-                currentProcess.finalJudgingStatus = 'completed';
-
-            } catch (e: any) {
-                currentProcess.finalJudgingStatus = 'error';
-                currentProcess.finalJudgingError = e.message || "Failed to perform final judging.";
-            }
-        }
-
-        currentProcess.status = 'completed';
+    if (deps.getDissectedObservationsEnabled()) {
+        args.process.dissectedSynthesisStatus = 'processing';
         render();
 
+        try {
+            const solutionsWithCritiques = activeStrategies(args.process).map(strategy => {
+                const subs = strategy.subStrategies.filter(sub => sub.solutionAttempt);
+                if (subs.length === 0) return '';
+                return [
+                    `<Strategy id="${strategy.id}">`,
+                    strategy.strategyText,
+                    ...subs.map(sub => [
+                        `<SubStrategy id="${sub.id}">`,
+                        sub.subStrategyText,
+                        '<SolutionAttempt>',
+                        sub.solutionAttempt || '',
+                        '</SolutionAttempt>',
+                        '<Critique>',
+                        sub.solutionCritique || 'No critique available.',
+                        '</Critique>',
+                        '</SubStrategy>',
+                    ].join('\n')),
+                    `</Strategy>`,
+                ].join('\n');
+            }).filter(Boolean).join('\n\n');
+
+            const packet = deps.getShareHypothesesToDissected()
+                ? args.process.knowledgePacket || 'No hypothesis exploration performed.'
+                : 'Hypothesis exploration sharing is disabled for dissected observations.';
+            const prompt = buildDissectedSynthesisPrompt({
+                challengeText: args.challengeText,
+                knowledgePacket: packet,
+                solutionsWithCritiques,
+            });
+            args.process.dissectedSynthesisRequestPrompt = prompt;
+
+            const synthesisResponse = await callAgent({
+                process: args.process,
+                parts: args.parts.concat([{ text: prompt }]),
+                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_dissectedSynthesis,
+                isJson: false,
+                stepDescription: 'Dissected Observations Synthesis',
+                target: args.process,
+                retryField: 'dissectedSynthesisRetryAttempt',
+                critical: false,
+            });
+            args.process.dissectedObservationsSynthesis = synthesisResponse.contextText;
+            args.process.dissectedSynthesisStatus = 'completed';
+        } catch (error: any) {
+            args.process.dissectedSynthesisStatus = 'error';
+            args.process.dissectedSynthesisError = error.message || 'Dissected synthesis failed';
+        }
+        render();
+    }
+
+    await Promise.allSettled(activeStrategies(args.process).flatMap(strategy => strategy.subStrategies.map(async subStrategy => {
+        if (!subStrategy.solutionAttempt) return;
+
+        subStrategy.selfImprovementStatus = 'processing';
+        render();
+
+        const allSolutions = deps.getProvideAllSolutionsToCorrectors()
+            ? activeStrategies(args.process).flatMap(strategyItem => strategyItem.subStrategies.map(sub => [
+                `<Candidate strategy="${strategyItem.id}" subStrategy="${sub.id}" assigned="${sub.id === subStrategy.id}">`,
+                strategyItem.strategyText,
+                sub.subStrategyText,
+                sub.solutionAttempt || '',
+                sub.solutionCritique || '',
+                '</Candidate>',
+            ].join('\n'))).join('\n\n')
+            : '';
+
+        const solutionSection = [
+            subStrategy.solutionCritique || 'No critique available.',
+            args.process.dissectedObservationsSynthesis ? `\n\n<Dissected Observations Synthesis>\n${args.process.dissectedObservationsSynthesis}\n</Dissected Observations Synthesis>` : '',
+            allSolutions ? `\n\n<All Solutions Context>\n${allSolutions}\n</All Solutions Context>` : '',
+        ].join('');
+
+        const prompt = buildSelfImprovementPrompt({
+            challengeText: args.challengeText,
+            mainStrategy: strategy.strategyText,
+            subStrategy: subStrategy.subStrategyText,
+            solutionAttempt: subStrategy.solutionAttempt || '',
+            solutionSection,
+        });
+        subStrategy.requestPromptSelfImprovement = prompt;
+
+        try {
+            const response = await callAgent({
+                process: args.process,
+                parts: args.parts.concat([{ text: prompt }]),
+                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_selfImprovement,
+                isJson: false,
+                stepDescription: `Self-Improvement for ${subStrategy.id}`,
+                target: subStrategy,
+                retryField: 'selfImprovementRetryAttempt',
+                timeoutMs: AGENT_TIMEOUT_MS,
+                critical: false,
+                pythonAccess: createPersistentPythonAccess({
+                    process: args.process,
+                    kind: 'Self-Improvement',
+                    strategyId: strategy.id,
+                    subStrategyId: subStrategy.id,
+                    branchVersion: strategy.branchVersion || 1,
+                }),
+            });
+            subStrategy.refinedSolution = response.contextText;
+            subStrategy.refinedSolutionDisplay = response.displayText;
+            subStrategy.refinedSolutionFinal = response.finalText;
+            subStrategy.selfImprovementStatus = 'completed';
+        } catch (error: any) {
+            subStrategy.selfImprovementStatus = 'error';
+            subStrategy.selfImprovementError = error.message || 'Self-improvement failed';
+        }
+        render();
+    })));
+}
+
+async function finalJudge(process: DeepthinkPipelineState, parts: Part[], challengeText: string): Promise<void> {
+    process.finalJudgingStatus = 'processing';
+    render();
+
+    const allSolutions = activeStrategies(process).flatMap(strategy => strategy.subStrategies.map(subStrategy => ({
+        id: subStrategy.id,
+        solution: subStrategy.refinedSolutionFinal || subStrategy.solutionAttemptFinal || subStrategy.refinedSolution || subStrategy.solutionAttempt || '',
+        mainStrategyId: strategy.id,
+        subStrategyText: subStrategy.subStrategyText,
+    }))).filter(item => item.solution.trim());
+
+    if (allSolutions.length === 0) {
+        process.finalJudgingStatus = 'error';
+        process.finalJudgingError = 'No completed solutions available for final review.';
+        render();
+        return;
+    }
+
+    const finalSolutionsText = allSolutions.map((solution, index) => [
+        `<SOLUTION_${index + 1}>`,
+        `ID: ${solution.id}`,
+        `Main Strategy: ${solution.mainStrategyId}`,
+        `Sub-Strategy: ${solution.subStrategyText}`,
+        'Solution Text:',
+        solution.solution,
+        `</SOLUTION_${index + 1}>`,
+    ].join('\n')).join('\n\n');
+
+    const prompt = `Original Challenge:
+${challengeText}
+
+Below are ${allSolutions.length} candidate solutions from different strategic approaches. Select the single overall best solution.
+
+Return JSON:
+{"best_solution_id":"ID of the winning solution","final_reasoning":"Detailed comparison based only on provided texts"}
+
+${finalSolutionsText}`;
+
+    process.finalJudgingRequestPrompt = prompt;
+
+    try {
+        const responseOutput = await callAgent({
+            process,
+            parts: parts.concat([{ text: prompt }]),
+            systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_finalJudge,
+            isJson: true,
+            stepDescription: 'Final Judging',
+            target: process,
+            retryField: 'finalJudgingRetryAttempt',
+            timeoutMs: AGENT_TIMEOUT_MS,
+            critical: false,
+        });
+        const response = responseOutput.contextText;
+        process.finalJudgingResponseText = response;
+        const parsed = parseJson(response, 'Final Judge');
+        if (!parsed.best_solution_id || !parsed.final_reasoning) {
+            throw new Error('Final Judge response is missing best_solution_id or final_reasoning.');
+        }
+
+        const winningSolution = allSolutions.find(solution => solution.id === parsed.best_solution_id);
+        process.finalJudgedBestStrategyId = winningSolution?.id || parsed.best_solution_id;
+        process.finalJudgedBestSolution = `**Solution ID:** <span class="sub-strategy-purple-id">${parsed.best_solution_id}</span>
+
+**Origin:** ${winningSolution ? `${winningSolution.subStrategyText} from ${winningSolution.mainStrategyId}` : `Solution ${parsed.best_solution_id}`}
+
+**Final Reasoning:**
+${parsed.final_reasoning}
+
+---
+
+**Definitive Solution:**
+${winningSolution?.solution || parsed.final_solution_text || 'Solution not found'}`;
+        process.finalJudgingStatus = 'completed';
+    } catch (error: any) {
+        process.finalJudgingStatus = 'error';
+        process.finalJudgingError = error.message || 'Failed to perform final judging.';
+    }
+    render();
+}
+
+export async function startDeepthinkAnalysisProcess(challengeText: string, imageBase64?: string | null, imageMimeType?: string | null) {
+    const currentAIProvider = deps.getAIProvider();
+    if (!currentAIProvider) {
+        alert('AI provider not initialized. Please check your API key configuration.');
+        return;
+    }
+
+    activeDeepthinkPipeline = createPipeline(challengeText, imageBase64, imageMimeType);
+    deepthinkPythonHistories.clear();
+    if (setActiveDeepthinkPipeline) setActiveDeepthinkPipeline(activeDeepthinkPipeline);
+    deps.updateControlsState({ isGenerating: true });
+    addLiveEvent(activeDeepthinkPipeline, 'Orchestrator', 'Initializing Deepthink pipeline', 'info');
+    render();
+
+    const process = activeDeepthinkPipeline;
+    const parts = buildImageParts(imageBase64, imageMimeType);
+    const evolvingDfsMode = deps.getRefinementEnabled() && deps.getEvolvingDfsEnabled();
+    process.hypothesisInjectionMode = evolvingDfsMode ? 'selective_injection' : deps.getHypothesisInjectionMode();
+
+    try {
+        await generateStrategies(process, parts, challengeText, evolvingDfsMode);
+        await generateSubStrategies(process, parts, challengeText);
+
+        if (!evolvingDfsMode) {
+            await runHypothesisRound({
+                process,
+                parts,
+                challengeText,
+                mode: process.hypothesisInjectionMode || 'selective_injection',
+                roundNumber: 1,
+                globalIteration: 0,
+            });
+            await runNonIterativeRefinement({ process, parts, challengeText });
+        } else {
+            await runEvolvingDepthFirstSearch({ process, parts, challengeText });
+        }
+
+        if (process.isStopRequested) throw new PipelineStopRequestedError('Stopped before final judging.');
+
+        process.strategicSolverComplete = true;
+        await finalJudge(process, parts, challengeText);
+        process.status = 'completed';
     } catch (error: any) {
         if (error instanceof PipelineStopRequestedError) {
-            currentProcess.status = 'stopped';
+            process.status = 'stopped';
         } else {
-            currentProcess.status = 'error';
-            currentProcess.error = error.message;
+            process.status = 'error';
+            process.error = error.message || String(error);
         }
-        render();
     } finally {
         deps.updateControlsState({ isGenerating: false });
+        render();
     }
 }

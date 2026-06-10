@@ -74,8 +74,8 @@ export function getSelectedHypothesisCount(): number {
     return getRoutingManager().getHypothesisCount();
 }
 
-export function getSelectedRedTeamAggressiveness(): string {
-    return getRoutingManager().getRedTeamAggressiveness();
+export function getSelectedPqfAggressiveness(): string {
+    return getRoutingManager().getPqfAggressiveness();
 }
 
 export function getRefinementEnabled(): boolean {
@@ -94,12 +94,12 @@ export function getShareHypothesesToDissected(): boolean {
     return getRoutingManager().isShareHypothesesToDissected();
 }
 
-export function getIterativeCorrectionsEnabled(): boolean {
-    return getRoutingManager().isIterativeCorrectionsEnabled();
+export function getEvolvingDfsEnabled(): boolean {
+    return getRoutingManager().isEvolvingDfsEnabled();
 }
 
-export function getIterativeDepth(): number {
-    return getRoutingManager().getIterativeDepth();
+export function getEvolvingDfsDepth(): number {
+    return getRoutingManager().getEvolvingDfsDepth();
 }
 
 export function getProvideAllSolutionsToCorrectors(): boolean {

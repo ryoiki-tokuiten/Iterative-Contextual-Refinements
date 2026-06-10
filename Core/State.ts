@@ -10,7 +10,7 @@ class GlobalStateManager {
     currentMode: ApplicationMode = 'deepthink';
     activeDeepthinkPipeline: DeepthinkPipelineState | null = null;
     isGenerating: boolean = false;
-    currentProblemImages: Array<{ base64: string, mimeType: string }> = [];
+    currentProblemImages: Array<{ base64: string, mimeType: string, name?: string, size?: number }> = [];
     isCustomPromptsOpen: boolean = false;
 
     // Mode running states
@@ -19,7 +19,8 @@ class GlobalStateManager {
     isAdaptiveDeepthinkRunning: boolean = false;
     isDCARunning: boolean = false;
 
-    // Gemini Code Execution (only for Contextual mode with Gemini provider)
+    // Contextual Python tool environment toggle. Kept under the existing field
+    // name so imported configs and UI wiring remain backward compatible.
     geminiCodeExecutionEnabled: boolean = false;
 
     // Gemini Thinking Level
@@ -33,4 +34,3 @@ class GlobalStateManager {
 }
 
 export const globalState = new GlobalStateManager();
-

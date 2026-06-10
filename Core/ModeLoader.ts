@@ -14,17 +14,16 @@ import {
     getSelectedStrategiesCount,
     getSelectedSubStrategiesCount,
     getSelectedHypothesisCount,
-    getSelectedRedTeamAggressiveness,
+    getSelectedPqfAggressiveness,
     getRefinementEnabled,
     getSkipSubStrategies,
     getDissectedObservationsEnabled,
     getShareHypothesesToDissected,
-    getIterativeCorrectionsEnabled,
-    getIterativeDepth,
+    getEvolvingDfsEnabled,
+    getEvolvingDfsDepth,
     getProvideAllSolutionsToCorrectors,
     getPostQualityFilterEnabled,
     callAI,
-    getProviderForCurrentModel,
     getHypothesisInjectionMode,
     getSelectedThinkingLevel
 } from '../Routing';
@@ -145,17 +144,16 @@ export async function ensureDeepthinkInitialized(): Promise<DeepthinkModule> {
             getSelectedStrategiesCount,
             getSelectedSubStrategiesCount,
             getSelectedHypothesisCount,
-            getSelectedRedTeamAggressiveness,
+            getSelectedPqfAggressiveness,
             getRefinementEnabled,
             getSkipSubStrategies,
             getDissectedObservationsEnabled,
             getShareHypothesesToDissected,
-            getIterativeCorrectionsEnabled,
-            getIterativeDepth,
+            getEvolvingDfsEnabled,
+            getEvolvingDfsDepth,
             getProvideAllSolutionsToCorrectors,
             getPostQualityFilterEnabled,
             getDeepthinkCodeExecutionEnabled: () => routingManager.getDeepthinkConfigController().isCodeExecutionEnabled(),
-            getModelProvider: getProviderForCurrentModel,
             getHypothesisInjectionMode,
             getSelectedThinkingLevel,
             cleanTextOutput: (text: string) => text.trim(),
@@ -232,4 +230,3 @@ export function getLoadedContextualModule(): ContextualModule | null {
 export function getLoadedAdaptiveDeepthinkModule(): AdaptiveDeepthinkModule | null {
     return adaptiveDeepthinkModule;
 }
-

@@ -664,12 +664,12 @@
     border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
     box-shadow: var(--shadow-md);
 
-    /* Legacy override max-width handling */
+    /* Modal override max-width handling */
     max-width: none;
     margin: 0;
 }
 
-/* Legacy layout classes compatibility */
+/* Historical layout class support */
 .solution-side {
     flex: 1;
     padding: 2rem;
@@ -853,7 +853,7 @@
 .embedded-modal-content .hypothesis-content,
 .embedded-modal-content .critique-content,
 .embedded-modal-content .hypothesis-argument-content,
-.red-team-analysis {
+.agent-analysis {
     font-size: 1rem;
     line-height: 1.7;
     color: var(--text-color);
@@ -1112,34 +1112,16 @@
 }
 
 /* --------------------------------------------------------------------------
-   10. RED TEAM & FIXES
+   10. EVOLUTION FILTER & FIXES
    -------------------------------------------------------------------------- */
 
-.modal-body.red-team-reasoning-display {
+.modal-body.agent-reasoning-display {
     background: rgba(var(--accent-pink-rgb), 0.08);
     border: 1.5px solid rgba(var(--accent-pink-rgb), 0.25);
     border-radius: 12px;
 }
 
-.red-team-section-title {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
-    margin: 0 0 1.5rem 0;
-
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--accent-purple);
-    line-height: 1.6;
-}
-
-.red-team-section-title .icon-slot {
-    font-size: 1.2rem;
-    flex-shrink: 0;
-    margin-top: 0.1rem;
-}
-
-.red-team-strategy-id {
+.agent-strategy-id {
     margin: 1.5rem 0;
     font-family: 'JetBrains Mono', 'Fira Code', monospace;
     font-size: 0.9rem;
@@ -1147,7 +1129,7 @@
     color: var(--text-color);
 }
 
-.red-team-verdict {
+.agent-verdict {
     display: block;
     float: right;
     width: fit-content;
@@ -1161,18 +1143,18 @@
     border-radius: 12px;
 }
 
-.red-team-verdict.verdict-eliminate {
+.agent-verdict.verdict-eliminate {
     background: var(--accent-pink);
     color: #fff;
 }
 
-.red-team-verdict.verdict-keep {
+.agent-verdict.verdict-keep {
     background: transparent;
     color: var(--accent-green);
     border: 1px solid var(--accent-green);
 }
 
-.red-team-analysis {
+.agent-analysis {
     clear: both;
     margin-top: 1.5rem;
 }

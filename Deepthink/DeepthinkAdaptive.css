@@ -268,7 +268,7 @@
     border-color: var(--accent-green) !important;
 }
 
-.red-team-agent-card.simulated-hover {
+.agent-card.simulated-hover {
     border-color: var(--accent-purple) !important;
     box-shadow: 0 4px 16px rgba(var(--accent-purple-rgb), 0.3) !important;
 }

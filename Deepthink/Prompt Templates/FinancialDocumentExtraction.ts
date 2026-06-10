@@ -1,28 +1,17 @@
 // Type definition for customizable Deepthink prompts
 export interface CustomizablePromptsDeepthink {
   sys_deepthink_initialStrategy: string;
-  user_deepthink_initialStrategy: string;
   sys_deepthink_subStrategy: string;
-  user_deepthink_subStrategy: string;
   sys_deepthink_solutionAttempt: string;
-  user_deepthink_solutionAttempt: string;
   sys_deepthink_solutionCritique: string;
-  user_deepthink_solutionCritique: string;
   sys_deepthink_dissectedSynthesis: string;
-  user_deepthink_dissectedSynthesis: string;
   sys_deepthink_selfImprovement: string;
-  user_deepthink_selfImprovement: string;
   sys_deepthink_hypothesisGeneration: string;
-  user_deepthink_hypothesisGeneration: string;
   sys_deepthink_hypothesisTester: string;
-  user_deepthink_hypothesisTester: string;
-  sys_deepthink_redTeam: string;
-  user_deepthink_redTeam: string;
   sys_deepthink_postQualityFilter: string;
-  user_deepthink_postQualityFilter: string;
+  sys_deepthink_memoryBank: string;
   sys_deepthink_finalJudge: string;
   sys_deepthink_structuredSolutionPool: string;
-  user_deepthink_structuredSolutionPool: string;
   // Per-agent model selections (defaults to null to use global model)
   model_initialStrategy?: string | null;
   model_subStrategy?: string | null;
@@ -32,8 +21,8 @@ export interface CustomizablePromptsDeepthink {
   model_selfImprovement?: string | null;
   model_hypothesisGeneration?: string | null;
   model_hypothesisTester?: string | null;
-  model_redTeam?: string | null;
   model_postQualityFilter?: string | null;
+  model_memoryBank?: string | null;
   model_finalJudge?: string | null;
   model_structuredSolutionPool?: string | null;
 }
@@ -89,36 +78,13 @@ All agents must adhere to these target schemas based on the identified document 
 
 const systemInstructionJsonOutputOnly = `\n\n**CRITICAL OUTPUT FORMAT REQUIREMENT:**\nYour response must be EXCLUSIVELY a valid JSON object. No additional text, explanations, markdown formatting, or code blocks are permitted. The response must begin with { and end with }.`;
 
-// Red Team Aggressiveness Level Constants (Adapted for Data Validation)
-export const RED_TEAM_AGGRESSIVENESS_LEVELS = {
-  off: {
-    name: "Off",
-    description: `Validation disabled. All extraction strategies proceed.`,
-    systemProtocol: "VALIDATION_DISABLED",
-  },
-  balanced: {
-    name: "Balanced",
-    description: `Standard validation. Check for date format consistency, mandatory field presence (Total Amount), and basic vendor verification. Prune strategies that produce invalid JSON structures or extract clearly wrong dates (e.g., future years).`,
-    systemProtocol: "STANDARD_DATA_VALIDATION_PROTOCOL",
-  },
-  very_aggressive: {
-    name: "Very Aggressive",
-    description: `Strict forensic audit. Prune any strategy where line item sums do not exactly match totals to the cent. Eliminate strategies that rely on fuzzy matching for Vendor IDs. Require 100% confidence on Invoice Numbers.`,
-    systemProtocol: "STRICT_FORENSIC_AUDIT_PROTOCOL",
-  },
-};
-
 export function createDefaultCustomPromptsDeepthink(
   NUM_INITIAL_STRATEGIES_DEEPTHINK: number = 3,
   NUM_SUB_STRATEGIES_PER_MAIN_DEEPTHINK: number = 3,
   NUM_HYPOTHESES: number = 4,
-  RED_TEAM_AGGRESSIVENESS: string = "balanced"
+  PQF_AGGRESSIVENESS: string = "balanced"
 ): CustomizablePromptsDeepthink {
-
-  const aggressivenessConfig =
-    RED_TEAM_AGGRESSIVENESS_LEVELS[
-    RED_TEAM_AGGRESSIVENESS as keyof typeof RED_TEAM_AGGRESSIVENESS_LEVELS
-    ] || RED_TEAM_AGGRESSIVENESS_LEVELS.balanced;
+  void PQF_AGGRESSIVENESS;
 
   return {
     // ==================================================================================
@@ -156,14 +122,6 @@ Do not extract the actual data. Output a JSON object containing the list of stra
 </Output Constraint>
 ${systemInstructionJsonOutputOnly}`,
 
-    user_deepthink_initialStrategy: `Core Document Input: {{originalProblemText}}
-
-<Mission>
-Analyze the provided document input. Generate exactly ${NUM_INITIAL_STRATEGIES_DEEPTHINK} high-level strategies for extracting the financial data.
-If the input is ambiguous, generate strategies covering different possibilities (e.g., Strategy 1: Treat as Invoice; Strategy 2: Treat as Work Order).
-</Mission>
-`,
-
     // ==================================================================================
     // SUB-STRATEGY AGENT (Refined Extraction Methodologies)
     // ==================================================================================
@@ -200,14 +158,6 @@ Examples of sub-strategies:
 Output valid JSON containing the list of sub-strategies. Keep descriptions precise and technical.
 </Output Constraint>
 ${systemInstructionJsonOutputOnly}`,
-
-    user_deepthink_subStrategy: `Core Document Input: {{originalProblemText}}
-Assigned Main Strategy: "{{currentMainStrategy}}"
-
-<Mission>
-Generate exactly ${NUM_SUB_STRATEGIES_PER_MAIN_DEEPTHINK} distinct technical execution plans (sub-strategies) to implement the Main Strategy.
-</Mission>
-`,
 
     // ==================================================================================
     // HYPOTHESIS GENERATION (Data Type ID & Ambiguity Detection)
@@ -250,13 +200,6 @@ Your response must be exclusively a valid JSON object. No additional text, comme
 </Output Format Requirements>
 
 ${systemInstructionJsonOutputOnly}`,
-
-    user_deepthink_hypothesisGeneration: `Core Document Input: {{originalProblemText}}
-
-<Mission>
-Identify specific ambiguities, potential low-confidence regions, and document classification theories. Generate ${NUM_HYPOTHESES} testable hypotheses.
-</Mission>
-`,
 
     // ==================================================================================
     // HYPOTHESIS TESTER (Prompt Generation & Ambiguity Validation)
@@ -669,45 +612,9 @@ Output the results of your investigation.
 </Output Format>
 `,
 
-    user_deepthink_hypothesisTester: `Core Document Input: {{originalProblemText}}
-Hypothesis to Test: {{hypothesisText}}
-
-<Mission>
-1. If this is a Data Type hypothesis, generate the exact System Prompt needed to extract this document type (Invoice/Receipt/Statement).
-2. If this is an Ambiguity hypothesis, perform forensic analysis to validate or refute the specific claim about the text.
-3. Output a VALIDATED or REFUTED status with your findings/prompts.
-</Mission>`,
-
     // ==================================================================================
-    // RED TEAM (Database/Logic Validation)
+    // LEGACY STRATEGY EVALUATION PLACEHOLDER (not used by Deepthink)
     // ==================================================================================
-    sys_deepthink_redTeam: `
-<Persona>
-You are the **Database Integrity Validator** (Red Team). Your goal is to prune extraction strategies that are logically impossible or violate database constraints.
-</Persona>
-
-<Protocol>
-${aggressivenessConfig.description}
-</Protocol>
-
-<Validation Logic>
-1. **Date Logic**: Prune strategies that detect dates in the future or format dates as MM/DD/YYYY when the context suggests DD/MM/YYYY.
-2. **Vendor Logic**: If a strategy identifies a Vendor Name that looks like a total amount (e.g., "Total: $500"), prune it.
-3. **Math Logic**: If a strategy's proposed line items cannot possibly sum to the visual total, mark it for elimination.
-4. **PII Safety**: Ensure no strategies are attempting to extract restricted data fields not defined in the schema.
-</Validation Logic>
-
-<Output Constraint>
-Output valid JSON with "keep" or "eliminate" decisions for each strategy.
-</Output Constraint>
-${systemInstructionJsonOutputOnly}`,
-
-    user_deepthink_redTeam: `Core Document Input: {{originalProblemText}}
-Strategies to Validate: {{allStrategies}}
-
-<Mission>
-Evaluate the feasibility of these extraction strategies. Prune those that are logically unsound or likely to produce invalid JSON schemas.
-</Mission>`,
 
     // ==================================================================================
     // EXECUTION AGENT (The Extractor)
@@ -740,16 +647,6 @@ Your output must be the raw JSON object containing the extracted data. No markdo
 </Output Constraint>
 ${systemInstructionJsonOutputOnly}`,
 
-    user_deepthink_solutionAttempt: `Core Document Input: {{originalProblemText}}
-Assigned Strategy: {{currentMainStrategy}}
-Specific Methodology: {{currentSubStrategy}}
-Knowledge Packet (Validated Facts): {{knowledgePacket}}
-
-<Mission>
-Execute the extraction using the assigned strategy.
-Output the final JSON object matching the appropriate schema (Invoice/Receipt/Statement).
-</Mission>`,
-
     // ==================================================================================
     // CRITIQUE AGENT (Schema & Math Validator)
     // ==================================================================================
@@ -774,13 +671,6 @@ Output a structured critique identifying specific field errors, math discrepanci
 </Output Constraint>
 `,
 
-    user_deepthink_solutionCritique: `Core Document Input: {{originalProblemText}}
-Extracted JSON: {{allSubStrategiesAndSolutions}}
-
-<Mission>
-Audit the extracted JSON. Flag any math errors, schema violations, or likely hallucinations.
-</Mission>`,
-
     // ==================================================================================
     // DISSECTED SYNTHESIS (Error Aggregation)
     // ==================================================================================
@@ -798,13 +688,6 @@ You are the **Extraction Error Synthesizer**. You analyze critiques from multipl
 <Output>
 A synthesized report on the accuracy of the extraction attempts, identifying the most likely correct values for disputed fields.
 </Output>`,
-
-    user_deepthink_dissectedSynthesis: `Core Document Input: {{originalProblemText}}
-Critiques: {{solutionsWithCritiques}}
-
-<Mission>
-Synthesize the critiques. Identify which extracted fields are consistent and valid, and which are disputed.
-</Mission>`,
 
     // ==================================================================================
     // CORRECTOR AGENT (Final JSON Polishing)
@@ -829,13 +712,6 @@ Output **ONLY** the corrected, valid JSON object.
 </Output Constraint>
 ${systemInstructionJsonOutputOnly}`,
 
-    user_deepthink_selfImprovement: `Core Document Input: {{originalProblemText}}
-Original Extraction: {{solutionSectionPlaceholder}}
-
-<Mission>
-Apply the corrections. Output the final, mathematically consistent, schema-compliant JSON.
-</Mission>`,
-
     // ==================================================================================
     // POST QUALITY FILTER (Deduplication)
     // ==================================================================================
@@ -855,12 +731,24 @@ JSON output with "keep" or "update" decisions.
 </Output Constraint>
 ${systemInstructionJsonOutputOnly}`,
 
-    user_deepthink_postQualityFilter: `Core Document Input: {{originalProblemText}}
-Strategies & Executions: {{strategiesWithExecutionsAndCritiques}}
+    sys_deepthink_memoryBank: `
+<Persona>
+You are the Memory Bank agent for one active financial extraction branch.
+</Persona>
 
-<Mission>
-Decide which strategies yielded valid extraction data and which failed.
-</Mission>`,
+<Task>
+Distill the latest branch-local extraction/correction and critique history into durable exploration memory. Do not summarize candidate JSON prose. Capture validated document facts, OCR/decomposition dead ends, recurring schema/math flaws, refuted assumptions, and concrete guidance future correctors must preserve.
+</Task>
+
+<Required Sections>
+- Validated Invariants
+- Dead Ends
+- Persistent Flaws
+- Useful Techniques
+- Refuted Assumptions
+- Open Questions
+- Branch-Level Guidance For Future Corrections
+</Required Sections>`,
 
     // ==================================================================================
     // FINAL JUDGE (Selection)
@@ -901,14 +789,6 @@ Generate 5 distinct Contextual Insights that might aid the corrector agents.
 <Output Constraint>
 Output 5 distinct contextual insights labeled SOLUTION 1 through SOLUTION 5.
 </Output Constraint>`,
-
-    user_deepthink_structuredSolutionPool: `Core Document Input: {{originalProblemText}}
-Strategy: {{assignedStrategyId}}
-Critique: {{currentSolutionCritique}}
-
-<Mission>
-Generate 5 Contextual Insights (e.g., Tax verification, Vendor normalization, Common OCR fixes) relevant to this document.
-</Mission>`,
   };
 }
 

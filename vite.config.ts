@@ -1,9 +1,29 @@
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
+import { handlePythonBackendRequest } from './Backend/pythonToolBackend';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   return {
+    plugins: [{
+      name: 'iterative-studio-python-backend',
+      configureServer(server) {
+        server.middlewares.use(async (req, res, next) => {
+          const pathname = new URL(req.url || '/', 'http://localhost').pathname;
+          const basePath = server.config.base.replace(/\/$/, '');
+          const isPythonBackendRequest = pathname.startsWith('/api/python/')
+            || (basePath && pathname.startsWith(`${basePath}/api/python/`));
+
+          if (!isPythonBackendRequest) {
+            next();
+            return;
+          }
+
+          const handled = await handlePythonBackendRequest(req, res);
+          if (!handled) next();
+        });
+      }
+    }],
     define: {
       'process.env.AI_API_KEY': JSON.stringify(env.AI_API_KEY || env.GEMINI_API_KEY),
       'process.env.API_KEY': JSON.stringify(env.API_KEY || env.GEMINI_API_KEY),

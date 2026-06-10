@@ -18,12 +18,12 @@ export interface DeepthinkConfigState {
     hypothesisCount: number;
     skipSubStrategies: boolean;
     hypothesisEnabled: boolean;
-    redTeamMode: string;
+    pqfMode: string;
     postQualityFilterEnabled: boolean;
     refinementEnabled: boolean;
     dissectedObservationsEnabled: boolean;
-    iterativeCorrectionsEnabled: boolean;
-    iterativeDepth: number;
+    evolvingDfsEnabled: boolean;
+    evolvingDfsDepth: number;
     provideAllSolutionsEnabled: boolean;
     temperature: number;
     topP: number;
@@ -40,7 +40,7 @@ export type DeepthinkConfigChangeEvent = CustomEvent<{
 /**
  * Business rule constants
  */
-const MAX_STRATEGIES_WITH_ITERATIVE = 5;
+const MAX_STRATEGIES_WITH_EVOLVING_DFS = 5;
 const MAX_STRATEGIES_DEFAULT = 10;
 
 export class DeepthinkConfigController extends EventTarget {
@@ -61,17 +61,19 @@ export class DeepthinkConfigController extends EventTarget {
             hypothesisCount: params.hypothesisCount,
             skipSubStrategies: params.skipSubStrategies,
             hypothesisEnabled: params.hypothesisCount > 0,
-            redTeamMode: params.redTeamAggressiveness,
-            postQualityFilterEnabled: params.postQualityFilterEnabled,
+            pqfMode: params.pqfAggressiveness,
+            postQualityFilterEnabled: params.evolvingDfsEnabled && params.refinementEnabled ? true : params.postQualityFilterEnabled,
             refinementEnabled: params.refinementEnabled,
             dissectedObservationsEnabled: params.dissectedObservationsEnabled,
-            iterativeCorrectionsEnabled: params.iterativeCorrectionsEnabled,
-            iterativeDepth: params.iterativeDepth,
+            evolvingDfsEnabled: params.evolvingDfsEnabled,
+            evolvingDfsDepth: params.evolvingDfsDepth,
             provideAllSolutionsEnabled: params.provideAllSolutionsToCorrectors,
             temperature: params.temperature,
             topP: params.topP,
             codeExecutionEnabled: params.deepthinkCodeExecutionEnabled,
-            hypothesisInjectionMode: params.hypothesisInjectionMode || 'selective_injection',
+            hypothesisInjectionMode: params.evolvingDfsEnabled && params.refinementEnabled
+                ? 'selective_injection'
+                : params.hypothesisInjectionMode || 'selective_injection',
             shareHypothesesToDissected: params.shareHypothesesToDissected === true
         };
     }
@@ -96,12 +98,12 @@ export class DeepthinkConfigController extends EventTarget {
         return this.modelConfig.isSkipSubStrategies();
     }
 
-    public getRedTeamMode(): string {
-        return this.modelConfig.getRedTeamAggressiveness();
+    public getPqfMode(): string {
+        return this.modelConfig.getPqfAggressiveness();
     }
 
     public isPostQualityFilterEnabled(): boolean {
-        return this.modelConfig.isPostQualityFilterEnabled();
+        return this.isEvolvingDfsEnabled() || this.modelConfig.isPostQualityFilterEnabled();
     }
 
     public isRefinementEnabled(): boolean {
@@ -112,8 +114,8 @@ export class DeepthinkConfigController extends EventTarget {
         return this.modelConfig.isDissectedObservationsEnabled();
     }
 
-    public isIterativeCorrectionsEnabled(): boolean {
-        return this.modelConfig.isIterativeCorrectionsEnabled();
+    public isEvolvingDfsEnabled(): boolean {
+        return this.modelConfig.isEvolvingDfsEnabled();
     }
 
     public isProvideAllSolutionsEnabled(): boolean {
@@ -121,11 +123,11 @@ export class DeepthinkConfigController extends EventTarget {
     }
 
     public getMaxStrategies(): number {
-        return this.isIterativeCorrectionsEnabled() ? MAX_STRATEGIES_WITH_ITERATIVE : MAX_STRATEGIES_DEFAULT;
+        return this.isEvolvingDfsEnabled() ? MAX_STRATEGIES_WITH_EVOLVING_DFS : MAX_STRATEGIES_DEFAULT;
     }
 
-    public getIterativeDepth(): number {
-        return this.modelConfig.getIterativeDepth();
+    public getEvolvingDfsDepth(): number {
+        return this.modelConfig.getEvolvingDfsDepth();
     }
 
     public isCodeExecutionEnabled(): boolean {
@@ -133,14 +135,14 @@ export class DeepthinkConfigController extends EventTarget {
     }
 
     public getHypothesisInjectionMode(): 'parallel' | 'strategy_aware' | 'selective_injection' {
-        return this.modelConfig.getHypothesisInjectionMode();
+        return this.isEvolvingDfsEnabled() ? 'selective_injection' : this.modelConfig.getHypothesisInjectionMode();
     }
 
     // ========== SETTERS WITH BUSINESS LOGIC ==========
 
     /**
      * Set the strategies count.
-     * Enforces max limit based on iterative corrections state.
+     * Enforces max limit based on Evolving Depth First Search state.
      */
     public setStrategiesCount(count: number): void {
         const maxAllowed = this.getMaxStrategies();
@@ -154,8 +156,8 @@ export class DeepthinkConfigController extends EventTarget {
      * When set to 0, also sets skipSubStrategies to true.
      */
     public setSubStrategiesCount(count: number): void {
-        // Cannot change sub-strategies when iterative corrections is enabled
-        if (this.isIterativeCorrectionsEnabled()) {
+        // Cannot change sub-strategies when Evolving DFS is enabled
+        if (this.isEvolvingDfsEnabled()) {
             return;
         }
 
@@ -177,8 +179,8 @@ export class DeepthinkConfigController extends EventTarget {
      * Set skip sub-strategies flag.
      */
     public setSkipSubStrategies(skip: boolean): void {
-        // Cannot change when iterative corrections is enabled
-        if (this.isIterativeCorrectionsEnabled()) {
+        // Cannot change while Evolving DFS is enabled
+        if (this.isEvolvingDfsEnabled()) {
             return;
         }
 
@@ -213,11 +215,11 @@ export class DeepthinkConfigController extends EventTarget {
     }
 
     /**
-     * Set red team mode.
+     * Set PQF aggressiveness mode.
      */
-    public setRedTeamMode(mode: string): void {
-        this.modelConfig.updateParameter('redTeamAggressiveness', mode);
-        this.emitChange('redTeamMode');
+    public setPqfMode(mode: string): void {
+        this.modelConfig.updateParameter('pqfAggressiveness', this.isEvolvingDfsEnabled() && mode === 'off' ? 'balanced' : mode);
+        this.emitChange('pqfMode');
     }
 
     /**
@@ -230,11 +232,11 @@ export class DeepthinkConfigController extends EventTarget {
         if (!enabled) {
             // Disable all refinement sub-options
             this.modelConfig.updateParameter('dissectedObservationsEnabled', false);
-            this.modelConfig.updateParameter('iterativeCorrectionsEnabled', false);
+            this.modelConfig.updateParameter('evolvingDfsEnabled', false);
             this.modelConfig.updateParameter('provideAllSolutionsToCorrectors', false);
             this.modelConfig.updateParameter('postQualityFilterEnabled', false);
 
-            // Re-enable sub-strategies (since iterative corrections is now off)
+            // Re-enable sub-strategies (since Evolving Depth First Search is now off)
             // Don't change the value, just allow it to be editable again
         }
 
@@ -243,11 +245,11 @@ export class DeepthinkConfigController extends EventTarget {
 
     /**
      * Set dissected observations (critique synthesis) enabled.
-     * Can only be enabled if refinement is on AND iterative corrections is off.
+     * Can only be enabled if refinement is on AND Evolving Depth First Search is off.
      */
     public setDissectedObservationsEnabled(enabled: boolean): void {
-        // Guard: requires refinement enabled and iterative corrections disabled
-        if (!this.isRefinementEnabled() || this.isIterativeCorrectionsEnabled()) {
+        // Guard: requires refinement enabled and Evolving Depth First Search disabled
+        if (!this.isRefinementEnabled() || this.isEvolvingDfsEnabled()) {
             return;
         }
 
@@ -264,28 +266,28 @@ export class DeepthinkConfigController extends EventTarget {
     }
 
     /**
-     * Set iterative corrections enabled.
+     * Set Evolving Depth First Search enabled.
      * This has the most side-effects:
      * - Limits strategies to max 5
      * - Forces sub-strategies to 0 and disables the control
      * - Disables synthesis and full-context options
      * - Enables post-quality filter option
      */
-    public setIterativeCorrectionsEnabled(enabled: boolean): void {
+    public setEvolvingDfsEnabled(enabled: boolean): void {
         // Guard: requires refinement enabled
         if (!this.isRefinementEnabled()) {
             return;
         }
 
-        this.modelConfig.updateParameter('iterativeCorrectionsEnabled', enabled);
+        this.modelConfig.updateParameter('evolvingDfsEnabled', enabled);
 
         if (enabled) {
             // === SIDE EFFECTS WHEN ENABLING ===
 
             // 1. Limit strategies to max 5
             const currentStrategies = this.modelConfig.getStrategiesCount();
-            if (currentStrategies > MAX_STRATEGIES_WITH_ITERATIVE) {
-                this.modelConfig.updateParameter('strategiesCount', MAX_STRATEGIES_WITH_ITERATIVE);
+            if (currentStrategies > MAX_STRATEGIES_WITH_EVOLVING_DFS) {
+                this.modelConfig.updateParameter('strategiesCount', MAX_STRATEGIES_WITH_EVOLVING_DFS);
             }
 
             // 2. Force sub-strategies to 0 and disable
@@ -298,36 +300,47 @@ export class DeepthinkConfigController extends EventTarget {
             // 4. Disable full context (provide all solutions)
             this.modelConfig.updateParameter('provideAllSolutionsToCorrectors', false);
 
+            // 5. PQF is required for Evolving Depth First Search
+            this.modelConfig.updateParameter('postQualityFilterEnabled', true);
+
+            // 6. Hypothesis injection must be selective in Evolving DFS
+            this.modelConfig.updateParameter('hypothesisInjectionMode', 'selective_injection');
+
+            // 7. PQF aggressiveness cannot be "off" while the mode is active
+            if (this.modelConfig.getPqfAggressiveness() === 'off') {
+                this.modelConfig.updateParameter('pqfAggressiveness', 'balanced');
+            }
+
         } else {
             // === SIDE EFFECTS WHEN DISABLING ===
 
-            // 1. Disable post-quality filter (requires iterative corrections)
+            // 1. Disable post-quality filter (requires Evolving DFS)
             this.modelConfig.updateParameter('postQualityFilterEnabled', false);
 
             // Note: We don't auto-enable synthesis or change sub-strategies.
             // User must manually re-enable them if desired.
         }
 
-        this.emitChange('iterativeCorrectionsEnabled');
+        this.emitChange('evolvingDfsEnabled');
     }
 
     /**
-     * Set iterative depth (number of correction iterations).
+     * Set Evolving DFS depth (number of correction iterations).
      * Range: 1-10, default 3.
      */
-    public setIterativeDepth(depth: number): void {
+    public setEvolvingDfsDepth(depth: number): void {
         const clampedDepth = Math.max(1, Math.min(depth, 10));
-        this.modelConfig.updateParameter('iterativeDepth', clampedDepth);
-        this.emitChange('iterativeDepth');
+        this.modelConfig.updateParameter('evolvingDfsDepth', clampedDepth);
+        this.emitChange('evolvingDfsDepth');
     }
 
     /**
      * Set provide all solutions to correctors (full context) enabled.
-     * Can only be enabled if refinement is on AND iterative corrections is off.
+     * Can only be enabled if refinement is on AND Evolving Depth First Search is off.
      */
     public setProvideAllSolutionsEnabled(enabled: boolean): void {
-        // Guard: requires refinement enabled and iterative corrections disabled
-        if (!this.isRefinementEnabled() || this.isIterativeCorrectionsEnabled()) {
+        // Guard: requires refinement enabled and Evolving Depth First Search disabled
+        if (!this.isRefinementEnabled() || this.isEvolvingDfsEnabled()) {
             return;
         }
 
@@ -337,15 +350,15 @@ export class DeepthinkConfigController extends EventTarget {
 
     /**
      * Set post-quality filter enabled.
-     * Can only be enabled if iterative corrections is on.
+     * Can only be enabled if Evolving Depth First Search is on.
      */
-    public setPostQualityFilterEnabled(enabled: boolean): void {
-        // Guard: requires iterative corrections enabled
-        if (!this.isIterativeCorrectionsEnabled()) {
+    public setPostQualityFilterEnabled(_enabled: boolean): void {
+        // Guard: requires Evolving DFS enabled
+        if (!this.isEvolvingDfsEnabled()) {
             return;
         }
 
-        this.modelConfig.updateParameter('postQualityFilterEnabled', enabled);
+        this.modelConfig.updateParameter('postQualityFilterEnabled', true);
         this.emitChange('postQualityFilterEnabled');
     }
 
@@ -366,8 +379,7 @@ export class DeepthinkConfigController extends EventTarget {
     }
 
     /**
-     * Set code execution enabled for Deepthink agents.
-     * Only applies when using Gemini provider.
+     * Set backend Python tool access for eligible Deepthink agents.
      */
     public setCodeExecutionEnabled(enabled: boolean): void {
         this.modelConfig.updateParameter('deepthinkCodeExecutionEnabled', enabled);
@@ -382,7 +394,7 @@ export class DeepthinkConfigController extends EventTarget {
      * - 'selective_injection': Hypothesis runs after strategies finalize, per-strategy packets
      */
     public setHypothesisInjectionMode(mode: 'parallel' | 'strategy_aware' | 'selective_injection'): void {
-        this.modelConfig.updateParameter('hypothesisInjectionMode', mode);
+        this.modelConfig.updateParameter('hypothesisInjectionMode', this.isEvolvingDfsEnabled() ? 'selective_injection' : mode);
         this.emitChange('hypothesisInjectionMode');
     }
 

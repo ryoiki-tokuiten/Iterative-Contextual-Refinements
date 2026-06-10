@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type ModalType = 'red-team' | 'deepthink-red-team' | 'patches';
+export type ModalType = 'patches';
 
 export interface ModalState {
     isActive: boolean;
@@ -11,8 +11,6 @@ export interface ModalState {
 }
 
 const modalStates: Record<ModalType, ModalState> = {
-    'red-team': { isActive: false, content: '' },
-    'deepthink-red-team': { isActive: false, content: '' },
     'patches': { isActive: false, content: '' }
 };
 
@@ -43,8 +41,6 @@ export function toggleModalExpanded(elementId: string): boolean {
 
 export function getModalElement(type: ModalType): { modal: HTMLElement | null; content: HTMLElement | null } {
     const ids = {
-        'red-team': { modal: 'red-team-full-modal', content: 'red-team-modal-content' },
-        'deepthink-red-team': { modal: 'deepthink-red-team-full-modal', content: 'deepthink-red-team-modal-content' },
         'patches': { modal: 'patches-modal-overlay', content: 'patches-modal-content' }
     };
     
@@ -73,34 +69,6 @@ export function closeModal(type: ModalType): void {
     setModalActive(type, false);
 }
 
-export function initializeGlobalModalFunctions(): void {
-    (window as any).toggleRedTeamReasoning = function (agentId: string) {
-        toggleModalExpanded(`red-team-reasoning-${agentId}`);
-    };
-
-    (window as any).showFullRedTeamReasoning = function (_agentId: string, fullContent: string) {
-        setModalContent('red-team', fullContent);
-        showModal('red-team', fullContent);
-    };
-
-    (window as any).closeRedTeamModal = function () {
-        closeModal('red-team');
-    };
-
-    (window as any).toggleDeepthinkRedTeamReasoning = function (agentId: string) {
-        toggleModalExpanded(`deepthink-red-team-reasoning-${agentId}`);
-    };
-
-    (window as any).showFullDeepthinkRedTeamReasoning = function (_agentId: string, fullContent: string) {
-        setModalContent('deepthink-red-team', fullContent);
-        showModal('deepthink-red-team', fullContent);
-    };
-
-    (window as any).closeDeepthinkRedTeamModal = function () {
-        closeModal('deepthink-red-team');
-    };
-}
-
 export function initializePatchesModalHandlers(): void {
     const patchesCloseBtn = document.getElementById('patches-modal-close-button');
     const patchesOverlay = document.getElementById('patches-modal-overlay');
@@ -120,7 +88,6 @@ export function initializePatchesModalHandlers(): void {
 
 export class GlobalModals {
     public static initialize() {
-        initializeGlobalModalFunctions();
         initializePatchesModalHandlers();
     }
 }

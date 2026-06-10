@@ -11,7 +11,7 @@ import { createRoot, Root } from 'react-dom/client';
 import { AIProvider } from '../Routing/AIProvider';
 import { callGemini } from "@/Routing/AIService.js";
 import { CustomizablePromptsDeepthink } from './DeepthinkPrompts';
-import { cleanupIterativeCorrectionsRoot } from '../Contextual/ContextualUI';
+import { cleanupEvolvingDfsRoot } from '../Contextual/ContextualUI';
 import { onHighlighterReady } from '../Styles/Shiki';
 import {
     openSolutionPoolEvolution,
@@ -30,12 +30,11 @@ import {
     DefaultSolutionUI,
     SubStrategyComparisonUI,
     EmbeddedModalContent,
-    RedTeamReasoningContent,
     StructuredReasoningContent,
     StrategicSolverTab,
     HypothesisExplorerTab,
     DissectedObservationsTab,
-    RedTeamTab,
+    EvolutionFilterTab,
     FinalResultTab,
 } from './Deepthink.tsx';
 
@@ -47,7 +46,6 @@ import {
     DeepthinkSolutionCritiqueData,
     DeepthinkSubStrategyData,
     DeepthinkHypothesisData,
-    DeepthinkRedTeamData,
     DeepthinkPostQualityFilterData,
     DeepthinkMainStrategyData,
     DeepthinkPipelineState,
@@ -66,7 +64,6 @@ export type {
     DeepthinkSolutionCritiqueData,
     DeepthinkSubStrategyData,
     DeepthinkHypothesisData,
-    DeepthinkRedTeamData,
     DeepthinkPostQualityFilterData,
     DeepthinkMainStrategyData,
     DeepthinkPipelineState,
@@ -99,9 +96,9 @@ interface DeepthinkModuleState {
     getSelectedStrategiesCount: () => number;
     getSelectedSubStrategiesCount: () => number;
     getSelectedHypothesisCount: () => number;
-    getSelectedRedTeamAggressiveness: () => string;
+    getSelectedPqfAggressiveness: () => string;
     getRefinementEnabled: () => boolean;
-    getIterativeCorrectionsEnabled: () => boolean;
+    getEvolvingDfsEnabled: () => boolean;
     getDissectedObservationsEnabled: () => boolean;
 }
 
@@ -113,13 +110,14 @@ const moduleState: DeepthinkModuleState = {
     getSelectedStrategiesCount: () => 0,
     getSelectedSubStrategiesCount: () => 0,
     getSelectedHypothesisCount: () => 0,
-    getSelectedRedTeamAggressiveness: () => 'off',
+    getSelectedPqfAggressiveness: () => 'off',
     getRefinementEnabled: () => false,
-    getIterativeCorrectionsEnabled: () => false,
+    getEvolvingDfsEnabled: () => false,
     getDissectedObservationsEnabled: () => false,
 };
 
 let activeSolutionModalSubStrategyId: string | null = null;
+let activeSolutionModalBranchVersion: number | undefined;
 
 // React roots for React-rendered content
 let pipelineContentRoot: Root | null = null;
@@ -145,16 +143,15 @@ export function initializeDeepthinkModule(dependencies: {
     getSelectedSubStrategiesCount: () => number;
     getRefinementEnabled: () => boolean;
     getSelectedHypothesisCount: () => number;
-    getSelectedRedTeamAggressiveness: () => string;
+    getSelectedPqfAggressiveness: () => string;
     getSkipSubStrategies: () => boolean;
     getDissectedObservationsEnabled: () => boolean;
     getShareHypothesesToDissected: () => boolean;
-    getIterativeCorrectionsEnabled: () => boolean;
-    getIterativeDepth: () => number;
+    getEvolvingDfsEnabled: () => boolean;
+    getEvolvingDfsDepth: () => number;
     getProvideAllSolutionsToCorrectors: () => boolean;
     getPostQualityFilterEnabled: () => boolean;
     getDeepthinkCodeExecutionEnabled: () => boolean;
-    getModelProvider: () => string;
     getHypothesisInjectionMode: () => 'parallel' | 'strategy_aware' | 'selective_injection';
     getSelectedThinkingLevel?: () => 'low' | 'medium' | 'high' | 'minimal';
     cleanTextOutput: (text: string) => string;
@@ -171,9 +168,9 @@ export function initializeDeepthinkModule(dependencies: {
         getSelectedStrategiesCount: dependencies.getSelectedStrategiesCount,
         getSelectedSubStrategiesCount: dependencies.getSelectedSubStrategiesCount,
         getSelectedHypothesisCount: dependencies.getSelectedHypothesisCount,
-        getSelectedRedTeamAggressiveness: dependencies.getSelectedRedTeamAggressiveness,
+        getSelectedPqfAggressiveness: dependencies.getSelectedPqfAggressiveness,
         getRefinementEnabled: dependencies.getRefinementEnabled,
-        getIterativeCorrectionsEnabled: dependencies.getIterativeCorrectionsEnabled,
+        getEvolvingDfsEnabled: dependencies.getEvolvingDfsEnabled,
         getDissectedObservationsEnabled: dependencies.getDissectedObservationsEnabled,
     });
 
@@ -219,10 +216,10 @@ function unmountModal(): void {
         modalRoot.render(null);
     }
     activeSolutionModalSubStrategyId = null;
-    if (cleanupIterativeCorrectionsRoot) cleanupIterativeCorrectionsRoot();
+    if (cleanupEvolvingDfsRoot) cleanupEvolvingDfsRoot();
 }
 
-function removeIterativeSolutionOverlay(immediate = true): void {
+function removeEvolvingDfsSolutionOverlay(immediate = true): void {
     const overlay = document.getElementById('solution-modal-overlay') as (HTMLElement & {
         cleanup?: () => void;
     }) | null;
@@ -245,22 +242,24 @@ function removeIterativeSolutionOverlay(immediate = true): void {
     }
 
     activeSolutionModalSubStrategyId = null;
-    cleanupIterativeCorrectionsRoot();
+    activeSolutionModalBranchVersion = undefined;
+    cleanupEvolvingDfsRoot();
 }
 
-export async function openDeepthinkSolutionModal(subStrategyId: string) {
+export async function openDeepthinkSolutionModal(subStrategyId: string, branchVersion?: number) {
     const pipeline = getActiveDeepthinkPipeline();
     const subStrategy = pipeline?.initialStrategies.flatMap(ms => ms.subStrategies).find(ss => ss.id === subStrategyId);
     if (!subStrategy) return;
 
-    const iterativeCorrectionsEnabled = moduleState.getIterativeCorrectionsEnabled();
+    const evolvingDfsEnabled = moduleState.getEvolvingDfsEnabled();
 
-    if (iterativeCorrectionsEnabled) {
-        removeIterativeSolutionOverlay(true);
+    if (evolvingDfsEnabled) {
+        removeEvolvingDfsSolutionOverlay(true);
         unmountModal();
         activeSolutionModalSubStrategyId = subStrategyId;
+        activeSolutionModalBranchVersion = branchVersion;
 
-        // For iterative corrections, we keep the imperative approach because it uses
+        // For Evolving DFS corrections, we keep the imperative approach because it uses
         // the external ContextualUI component which has its own rendering lifecycle
         const overlay = document.createElement('div');
         overlay.className = 'modal-overlay';
@@ -276,7 +275,9 @@ export async function openDeepthinkSolutionModal(subStrategyId: string) {
         header.className = 'modal-header';
         const title = document.createElement('h2');
         title.className = 'modal-title';
-        title.textContent = 'Iterative Corrections';
+        title.textContent = branchVersion
+            ? `Evolving Depth First Search - Branch v${branchVersion}`
+            : 'Evolving Depth First Search';
         header.appendChild(title);
 
         const closeBtn = document.createElement('button');
@@ -296,7 +297,7 @@ export async function openDeepthinkSolutionModal(subStrategyId: string) {
         overlay.appendChild(content);
         document.body.appendChild(overlay);
 
-        const close = () => removeIterativeSolutionOverlay(false);
+        const close = () => removeEvolvingDfsSolutionOverlay(false);
         const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
 
         closeBtn.addEventListener('click', close);
@@ -305,7 +306,7 @@ export async function openDeepthinkSolutionModal(subStrategyId: string) {
         (overlay as any).cleanup = () => document.removeEventListener('keydown', onKey);
         setTimeout(() => overlay.classList.add('is-visible'), 10);
 
-        await updateSolutionModalContent(body, subStrategyId);
+        await updateSolutionModalContent(body, subStrategyId, branchVersion);
     } else {
         // Non-iterative: mount React components
         const close = () => unmountModal();
@@ -323,16 +324,16 @@ export async function openDeepthinkSolutionModal(subStrategyId: string) {
 }
 
 export function closeSolutionModal() {
-    removeIterativeSolutionOverlay(false);
+    removeEvolvingDfsSolutionOverlay(false);
     unmountModal();
 }
 
-export async function openSubStrategySolutionModal(subStrategyId: string) {
+export async function openSubStrategySolutionModal(subStrategyId: string, branchVersion?: number) {
     const pipeline = getActiveDeepthinkPipeline();
     if (!pipeline) return;
 
-    if (moduleState.getIterativeCorrectionsEnabled()) {
-        await openDeepthinkSolutionModal(subStrategyId);
+    if (moduleState.getEvolvingDfsEnabled()) {
+        await openDeepthinkSolutionModal(subStrategyId, branchVersion);
         return;
     }
 
@@ -366,7 +367,7 @@ export function openCritiqueModal(critiqueId: string) {
             isEmbedded: true,
             onClose: close,
             children: React.createElement(EmbeddedModalContent, {
-                content: critique.critiqueResponse || 'No critique available',
+                content: critique.critiqueResponseDisplay || critique.critiqueResponse || 'No critique available',
             })
         })
     );
@@ -391,7 +392,7 @@ export function openSubStrategyCritiqueModal(subStrategyId: string) {
             isEmbedded: true,
             onClose: close,
             children: React.createElement(EmbeddedModalContent, {
-                content: subStrategy.solutionCritique,
+                content: subStrategy.solutionCritiqueDisplay || subStrategy.solutionCritique,
             })
         })
     );
@@ -399,7 +400,11 @@ export function openSubStrategyCritiqueModal(subStrategyId: string) {
 
 export function openHypothesisArgumentModal(hypothesisId: string) {
     const pipeline = getActiveDeepthinkPipeline();
-    const hypothesis = pipeline?.hypotheses.find(h => h.id === hypothesisId);
+    const allHypotheses = [
+        ...((pipeline?.hypothesisHistory || []).flat()),
+        ...(pipeline?.hypotheses || []),
+    ];
+    const hypothesis = allHypotheses.find(h => h.id === hypothesisId);
     if (!hypothesis || document.querySelector('.embedded-modal-overlay')) return;
 
     const close = () => unmountModal();
@@ -409,23 +414,9 @@ export function openHypothesisArgumentModal(hypothesisId: string) {
             isEmbedded: true,
             onClose: close,
             children: React.createElement(EmbeddedModalContent, {
-                content: hypothesis.testerAttempt || 'No argument available',
+                content: hypothesis.testerAttemptDisplay || hypothesis.testerAttempt || 'No argument available',
                 contentClass: 'hypothesis-argument-content',
             })
-        })
-    );
-}
-
-export function openRedTeamReasoningModal(agent: any) {
-    if (document.querySelector('.embedded-modal-overlay')) return;
-
-    const close = () => unmountModal();
-    mountModal(
-        React.createElement(BaseModal, {
-            title: `Red Team Agent ${agent.id} - Evaluation`,
-            isEmbedded: true,
-            onClose: close,
-            children: React.createElement(RedTeamReasoningContent, { agent, reasoningData: agent.reasoning })
         })
     );
 }
@@ -436,7 +427,7 @@ export function openPostQualityFilterModal(agent: any) {
     const close = () => unmountModal();
     mountModal(
         React.createElement(BaseModal, {
-            title: `PostQualityFilter Iteration ${agent.iterationNumber} - Analysis`,
+            title: `Evolution Filter Iteration ${agent.iterationNumber} - Analysis`,
             isEmbedded: true,
             onClose: close,
             children: React.createElement(StructuredReasoningContent, {
@@ -448,31 +439,94 @@ export function openPostQualityFilterModal(agent: any) {
     );
 }
 
-// Update active modal content dynamically (for iterative corrections)
-async function updateSolutionModalContent(modalBody: HTMLElement, subStrategyId: string) {
-    const pipeline = getActiveDeepthinkPipeline();
-    const subStrategy = pipeline?.initialStrategies.flatMap(ms => ms.subStrategies).find(ss => ss.id === subStrategyId);
-    if (!subStrategy) return;
+// Update active modal content dynamically (for Evolving Depth First Search)
+function findStrategyForSubStrategy(pipeline: DeepthinkPipelineState | null, subStrategyId: string) {
+    for (const strategy of pipeline?.initialStrategies ?? []) {
+        const subStrategy = strategy.subStrategies.find(sub => sub.id === subStrategyId);
+        if (subStrategy) return { strategy, subStrategy };
+    }
+    return null;
+}
 
-    const iterativeCorrectionsData = (subStrategy as any).iterativeCorrections;
-    const iterations = iterativeCorrectionsData?.iterations || [];
-    const originalSolution = subStrategy.solutionAttempt || 'Processing...';
+function readIterationBranchVersion(iteration: any): number | undefined {
+    if (typeof iteration.branchVersion === 'number' && iteration.branchVersion > 0) return iteration.branchVersion;
+    if (typeof iteration.branchVersion === 'string') {
+        const parsed = parseInt(iteration.branchVersion, 10);
+        if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
+
+    const labelMatch = String(iteration.label || '').match(/\bBranch\s+v(\d+)\b/i);
+    if (labelMatch) {
+        const parsed = parseInt(labelMatch[1], 10);
+        if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
+
+    return undefined;
+}
+
+function isCurrentBranchIteration(strategy: DeepthinkMainStrategyData, iteration: any, targetBranchVersion: number): boolean {
+    const iterationBranchVersion = readIterationBranchVersion(iteration);
+    if (iterationBranchVersion !== undefined) return iterationBranchVersion === targetBranchVersion;
+
+    const hasEverBeenReplaced = (strategy.replacementHistory || []).length > 0;
+    return targetBranchVersion === 1 && !hasEverBeenReplaced;
+}
+
+async function updateSolutionModalContent(modalBody: HTMLElement, subStrategyId: string, branchVersion?: number) {
+    const pipeline = getActiveDeepthinkPipeline();
+    const found = findStrategyForSubStrategy(pipeline, subStrategyId);
+    if (!found) return;
+    const { strategy, subStrategy } = found;
+    const targetBranchVersion = branchVersion || strategy.branchVersion || 1;
+    const isCurrentBranch = targetBranchVersion === (strategy.branchVersion || 1);
+
+    const replacementRecord = isCurrentBranch
+        ? undefined
+        : (strategy.replacementHistory || []).find(record => record.previousBranchVersion === targetBranchVersion);
+
+    const evolvingDfsData = (subStrategy as any).evolvingDfs;
+    const activeIterations = isCurrentBranch
+        ? (evolvingDfsData?.iterations || []).filter((iteration: any) =>
+            isCurrentBranchIteration(strategy, iteration, targetBranchVersion)
+        )
+        : [];
+    const retiredHistoryLength = replacementRecord?.branchHistory?.length || 1;
+    const retiredIterations = (replacementRecord?.branchHistory || []).map(entry => ({
+        iterationNumber: entry.branchIteration,
+        globalIteration: entry.globalIteration,
+        branchIteration: entry.branchIteration,
+        branchVersion: entry.branchVersion || targetBranchVersion,
+        critique: entry.critiqueDisplay || entry.critique,
+        correctedSolution: entry.solutionDisplay || entry.solution,
+        timestamp: Date.now() - Math.max(1, retiredHistoryLength - entry.branchIteration) * 1000,
+        label: entry.label,
+    }));
+    const iterations = (isCurrentBranch ? activeIterations : retiredIterations).map((iteration: any) => ({
+        ...iteration,
+        critique: iteration.critiqueDisplay || iteration.critique,
+        correctedSolution: iteration.correctedSolutionDisplay || iteration.correctedSolution,
+    }));
+    const originalSolution = isCurrentBranch
+        ? iterations[0]?.correctedSolution || subStrategy.solutionAttemptDisplay || subStrategy.solutionAttempt || 'Processing...'
+        : iterations[0]?.correctedSolution || replacementRecord?.latestSolutionDisplay || replacementRecord?.latestSolution || 'Retired branch solution not available.';
     const latestCorrection = iterations.length > 0 ? iterations[iterations.length - 1]?.correctedSolution : null;
-    const currentBestSolution = latestCorrection || subStrategy.refinedSolution || subStrategy.solutionAttempt || 'Processing...';
+    const currentBestSolution = latestCorrection || (isCurrentBranch
+        ? subStrategy.refinedSolutionDisplay || subStrategy.refinedSolution || subStrategy.solutionAttemptDisplay || subStrategy.solutionAttempt
+        : replacementRecord?.latestSolutionDisplay || replacementRecord?.latestSolution) || 'Processing...';
 
     const isProcessing = subStrategy.selfImprovementStatus === 'processing' ||
         subStrategy.selfImprovementStatus === 'pending' ||
-        iterativeCorrectionsData?.status === 'processing';
+        evolvingDfsData?.status === 'processing';
 
-    const { renderIterativeCorrectionsUI } = await import('../Contextual/ContextualUI');
-    await renderIterativeCorrectionsUI(modalBody, originalSolution, currentBestSolution, iterations, isProcessing);
+    const { renderEvolvingDfsUI } = await import('../Contextual/ContextualUI');
+    await renderEvolvingDfsUI(modalBody, originalSolution, currentBestSolution, iterations, isCurrentBranch ? isProcessing : false);
 }
 
 export async function updateActiveSolutionModal() {
     if (activeSolutionModalSubStrategyId && document.getElementById('solution-modal-overlay')) {
         const modalBody = document.querySelector('#solution-modal-overlay .modal-body') as HTMLElement;
         if (modalBody) {
-            await updateSolutionModalContent(modalBody, activeSolutionModalSubStrategyId);
+            await updateSolutionModalContent(modalBody, activeSolutionModalSubStrategyId, activeSolutionModalBranchVersion);
         }
     }
 }
@@ -516,7 +570,12 @@ function deepthinkClickHandler(event: Event) {
         const btn = closest('view-pool-button');
         const sid = btn.getAttribute('data-strategy-id');
         const iter = btn.getAttribute('data-iteration');
-        if (sid && iter) openSolutionPoolModal(sid, parseInt(iter, 10));
+        const branchVersion = btn.getAttribute('data-branch-version');
+        if (sid && iter) openSolutionPoolModal(
+            sid,
+            parseInt(iter, 10),
+            branchVersion ? parseInt(branchVersion, 10) : undefined
+        );
         return;
     }
 
@@ -635,7 +694,7 @@ export function renderActiveDeepthinkPipeline() {
 
 type DeepthinkTabContentCallbacks = {
     onStrategyTabClick?: (idx: number) => void;
-    onViewSolution?: (id: string) => void;
+    onViewSolution?: (id: string, branchVersion?: number) => void;
     onViewArgument?: (id: string) => void;
     onViewCritique?: (id: string) => void;
     onViewSubStrategyCritique?: (id: string) => void;
@@ -643,10 +702,9 @@ type DeepthinkTabContentCallbacks = {
 };
 
 export function getVisibleDeepthinkTabs(process: DeepthinkPipelineState): DeepthinkTabDefinition[] {
-    const isRedTeamEnabled = moduleState.getSelectedRedTeamAggressiveness() !== 'off';
     const hasPostQualityFilter = process.postQualityFilterAgents?.length > 0;
     const isHypothesisEnabled = moduleState.getSelectedHypothesisCount() > 0;
-    const isDissectedEnabled = moduleState.getRefinementEnabled() || moduleState.getIterativeCorrectionsEnabled() || moduleState.getDissectedObservationsEnabled();
+    const isDissectedEnabled = moduleState.getRefinementEnabled() || moduleState.getEvolvingDfsEnabled() || moduleState.getDissectedObservationsEnabled();
 
     return [
         { id: 'live', label: 'Live', icon: 'terminal', visible: true },
@@ -654,7 +712,7 @@ export function getVisibleDeepthinkTabs(process: DeepthinkPipelineState): Deepth
         { id: 'hypothesis-explorer', label: 'Hypothesis Explorer', icon: 'science', visible: isHypothesisEnabled },
         { id: 'solution-pool', label: 'Solution Pool', icon: 'database', visible: process.structuredSolutionPoolEnabled },
         { id: 'dissected-observations', label: 'Dissected Observations', icon: 'troubleshoot', visible: isDissectedEnabled },
-        { id: 'red-team', label: 'Red Team', icon: 'security', visible: isRedTeamEnabled || hasPostQualityFilter },
+        { id: 'evolution-filter', label: 'Evolution Filter', icon: 'security', visible: hasPostQualityFilter },
         { id: 'final-result', label: 'Final Result', icon: 'flag', visible: true, alignRight: true }
     ]
         .filter(tab => tab.visible)
@@ -672,17 +730,11 @@ export function createDeepthinkTabContent(
         process.activeStrategyTab = idx;
         renderActiveDeepthinkPipeline();
     });
-    const onViewSolution = callbacks.onViewSolution ?? ((id: string) => openSubStrategySolutionModal(id));
+    const onViewSolution = callbacks.onViewSolution ?? ((id: string, branchVersion?: number) => openSubStrategySolutionModal(id, branchVersion));
     const onViewArgument = callbacks.onViewArgument ?? ((id: string) => openHypothesisArgumentModal(id));
     const onViewCritique = callbacks.onViewCritique ?? ((id: string) => openCritiqueModal(id));
     const onViewSubStrategyCritique = callbacks.onViewSubStrategyCritique ?? ((id: string) => openSubStrategyCritiqueModal(id));
     const onViewReasoning = callbacks.onViewReasoning ?? ((id: string) => {
-        const rtAgent = process.redTeamEvaluations.find(a => a.id === id);
-        if (rtAgent?.reasoning) {
-            openRedTeamReasoningModal(rtAgent);
-            return;
-        }
-
         const pqfAgent = process.postQualityFilterAgents.find(a => a.id === id);
         if (pqfAgent?.reasoning) {
             openPostQualityFilterModal(pqfAgent);
@@ -711,12 +763,12 @@ export function createDeepthinkTabContent(
             return React.createElement(DissectedObservationsTab, {
                 process,
                 refinementEnabled: moduleState.getRefinementEnabled(),
-                iterativeCorrectionsEnabled: moduleState.getIterativeCorrectionsEnabled(),
+                evolvingDfsEnabled: moduleState.getEvolvingDfsEnabled(),
                 onViewCritique,
                 onViewSubStrategyCritique,
             });
-        case 'red-team':
-            return React.createElement(RedTeamTab, {
+        case 'evolution-filter':
+            return React.createElement(EvolutionFilterTab, {
                 process,
                 onViewReasoning,
             });
@@ -758,8 +810,11 @@ function getTabStatusClass(tabId: string, process: DeepthinkPipelineState): stri
             if (process.dissectedSynthesisStatus === 'error') return 'status-deepthink-error';
             if (process.dissectedSynthesisStatus === 'processing' || process.solutionCritiquesStatus === 'processing') return 'status-deepthink-processing';
             return '';
-        case 'red-team':
-            return process.redTeamComplete ? 'status-deepthink-completed' : '';
+        case 'evolution-filter':
+            if (process.postQualityFilterStatus === 'completed') return 'status-deepthink-completed';
+            if (process.postQualityFilterStatus === 'processing') return 'status-deepthink-processing';
+            if (process.postQualityFilterStatus === 'error') return 'status-deepthink-error';
+            return '';
         case 'final-result':
             if (process.finalJudgingStatus === 'completed') return 'status-deepthink-completed';
             if (process.finalJudgingStatus === 'error') return 'status-deepthink-error';
