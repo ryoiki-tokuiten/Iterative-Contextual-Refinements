@@ -6,6 +6,7 @@
 import { AIMessage, BaseMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import { nanoid } from 'nanoid';
 import { globalState } from '../Core/State';
+import { describeProviderError } from '../Core/ProviderError';
 import { getSelectedModel, getSelectedTemperature, getSelectedTopP } from '../Routing';
 import { updateControlsState } from '../UI/Controls';
 import { AGENTIC_SYSTEM_PROMPT, VERIFIER_SYSTEM_PROMPT } from './AgenticModePrompt';
@@ -297,7 +298,7 @@ export class AgenticEngine {
             }
         } catch (error) {
             if (!isAbortError(error) && !this.abortController?.signal.aborted) {
-                const message = error instanceof Error ? error.message : 'Unknown error occurred';
+                const message = describeProviderError(error);
                 const systemMessage: AgenticMessage = {
                     id: newMsgId('system'),
                     role: 'system',

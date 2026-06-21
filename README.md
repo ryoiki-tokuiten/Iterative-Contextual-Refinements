@@ -24,6 +24,11 @@ Hypothesis routing supports Blind Trust, Strategy-Aware, and Selective modes. Ev
 
 The Final Judge sees only active candidate solution texts. It does not receive critiques, memory banks, solution pools, PQF decisions, or replaced branches.
 
+**Sandbox Environment and Artifact Submission**:
+Deepthink integrates a secure sandbox virtual environment for execution and verification.
+- **Repository Visibility**: Every Deepthink role receives `sandbox_exec` and `final_output` when the Sandbox Terminal Environment is enabled. Active branches use `Strategy-N/{Critique,SolutionPool}`: execution and correction write direct branch files, critique owns `Critique`, and the pool owns `SolutionPool`. PQF replacements archive the complete old branch under `Pruned_Strategies/Strategy-N_First_PQF` (then ordinal successors) before recreating fresh active slot directories. Hypothesis tests are organized by `Hypothesis-vN`, while only current selectively routed tests are mounted to branch workers.
+- **Submit Final Artifact**: Sandbox-enabled agents use `sandbox_exec` for iterative exploration and testing, then use `final_output` to submit their completed work. JSON-producing roles submit their existing role-specific JSON object directly through `final_output`; the environment validates that contract in the tool loop and returns a correction error without discarding the agent's research. Downstream agents and the central system receive only the submitted artifact, filtering out intermediate command transcripts and scratchpad data.
+
 ![Current Deepthink Architecture](Deepthink/SystemArchitecture.png)
 
 See [Deepthink architecture and context flow](Deepthink/DeepthinkDocs.md) for the complete agent contracts, repository schemas, mode behavior, iteration synchronization, and failure policy. The previous diagram remains archived at `Deepthink/OldSystemArchitecture.png`.
@@ -163,7 +168,7 @@ Use your lookback IP: http://127.0.0.1:1234 or http://localhost:1234 when you tu
 - Single-pass refinement, critique synthesis, and full-solution context
 - Evolving DFS depth
 - PQF aggressiveness
-- Optional Python execution for eligible agents
+- Optional sandbox terminal execution for every Deepthink agent
 
 **Adaptive Deepthink**:
 - Agent-directed access to Deepthink tools and model settings

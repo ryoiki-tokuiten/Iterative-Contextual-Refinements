@@ -9,6 +9,7 @@ import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import { nanoid } from 'nanoid';
 import { AgenticMessage, ResponseSegment, SystemBlock } from '../Agentic/AgenticCore';
 import { messageContentToText } from '../Core/LangGraphToolRuntime';
+import { describeProviderError } from '../Core/ProviderError';
 import { globalState } from '../Core/State';
 import type {
     DeepthinkPipelineState,
@@ -586,7 +587,7 @@ async function runAdaptiveDeepthinkGraph(
         notifyAdaptiveDeepthinkListeners();
     } catch (error) {
         if (!isAbortError(error) && !abortController?.signal.aborted && activeAdaptiveDeepthinkState) {
-            const message = error instanceof Error ? error.message : 'Unknown error';
+            const message = describeProviderError(error);
             activeAdaptiveDeepthinkState.messages = [
                 ...activeAdaptiveDeepthinkState.messages,
                 {

@@ -639,6 +639,7 @@ export class PromptsModal {
         // Provider configuration with colors (same as ModelSelectionUI)
         const providerConfig: Record<string, { class: string }> = {
             'openai': { class: 'openai' },
+            'nvidia': { class: 'nvidia' },
             'anthropic': { class: 'anthropic' },
             'google': { class: 'google' },
             'gemini': { class: 'google' },
@@ -649,7 +650,7 @@ export class PromptsModal {
 
         // Sort providers for consistent ordering
         const sortedProviders = Object.keys(modelsByProvider).sort((a, b) => {
-            const order = ['openai', 'anthropic', 'google', 'gemini', 'meta', 'mistral'];
+            const order = ['openai', 'nvidia', 'anthropic', 'google', 'gemini', 'meta', 'mistral'];
             const aIndex = order.indexOf(a.toLowerCase());
             const bIndex = order.indexOf(b.toLowerCase());
             if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
@@ -881,9 +882,12 @@ export class PromptsModal {
 
         if (!originalPrompt) return;
 
-        // Use the existing diff modal from DiffModal.tsx (lazy-loaded)
-        void import('../Styles/Components/DiffModal/DiffModalController').then((mod) => {
-            mod.openPromptDiffModal(originalPrompt, currentPrompt, `Prompt Changes - ${agentName}`);
+        // Use the evolution viewer to display changes between original and current prompts
+        void import('../Styles/Components/DiffModal/EvolutionViewer').then((mod) => {
+            mod.openEvolutionViewerFromHistory([
+                { title: 'Original Prompt', content: originalPrompt, timestamp: Date.now() - 1000 },
+                { title: 'Current Prompt', content: currentPrompt, timestamp: Date.now() }
+            ], `prompt-changes-${agentName}`);
         });
     }
 

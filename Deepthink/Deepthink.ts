@@ -30,7 +30,7 @@ import {
     DefaultSolutionUI,
     SubStrategyComparisonUI,
     EmbeddedModalContent,
-    StructuredReasoningContent,
+    StructuredResponseModalContent,
     StrategicSolverTab,
     HypothesisExplorerTab,
     DissectedObservationsTab,
@@ -40,6 +40,7 @@ import {
 
 import { SolutionPoolTabContent } from './SolutionPool.tsx';
 import { DeepthinkLiveTab } from './DeepthinkLiveTab.tsx';
+import { DeepthinkFilesystemTab } from './DeepthinkFilesystemTab.tsx';
 
 // Core Imports
 import {
@@ -125,6 +126,7 @@ let pipelineContentContainerNode: HTMLElement | null = null;
 let modalRoot: Root | null = null;
 let modalContainer: HTMLElement | null = null;
 let deepthinkEventHandlerContainer: HTMLElement | null = null;
+let filesystemRedirectListenerRegistered = false;
 
 // ============================================================================ 
 // Initialization
@@ -149,6 +151,8 @@ export function initializeDeepthinkModule(dependencies: {
     getShareHypothesesToDissected: () => boolean;
     getEvolvingDfsEnabled: () => boolean;
     getEvolvingDfsDepth: () => number;
+    getIsolateBranchesEnabled: () => boolean;
+    getSolutionPoolDisabled: () => boolean;
     getProvideAllSolutionsToCorrectors: () => boolean;
     getPostQualityFilterEnabled: () => boolean;
     getDeepthinkCodeExecutionEnabled: () => boolean;
@@ -180,9 +184,25 @@ export function initializeDeepthinkModule(dependencies: {
         }
     });
 
+    if (!filesystemRedirectListenerRegistered) {
+        filesystemRedirectListenerRegistered = true;
+        window.addEventListener('openDeepthinkFilesystem', () => {
+            const process = getActiveDeepthinkPipeline();
+            if (!process) return;
+            process.activeTabId = 'filesystem';
+            renderActiveDeepthinkPipeline();
+        });
+    }
+
     initializeDeepthinkCore({
         ...dependencies,
         renderActiveDeepthinkPipeline
+    });
+
+    window.addEventListener('deepthinkPipelineUpdated', () => {
+        if (getActiveDeepthinkPipeline()) {
+            renderActiveDeepthinkPipeline();
+        }
     });
 }
 
@@ -368,6 +388,7 @@ export function openCritiqueModal(critiqueId: string) {
             onClose: close,
             children: React.createElement(EmbeddedModalContent, {
                 content: critique.critiqueResponseDisplay || critique.critiqueResponse || 'No critique available',
+                interactionTraceText: critique.interactionTraceText,
             })
         })
     );
@@ -393,6 +414,7 @@ export function openSubStrategyCritiqueModal(subStrategyId: string) {
             onClose: close,
             children: React.createElement(EmbeddedModalContent, {
                 content: subStrategy.solutionCritiqueDisplay || subStrategy.solutionCritique,
+                interactionTraceText: subStrategy.solutionCritiqueTraceText,
             })
         })
     );
@@ -416,6 +438,7 @@ export function openHypothesisArgumentModal(hypothesisId: string) {
             children: React.createElement(EmbeddedModalContent, {
                 content: hypothesis.testerAttemptDisplay || hypothesis.testerAttempt || 'No argument available',
                 contentClass: 'hypothesis-argument-content',
+                interactionTraceText: hypothesis.testerAttemptTraceText,
             })
         })
     );
@@ -430,8 +453,9 @@ export function openPostQualityFilterModal(agent: any) {
             title: `Evolution Filter Iteration ${agent.iterationNumber} - Analysis`,
             isEmbedded: true,
             onClose: close,
-            children: React.createElement(StructuredReasoningContent, {
+            children: React.createElement(StructuredResponseModalContent, {
                 reasoning: agent.reasoning,
+                interactionTraceText: agent.interactionTraceText,
                 resultsClassName: 'post-quality-filter-results',
                 emptyMessage: 'No analysis available',
             })
@@ -513,13 +537,23 @@ async function updateSolutionModalContent(modalBody: HTMLElement, subStrategyId:
     const currentBestSolution = latestCorrection || (isCurrentBranch
         ? subStrategy.refinedSolutionDisplay || subStrategy.refinedSolution || subStrategy.solutionAttemptDisplay || subStrategy.solutionAttempt
         : replacementRecord?.latestSolutionDisplay || replacementRecord?.latestSolution) || 'Processing...';
+    const latestIteration = iterations.length > 0 ? iterations[iterations.length - 1] : undefined;
+    const currentArtifactTraceText = latestIteration?.correctedSolutionTraceText
+        || (isCurrentBranch ? subStrategy.refinedSolutionTraceText || subStrategy.solutionAttemptTraceText : undefined);
 
     const isProcessing = subStrategy.selfImprovementStatus === 'processing' ||
         subStrategy.selfImprovementStatus === 'pending' ||
         evolvingDfsData?.status === 'processing';
 
     const { renderEvolvingDfsUI } = await import('../Contextual/ContextualUI');
-    await renderEvolvingDfsUI(modalBody, originalSolution, currentBestSolution, iterations, isCurrentBranch ? isProcessing : false);
+    await renderEvolvingDfsUI(
+        modalBody,
+        originalSolution,
+        currentBestSolution,
+        iterations,
+        isCurrentBranch ? isProcessing : false,
+        currentArtifactTraceText
+    );
 }
 
 export async function updateActiveSolutionModal() {
@@ -708,6 +742,7 @@ export function getVisibleDeepthinkTabs(process: DeepthinkPipelineState): Deepth
 
     return [
         { id: 'live', label: 'Live', icon: 'terminal', visible: true },
+        { id: 'filesystem', label: 'Filesystem', icon: 'folder', visible: true },
         { id: 'strategic-solver', label: 'Strategic Solver', icon: 'psychology', visible: true },
         { id: 'hypothesis-explorer', label: 'Hypothesis Explorer', icon: 'science', visible: isHypothesisEnabled },
         { id: 'solution-pool', label: 'Solution Pool', icon: 'database', visible: process.structuredSolutionPoolEnabled },
@@ -744,6 +779,8 @@ export function createDeepthinkTabContent(
     switch (process.activeTabId) {
         case 'live':
             return React.createElement(DeepthinkLiveTab, { process });
+        case 'filesystem':
+            return React.createElement(DeepthinkFilesystemTab, { key: process.id });
         case 'strategic-solver':
             return React.createElement(StrategicSolverTab, {
                 process,

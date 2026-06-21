@@ -17,14 +17,14 @@ import {
 import {
     routingManager,
     initializeRouting,
-    hasValidApiKey,
-    getProviderForCurrentModel
+    hasValidApiKey
 } from '../Routing';
 import { globalState } from './State';
 import { ApplicationMode } from './Types';
 import { updateControlsState } from '../UI/Controls';
 import { LayoutController } from '../UI/LayoutController';
 import { GlobalModals } from '../UI/GlobalModals';
+import { countFileTokens, getMediaCounts, DIRECT_CONTEXT_MEDIA_LIMITS, DIRECT_CONTEXT_TOKEN_LIMIT } from '../Styles/Components/Sidebar/FileUploadLogic';
 
 export class App {
     public static init() {
@@ -90,37 +90,12 @@ export class App {
             return;
         }
 
-        if (globalState.currentMode === 'contextual' && globalState.currentProblemImages.length > 0) {
-            const unsupportedFiles = globalState.currentProblemImages.filter(f => !f.mimeType.startsWith('image/'));
-            if (unsupportedFiles.length > 0) {
-                const unsupportedTypes = [...new Set(unsupportedFiles.map(f => f.mimeType))].join(', ');
-                alert(`Contextual Python virtual filesystem currently supports image files only.\n\nUnsupported file types detected: ${unsupportedTypes}`);
-                return;
-            }
-        }
-
-        // Validate file compatibility with selected provider in Deepthink modes
-        if ((globalState.currentMode === 'deepthink' || globalState.currentMode === 'adaptive-deepthink') &&
-            globalState.currentProblemImages.length > 0) {
-
-            const provider = getProviderForCurrentModel();
-            const uploadedFiles = globalState.currentProblemImages;
-
-            if (provider === 'openrouter') {
-                alert("OpenRouter models do not support file uploads. Please remove all files or select a different provider.");
-                return;
-            }
-
-            if (provider === 'openai' || provider === 'anthropic') {
-                const supportedImageTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
-                const unsupportedFiles = uploadedFiles.filter(f => !supportedImageTypes.includes(f.mimeType));
-
-                if (unsupportedFiles.length > 0) {
-                    const unsupportedTypes = [...new Set(unsupportedFiles.map(f => f.mimeType))].join(', ');
-                    alert(`${provider.charAt(0).toUpperCase() + provider.slice(1)} only supports images (PNG, JPEG, GIF, WEBP).\n\nUnsupported file types detected: ${unsupportedTypes}\n\nPlease remove unsupported files or switch to Gemini for full file support.`);
-                    return;
-                }
-            }
+        const directFiles = globalState.directContextFiles;
+        const directMedia = getMediaCounts(directFiles);
+        if (countFileTokens(directFiles) > DIRECT_CONTEXT_TOKEN_LIMIT
+            || directMedia.images > DIRECT_CONTEXT_MEDIA_LIMITS.images) {
+            alert(`Direct context exceeds its limit: ${DIRECT_CONTEXT_TOKEN_LIMIT.toLocaleString()} text tokens and ${DIRECT_CONTEXT_MEDIA_LIMITS.images} images. Move files to Context through file-system or remove some files.`);
+            return;
         }
 
         if (globalState.currentMode === 'deepthink') {

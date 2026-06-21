@@ -15,6 +15,7 @@ import {
     selectBestSolutionAgent,
     AgentExecutionContext
 } from '../Deepthink/DeepthinkAgents';
+import { describeProviderError } from '../Core/ProviderError';
 
 // Tool call types for Adaptive Deepthink
 export type AdaptiveDeepthinkToolCall =
@@ -271,7 +272,7 @@ export async function executeAdaptiveDeepthinkTool(
                 return '[ERROR: Unknown tool type]';
         }
     } catch (error) {
-        return `[ERROR: ${error instanceof Error ? error.message : 'Unknown error'}]`;
+        return `[ERROR: ${describeProviderError(error)}]`;
     }
 }
 

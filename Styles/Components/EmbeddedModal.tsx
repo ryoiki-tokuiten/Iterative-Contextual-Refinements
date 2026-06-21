@@ -13,6 +13,7 @@ export interface ModalMessage {
     role: string;
     content: string;
     iterationNumber: number;
+    interactionTraceText?: string;
 }
 
 interface EmbeddedModalViewerProps {
@@ -62,6 +63,7 @@ const EmbeddedModalViewer: React.FC<EmbeddedModalViewerProps> = ({
     const transitionTimeoutRef = useRef<number | null>(null);
     const [isTransitioning, setIsTransitioning] = useState(false);
     const [modalWidth, setModalWidth] = useState<number | undefined>(undefined);
+    const [viewMode, setViewMode] = useState<'submitted' | 'trace'>('submitted');
 
     const messages = useMemo(() => {
         if (!currentMessage || !allMessages?.length) return [];
@@ -82,8 +84,16 @@ const EmbeddedModalViewer: React.FC<EmbeddedModalViewerProps> = ({
     }, [initialIndex]);
 
     const displayedMessage = hasNavigation && activeIndex >= 0 ? messages[activeIndex] : null;
-    const displayContent = displayedMessage?.content || content || 'No content available';
+    const submittedContent = displayedMessage?.content || content || 'No content available';
+    const interactionTraceText = displayedMessage?.interactionTraceText || currentMessage?.interactionTraceText;
+    const displayContent = viewMode === 'trace'
+        ? (interactionTraceText || 'No multi-turn interaction trace is available for this response.')
+        : submittedContent;
     const displayIteration = displayedMessage?.iterationNumber;
+
+    useEffect(() => {
+        setViewMode('submitted');
+    }, [displayedMessage?.id, currentMessage?.id]);
 
     const navigateTo = (nextIndex: number) => {
         if (nextIndex === activeIndex || nextIndex < 0 || nextIndex >= messages.length) {
@@ -178,6 +188,24 @@ const EmbeddedModalViewer: React.FC<EmbeddedModalViewerProps> = ({
                         </div>
                     </div>
                     <div className="embedded-modal-header-controls" style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginLeft: 'auto' }}>
+                        {interactionTraceText && (
+                            <div className="embedded-modal-view-toggle" style={{ display: 'inline-flex', alignItems: 'center', gap: '.25rem' }}>
+                                <button
+                                    className={`modal-nav-btn ${viewMode === 'submitted' ? 'active' : ''}`}
+                                    title="View submitted artifact"
+                                    onClick={() => setViewMode('submitted')}
+                                >
+                                    Artifact
+                                </button>
+                                <button
+                                    className={`modal-nav-btn ${viewMode === 'trace' ? 'active' : ''}`}
+                                    title="View multi-turn interaction"
+                                    onClick={() => setViewMode('trace')}
+                                >
+                                    Trace
+                                </button>
+                            </div>
+                        )}
                         {hasNavigation && (
                             <>
                                 <button

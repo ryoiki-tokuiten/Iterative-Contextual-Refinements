@@ -3,10 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { MAX_HYPOTHESIS_COUNT } from './ModelConfig';
+
 export interface EvolvingDfsTokenEstimateInput {
     strategiesCount: number;
     hypothesisCount: number;
     evolvingDfsDepth: number;
+    isolateBranches?: boolean;
+    disableSolutionPool?: boolean;
 }
 
 export interface TokenRange {
@@ -49,11 +53,11 @@ interface TokenProfile {
     strategyUpdateOutput: number;
     finalJudgeOutput: number;
     updateBranchShare: number;
+    selectivePacketShare: number;
 }
 
 const MAX_EVOLVING_DFS_STRATEGIES = 5;
 const MAX_EVOLVING_DFS_DEPTH = 10;
-const MAX_HYPOTHESES = 6;
 const MEMORY_INTERVAL = 5;
 const HYPOTHESIS_HEARTBEAT_INTERVAL = 2;
 const PQF_GROUP_SIZE = 2;
@@ -80,6 +84,7 @@ const WORST_PROFILE: TokenProfile = {
     strategyUpdateOutput: 3_000,
     finalJudgeOutput: 5_000,
     updateBranchShare: 1,
+    selectivePacketShare: 1,
 };
 
 const AVERAGE_PROFILE: TokenProfile = {
@@ -102,6 +107,7 @@ const AVERAGE_PROFILE: TokenProfile = {
     strategyUpdateOutput: 800,
     finalJudgeOutput: 1_500,
     updateBranchShare: 0.2,
+    selectivePacketShare: 0.5,
 };
 
 function clampInteger(value: number, min: number, max: number): number {
@@ -125,7 +131,7 @@ function getPqfGroupSizes(strategyCount: number): number[] {
     return sizes;
 }
 
-function calculateApiCalls(strategyCount: number, hypothesisCount: number, depth: number): ApiCallRange {
+function calculateApiCalls(strategyCount: number, hypothesisCount: number, depth: number, disableSolutionPool: boolean): ApiCallRange {
     let min = 1; // Initial strategy generation
     let max = 1;
 
@@ -135,8 +141,9 @@ function calculateApiCalls(strategyCount: number, hypothesisCount: number, depth
         max += hypothesisRounds * (1 + hypothesisCount);
     }
 
-    min += strategyCount * depth * 3;
-    max += strategyCount * depth * 3;
+    const branchCallsPerDepth = disableSolutionPool ? 2 : 3;
+    min += strategyCount * depth * branchCallsPerDepth;
+    max += strategyCount * depth * branchCallsPerDepth;
 
     const maintenancePasses = Math.floor(depth / MEMORY_INTERVAL);
     const pqfAgentCount = Math.ceil(strategyCount / PQF_GROUP_SIZE);
@@ -164,18 +171,29 @@ function calculateHypothesisInput(profile: TokenProfile, strategyCount: number, 
     }, 0);
 }
 
-function calculateBranchInput(profile: TokenProfile, strategyCount: number, depth: number): number {
+function calculateBranchInput(
+    profile: TokenProfile,
+    strategyCount: number,
+    hypothesisCount: number,
+    depth: number,
+    isolateBranches: boolean,
+    disableSolutionPool: boolean
+): number {
     let input = 0;
+    const selectivePacketContext = hypothesisCount *
+        profile.hypothesisPacketContext *
+        profile.selectivePacketShare;
 
     for (let currentDepth = 1; currentDepth <= depth; currentDepth++) {
         if (currentDepth === 1) {
-            input += strategyCount * profile.initialExecutionInput;
+            input += strategyCount * (profile.initialExecutionInput + selectivePacketContext);
         } else {
             const currentHistoryPairs = Math.min(currentDepth - 1, MEMORY_INTERVAL);
             const correctionInput = Math.min(
-                ((strategyCount - 1) * profile.branchPairContext) +
+                (isolateBranches ? 0 : (strategyCount - 1) * profile.branchPairContext) +
                 (currentHistoryPairs * profile.branchPairContext) +
-                profile.poolContext,
+                (disableSolutionPool ? 0 : profile.poolContext) +
+                selectivePacketContext,
                 CORRECTOR_CONTEXT_CEILING
             );
             input += strategyCount * correctionInput;
@@ -184,14 +202,18 @@ function calculateBranchInput(profile: TokenProfile, strategyCount: number, dept
         const critiqueHistoryPairs = Math.min(currentDepth - 1, MEMORY_INTERVAL);
         input += strategyCount * (profile.solutionContext + (critiqueHistoryPairs * profile.branchPairContext));
 
-        const poolContextCount = currentDepth === 1
-            ? 0
-            : (strategyCount - 1) + Math.min(currentDepth - 1, MEMORY_INTERVAL);
-        const poolInput = Math.min(
-            profile.branchPairContext + (poolContextCount * profile.poolContext),
-            SOLUTION_POOL_CONTEXT_CEILING
-        );
-        input += strategyCount * poolInput;
+        if (!disableSolutionPool) {
+            const poolContextCount = currentDepth === 1
+                ? 0
+                : (isolateBranches ? 0 : strategyCount - 1) + Math.min(currentDepth - 1, MEMORY_INTERVAL);
+            const poolInput = Math.min(
+                profile.branchPairContext +
+                (poolContextCount * profile.poolContext) +
+                selectivePacketContext,
+                SOLUTION_POOL_CONTEXT_CEILING
+            );
+            input += strategyCount * poolInput;
+        }
     }
 
     return input;
@@ -226,20 +248,33 @@ function calculateMaintenanceInput(profile: TokenProfile, strategyCount: number,
     return input;
 }
 
-function calculateInputTokens(profile: TokenProfile, strategyCount: number, hypothesisCount: number, depth: number): number {
+function calculateInputTokens(
+    profile: TokenProfile,
+    strategyCount: number,
+    hypothesisCount: number,
+    depth: number,
+    isolateBranches: boolean,
+    disableSolutionPool: boolean
+): number {
     const strategyGenerationInput = profile.promptBase + (strategyCount * 500);
     const finalJudgeInput = profile.promptBase + (strategyCount * profile.solutionContext);
 
     return Math.round(
         strategyGenerationInput +
         calculateHypothesisInput(profile, strategyCount, hypothesisCount, depth) +
-        calculateBranchInput(profile, strategyCount, depth) +
+        calculateBranchInput(profile, strategyCount, hypothesisCount, depth, isolateBranches, disableSolutionPool) +
         calculateMaintenanceInput(profile, strategyCount, depth) +
         finalJudgeInput
     );
 }
 
-function calculateOutputTokens(profile: TokenProfile, strategyCount: number, hypothesisCount: number, depth: number): number {
+function calculateOutputTokens(
+    profile: TokenProfile,
+    strategyCount: number,
+    hypothesisCount: number,
+    depth: number,
+    disableSolutionPool: boolean
+): number {
     const hypothesisRounds = hypothesisCount > 0 ? getHypothesisRoundGlobals(depth).length : 0;
     const maintenancePasses = Math.floor(depth / MEMORY_INTERVAL);
     const pqfAgentCount = Math.ceil(strategyCount / PQF_GROUP_SIZE);
@@ -248,7 +283,7 @@ function calculateOutputTokens(profile: TokenProfile, strategyCount: number, hyp
     const branchOutput = strategyCount * depth * (
         profile.solutionOutput +
         profile.critiqueOutput +
-        profile.poolOutput
+        (disableSolutionPool ? 0 : profile.poolOutput)
     );
 
     const maintenanceOutput = maintenancePasses * (
@@ -272,13 +307,15 @@ function calculateOutputTokens(profile: TokenProfile, strategyCount: number, hyp
 
 export function calculateEvolvingDfsTokenEstimate(args: EvolvingDfsTokenEstimateInput): EvolvingDfsTokenEstimate {
     const strategiesCount = clampInteger(args.strategiesCount, 1, MAX_EVOLVING_DFS_STRATEGIES);
-    const hypothesisCount = clampInteger(args.hypothesisCount, 0, MAX_HYPOTHESES);
+    const hypothesisCount = clampInteger(args.hypothesisCount, 0, MAX_HYPOTHESIS_COUNT);
     const depth = clampInteger(args.evolvingDfsDepth, 1, MAX_EVOLVING_DFS_DEPTH);
+    const isolateBranches = args.isolateBranches === true;
+    const disableSolutionPool = args.disableSolutionPool === true;
 
-    const averageInput = calculateInputTokens(AVERAGE_PROFILE, strategiesCount, hypothesisCount, depth);
-    const worstInput = calculateInputTokens(WORST_PROFILE, strategiesCount, hypothesisCount, depth);
-    const averageOutput = calculateOutputTokens(AVERAGE_PROFILE, strategiesCount, hypothesisCount, depth);
-    const worstOutput = calculateOutputTokens(WORST_PROFILE, strategiesCount, hypothesisCount, depth);
+    const averageInput = calculateInputTokens(AVERAGE_PROFILE, strategiesCount, hypothesisCount, depth, isolateBranches, disableSolutionPool);
+    const worstInput = calculateInputTokens(WORST_PROFILE, strategiesCount, hypothesisCount, depth, isolateBranches, disableSolutionPool);
+    const averageOutput = calculateOutputTokens(AVERAGE_PROFILE, strategiesCount, hypothesisCount, depth, disableSolutionPool);
+    const worstOutput = calculateOutputTokens(WORST_PROFILE, strategiesCount, hypothesisCount, depth, disableSolutionPool);
 
     return {
         depth,
@@ -296,7 +333,7 @@ export function calculateEvolvingDfsTokenEstimate(args: EvolvingDfsTokenEstimate
             average: averageInput + averageOutput,
             worst: worstInput + worstOutput,
         },
-        apiCalls: calculateApiCalls(strategiesCount, hypothesisCount, depth),
+        apiCalls: calculateApiCalls(strategiesCount, hypothesisCount, depth, disableSolutionPool),
     };
 }
 

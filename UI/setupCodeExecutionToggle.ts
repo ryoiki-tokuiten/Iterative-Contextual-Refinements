@@ -18,7 +18,7 @@ export function getGeminiCodeExecutionEnabled(): boolean {
     return globalState.geminiCodeExecutionEnabled;
 }
 
-export function getPythonToolExecutionEnabled(): boolean {
+export function getSandboxToolExecutionEnabled(): boolean {
     return globalState.geminiCodeExecutionEnabled;
 }
 
@@ -26,7 +26,7 @@ export function setGeminiCodeExecutionEnabled(enabled: boolean): void {
     globalState.geminiCodeExecutionEnabled = enabled;
 }
 
-export function setPythonToolExecutionEnabled(enabled: boolean): void {
+export function setSandboxToolExecutionEnabled(enabled: boolean): void {
     globalState.geminiCodeExecutionEnabled = enabled;
 }
 

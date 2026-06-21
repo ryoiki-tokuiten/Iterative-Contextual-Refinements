@@ -3,13 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { callAI, getSelectedModel, getSelectedTemperature, getSelectedTopP, getSelectedThinkingLevel } from '../Routing';
+import { callAI, getSelectedModel, getSelectedTemperature, getSelectedTopP } from '../Routing';
 import { updateControlsState } from '../UI/Controls';
 import { globalState } from '../Core/State';
 import { CustomizablePromptsContextual } from './ContextualPrompts';
-import { isContextualPythonToolEnabled, runContextualPythonToolAgent } from './ContextualPythonToolRuntime';
+import { isContextualSandboxToolEnabled, runContextualSandboxToolAgent, snapshotSandboxRepositoryById, type SandboxRepositoryAccess } from '../Core/SandboxToolRuntime';
 import { BaseMessage, HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages';
 import { messageContentToText } from '../Core/LangGraphToolRuntime';
+import { describeProviderError } from '../Core/ProviderError';
 
 export interface ContentHistoryEntry {
     content: string;
@@ -21,7 +22,6 @@ export interface HistoryMessage {
     role: 'system' | 'assistant' | 'user';
     content: string;
     rawParts?: any[];
-    loopMessages?: any[];
 }
 
 export interface ContextualState {
@@ -29,6 +29,7 @@ export interface ContextualState {
     initialUserRequest: string;
     initialMainGeneration: string;
     currentBestGeneration: string;
+    currentBestGenerationTraceText?: string;
     currentBestSuggestions: string;
     allIterativeSuggestions: string[];
     mainGeneratorHistory: HistoryMessage[];
@@ -65,6 +66,7 @@ export interface ContextualMessage {
     status?: 'success' | 'error' | 'processing';
     blocks?: ContextualSystemBlock[];
     codeExecution?: CodeExecutionPart[];
+    interactionTraceText?: string;
 }
 
 export interface IterationData {
@@ -78,7 +80,7 @@ interface ContextualAgentCallResult {
     promptText?: string;
     finalText: string;
     geminiContent?: any;
-    loopMessages?: any[];
+    interactionTraceText?: string;
 }
 
 export interface MemorySnapshot {
@@ -129,21 +131,93 @@ function newMessageId(prefix: string): string {
     return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function getContextualPythonSessionId(agentName: string): string {
+function buildInitialContextualRequest(initialUserRequest: string): string {
+    if (isContextualSandboxToolEnabled()) return `Initial User Request:\n${initialUserRequest}`;
+    const textFiles = globalState.directContextFiles.filter(file => file.mimeType.startsWith('text/') || file.mimeType === 'application/json');
+    if (!textFiles.length) return `Initial User Request:\n${initialUserRequest}`;
+    const decoder = new TextDecoder();
+    const directText = textFiles.map(file => {
+        try {
+            const binary = atob(file.base64);
+            return `\n\n--- ${file.name || 'uploaded text file'} ---\n${decoder.decode(Uint8Array.from(binary, char => char.charCodeAt(0)))}\n--- end file ---`;
+        } catch {
+            return `\n\n--- ${file.name || 'uploaded text file'} ---\n[Unable to decode file]`;
+        }
+    }).join('');
+    return `Initial User Request:\n${initialUserRequest}\n\nDirect context files:${directText}`;
+}
+
+function getContextualSandboxSessionId(agentName: string): string {
     if (!activeContextualState) return '';
     const safeName = agentName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     return `ctx-sess-${activeContextualState.id}-${safeName}`;
 }
 
-const MAX_RETRIES = 2;
-const INITIAL_DELAY_MS = 2000;
-const BACKOFF_FACTOR = 1.5;
+function getContextualSandboxRepositoryAccess(agentName: string): SandboxRepositoryAccess | undefined {
+    if (!activeContextualState) return undefined;
+
+    switch (agentName) {
+        case 'Main Generator':
+            return {
+                repositoryId: activeContextualState.id,
+                agentDirectory: 'Correction',
+                readableDirectories: ['Critique', 'SolutionPool', 'MemoryBank'],
+            };
+
+        case 'Iterative Agent':
+            return {
+                repositoryId: activeContextualState.id,
+                agentDirectory: 'Critique',
+                readableDirectories: ['Correction', 'MemoryBank'],
+            };
+
+        case 'Strategic Pool Agent':
+            return {
+                repositoryId: activeContextualState.id,
+                agentDirectory: 'SolutionPool',
+                readableDirectories: ['Correction', 'Critique', 'MemoryBank'],
+            };
+
+        case 'Memory Agent':
+            return {
+                repositoryId: activeContextualState.id,
+                agentDirectory: 'MemoryBank',
+                readableDirectories: ['Correction', 'Critique', 'SolutionPool'],
+            };
+
+        default:
+            return {
+                repositoryId: activeContextualState.id,
+                agentDirectory: agentName.replace(/[^a-zA-Z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '') || 'Agent',
+                readableDirectories: [],
+            };
+    }
+}
+
+const RETRY_DELAYS_MS = [30_000, 60_000, 5 * 60_000] as const;
+const MAX_RETRIES = RETRY_DELAYS_MS.length;
+const STANDARD_AGENT_TIMEOUT_MS = 15 * 60_000;
+const SANDBOX_AGENT_TIMEOUT_MS = 30 * 60_000;
 
 let mainGeneratorMessages: BaseMessage[] = [];
 let iterativeAgentMessages: BaseMessage[] = [];
 let strategicPoolMessages: BaseMessage[] = [];
 let turnsSinceLastCondense = 0;
 let condenseCount = 0;
+
+function getContextualRetryDelay(attempt: number): number {
+    return RETRY_DELAYS_MS[attempt] ?? 0;
+}
+
+function withContextualTimeout<T>(promise: Promise<T>, timeoutMs: number, agentName: string): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`Timeout after ${Math.round(timeoutMs / 60_000)} minutes: ${agentName}`)), timeoutMs);
+    });
+    return Promise.race([promise, timeout]).finally(() => {
+        if (timer) clearTimeout(timer);
+    });
+}
 
 export async function startContextualProcess(
     initialUserRequest: string,
@@ -164,15 +238,10 @@ export async function startContextualProcess(
     abortController = new AbortController();
 
     // Initialize the isolated histories
-    mainGeneratorMessages = [
-        new HumanMessage(`Initial User Request:\n${initialUserRequest}`)
-    ];
-    iterativeAgentMessages = [
-        new HumanMessage(`Initial User Request:\n${initialUserRequest}`)
-    ];
-    strategicPoolMessages = [
-        new HumanMessage(`Initial User Request:\n${initialUserRequest}`)
-    ];
+    const initialRequestMessage = buildInitialContextualRequest(initialUserRequest);
+    mainGeneratorMessages = [new HumanMessage(initialRequestMessage)];
+    iterativeAgentMessages = [new HumanMessage(initialRequestMessage)];
+    strategicPoolMessages = [new HumanMessage(initialRequestMessage)];
     
     turnsSinceLastCondense = 0;
     condenseCount = 0;
@@ -214,6 +283,15 @@ function getAgentPromptText(result: ContextualAgentCallResult): string {
     return result.promptText || result.text;
 }
 
+async function snapshotContextualIteration(iteration: number): Promise<void> {
+    if (!activeContextualState || !isContextualSandboxToolEnabled()) return;
+    try {
+        await snapshotSandboxRepositoryById(activeContextualState.id, `Contextual iteration ${iteration}`);
+    } catch (error) {
+        console.warn(`Failed to snapshot Contextual iteration ${iteration}:`, error);
+    }
+}
+
 async function runContextualLoop() {
     if (!activeContextualState || !globalState.isContextualRunning) return;
 
@@ -236,7 +314,7 @@ async function runContextualLoop() {
 
             const mainGeneration = mainGenerationResult.text;
             const mainGenerationPromptText = getAgentPromptText(mainGenerationResult);
-            const mainLoopMessages = mainGenerationResult.loopMessages || [new AIMessage(mainGenerationResult.text)];
+            const mainSubmittedMessage = new AIMessage(mainGenerationPromptText);
             
             if (activeContextualState.iterationCount === 1) {
                 activeContextualState.initialMainGeneration = mainGeneration;
@@ -255,15 +333,14 @@ async function runContextualLoop() {
                 content: mainGeneration,
                 timestamp: Date.now(),
                 iterationNumber: activeContextualState.iterationCount,
-                codeExecution: mainGenerationResult.geminiContent?.parts
+                codeExecution: mainGenerationResult.geminiContent?.parts,
+                interactionTraceText: mainGenerationResult.interactionTraceText
             };
             activeContextualState.messages.push(mainMsg);
             
-            // Distribute Main Generator's outputs
-            // 1. To its own history
-            mainGeneratorMessages.push(...mainLoopMessages);
-            // 2. To the Iterative Agent's history (as native messages, so it critiques its "own" work)
-            iterativeAgentMessages.push(...mainLoopMessages);
+            // Distribute only the submitted final output, never the private tool trajectory.
+            mainGeneratorMessages.push(mainSubmittedMessage);
+            iterativeAgentMessages.push(new HumanMessage(`Current Main Generator final output:\n${mainGenerationPromptText}`));
             
             if (onContentUpdated) {
                 try { onContentUpdated(mainGeneration); } catch { }
@@ -274,7 +351,7 @@ async function runContextualLoop() {
             // ---------------------------------------------------------
             // 2: ITERATIVE AGENT (CRITIQUE)
             // ---------------------------------------------------------
-            iterativeAgentMessages.push(new HumanMessage("Please critique the solution and tool executions you just generated above. If no tools were used, critique the generation text."));
+            iterativeAgentMessages.push(new HumanMessage("Please critique the submitted solution above, including any referenced artifacts that are relevant to the critique."));
             
             const suggestionsResult = await callContextualAgent('Iterative Agent', iterativeAgentMessages, contextualCustomPrompts!.sys_contextual_iterativeAgent);
 
@@ -282,7 +359,7 @@ async function runContextualLoop() {
 
             const suggestions = suggestionsResult.text;
             const suggestionsPromptText = getAgentPromptText(suggestionsResult);
-            const suggestionsLoopMessages = suggestionsResult.loopMessages || [new AIMessage(suggestionsResult.text)];
+            const suggestionsSubmittedMessage = new AIMessage(suggestionsPromptText);
 
             activeContextualState.currentBestSuggestions = suggestions;
             activeContextualState.allIterativeSuggestions.push(suggestions);
@@ -292,13 +369,13 @@ async function runContextualLoop() {
                 role: 'iterative_agent',
                 content: suggestions,
                 timestamp: Date.now(),
-                iterationNumber: activeContextualState.iterationCount
+                iterationNumber: activeContextualState.iterationCount,
+                interactionTraceText: suggestionsResult.interactionTraceText
             };
             activeContextualState.messages.push(iterMsg);
             
-            // Distribute Iterative Agent's outputs
-            // 1. To its own history
-            iterativeAgentMessages.push(...suggestionsLoopMessages);
+            // Keep only the submitted critique in the critique agent's own history.
+            iterativeAgentMessages.push(suggestionsSubmittedMessage);
 
             if (onStateUpdated) onStateUpdated({ ...activeContextualState });
             if (abortController?.signal.aborted || !globalState.isContextualRunning) break;
@@ -315,7 +392,7 @@ async function runContextualLoop() {
                 suggestionsPromptText,
                 '',
                 `## Deep Analysis Task`,
-                "Study the solution and tool executions above carefully:",
+                "Study the submitted solution, critique, and any referenced artifacts above carefully:",
                 '- What unexplored strategic territories remain?',
                 '',
                 '## Strategic Pool Evolution Task',
@@ -337,7 +414,7 @@ async function runContextualLoop() {
 
             const strategicPool = strategicPoolResult.text;
             const strategicPoolPromptText = getAgentPromptText(strategicPoolResult);
-            const stratLoopMessages = strategicPoolResult.loopMessages || [new AIMessage(strategicPoolResult.text)];
+            const stratSubmittedMessage = new AIMessage(strategicPoolPromptText);
 
             if ((strategicPoolResult.finalText || strategicPool).trim() === '<<<Exit>>>') {
                 const exitMsg: ContextualMessage = {
@@ -351,6 +428,7 @@ async function runContextualLoop() {
                 };
                 activeContextualState.messages.push(exitMsg);
                 activeContextualState.isProcessing = false;
+                await snapshotContextualIteration(activeContextualState.iterationCount);
                 if (onStateUpdated) onStateUpdated({ ...activeContextualState });
                 stopContextualProcess();
                 break;
@@ -364,13 +442,13 @@ async function runContextualLoop() {
                 role: 'strategic_pool_agent',
                 content: strategicPool,
                 timestamp: Date.now(),
-                iterationNumber: activeContextualState.iterationCount
+                iterationNumber: activeContextualState.iterationCount,
+                interactionTraceText: strategicPoolResult.interactionTraceText
             };
             activeContextualState.messages.push(stratMsg);
 
-            // Distribute Strategic Pool's outputs
-            // 1. To its own history (native messages)
-            strategicPoolMessages.push(...stratLoopMessages);
+            // Keep only the submitted pool output in the pool agent's own history.
+            strategicPoolMessages.push(stratSubmittedMessage);
 
             // ---------------------------------------------------------
             // 4: LOOP PREP & CONDENSATION
@@ -393,7 +471,7 @@ async function runContextualLoop() {
             if (turnsSinceLastCondense >= 10) {
                 // Build a fresh memory agent context
                 const completeIterations = activeContextualState.messages.filter(m => m.role === 'main_generator' || m.role === 'iterative_agent');
-                // The Memory Agent doesn't need to see the full raw loop messages, a formatted text summary is sufficient for condensation
+                // The Memory Agent only sees submitted outputs; private sandbox traces stay out of condensation.
                 const memoryPrompt = [
                     `Initial User Request:\n${activeContextualState.initialUserRequest}`,
                     '',
@@ -423,7 +501,8 @@ async function runContextualLoop() {
                         role: 'memory_agent',
                         content: memoryText,
                         timestamp: Date.now(),
-                        iterationNumber: activeContextualState.iterationCount
+                        iterationNumber: activeContextualState.iterationCount,
+                        interactionTraceText: memoryResult.interactionTraceText
                     };
                     activeContextualState.messages.push(memMsg);
                     
@@ -435,7 +514,7 @@ async function runContextualLoop() {
                         initialReqMessage,
                         memoryCondenseMessage,
                         new HumanMessage(`Latest Context:\n`),
-                        ...mainLoopMessages,
+                        mainSubmittedMessage,
                         new HumanMessage(combinedCritique)
                     ];
                     
@@ -443,16 +522,16 @@ async function runContextualLoop() {
                         initialReqMessage,
                         memoryCondenseMessage,
                         new HumanMessage(`Latest Context:\n`),
-                        ...mainLoopMessages,
-                        ...suggestionsLoopMessages
+                        new HumanMessage(`Current Main Generator final output:\n${mainGenerationPromptText}`),
+                        suggestionsSubmittedMessage
                     ];
                     
-                    // Strategic Pool doesn't strictly need condensation of old turns as it evaluates the current turn, but we'll reset it to avoid bloat
+                    // Strategic Pool evaluates the current submitted outputs, so reset to the latest submitted pool state.
                     strategicPoolMessages = [
                         initialReqMessage,
                         memoryCondenseMessage,
                         new HumanMessage(`Latest Strategic Pool Context:\n`),
-                        ...stratLoopMessages
+                        stratSubmittedMessage
                     ];
 
                     turnsSinceLastCondense = 0;
@@ -461,6 +540,7 @@ async function runContextualLoop() {
             }
 
             activeContextualState.isProcessing = false;
+            await snapshotContextualIteration(activeContextualState.iterationCount);
             if (onStateUpdated) onStateUpdated({ ...activeContextualState });
             if (abortController?.signal.aborted || !globalState.isContextualRunning) break;
 
@@ -510,6 +590,9 @@ async function callContextualAgent(
     const modelName = getSelectedModel();
     const temperature = getSelectedTemperature();
     const topP = getSelectedTopP();
+    const sandboxEnabled = isContextualSandboxToolEnabled();
+    const responseTimeoutMs = sandboxEnabled ? SANDBOX_AGENT_TIMEOUT_MS : STANDARD_AGENT_TIMEOUT_MS;
+    const startedAt = Date.now();
 
     let lastError: Error | null = null;
 
@@ -520,7 +603,7 @@ async function callContextualAgent(
 
         try {
             if (attempt > 0) {
-                const delay = INITIAL_DELAY_MS * Math.pow(BACKOFF_FACTOR, attempt - 1);
+                const delay = Math.min(getContextualRetryDelay(attempt - 1), Math.max(0, responseTimeoutMs - (Date.now() - startedAt)));
                 await new Promise((resolve, reject) => {
                     const timeout = setTimeout(resolve, delay);
                     if (abortController) {
@@ -534,16 +617,18 @@ async function callContextualAgent(
 
             if (!globalState.isContextualRunning) throw new Error('Process stopped by user');
 
-            if (isContextualPythonToolEnabled()) {
-                return await runContextualPythonToolAgent({
+            const remaining = Math.max(1, responseTimeoutMs - (Date.now() - startedAt));
+            if (sandboxEnabled) {
+                return await withContextualTimeout(runContextualSandboxToolAgent({
                     agentName,
-                    sessionId: getContextualPythonSessionId(agentName),
+                    sessionId: getContextualSandboxSessionId(agentName),
                     messages,
                     systemPrompt,
                     modelName,
                     temperature,
-                    topP
-                });
+                    topP,
+                    repositoryAccess: getContextualSandboxRepositoryAccess(agentName)
+                }), remaining, agentName);
             }
 
             // Fallback: convert BaseMessage[] to StructuredMessage[] for standard callAI
@@ -557,33 +642,34 @@ async function callContextualAgent(
                 };
             });
 
-            const result = await callAI(
+            const result = await withContextualTimeout(callAI(
                 structuredMessages,
                 temperature,
                 modelName,
                 systemPrompt,
                 false,
                 topP
-            );
+            ), remaining, agentName);
 
             const text = result.text || '';
             return {
                 text,
                 promptText: text,
                 finalText: text,
-                geminiContent: undefined,
-                loopMessages: [new AIMessage(text)]
+                geminiContent: undefined
             };
 
         } catch (error) {
-            lastError = error instanceof Error ? error : new Error(String(error));
+            const providerErrorMessage = describeProviderError(error);
+            lastError = new Error(providerErrorMessage);
             console.warn(`${agentName} call attempt ${attempt + 1}/${MAX_RETRIES + 1} failed:`, lastError.message);
+            const deadlineReached = Date.now() - startedAt >= responseTimeoutMs;
 
-            if (attempt < MAX_RETRIES && activeContextualState) {
+            if (attempt < MAX_RETRIES && !deadlineReached && activeContextualState) {
                 const retryMsg: ContextualMessage = {
                     id: newMessageId('system'),
                     role: 'system',
-                    content: `${agentName} call failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}): ${lastError.message}. Retrying in ${INITIAL_DELAY_MS * Math.pow(BACKOFF_FACTOR, attempt) / 1000}s...`,
+                    content: `${agentName} call failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}): ${lastError.message}. Retrying in ${getContextualRetryDelay(attempt) / 1000}s...`,
                     timestamp: Date.now(),
                     iterationNumber: activeContextualState.iterationCount,
                     status: 'error',
@@ -593,7 +679,7 @@ async function callContextualAgent(
                 if (onStateUpdated) onStateUpdated({ ...activeContextualState });
             }
 
-            if (attempt === MAX_RETRIES) break;
+            if (attempt === MAX_RETRIES || deadlineReached) break;
         }
     }
 

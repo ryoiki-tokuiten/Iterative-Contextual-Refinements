@@ -488,6 +488,7 @@ export class ProviderManagementUI {
         const icons: Record<string, string> = {
             gemini: '<img src="./Logos/Google.png" alt="Google Gemini" class="provider-logo">',
             openai: '<img src="./Logos/OpenAI.png" alt="OpenAI" class="provider-logo">',
+            nvidia: '<img src="./Logos/Nvidia.png" alt="NVIDIA" class="provider-logo">',
             anthropic: '<img src="./Logos/Anthropic.png" alt="Anthropic" class="provider-logo">',
             openrouter: '<img src="./Logos/Openrouter.png" alt="OpenRouter" class="provider-logo">',
             local: '<img src="./Logos/Local.png" alt="Local Models" class="provider-logo">'
@@ -505,6 +506,8 @@ export class ProviderManagementUI {
                 return provider.apiKey === (process.env.GEMINI_API_KEY || process.env.AI_API_KEY || process.env.API_KEY);
             case 'openai':
                 return provider.apiKey === process.env.OPENAI_API_KEY;
+            case 'nvidia':
+                return provider.apiKey === process.env.NVIDIA_API_KEY;
             case 'anthropic':
                 return provider.apiKey === process.env.ANTHROPIC_API_KEY;
             case 'openrouter':

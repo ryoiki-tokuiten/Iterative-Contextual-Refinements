@@ -102,6 +102,17 @@
     border-bottom-color: rgba(138, 127, 248, 0.5);
 }
 
+.latex-content-wrapper a.sandbox-artifact-link {
+    color: var(--accent-blue);
+    border-bottom-color: rgba(41, 121, 255, 0.35);
+}
+
+.latex-content-wrapper a.sandbox-artifact-link:hover {
+    color: var(--accent-blue);
+    text-shadow: 0 0 8px rgba(41, 121, 255, 0.35);
+    border-bottom-color: rgba(41, 121, 255, 0.65);
+}
+
 .latex-content-wrapper a::after {
     content: '';
     position: absolute;
@@ -827,13 +838,11 @@ body.light-mode .latex-content-wrapper a::after {
     border: 1px solid rgba(148, 163, 184, 0.12);
     border-radius: 14px;
     overflow: hidden;
-    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .exec-image-item:hover {
-    transform: translateY(-1px);
-    border-color: rgba(148, 163, 184, 0.24);
-    box-shadow: 0 12px 26px rgba(2, 6, 23, 0.18);
+    /* Hover effects removed by request */
 }
 
 .exec-rendered-image {
@@ -896,8 +905,7 @@ body.light-mode .exec-image-item {
 }
 
 body.light-mode .exec-image-item:hover {
-    border-color: rgba(15, 23, 42, 0.12);
-    box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+    /* Hover effects removed by request */
 }
 
 body.light-mode .exec-image-error {
@@ -916,12 +924,11 @@ body.light-mode .exec-image-error {
     border-radius: 8px;
     margin: 1rem 0;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: box-shadow 0.2s ease;
 }
 
 .markdown-image:hover {
-    transform: scale(1.01);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    /* Hover effects removed by request */
 }
 
 .markdown-image.image-error {
@@ -952,7 +959,7 @@ body.light-mode .markdown-image {
 }
 
 body.light-mode .markdown-image:hover {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    /* Hover effects removed by request */
 }
 
 body.light-mode .markdown-image.image-error,

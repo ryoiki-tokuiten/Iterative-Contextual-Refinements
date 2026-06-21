@@ -5,6 +5,7 @@
 
 import { callAI } from './AIService';
 import { renderIconMarkup } from '../UI/Icons';
+import { describeProviderError } from '../Core/ProviderError';
 
 export interface PromptRefinerConfig {
     agentName: string;
@@ -323,7 +324,7 @@ export class PromptRefiner {
             this.hide();
         } catch (error) {
             console.error('Error refining prompt:', error);
-            this.showError('Failed to refine prompt. Please try again.');
+            this.showError(describeProviderError(error));
         } finally {
             this.isRefining = false;
             if (refineBtn) refineBtn.disabled = false;

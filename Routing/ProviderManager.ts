@@ -24,12 +24,14 @@ const DEFAULT_MODELS: Record<string, string[]> = {
     gemini: [],
     openrouter: [],
     anthropic: [],
-    openai: []
+    openai: [],
+    nvidia: []
 };
 
 export class ProviderManager {
     private providers: Map<string, ProviderConfig> = new Map();
     private activeProviders: Map<string, AIProvider> = new Map();
+    private imageInputSupportByModel: Map<string, boolean> = new Map();
     private modelUpdateListeners: (() => void)[] = [];
 
     constructor() {
@@ -64,6 +66,13 @@ export class ProviderManager {
             name: 'openai',
             displayName: 'OpenAI',
             models: [...DEFAULT_MODELS.openai],
+            isConfigured: false
+        });
+
+        this.providers.set('nvidia', {
+            name: 'nvidia',
+            displayName: 'NVIDIA',
+            models: [...DEFAULT_MODELS.nvidia],
             isConfigured: false
         });
 
@@ -135,6 +144,14 @@ export class ProviderManager {
             config.apiKey = openrouterKey;
             config.isConfigured = true;
         }
+
+        // Check for NVIDIA API key
+        const nvidiaKey = process.env.NVIDIA_API_KEY;
+        if (nvidiaKey) {
+            const config = this.providers.get('nvidia')!;
+            config.apiKey = nvidiaKey;
+            config.isConfigured = true;
+        }
     }
 
     private initializeConfiguredProviders(): void {
@@ -151,7 +168,7 @@ export class ProviderManager {
 
                     if (provider.initialize(initString)) {
                         this.activeProviders.set(name, provider);
-                        if (['gemini', 'openai', 'anthropic', 'openrouter'].includes(name)) {
+                        if (['gemini', 'openai', 'anthropic', 'openrouter', 'nvidia'].includes(name)) {
                             fetchPromises.push(
                                 this.fetchAndSetProviderModels(name).catch(err => {
                                     console.error(`Async fetch of ${name} models failed:`, err);
@@ -196,6 +213,8 @@ export class ProviderManager {
                 return config.apiKey === process.env.ANTHROPIC_API_KEY;
             case 'openrouter':
                 return config.apiKey === process.env.OPENROUTER_API_KEY;
+            case 'nvidia':
+                return config.apiKey === process.env.NVIDIA_API_KEY;
             default:
                 return false;
         }
@@ -230,7 +249,7 @@ export class ProviderManager {
                 this.activeProviders.set(providerName, provider);
                 this.saveToStorage();
 
-                if (['gemini', 'openai', 'anthropic', 'openrouter'].includes(providerName)) {
+                if (['gemini', 'openai', 'anthropic', 'openrouter', 'nvidia'].includes(providerName)) {
                     this.fetchAndSetProviderModels(providerName).catch(err => {
                         console.error(`Async configure fetch of ${providerName} models failed:`, err);
                     });
@@ -291,6 +310,16 @@ export class ProviderManager {
         return this.getProviderConfig(providerName);
     }
 
+    /**
+     * Returns a provider-published capability when available. `null` means
+     * the provider's model API does not expose a reliable answer.
+     */
+    public getImageInputSupportForModel(modelId: string): boolean | null {
+        const providerName = this.getProviderNameForModel(modelId);
+        if (!providerName) return null;
+        return this.imageInputSupportByModel.get(`${providerName}:${modelId}`) ?? null;
+    }
+
     public getAllProviders(): ProviderConfig[] {
         return Array.from(this.providers.values());
     }
@@ -348,11 +377,21 @@ export class ProviderManager {
         }
 
         try {
-            const models = await (provider as any).listModels();
+            const models = await (provider as AIProvider).listModels!();
             if (models && models.length > 0) {
                 const config = this.providers.get(providerName);
                 if (config) {
-                    config.models = models;
+                    for (const key of this.imageInputSupportByModel.keys()) {
+                        if (key.startsWith(`${providerName}:`)) this.imageInputSupportByModel.delete(key);
+                    }
+
+                    config.models = models.map(model => {
+                        if (typeof model === 'string') return model;
+                        if (typeof model.supportsImageInput === 'boolean') {
+                            this.imageInputSupportByModel.set(`${providerName}:${model.id}`, model.supportsImageInput);
+                        }
+                        return model.id;
+                    });
                     this.saveToStorage();
                     this.notifyModelUpdateListeners();
                 }

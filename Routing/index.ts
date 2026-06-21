@@ -102,6 +102,14 @@ export function getEvolvingDfsDepth(): number {
     return getRoutingManager().getEvolvingDfsDepth();
 }
 
+export function getIsolateBranchesEnabled(): boolean {
+    return getRoutingManager().isIsolateBranchesEnabled();
+}
+
+export function getSolutionPoolDisabled(): boolean {
+    return getRoutingManager().isSolutionPoolDisabled();
+}
+
 export function getProvideAllSolutionsToCorrectors(): boolean {
     return getRoutingManager().isProvideAllSolutionsToCorrectors();
 }

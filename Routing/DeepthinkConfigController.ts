@@ -10,7 +10,7 @@
  * 3. Never implement business logic themselves
  */
 
-import { ModelConfigManager } from './ModelConfig';
+import { MAX_HYPOTHESIS_COUNT, ModelConfigManager } from './ModelConfig';
 
 export interface DeepthinkConfigState {
     strategiesCount: number;
@@ -24,6 +24,8 @@ export interface DeepthinkConfigState {
     dissectedObservationsEnabled: boolean;
     evolvingDfsEnabled: boolean;
     evolvingDfsDepth: number;
+    isolateBranches: boolean;
+    disableSolutionPool: boolean;
     provideAllSolutionsEnabled: boolean;
     temperature: number;
     topP: number;
@@ -58,7 +60,7 @@ export class DeepthinkConfigController extends EventTarget {
         return {
             strategiesCount: params.strategiesCount,
             subStrategiesCount: params.subStrategiesCount,
-            hypothesisCount: params.hypothesisCount,
+            hypothesisCount: this.modelConfig.getHypothesisCount(),
             skipSubStrategies: params.skipSubStrategies,
             hypothesisEnabled: params.hypothesisCount > 0,
             pqfMode: params.pqfAggressiveness,
@@ -67,6 +69,8 @@ export class DeepthinkConfigController extends EventTarget {
             dissectedObservationsEnabled: params.dissectedObservationsEnabled,
             evolvingDfsEnabled: params.evolvingDfsEnabled,
             evolvingDfsDepth: params.evolvingDfsDepth,
+            isolateBranches: params.isolateBranches === true,
+            disableSolutionPool: params.disableSolutionPool === true,
             provideAllSolutionsEnabled: params.provideAllSolutionsToCorrectors,
             temperature: params.temperature,
             topP: params.topP,
@@ -128,6 +132,14 @@ export class DeepthinkConfigController extends EventTarget {
 
     public getEvolvingDfsDepth(): number {
         return this.modelConfig.getEvolvingDfsDepth();
+    }
+
+    public isIsolateBranchesEnabled(): boolean {
+        return this.modelConfig.isIsolateBranchesEnabled();
+    }
+
+    public isSolutionPoolDisabled(): boolean {
+        return this.modelConfig.isSolutionPoolDisabled();
     }
 
     public isCodeExecutionEnabled(): boolean {
@@ -193,7 +205,7 @@ export class DeepthinkConfigController extends EventTarget {
      * Setting to 0 effectively disables hypothesis.
      */
     public setHypothesisCount(count: number): void {
-        const clampedCount = Math.max(0, Math.min(count, 6));
+        const clampedCount = Math.max(0, Math.min(count, MAX_HYPOTHESIS_COUNT));
         this.modelConfig.updateParameter('hypothesisCount', clampedCount);
         this.emitChange('hypothesisCount');
     }
@@ -335,6 +347,30 @@ export class DeepthinkConfigController extends EventTarget {
     }
 
     /**
+     * Keep correction and solution-pool context local to each Evolving DFS branch.
+     */
+    public setIsolateBranchesEnabled(enabled: boolean): void {
+        if (!this.isEvolvingDfsEnabled()) {
+            return;
+        }
+
+        this.modelConfig.updateParameter('isolateBranches', enabled);
+        this.emitChange('isolateBranches');
+    }
+
+    /**
+     * Skip solution-pool agent calls while preserving the Evolving DFS stage lifecycle.
+     */
+    public setSolutionPoolDisabled(disabled: boolean): void {
+        if (!this.isEvolvingDfsEnabled()) {
+            return;
+        }
+
+        this.modelConfig.updateParameter('disableSolutionPool', disabled);
+        this.emitChange('disableSolutionPool');
+    }
+
+    /**
      * Set provide all solutions to correctors (full context) enabled.
      * Can only be enabled if refinement is on AND Evolving Depth First Search is off.
      */
@@ -379,7 +415,7 @@ export class DeepthinkConfigController extends EventTarget {
     }
 
     /**
-     * Set backend Python tool access for eligible Deepthink agents.
+     * Set backend sandbox tool access for every Deepthink agent.
      */
     public setCodeExecutionEnabled(enabled: boolean): void {
         this.modelConfig.updateParameter('deepthinkCodeExecutionEnabled', enabled);

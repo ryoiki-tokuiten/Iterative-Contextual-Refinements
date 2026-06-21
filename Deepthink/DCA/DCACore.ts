@@ -5,6 +5,7 @@
 
 import { nanoid } from 'nanoid';
 import { globalState } from '../../Core/State';
+import { describeProviderError } from '../../Core/ProviderError';
 import { callAI, getSelectedModel, getSelectedTemperature, getSelectedTopP } from '../../Routing';
 import { parseJsonSafe } from "../../Core/JsonParser";
 import { updateControlsState } from '../../UI/Controls';
@@ -124,7 +125,7 @@ export async function startDCAProcess(problem: string) {
     } catch (error: any) {
         if (activeDCAPipeline) {
             activeDCAPipeline.status = 'error';
-            activeDCAPipeline.error = error.message;
+            activeDCAPipeline.error = describeProviderError(error);
         }
     } finally {
         globalState.isDCARunning = false;

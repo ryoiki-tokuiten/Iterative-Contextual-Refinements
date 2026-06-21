@@ -10,7 +10,18 @@ class GlobalStateManager {
     currentMode: ApplicationMode = 'deepthink';
     activeDeepthinkPipeline: DeepthinkPipelineState | null = null;
     isGenerating: boolean = false;
-    currentProblemImages: Array<{ base64: string, mimeType: string, name?: string, size?: number }> = [];
+    /** Files injected into the model's initial context. `currentProblemImages`
+     * remains as a compatibility alias for older Deepthink integrations. */
+    directContextFiles: Array<{ base64: string, mimeType: string, name?: string, size?: number }> = [];
+    filesystemContextFiles: Array<{ base64: string, mimeType: string, name?: string, size?: number }> = [];
+
+    get currentProblemImages() {
+        return this.directContextFiles;
+    }
+
+    set currentProblemImages(files: Array<{ base64: string, mimeType: string, name?: string, size?: number }>) {
+        this.directContextFiles = files;
+    }
     isCustomPromptsOpen: boolean = false;
 
     // Mode running states
@@ -19,7 +30,7 @@ class GlobalStateManager {
     isAdaptiveDeepthinkRunning: boolean = false;
     isDCARunning: boolean = false;
 
-    // Contextual Python tool environment toggle. Kept under the existing field
+    // Contextual sandbox tool environment toggle. Kept under the existing field
     // name so imported configs and UI wiring remain backward compatible.
     geminiCodeExecutionEnabled: boolean = false;
 

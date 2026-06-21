@@ -7,6 +7,7 @@
  */
 
 import { Part, GenerateContentResponse } from "@google/genai";
+import { describeProviderError } from '../Core/ProviderError';
 
 // Agent response interface
 export interface AgentResponse {
@@ -147,7 +148,7 @@ async function wrapAgent(fn: () => Promise<AgentResponse>): Promise<AgentRespons
     try {
         return await fn();
     } catch (error) {
-        return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+        return { success: false, error: describeProviderError(error) };
     }
 }
 

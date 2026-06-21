@@ -7,6 +7,92 @@
     margin-top: 0.5rem;
 }
 
+.upload-context-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 12px;
+    background: rgba(15, 17, 32, 0.18);
+    transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.upload-context-section.is-file-drag-target {
+    border-color: var(--accent-purple, #8b5cf6);
+    background: rgba(var(--accent-purple-rgb, 139, 92, 246), 0.08);
+    transform: translateY(-1px);
+}
+
+.upload-context-heading h4 {
+    margin: 0;
+    font-size: 0.82rem;
+    color: var(--text-color, #e2e8f0);
+}
+
+.upload-context-heading p {
+    margin: 0.2rem 0 0;
+    font-size: 0.68rem;
+    color: var(--text-secondary-color, #94a3b8);
+    line-height: 1.35;
+}
+
+.filesystem-context-section .file-drop-zone {
+    border-color: rgba(6, 182, 212, 0.35);
+}
+
+.context-limit-status {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.4rem;
+    font-size: 0.66rem;
+    color: var(--text-secondary-color, #94a3b8);
+}
+
+.context-limit-status.limit-exceeded {
+    color: var(--accent-pink, #ef4444);
+    font-weight: 600;
+}
+
+.image-capability-indicator {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+    padding: 0.4rem 0.5rem;
+    border: 1px solid rgba(var(--accent-yellow-rgb, 245, 158, 11), 0.3);
+    border-radius: 7px;
+    background: rgba(var(--accent-yellow-rgb, 245, 158, 11), 0.08);
+    color: var(--text-secondary-color, #94a3b8);
+    font-size: 0.65rem;
+    line-height: 1.35;
+}
+
+.image-capability-indicator .icon-slot {
+    flex: 0 0 auto;
+    margin-top: 0.02rem;
+    color: var(--accent-yellow, #f59e0b);
+    font-size: 0.85rem;
+}
+
+.image-capability-indicator.supported {
+    border-color: rgba(var(--accent-green-rgb, 16, 185, 129), 0.32);
+    background: rgba(var(--accent-green-rgb, 16, 185, 129), 0.08);
+}
+
+.image-capability-indicator.supported .icon-slot {
+    color: var(--accent-green, #10b981);
+}
+
+.image-capability-indicator.unsupported {
+    border-color: rgba(var(--accent-pink-rgb, 239, 68, 68), 0.38);
+    background: rgba(var(--accent-pink-rgb, 239, 68, 68), 0.08);
+    color: var(--accent-pink, #ef4444);
+}
+
+.image-capability-indicator.unsupported .icon-slot {
+    color: inherit;
+}
+
 /* Drop Zone */
 .file-drop-zone {
     border: 2px dashed var(--border-color, rgba(139, 92, 246, 0.3));
@@ -30,6 +116,19 @@
 
 .file-drop-zone.has-files {
     padding: 0.75rem;
+}
+
+/* The filesystem section is deliberately compact: it is a large-capacity
+ * staging area, not a second competing primary upload surface. */
+.compact-upload-control {
+    min-height: 0;
+    padding: 0.6rem 0.75rem;
+    border-width: 1px;
+    border-radius: 9px;
+}
+
+.compact-upload-control .drop-zone-mini {
+    min-height: 1.1rem;
 }
 
 /* Light mode overrides for drop zone */
@@ -176,8 +275,9 @@ body.light-mode .file-list-container {
     border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
     border-radius: 10px;
     overflow: hidden;
-    transition: all 0.2s ease;
     cursor: pointer;
+    touch-action: none;
+    user-select: none;
 }
 
 /* Light mode card adjustment */
@@ -187,10 +287,47 @@ body.light-mode .file-card {
     backdrop-filter: var(--card-blur-effect);
 }
 
-.file-card:hover {
-    border-color: var(--accent-purple, rgba(139, 92, 246, 0.4));
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+.file-card.is-dragging {
+    opacity: 0.18;
+    transform: scale(0.96);
+    transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.file-drag-ghost {
+    position: fixed;
+    z-index: 100001;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: min(260px, 70vw);
+    padding: 0.55rem 0.75rem;
+    pointer-events: none;
+    color: var(--text-color, #e2e8f0);
+    background: var(--background-primary, #0f1120);
+    border: 1px solid rgba(var(--accent-purple-rgb, 139, 92, 246), 0.7);
+    border-radius: 9px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
+    font-size: 0.72rem;
+    font-weight: 600;
+    will-change: transform;
+    animation: file-drag-ghost-in 140ms ease-out;
+}
+
+.file-drag-ghost .icon-slot {
+    flex: 0 0 auto;
+    font-size: 1rem;
+    color: var(--accent-purple, #8b5cf6);
+}
+
+.file-drag-ghost span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+@keyframes file-drag-ghost-in {
+    from { opacity: 0; scale: 0.94; }
+    to { opacity: 1; scale: 1; }
 }
 
 /* File remove button - guaranteed perfect circle */
@@ -325,7 +462,9 @@ body.light-mode .file-card {
 .file-preview-modal {
     display: flex;
     flex-direction: column;
-    max-width: 90vw;
+    width: min(1100px, 94vw);
+    height: min(820px, 90vh);
+    max-width: 94vw;
     max-height: 90vh;
     background: var(--background-primary, #0f1120);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -418,12 +557,11 @@ body.light-mode .file-card {
 .preview-modal-content {
     flex: 1;
     display: flex;
-    align-items: center;
-    justify-content: center;
+    min-height: 0;
+    align-items: stretch;
+    justify-content: stretch;
     overflow: auto;
-    padding: 1.5rem;
-    min-height: 300px;
-    max-height: calc(90vh - 80px);
+    padding: 1rem;
     background: rgba(0, 0, 0, 0.2);
 }
 
@@ -448,35 +586,24 @@ body.light-mode .file-card {
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
 }
 
-.preview-video {
-    max-width: 100%;
-    max-height: 100%;
-    border-radius: 8px;
-    outline: none;
-}
-
-.preview-pdf {
-    width: 800px;
-    max-width: 100%;
-    height: 70vh;
-    border: none;
-    border-radius: 8px;
-    background: white;
-}
-
 .preview-code {
     width: 100%;
-    max-height: 100%;
+    height: 100%;
+    min-height: 0;
+    box-sizing: border-box;
+    margin: 0;
     overflow: auto;
-    padding: 1.5rem;
+    padding: 1rem 1.25rem;
     background: rgba(0, 0, 0, 0.4);
     border-radius: 8px;
     font-family: 'JetBrains Mono', 'Fira Code', monospace;
     font-size: 0.8rem;
     line-height: 1.6;
     color: #e2e8f0;
-    white-space: pre-wrap;
-    word-break: break-word;
+    text-align: left;
+    white-space: pre;
+    overflow-wrap: normal;
+    tab-size: 4;
 }
 
 .preview-unsupported {
@@ -507,7 +634,6 @@ body.light-mode .file-card {
     box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
 }
 
-/* Preview overlay on file cards */
 .file-preview-thumb {
     position: relative;
     width: 100%;
@@ -517,26 +643,6 @@ body.light-mode .file-card {
     justify-content: center;
     background: rgba(0, 0, 0, 0.2);
     overflow: hidden;
-}
-
-.file-preview-overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.6);
-    opacity: 0;
-    transition: opacity 0.15s;
-}
-
-.file-card:hover .file-preview-overlay {
-    opacity: 1;
-}
-
-.file-preview-overlay .icon-slot {
-    font-size: 1.5rem;
-    color: white;
 }
 
 /* ========== LIGHT MODE OVERRIDES ========== */
@@ -565,12 +671,29 @@ body.light-mode .file-list-container {
 body.light-mode .file-card {
     background: rgba(255, 255, 255, 0.8) !important;
     border-color: rgba(139, 92, 246, 0.12) !important;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06) !important;
+    box-shadow: none !important;
 }
 
-body.light-mode .file-card:hover {
-    border-color: rgba(139, 92, 246, 0.35) !important;
-    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15) !important;
+body.light-mode .upload-context-section {
+    background: rgba(255, 255, 255, 0.62);
+    border-color: rgba(99, 102, 241, 0.18);
+}
+
+body.light-mode .upload-context-section.is-file-drag-target {
+    background: rgba(139, 92, 246, 0.1);
+    border-color: rgba(124, 58, 237, 0.5);
+}
+
+body.light-mode .filesystem-context-section .compact-upload-control {
+    background: rgba(6, 182, 212, 0.045) !important;
+    border-color: rgba(6, 182, 212, 0.32) !important;
+}
+
+body.light-mode .file-drag-ghost {
+    color: #1f2937;
+    background: #ffffff;
+    border-color: rgba(124, 58, 237, 0.4);
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
 }
 
 body.light-mode .file-name {
@@ -591,4 +714,34 @@ body.light-mode .drop-primary {
 
 body.light-mode .drop-secondary {
     color: var(--text-secondary-color) !important;
+}
+
+body.light-mode .file-preview-modal-overlay {
+    background: rgba(255, 255, 255, 0.85) !important;
+}
+
+body.light-mode .file-preview-modal {
+    background: var(--background-primary, #ffffff) !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15) !important;
+}
+
+body.light-mode .preview-modal-header {
+    background: rgba(0, 0, 0, 0.03) !important;
+    border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+body.light-mode .preview-file-name {
+    color: var(--text-color) !important;
+}
+
+body.light-mode .preview-close-btn {
+    color: var(--text-color) !important;
+    background: rgba(0, 0, 0, 0.05) !important;
+    border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+body.light-mode .preview-close-btn:hover {
+    background: rgba(0, 0, 0, 0.1) !important;
+    color: var(--text-color) !important;
 }

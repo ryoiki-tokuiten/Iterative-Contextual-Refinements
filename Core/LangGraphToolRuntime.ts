@@ -18,7 +18,7 @@ export interface ToolCallingAgentOptions {
 }
 
 export type ResolvedProvider = {
-    providerName: 'gemini' | 'openai' | 'openrouter' | 'local' | 'anthropic';
+    providerName: 'gemini' | 'openai' | 'openrouter' | 'local' | 'anthropic' | 'nvidia';
     providerConfig: ProviderConfig;
 };
 
@@ -98,6 +98,20 @@ export function createToolCallingAgentModel(
                 ...browserSafeConfig,
                 baseURL: normalizeLocalEndpoint(providerConfig.apiKey!)
             });
+
+        case 'nvidia': {
+            const isBrowser = typeof window !== 'undefined';
+            const baseUrl = isBrowser ? ((import.meta as any).env?.BASE_URL || '/') : '/';
+            const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+            const nvidiaBaseURL = isBrowser
+                ? `${window.location.origin}${normalizedBase}/api/nvidia/v1`
+                : 'https://integrate.api.nvidia.com/v1';
+
+            return createOpenAICompatibleAgentModel(options, providerConfig.apiKey!, {
+                ...browserSafeConfig,
+                baseURL: nvidiaBaseURL
+            });
+        }
 
         case 'anthropic':
             return new ChatAnthropic({

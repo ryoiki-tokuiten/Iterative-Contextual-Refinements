@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/* --- Base Variables (Easy Theming) --- */
+/* Theme contract: consumers can override any variable without touching tokens. */
 :root {
-    /* Dark Mode Defaults */
     --ps-bg: transparent;
     --ps-text: inherit;
     --ps-caret: auto;
@@ -23,8 +22,8 @@
 
     --ps-t-code: #ff8080;
     --ps-t-code-bg: rgba(255, 128, 128, 0.1);
-
     --ps-t-list: #8a7ff8;
+
     --ps-t-var: #aea5ff;
     --ps-t-var-bg: #2a254f;
     --ps-t-var-bd: #4d4398;
@@ -39,7 +38,6 @@
     --ps-t-pos: #55d49a;
     --ps-t-neg: #ff6969;
 
-    /* HLJS Defaults */
     --hljs-base: #abb2bf;
     --hljs-comment: #5c6370;
     --hljs-key: #c678dd;
@@ -47,54 +45,52 @@
     --hljs-func: #61aeee;
 }
 
-/* Light Mode Overrides */
 body.light-mode {
     --ps-text: var(--text-color);
+
     --ps-scroll-track: rgba(0, 0, 0, 0.03);
     --ps-scroll-thumb: rgba(0, 0, 0, 0.15);
 
     --ps-code-bg: rgba(0, 0, 0, 0.03);
     --ps-code-border: rgba(0, 0, 0, 0.06);
-    --ps-marker: #9CA3AF;
+    --ps-marker: #9ca3af;
     --ps-heading: var(--text-color);
     --ps-heading-border: rgba(0, 0, 0, 0.1);
-    --ps-crit: #D97706;
+    --ps-crit: #d97706;
     --ps-crit-shadow: transparent;
 
-    --ps-t-code: #DC2626;
+    --ps-t-code: #dc2626;
     --ps-t-code-bg: rgba(220, 38, 38, 0.08);
+    --ps-t-list: #7c3aed;
 
-    --ps-t-list: #7C3AED;
-    --ps-t-var: #4F46E5;
+    --ps-t-var: #4f46e5;
     --ps-t-var-bg: rgba(79, 70, 229, 0.08);
     --ps-t-var-bd: rgba(79, 70, 229, 0.15);
 
-    --ps-t-tag: #EA580C;
+    --ps-t-tag: #ea580c;
     --ps-t-tag-bg: rgba(234, 88, 12, 0.08);
 
-    --ps-t-inst: #DB2777;
+    --ps-t-inst: #db2777;
     --ps-t-inst-bg: rgba(219, 39, 119, 0.08);
 
-    --ps-t-str: #7C3AED;
+    --ps-t-str: #7c3aed;
     --ps-t-pos: #059669;
-    --ps-t-neg: #DC2626;
+    --ps-t-neg: #dc2626;
 
     --hljs-base: #374151;
-    --hljs-comment: #6B7280;
-    --hljs-key: #9333EA;
-    --hljs-str: #16A34A;
-    --hljs-func: #2563EB;
+    --hljs-comment: #6b7280;
+    --hljs-key: #9333ea;
+    --hljs-str: #16a34a;
+    --hljs-func: #2563eb;
 }
 
-/* --- Container & Editor --- */
-
+/* Layout containment prevents editor mutations from invalidating outer layout. */
 .prompt-styling-container {
     position: relative;
-    width: 100%;
-    height: 100%;
     display: flex;
     flex-direction: column;
-    /* Optimization: Limits browser layout recalculations to this box */
+    width: 100%;
+    height: 100%;
     contain: size layout;
 }
 
@@ -104,22 +100,24 @@ body.light-mode {
     height: 100%;
     padding: var(--card-padding-xs) var(--card-padding-xs) var(--card-padding-md);
 
-    font-family: var(--font-family);
-    font-size: var(--font-size-lg);
-    line-height: var(--line-height-relaxed);
-    color: var(--ps-text);
-    background: var(--ps-bg);
+    overflow-x: hidden;
+    overflow-y: auto;
+    resize: vertical;
 
     border: none;
     outline: none;
+    background: var(--ps-bg);
+    color: var(--ps-text);
+    caret-color: var(--ps-caret);
+
+    font-family: var(--font-family);
+    font-size: var(--font-size-lg);
+    line-height: var(--line-height-relaxed);
+
     white-space: pre-wrap;
-    word-wrap: break-word;
-    overflow-y: auto;
-    overflow-x: hidden;
-    resize: vertical;
+    overflow-wrap: break-word;
 }
 
-/* Scrollbars */
 .prompt-styling-editor::-webkit-scrollbar,
 .prompt-styling-editor pre::-webkit-scrollbar {
     width: 8px;
@@ -128,106 +126,115 @@ body.light-mode {
 
 .prompt-styling-editor::-webkit-scrollbar-track,
 .prompt-styling-editor pre::-webkit-scrollbar-track {
-    background: var(--ps-scroll-track);
     border-radius: 4px;
+    background: var(--ps-scroll-track);
 }
 
 .prompt-styling-editor::-webkit-scrollbar-thumb,
 .prompt-styling-editor pre::-webkit-scrollbar-thumb {
-    background: var(--ps-scroll-thumb);
     border-radius: 4px;
+    background: var(--ps-scroll-thumb);
 }
 
-/* --- Block Elements --- */
-
+/* Block code remains structurally separate so source fences round-trip cleanly. */
 .prompt-styling-editor pre {
-    background: var(--ps-code-bg);
+    margin: 12px 0;
+    padding: 12px;
+    overflow-x: auto;
+
     border: 1px solid var(--ps-code-border);
     border-radius: 12px;
-    padding: 12px;
-    margin: 12px 0;
-    overflow-x: auto;
+    background: var(--ps-code-bg);
+
     white-space: pre;
-    /* Performance: don't render off-screen code blocks */
     content-visibility: auto;
 }
 
+.prompt-styling-editor pre > code,
 .prompt-styling-editor code.hljs {
+    padding: 0;
     background: transparent;
     font-family: var(--font-family-mono);
     font-size: 0.9em;
-    padding: 0;
+}
+
+.token-code-marker,
+.token-code-inline {
+    font-family: var(--font-family-mono);
 }
 
 .token-code-marker {
     color: var(--ps-marker);
-    font-family: var(--font-family-mono);
     font-size: 0.8em;
     opacity: 0.7;
     user-select: none;
 }
 
-/* --- Inline Tokens --- */
-
 .token-heading {
     display: inline-block;
     width: 100%;
-    font-weight: 700;
-    color: var(--ps-heading);
     margin: 8px 0;
+    color: var(--ps-heading);
+    font-weight: 700;
 }
 
 .token-heading1 {
-    font-size: 1.4em;
-    border-bottom: 1px solid var(--ps-heading-border);
     padding-bottom: 4px;
+    border-bottom: 1px solid var(--ps-heading-border);
+    font-size: 1.4em;
 }
 
 .token-heading2 {
     font-size: 1.2em;
 }
 
+.token-critical,
+.token-list-marker,
+.token-keyword-positive,
+.token-keyword-negative {
+    font-weight: 700;
+}
+
 .token-critical {
     color: var(--ps-crit);
-    font-weight: 700;
     text-shadow: 0 0 8px var(--ps-crit-shadow);
 }
 
 .token-code-inline {
-    color: var(--ps-t-code);
-    background: var(--ps-t-code-bg);
-    border-radius: 6px;
     padding: 2px 5px;
-    font-family: var(--font-family-mono);
+    border-radius: 6px;
+    background: var(--ps-t-code-bg);
+    color: var(--ps-t-code);
     font-size: 0.9em;
 }
 
 .token-list-marker {
     color: var(--ps-t-list);
-    font-weight: 700;
 }
 
 .token-variable {
-    color: var(--ps-t-var);
-    background: var(--ps-t-var-bg);
+    padding: 1px 6px;
     border: 1px solid var(--ps-t-var-bd);
     border-radius: 16px;
-    padding: 1px 6px;
+    background: var(--ps-t-var-bg);
+    color: var(--ps-t-var);
     font-size: 0.9em;
 }
 
-.token-tag {
-    color: var(--ps-t-tag);
-    background: var(--ps-t-tag-bg);
-    border-radius: 6px;
+.token-tag,
+.token-instruction {
     padding: 1px 4px;
+    border-radius: 6px;
+}
+
+.token-tag {
+    background: var(--ps-t-tag-bg);
+    color: var(--ps-t-tag);
 }
 
 .token-instruction {
-    color: var(--ps-t-inst);
     background: var(--ps-t-inst-bg);
-    border-radius: 6px;
-    padding: 1px 4px;
+    color: var(--ps-t-inst);
 }
 
 .token-string {
@@ -236,16 +243,14 @@ body.light-mode {
 
 .token-keyword-positive {
     color: var(--ps-t-pos);
-    font-weight: 700;
     border-bottom: 2px solid rgba(85, 212, 154, 0.3);
 }
 
 .token-keyword-negative {
     color: var(--ps-t-neg);
-    font-weight: 700;
 }
 
-/* --- HLJS Syntax Colors --- */
+/* Syntax colors remain compatible with existing HLJS-like token classes. */
 .prompt-styling-editor .hljs {
     color: var(--hljs-base);
 }

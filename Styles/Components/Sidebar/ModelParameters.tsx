@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { globalState } from '../../../Core/State';
 import { ApplicationMode } from '../../../Core/Types';
 import { Icon } from '../../../UI/Icons';
+import { setGeminiCodeExecutionEnabled } from '../../../UI/setupCodeExecutionToggle';
+import { MAX_HYPOTHESIS_COUNT } from '../../../Routing/ModelConfig';
 
 export const ModelParameters: React.FC = () => {
     const [currentMode, setCurrentMode] = useState<ApplicationMode>(globalState.currentMode as ApplicationMode);
@@ -76,7 +78,7 @@ export const ModelParameters: React.FC = () => {
                         <input type="checkbox" id="skip-sub-strategies-toggle" />
                         <input type="checkbox" id="hypothesis-toggle" defaultChecked />
                         <span id="hypothesis-value">4</span>
-                        <input type="range" id="hypothesis-slider" min="1" max="6" step="1" defaultValue="4" />
+                        <input type="range" id="hypothesis-slider" min="1" max={MAX_HYPOTHESIS_COUNT} step="1" defaultValue="4" />
                         <button type="button" className="pqf-button active" data-value="balanced"></button>
                         <button type="button" className="pqf-button" data-value="very_aggressive"></button>
                         <input type="checkbox" id="refinement-toggle" />
@@ -89,21 +91,23 @@ export const ModelParameters: React.FC = () => {
                         <div className="code-execution-container">
                             <div className="code-execution-header">
                                 <Icon name="code" />
-                                <span className="code-execution-title">Python Tool Environment</span>
+                                <span className="code-execution-title">Sandbox Terminal Environment</span>
                             </div>
                             <div className="code-execution-toggle-row">
                                 <label className="toggle-switch">
                                     <input
                                         type="checkbox"
                                         id="gemini-code-execution-toggle"
-                                        aria-label="Enable Python Tool Environment"
+                                        aria-label="Enable Sandbox Terminal Environment"
+                                        defaultChecked={globalState.geminiCodeExecutionEnabled}
+                                        onChange={(event) => setGeminiCodeExecutionEnabled(event.target.checked)}
                                     />
                                     <span className="toggle-slider"></span>
                                 </label>
-                                <span className="toggle-label">Enable Python Code Execution</span>
+                                <span className="toggle-label">Enable Sandbox Execution</span>
                             </div>
                             <div className="code-execution-description">
-                                Allow contextual agents to use a backend Python virtual filesystem for calculations, verification, plots, and image manipulation.
+                                Allow contextual agents to use a persistent sandbox terminal for calculations, verification, scripts, plots, and image manipulation.
                             </div>
                         </div>
                     </div>

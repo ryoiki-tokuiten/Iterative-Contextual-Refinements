@@ -6,17 +6,9 @@ import SidebarFooter from './SidebarFooter';
 import { FileUpload } from './FileUpload';
 import { AppMode, getShowFileUploadForMode, createModeChangeHandler, attachModeChangeListener } from './SidebarLogic';
 import { Icon } from '../../../UI/Icons';
-import { getProviderForCurrentModel } from '../../../Routing';
 
 export const Sidebar: React.FC = () => {
     const [currentMode, setCurrentMode] = useState<AppMode>('deepthink');
-    const [modelProvider, setModelProvider] = useState<string>(() => {
-        try {
-            return getProviderForCurrentModel();
-        } catch {
-            return 'gemini';
-        }
-    });
     const importInputRef = React.useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -26,22 +18,12 @@ export const Sidebar: React.FC = () => {
 
         const { cleanup } = attachModeChangeListener(handler);
 
-        const handleModelChange = () => {
-            try {
-                setModelProvider(getProviderForCurrentModel());
-            } catch (err) {
-                console.error(err);
-            }
-        };
-        window.addEventListener('selectedModelChanged', handleModelChange);
-
         return () => {
             cleanup();
-            window.removeEventListener('selectedModelChanged', handleModelChange);
         };
     }, []);
 
-    const showFileUpload = currentMode === 'contextual' || (getShowFileUploadForMode(currentMode) && modelProvider === 'gemini');
+    const showFileUpload = currentMode === 'contextual' || getShowFileUploadForMode(currentMode);
 
     let labelText = 'Core Challenge:';
     let placeholderText = 'E.g., "Design a sustainable urban transportation system", "Analyze the impact of remote work on company culture"...';

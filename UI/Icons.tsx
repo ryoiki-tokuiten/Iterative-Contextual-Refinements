@@ -85,6 +85,10 @@ import {
     X,
     Eye,
     EyeOff,
+    Folder,
+    File,
+    Terminal,
+    RefreshCw,
 } from 'lucide-react';
 
 type IconAttributes = Record<string, string | number | boolean | null | undefined>;
@@ -188,6 +192,11 @@ const ICON_COMPONENTS: Record<string, LucideIcon> = {
     person: User,
     picture_as_pdf: FileText,
     verified_user: ShieldCheck,
+    folder: Folder,
+    file: File,
+    terminal: Terminal,
+    refresh: RefreshCw,
+    chevron_down: ChevronDown,
 };
 
 const ICON_ALIASES: Record<string, string> = {

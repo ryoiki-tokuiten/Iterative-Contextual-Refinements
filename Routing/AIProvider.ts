@@ -27,6 +27,13 @@ export interface ThinkingConfig {
     tools?: any[];  // Function declarations to enable thought signatures
 }
 
+export interface DiscoveredModel {
+    id: string;
+    /** Undefined means the provider did not publish a reliable vision capability. */
+    supportsImageInput?: boolean;
+}
+
+export type ListedModel = string | DiscoveredModel;
 
 
 // ============================================================================
@@ -89,16 +96,13 @@ export interface AIProvider {
     ): Promise<GenerateContentResponse>;
     isInitialized(): boolean;
     getProviderName(): string;
-    listModels?(): Promise<string[]>;
+    listModels?(): Promise<ListedModel[]>;
 }
 
 // Helper to check if input is structured messages
 function isStructuredMessages(input: any): input is StructuredMessage[] {
     return Array.isArray(input) && input.length > 0 && 'role' in input[0] && 'content' in input[0];
 }
-
-// Supported image MIME types for vision APIs (OpenAI and Anthropic)
-const VISION_SUPPORTED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 
 // Helper to check if a Part contains inline image data
 function hasInlineData(part: any): part is { inlineData: { mimeType: string; data: string } } {
@@ -148,13 +152,11 @@ function buildChatMessages(
         for (const part of promptOrParts) {
             if (hasText(part)) {
                 contentParts.push({ type: 'text', text: part.text });
-            } else if (hasInlineData(part)) {
-                if (VISION_SUPPORTED_MIME_TYPES.includes(part.inlineData.mimeType)) {
+            } else if (hasInlineData(part) && part.inlineData.mimeType.startsWith('image/')) {
                     contentParts.push({
                         type: 'image_url',
                         image_url: { url: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` }
                     });
-                }
             }
         }
         if (contentParts.length > 0) messages.push({ role: 'user', content: contentParts });
@@ -199,13 +201,11 @@ function buildAnthropicMessages(
         for (const part of promptOrParts) {
             if (hasText(part)) {
                 contentParts.push({ type: 'text', text: part.text });
-            } else if (hasInlineData(part)) {
-                if (VISION_SUPPORTED_MIME_TYPES.includes(part.inlineData.mimeType)) {
+            } else if (hasInlineData(part) && part.inlineData.mimeType.startsWith('image/')) {
                     contentParts.push({
                         type: 'image',
                         source: { type: 'base64', media_type: part.inlineData.mimeType, data: part.inlineData.data }
                     });
-                }
             }
         }
         if (contentParts.length > 0) messages = [{ role: 'user', content: contentParts }];
@@ -634,12 +634,20 @@ export class OpenRouterProvider implements AIProvider {
         }
     }
 
-    async listModels(): Promise<string[]> {
+    async listModels(): Promise<DiscoveredModel[]> {
         if (!this.client) return [];
         try {
             const response = await this.client.models.list();
             if (!response || !response.data) return [];
-            return response.data.map((m: any) => m.id);
+            return response.data.map((model: any) => {
+                const inputModalities = model.architecture?.input_modalities;
+                return {
+                    id: model.id,
+                    supportsImageInput: Array.isArray(inputModalities)
+                        ? inputModalities.includes('image')
+                        : undefined,
+                };
+            });
         } catch (e) {
             console.error("Failed to fetch OpenRouter models:", e);
             return [];
@@ -657,7 +665,7 @@ export class OpenRouterProvider implements AIProvider {
     ): Promise<GenerateContentResponse> {
         if (!this.client) throw new Error("OpenRouter client not initialized.");
 
-        const messages = buildChatMessages(promptOrParts, systemInstruction);
+        const messages = buildChatMessages(promptOrParts, systemInstruction, true);
         const requestOptions: any = { model: modelToUse, messages, temperature };
 
         if (topP !== undefined) requestOptions.top_p = topP;
@@ -809,7 +817,7 @@ export class LocalModelsProvider implements AIProvider {
                 '\n\nIMPORTANT: You must respond with valid JSON only, no other text.';
         }
 
-        const messages = buildChatMessages(promptOrParts, effectiveSystemInstruction);
+        const messages = buildChatMessages(promptOrParts, effectiveSystemInstruction, true);
         const requestOptions: any = { model: modelToUse, messages, temperature };
         if (topP !== undefined) requestOptions.top_p = topP;
 
@@ -823,6 +831,76 @@ export class LocalModelsProvider implements AIProvider {
 
     getProviderName(): string {
         return 'local';
+    }
+}
+
+// ============================================================================
+// NVIDIA Provider
+// ============================================================================
+
+export class NvidiaProvider implements AIProvider {
+    private client: OpenAI | null = null;
+
+    initialize(apiKey: string): boolean {
+        try {
+            const isBrowser = typeof window !== 'undefined';
+            const baseUrl = isBrowser ? ((import.meta as any).env?.BASE_URL || '/') : '/';
+            const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+            const baseURL = isBrowser
+                ? `${window.location.origin}${normalizedBase}/api/nvidia/v1`
+                : "https://integrate.api.nvidia.com/v1";
+
+            this.client = new OpenAI({
+                apiKey,
+                baseURL,
+                dangerouslyAllowBrowser: true
+            });
+            return true;
+        } catch (e) {
+            console.error("Failed to initialize NVIDIA:", e);
+            return false;
+        }
+    }
+
+    async listModels(): Promise<string[]> {
+        if (!this.client) return [];
+        try {
+            const response = await this.client.models.list();
+            if (!response || !response.data) return [];
+            return response.data.map((m: any) => m.id);
+        } catch (e) {
+            console.error("Failed to fetch NVIDIA models:", e);
+            return [];
+        }
+    }
+
+    async generateContent(
+        promptOrParts: string | Part[] | StructuredMessage[],
+        temperature: number,
+        modelToUse: string,
+        systemInstruction?: string,
+        isJsonOutput: boolean = false,
+        topP?: number,
+        _thinkingConfig?: any
+    ): Promise<GenerateContentResponse> {
+        if (!this.client) throw new Error("NVIDIA client not initialized.");
+
+        const messages = buildChatMessages(promptOrParts, systemInstruction, true);
+        const requestOptions: any = { model: modelToUse, messages, temperature };
+
+        if (topP !== undefined) requestOptions.top_p = topP;
+        if (isJsonOutput) requestOptions.response_format = { type: "json_object" };
+
+        const response = await this.client.chat.completions.create(requestOptions);
+        return wrapAsGeminiResponse(response.choices[0]?.message?.content || '');
+    }
+
+    isInitialized(): boolean {
+        return this.client !== null;
+    }
+
+    getProviderName(): string {
+        return 'nvidia';
     }
 }
 
@@ -843,6 +921,8 @@ export function createAIProvider(provider: string): AIProvider {
             return new AnthropicProvider();
         case 'local':
             return new LocalModelsProvider();
+        case 'nvidia':
+            return new NvidiaProvider();
         default:
             return new GoogleAIProvider();
     }

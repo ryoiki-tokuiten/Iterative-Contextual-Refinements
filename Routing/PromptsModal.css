@@ -371,6 +371,11 @@ textarea.prompt-textarea:focus {
     background-color: rgba(16, 163, 127, 0.1);
 }
 
+.custom-model-select-provider-header.nvidia {
+    color: #76b900;
+    background-color: rgba(118, 185, 0, 0.1);
+}
+
 .custom-model-select-provider-header.anthropic {
     color: #d97757;
     background-color: rgba(217, 119, 87, 0.1);

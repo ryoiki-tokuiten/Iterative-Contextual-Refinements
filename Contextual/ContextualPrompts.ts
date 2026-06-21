@@ -152,38 +152,26 @@ If the memory records that specific issues were identified repeatedly, ensure yo
 </Historical Context>
 
 <Code Execution Capability>
-When available, you have access to a backend Python virtual filesystem tool. Use this tool when:
+When available, you have access to a backend virtual sandbox terminal. Use this tool when:
 - You need to perform calculations or verify mathematical results with precision
 - You want to test algorithms or logic before presenting them in your solution
 - Data processing or numerical analysis would benefit from executable verification
 - You need to explore edge cases or generate concrete examples
 - You need to inspect, transform, or generate images, plots, or charts
 
-The Python environment is configured for scientific and image work with the standard library plus packages such as numpy, scipy, pandas, matplotlib, sympy, pillow/PIL, scikit-image, opencv-python/cv2, seaborn, networkx, statsmodels, scikit-learn, plotly, imageio, beautifulsoup4, lxml, pyyaml, and requests. Uploaded images are visible by filename in the virtual filesystem. Generated or modified image files are returned as image inputs, not base64 text.
+The sandbox is a real isolated Linux workspace. The runtime will provide a detected environment summary listing the shared preinstalled tools and packages that are currently available. Treat it like a normal project terminal: create files and directories, write scripts or source code, run tests, search/read/edit/delete workspace files, use available command-line tools, and install extra dependencies into the workspace when needed. Uploaded files are visible by filename in the workspace. Generated or modified image files are returned as native image inputs, not base64 text. When Lean/Lake or Mathlib helpers are listed in the detected environment, use them for formal proof checking instead of merely sketching proofs. A proof, program, calculation, test, or generated artifact is externally verified only after the relevant sandbox command actually ran and returned a successful exit code.
 
-Your Python session is notebook-like for your own agent: variables, imports, functions, classes, and generated image files persist across your tool calls and future iterations in the same contextual run. Each agent role has an isolated Python session, so do not assume variables or files from other agents exist. If a timeout or backend restart happens, Python memory may be cleared while virtual filesystem image files may remain.
+Your sandbox writable directory persists for your agent across tool calls and future iterations in the same contextual run. Files persist; process memory, shell variables, REPL state, and language-level imports do not persist between separate commands. Write scripts, modules, data files, proof files, project files, or notes when you need durable state. The runtime will tell you exactly which repository directories are visible and which one is writable.
 
-Agent-scoped virtual filesystem rules:
-- Main Generator keeps its own Python memory and virtual filesystem across iterations.
-- Solution Critique / Iterative Agent keeps its own Python memory and virtual filesystem across iterations.
-- Strategic Pool Agent keeps its own Python memory and virtual filesystem across iterations.
-- Memory Agent keeps its own Python memory and virtual filesystem across iterations.
-- Each Python tool call starts in this agent session's virtual filesystem root. os.chdir(...) is allowed only within that workspace; changing to /tmp, /mnt/data, or other external directories is blocked.
-- These agent filesystems do not share generated files with each other. A file created by another agent is not available in your current working directory unless it is also an original uploaded file.
-- You may load files from your own previous tool calls by filename when they appeared in your own visible_image_files or generated image outputs.
-- Do not try to open filenames merely because they appeared in another agent output, UI transcript, markdown image link, or critique text. If you need a similar artifact, reproduce it in your own session by rerunning equivalent code from the original uploaded image/data, then save your own copy with a clear filename.
-
-Soft-clearing Python memory:
-- To clear stale Python memory, call exactly reset_python_session() inside a Python tool call. clear_python_memory() is an equivalent alias.
-- Soft clearing removes user-defined names from this agent session: variables such as df or summary, imported module bindings such as pd/np/plt/sns, helper functions, classes, and cached objects.
-- Soft clearing preserves the virtual filesystem: image files, uploaded files, generated plots, CSVs, and other files remain in the same working directory. It does not delete, rename, or modify files. It also returns the current working directory to the virtual filesystem root.
-- After soft clearing, immediately reimport libraries and reload/recreate every variable you still need. Do not call reset_python_session() and then expect earlier imports or variables to remain available.
-- Use soft clearing when prior state may be stale, partially failed, shadowed, based on an old dataset/image, or when you want future code to be clean and self-contained. Do not use it when you intentionally need variables from earlier successful tool calls.
+Agent-scoped workspace rules:
+- The runtime enforces a shared repository view with one writable agent directory and role-specific read-only peer directories.
+- Root and peer directories are read-only when visible; unavailable peer directories are not mounted.
+- If you need to modify a readable peer file, copy it into your own writable directory first.
+- Use final_output.references or inline markers such as [[image:plot.png|Plot]] and [[file:script.py|Script]] for artifacts that should be rendered or reused.
 
 Output visibility rules:
-- Print concise text results, progress notes, important numbers, and saved filenames with print() so both you and the user can see what happened in Code Output.
+- Print concise text results, progress notes, important numbers, command results, and saved filenames so both you and the user can see what happened in Command Output.
 - For plots, charts, or image manipulations, save actual image files such as output.png, step_01.png, or comparison.jpg. Saved image files are displayed to the user and attached back to you as native image inputs in the next loop.
-- When you open/read an existing image with common image APIs such as PIL.Image.open(...) or cv2.imread(...), that viewed image is also displayed to the user and attached back to you as a native image input, even if you did not modify it.
 - Do not print raw image bytes or base64. That is noisy and prevents useful visual inspection.
 - When creating multiple image iterations, save each meaningful step with a clear filename and print a short line describing that file.
 
@@ -328,36 +316,24 @@ When confronted with information, evidence, or reasoning that fundamentally cont
 </Strict Reminder>
 
 <Code Execution Capability>
-When available, you have access to a backend Python virtual filesystem tool. When analyzing solutions, use this to:
+When available, you have access to a backend virtual sandbox terminal. When analyzing solutions, use this to:
 - Verify claims made in the solution by running tests or calculations
 - Check mathematical calculations and detect computational errors
 - Demonstrate counterexamples with executable evidence
 - Generate concrete test cases that expose edge case failures
 - Inspect or manipulate image files when visual evidence is relevant
 
-The environment is configured with Python scientific and image libraries including numpy, scipy, pandas, matplotlib, sympy, pillow/PIL, scikit-image, opencv-python/cv2, seaborn, networkx, statsmodels, scikit-learn, plotly, and imageio. Image files are exchanged by filename and native image input, not by base64 text. Your Python session is notebook-like for your own agent: variables, imports, functions, classes, and generated image files persist across your tool calls and future iterations in the same contextual run. Each agent role has an isolated Python session, so do not assume variables or files from other agents exist.
+The sandbox is a real Linux workspace. The runtime will provide a detected environment summary listing the shared preinstalled tools and packages that are currently available, plus the exact repository directories visible to this role. Treat it like a normal project terminal: create files and directories in your writable directory, write scripts or source code, run tests, search/read visible files, use available command-line tools, and install extra dependencies into the writable directory when needed. When Lean/Lake or Mathlib helpers are listed in the detected environment, use them for formal proof checking instead of merely sketching proofs. A proof, program, calculation, test, or generated artifact is externally verified only after the relevant sandbox command actually ran and returned a successful exit code. Image files are exchanged by filename and native image input, not by base64 text. Your writable directory persists for your own agent across tool calls and future iterations in the same contextual run. Files persist; process memory, shell variables, REPL state, and language-level imports do not persist between separate commands.
 
-Agent-scoped virtual filesystem rules:
-- Main Generator keeps its own Python memory and virtual filesystem across iterations.
-- Solution Critique / Iterative Agent keeps its own Python memory and virtual filesystem across iterations.
-- Strategic Pool Agent keeps its own Python memory and virtual filesystem across iterations.
-- Memory Agent keeps its own Python memory and virtual filesystem across iterations.
-- Each Python tool call starts in this agent session's virtual filesystem root. os.chdir(...) is allowed only within that workspace; changing to /tmp, /mnt/data, or other external directories is blocked.
-- These agent filesystems do not share generated files with each other. A file created by another agent is not available in your current working directory unless it is also an original uploaded file.
-- You may load files from your own previous tool calls by filename when they appeared in your own visible_image_files or generated image outputs.
-- Do not try to open filenames merely because they appeared in another agent output, UI transcript, markdown image link, or critique text. If you need a similar artifact, reproduce it in your own session by rerunning equivalent code from the original uploaded image/data, then save your own copy with a clear filename.
-
-Soft-clearing Python memory:
-- To clear stale Python memory, call exactly reset_python_session() inside a Python tool call. clear_python_memory() is an equivalent alias.
-- Soft clearing removes user-defined names from this agent session: variables such as df or summary, imported module bindings such as pd/np/plt/sns, helper functions, classes, and cached objects.
-- Soft clearing preserves the virtual filesystem: image files, uploaded files, generated plots, CSVs, and other files remain in the same working directory. It does not delete, rename, or modify files. It also returns the current working directory to the virtual filesystem root.
-- After soft clearing, immediately reimport libraries and reload/recreate every variable you still need. Do not call reset_python_session() and then expect earlier imports or variables to remain available.
-- Use soft clearing when prior state may be stale, partially failed, shadowed, based on an old dataset/image, or when you want future code to be clean and self-contained. Do not use it when you intentionally need variables from earlier successful tool calls.
+Agent-scoped workspace rules:
+- The runtime enforces a shared repository view with one writable agent directory and role-specific read-only peer directories.
+- Root and peer directories are read-only when visible; unavailable peer directories are not mounted.
+- If you need to modify a readable peer file, copy it into your own writable directory first.
+- Use final_output.references or inline markers such as [[image:plot.png|Plot]] and [[file:script.py|Script]] for artifacts that should be rendered or reused.
 
 Output visibility rules:
-- Print concise text results, progress notes, important numbers, and saved filenames with print() so both you and the user can see what happened in Code Output.
+- Print concise text results, progress notes, important numbers, command results, and saved filenames so both you and the user can see what happened in Command Output.
 - For plots, charts, or image manipulations, save actual image files such as output.png, step_01.png, or comparison.jpg. Saved image files are displayed to the user and attached back to you as native image inputs in the next loop.
-- When you open/read an existing image with common image APIs such as PIL.Image.open(...) or cv2.imread(...), that viewed image is also displayed to the user and attached back to you as a native image input, even if you did not modify it.
 - Do not print raw image bytes or base64. That is noisy and prevents useful visual inspection.
 - When creating multiple image iterations, save each meaningful step with a clear filename and print a short line describing that file.
 

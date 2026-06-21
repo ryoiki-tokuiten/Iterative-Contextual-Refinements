@@ -10,6 +10,8 @@ export interface ModelOption {
     provider?: string;
 }
 
+export const MAX_HYPOTHESIS_COUNT = 10;
+
 export interface ModelParameters {
     temperature: number;
     topP: number;
@@ -22,6 +24,8 @@ export interface ModelParameters {
     dissectedObservationsEnabled: boolean;
     evolvingDfsEnabled: boolean;
     evolvingDfsDepth: number;
+    isolateBranches: boolean;
+    disableSolutionPool: boolean;
     provideAllSolutionsToCorrectors: boolean;
     postQualityFilterEnabled: boolean;
     deepthinkCodeExecutionEnabled: boolean;
@@ -40,16 +44,18 @@ export const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
     temperature: 1.0,
     topP: 0.95,
     strategiesCount: 3,
-    subStrategiesCount: 3,
+    subStrategiesCount: 0,
     hypothesisCount: 4,
     pqfAggressiveness: 'balanced',
-    refinementEnabled: false,
-    skipSubStrategies: false,
+    refinementEnabled: true,
+    skipSubStrategies: true,
     dissectedObservationsEnabled: false,
-    evolvingDfsEnabled: false,
+    evolvingDfsEnabled: true,
     evolvingDfsDepth: 3,
+    isolateBranches: false,
+    disableSolutionPool: false,
     provideAllSolutionsToCorrectors: false,
-    postQualityFilterEnabled: false,
+    postQualityFilterEnabled: true,
     deepthinkCodeExecutionEnabled: false,
     hypothesisInjectionMode: 'selective_injection' as const,
     thinkingLevel: 'high',
@@ -110,7 +116,7 @@ export class ModelConfigManager {
     }
 
     public getHypothesisCount(): number {
-        return Math.max(0, Math.min(6, this.parameters.hypothesisCount));
+        return Math.max(0, Math.min(MAX_HYPOTHESIS_COUNT, this.parameters.hypothesisCount));
     }
 
     public getPqfAggressiveness(): string {
@@ -141,6 +147,14 @@ export class ModelConfigManager {
 
     public getEvolvingDfsDepth(): number {
         return Math.max(1, Math.min(10, this.parameters.evolvingDfsDepth));
+    }
+
+    public isIsolateBranchesEnabled(): boolean {
+        return this.isEvolvingDfsEnabled() && this.parameters.isolateBranches === true;
+    }
+
+    public isSolutionPoolDisabled(): boolean {
+        return this.isEvolvingDfsEnabled() && this.parameters.disableSolutionPool === true;
     }
 
     public isProvideAllSolutionsToCorrectors(): boolean {

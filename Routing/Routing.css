@@ -131,6 +131,11 @@
     color: rgb(16, 163, 127);
 }
 
+.provider-tab.nvidia.active {
+    background: rgba(118, 185, 0, 0.12);
+    color: rgb(118, 185, 0);
+}
+
 .provider-tab.anthropic.active {
     background: rgba(204, 85, 68, 0.12);
     color: rgb(204, 85, 68);
@@ -556,7 +561,7 @@ nt Options Container */
 }
 
 .refinement-method-card:has(.method-checkbox:checked) {
-    background: rgba(139, 92, 246, 0.12);
+    background: rgba(139, 92, 246, 0.07);
     border-color: rgba(139, 92, 246, 0.4);
     box-shadow: 0 4px 16px rgba(139, 92, 246, 0.15),
         inset 0 1px 0 rgba(139, 92, 246, 0.2);
@@ -1076,8 +1081,17 @@ nt Options Container */
 }
 
 @keyframes pulse-slow {
-    0%, 100% { opacity: 0.8; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.05); }
+
+    0%,
+    100% {
+        opacity: 0.8;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1.05);
+    }
 }
 
 .refresh-icon.spinning {

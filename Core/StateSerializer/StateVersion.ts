@@ -71,6 +71,8 @@ export interface ExportedConfigV1 {
         dissectedObservationsEnabled: boolean;
         evolvingDfsEnabled: boolean;
         evolvingDfsDepth: number;
+        isolateBranches?: boolean;
+        disableSolutionPool?: boolean;
         provideAllSolutionsToCorrectors?: boolean;
     };
 
@@ -214,4 +216,3 @@ function extractLegacyModeState(config: Record<string, unknown>, mode: Applicati
             return null;
     }
 }
-

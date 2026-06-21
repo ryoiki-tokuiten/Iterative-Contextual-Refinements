@@ -248,6 +248,57 @@
         0 0 2px rgba(var(--accent-green-rgb), 0.3) inset;
 }
 
+/* Live and Filesystem share the same quiet red navigation treatment. */
+#deepthink-tab-live,
+#deepthink-tab-filesystem {
+    transition: all var(--transition-speed) var(--easing-curve);
+    display: inline-flex !important;
+    align-items: center !important;
+    background: rgba(239, 68, 68, 0.04);
+    color: rgba(239, 68, 68, 0.65);
+    border-color: rgba(239, 68, 68, 0.15);
+}
+
+#deepthink-tab-live.active,
+#deepthink-tab-filesystem.active {
+    background: rgba(239, 68, 68, 0.08) !important;
+    color: #ef4444 !important;
+    border-color: rgba(239, 68, 68, 0.45) !important;
+    box-shadow: none !important; /* No shadow/glow when complete/idle */
+}
+
+#deepthink-tab-live.active .icon-slot,
+#deepthink-tab-filesystem.active .icon-slot {
+    color: #ef4444 !important;
+}
+
+/* Only show the blinking red dot when deepthink is actively running/processing */
+#deepthink-tab-live.active.status-deepthink-processing::after {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    background-color: #ef4444;
+    border-radius: 50%;
+    margin-left: 6px;
+    box-shadow: 0 0 8px #ef4444;
+    animation: live-blinking 1s infinite alternate;
+}
+
+@keyframes live-blinking {
+    0% {
+        opacity: 0.3;
+        transform: scale(0.9);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1.1);
+        box-shadow: 0 0 12px #ef4444, 0 0 4px #ef4444;
+    }
+}
+
+
+
 /* --------------------------------------------------------------------------
    6. STRATEGY & SOLVER CARDS
    -------------------------------------------------------------------------- */
@@ -1338,6 +1389,10 @@
 }
 
 .solution-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
     padding: 12px 16px;
     background: rgba(15, 17, 32, 0.4);
     border-bottom: 1px solid #333;

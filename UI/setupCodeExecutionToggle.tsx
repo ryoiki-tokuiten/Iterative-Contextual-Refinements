@@ -24,7 +24,7 @@ export const GeminiCodeExecutionToggle: React.FC<CodeExecutionToggleProps> = ({ 
                         onChange?.(e.target.checked);
                     }}
                 />
-                <span>Enable Python Tool Environment</span>
+                <span>Enable Sandbox Terminal Environment</span>
             </label>
         </div>
     );

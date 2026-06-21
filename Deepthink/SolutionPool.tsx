@@ -473,14 +473,17 @@ export const SolutionPoolTabContent: React.FC<{ process: DeepthinkPipelineState 
                                     );
                                     const hasPoolResponse = !!(poolAgent?.poolResponse?.trim());
                                     const isError = poolAgent?.status === 'error';
-                                    const hasPool = hasPoolResponse;
+                                    const isSkipped = poolAgent?.status === 'skipped';
+                                    const hasPool = hasPoolResponse && !isSkipped;
                                     const solutionCount = poolAgent?.parsedPoolResponse?.solutions?.length;
 
                                     return (
-                                        <div key={branch.key} className={`agent-card${!hasPool ? ' pool-pending' : ''}${branch.isActive ? '' : ' replaced-branch'}`}>
+                                        <div key={branch.key} className={`agent-card${isSkipped ? ' pool-skipped' : !hasPool ? ' pool-pending' : ''}${branch.isActive ? '' : ' replaced-branch'}`}>
                                             <div className="agent-header">
                                                 <h4 className="agent-title">{branch.label}</h4>
-                                                {hasPool
+                                                {isSkipped
+                                                    ? <span className="status-badge status-skipped">Skipped</span>
+                                                    : hasPool
                                                     ? <span className="status-badge status-completed">Available</span>
                                                     : isError
                                                         ? <span className="status-badge status-error">Error</span>
@@ -505,9 +508,9 @@ export const SolutionPoolTabContent: React.FC<{ process: DeepthinkPipelineState 
                                                         </button>
                                                     </>
                                                 ) : (
-                                                    <div className="pool-empty-state-mini">
-                                                        <Icon name="hourglass_empty" />
-                                                        <span>{isError ? 'Failed' : 'Processing...'}</span>
+                                                    <div className={`pool-empty-state-mini${isSkipped ? ' skipped' : ''}`}>
+                                                        <Icon name={isSkipped ? 'block' : 'hourglass_empty'} />
+                                                        <span>{isSkipped ? 'No solution pool available' : isError ? 'Failed' : 'Processing...'}</span>
                                                     </div>
                                                 )}
                                             </div>
@@ -570,6 +573,10 @@ export function openSolutionPoolModal(strategyId: string, iteration: number, bra
     const matchesBranch = (agent: any) => branchVersion === undefined || (agent.branchVersion || 1) === branchVersion;
     const poolAgent = pipeline.structuredSolutionPoolAgents?.find(a => a.mainStrategyId === strategyId && a.globalIteration === iteration && matchesBranch(a))
         || pipeline.structuredSolutionPoolAgents?.filter(a => a.mainStrategyId === strategyId && matchesBranch(a)).sort((a, b) => (b.globalIteration || 0) - (a.globalIteration || 0))[0];
+    if (poolAgent?.status === 'skipped') {
+        alert('No solution pool available for this strategy.');
+        return;
+    }
     if (!poolAgent?.poolResponse) {
         alert('No solution pool available for this strategy.');
         return;

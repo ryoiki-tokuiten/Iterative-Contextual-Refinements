@@ -9,6 +9,7 @@ import Sidebar from './Styles/Components/Sidebar/Sidebar';
 import MainContent from './Styles/Components/MainContent';
 import PromptsModalManager from './Routing/PromptsModal/PromptsModalManager';
 import { AppInitializer } from './Styles/Components/AppInitializer';
+import { VirtualEnvironmentModal } from './UI/VirtualEnvironmentModal';
 
 document.addEventListener('DOMContentLoaded', () => {
     // First, render React components to populate the DOM
@@ -20,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <AppInitializer />
                 <Sidebar />
                 <MainContent />
+                <VirtualEnvironmentModal />
             </React.StrictMode>
         );
     }

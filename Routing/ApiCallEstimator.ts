@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ModelConfigManager, type ModelParameters } from './ModelConfig';
+import { MAX_HYPOTHESIS_COUNT, ModelConfigManager, type ModelParameters } from './ModelConfig';
 
 /**
  * Pure function: calculates the estimated API call range for Deepthink mode.
@@ -13,7 +13,7 @@ export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): {
     const evolvingDfsEnabled = params.refinementEnabled && params.evolvingDfsEnabled;
     const strategiesCount = evolvingDfsEnabled ? Math.min(params.strategiesCount, 5) : params.strategiesCount;
     const subStrategiesCount = params.subStrategiesCount;
-    const hypothesisCount = params.hypothesisCount;
+    const hypothesisCount = Math.max(0, Math.min(MAX_HYPOTHESIS_COUNT, params.hypothesisCount));
     const skipSubStrategies = evolvingDfsEnabled ? true : params.skipSubStrategies;
     const refinementEnabled = params.refinementEnabled;
     const dissectedObservationsEnabled = params.dissectedObservationsEnabled;
@@ -44,10 +44,10 @@ export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): {
         }
 
         // For each active strategy branch:
-        // depth 1: execution + critique + pool
-        // later depths: correction + critique + pool
-        minCalls += strategiesCount * evolvingDfsDepth * 3;
-        maxCalls += strategiesCount * evolvingDfsDepth * 3;
+        // Each depth runs execution/correction + critique. Pool calls are optional.
+        const branchCallsPerDepth = params.disableSolutionPool ? 2 : 3;
+        minCalls += strategiesCount * evolvingDfsDepth * branchCallsPerDepth;
+        maxCalls += strategiesCount * evolvingDfsDepth * branchCallsPerDepth;
 
         // Every five completed branch iterations: memory per branch + ceil(N/2) PQF agents.
         // If PQF requests updates, one strategy-update call plus execution+critique for each updated branch.

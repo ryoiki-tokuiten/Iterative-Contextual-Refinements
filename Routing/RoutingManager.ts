@@ -197,6 +197,14 @@ export class RoutingManager {
         return this.modelConfigManager.getEvolvingDfsDepth();
     }
 
+    public isIsolateBranchesEnabled(): boolean {
+        return this.modelConfigManager.isIsolateBranchesEnabled();
+    }
+
+    public isSolutionPoolDisabled(): boolean {
+        return this.modelConfigManager.isSolutionPoolDisabled();
+    }
+
     public isProvideAllSolutionsToCorrectors(): boolean {
         return this.modelConfigManager.isProvideAllSolutionsToCorrectors();
     }

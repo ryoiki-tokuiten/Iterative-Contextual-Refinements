@@ -644,6 +644,16 @@ body.light-mode .pool-iteration-header {
     animation: breathe 3s ease-in-out infinite;
 }
 
+.pool-empty-state-mini.skipped .icon-slot {
+    animation: none;
+}
+
+.status-badge.status-skipped {
+    border: 1px solid rgba(var(--text-secondary-rgb, 148, 163, 184), 0.24);
+    background: rgba(var(--text-secondary-rgb, 148, 163, 184), 0.1);
+    color: var(--text-tertiary);
+}
+
 @keyframes breathe {
 
     0%,
@@ -664,6 +674,10 @@ body.light-mode .pool-iteration-header {
 
 .agent-card.pool-pending:hover {
     opacity: 0.8;
+}
+
+.agent-card.pool-skipped {
+    opacity: 0.72;
 }
 
 /* Light Mode Override for shared agent cards */

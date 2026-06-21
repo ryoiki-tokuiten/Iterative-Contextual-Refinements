@@ -61,6 +61,8 @@ export class ApiKeyManager {
                 return !!process.env.ANTHROPIC_API_KEY;
             case 'openrouter':
                 return !!process.env.OPENROUTER_API_KEY;
+            case 'nvidia':
+                return !!process.env.NVIDIA_API_KEY;
             default:
                 return false;
         }

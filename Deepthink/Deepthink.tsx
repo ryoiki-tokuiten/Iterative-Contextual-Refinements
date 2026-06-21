@@ -6,7 +6,8 @@
  * All pure logic, state management, and event coordination lives in Deepthink.ts.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
     DeepthinkPipelineState,
     DeepthinkMainStrategyData,
@@ -48,6 +49,43 @@ const hypothesisTesterDisplay = (hypothesis: DeepthinkHypothesisData): string =>
 const StatusBadge: React.FC<{ status: string; label?: string }> = ({ status, label }) => (
     <span className={`status-badge status-${status}`}>{label || status}</span>
 );
+
+const ArtifactTracePane: React.FC<{
+    artifact: string;
+    trace?: string;
+    emptyMessage: string;
+}> = ({ artifact, trace, emptyMessage }) => {
+    const [viewMode, setViewMode] = useState<'submitted' | 'trace'>('submitted');
+    const content = viewMode === 'trace'
+        ? (trace || 'No multi-turn interaction trace is available for this response.')
+        : (artifact || emptyMessage);
+
+    return (
+        <div className="artifact-trace-pane">
+            {trace && (
+                <div className="response-view-toggle artifact-pane-toggle" aria-label="Response view">
+                    <button
+                        type="button"
+                        className={`response-toggle-option ${viewMode === 'submitted' ? 'active' : ''}`}
+                        onClick={() => setViewMode('submitted')}
+                    >
+                        Artifact
+                    </button>
+                    <button
+                        type="button"
+                        className={`response-toggle-option ${viewMode === 'trace' ? 'active' : ''}`}
+                        onClick={() => setViewMode('trace')}
+                    >
+                        Trace
+                    </button>
+                </div>
+            )}
+            <div>
+                <MathHTML content={content} />
+            </div>
+        </div>
+    );
+};
 
 // ═══════════════════════════════════════════════════════════════════════
 // Show More / Show Less Toggle
@@ -109,9 +147,11 @@ export const BaseModal: React.FC<{
                     {title && (isEmbedded
                         ? <h4>{title}</h4>
                         : <h2 className="modal-title">{title}</h2>)}
-                    <button className={isEmbedded ? 'close-modal-btn' : 'modal-close-button'} onClick={onClose}>
-                        <MIcon name="close" />
-                    </button>
+                    <div className="embedded-modal-header-actions">
+                        <button className={isEmbedded ? 'close-modal-btn' : 'modal-close-button'} onClick={onClose}>
+                            <MIcon name="close" />
+                        </button>
+                    </div>
                 </div>
                 <div className={`modal-body${isEmbedded ? ' custom-scrollbar' : ''}`} style={noPadding ? { padding: 0 } : undefined}>
                     {children}
@@ -136,7 +176,13 @@ export const DefaultSolutionUI: React.FC<{
                 <div className="solution-panel-header">
                     <h4 style={{ margin: 0 }}><MIcon name="psychology" />{refinementEnabled ? 'Attempted Solution' : 'Solution'}</h4>
                 </div>
-                <MathHTML content={attemptContent || 'Solution not available'} className="solution-panel-body" />
+                <div className="solution-panel-body">
+                    <ArtifactTracePane
+                        artifact={attemptContent}
+                        trace={subStrategy.solutionAttemptTraceText}
+                        emptyMessage="Solution not available"
+                    />
+                </div>
             </div>
 
             <div className={`solution-panel${!refinementWasPerformed ? ' disabled-pane' : ''}`} style={!refinementWasPerformed ? { position: 'relative' } : undefined}>
@@ -147,9 +193,13 @@ export const DefaultSolutionUI: React.FC<{
                     </h4>
                 </div>
                 <div className="solution-panel-body" style={!refinementWasPerformed ? { position: 'relative' } : undefined}>
-                    <MathHTML content={refinementEnabled
-                        ? (refinedContent || 'Refined solution not available')
-                        : (refinedContent || attemptContent || 'Solution refinement is disabled')} />
+                    <ArtifactTracePane
+                        artifact={refinementEnabled
+                            ? (refinedContent || 'Refined solution not available')
+                            : (refinedContent || attemptContent || 'Solution refinement is disabled')}
+                        trace={subStrategy.refinedSolutionTraceText}
+                        emptyMessage="Refined solution not available"
+                    />
                     {!refinementWasPerformed && <div className="disabled-overlay">Refinement Disabled</div>}
                 </div>
             </div>
@@ -168,17 +218,29 @@ export const SubStrategyComparisonUI: React.FC<{
     const refinedTitle = refinementEnabled ? 'Refined Solution' : 'Refined Solution (Disabled)';
     const attemptContent = solutionAttemptDisplay(subStrategy);
     const refinedContent = refinedSolutionDisplay(subStrategy);
-
-
+    const [attemptViewMode, setAttemptViewMode] = useState<'submitted' | 'trace'>('submitted');
+    const [refinedViewMode, setRefinedViewMode] = useState<'submitted' | 'trace'>('submitted');
+    const attemptDisplay = attemptViewMode === 'trace'
+        ? subStrategy.solutionAttemptTraceText || 'No multi-turn interaction trace is available for this response.'
+        : attemptContent || 'No solution attempt available';
+    const refinedDisplay = refinedViewMode === 'trace'
+        ? subStrategy.refinedSolutionTraceText || 'No multi-turn interaction trace is available for this response.'
+        : refinedContent || 'No refined solution available';
 
     return (
-        <div className="side-by-side-comparison">
-            <div className="comparison-side">
-                <div className="preview-header">
+        <div className="solution-comparison-grid">
+            <div className="solution-panel">
+                <div className="solution-panel-header">
                     <h4 className="comparison-title no-padding-left">
                         <MIcon name="psychology" /><span>Solution Attempt</span>
                     </h4>
                     <div className="code-actions">
+                        {subStrategy.solutionAttemptTraceText && (
+                            <div className="response-view-toggle" aria-label="Solution attempt view">
+                                <button type="button" className={`response-toggle-option ${attemptViewMode === 'submitted' ? 'active' : ''}`} onClick={() => setAttemptViewMode('submitted')}>Artifact</button>
+                                <button type="button" className={`response-toggle-option ${attemptViewMode === 'trace' ? 'active' : ''}`} onClick={() => setAttemptViewMode('trace')}>Trace</button>
+                            </div>
+                        )}
                         <ActionButton
                             type="copy"
                             content={attemptContent}
@@ -196,19 +258,23 @@ export const SubStrategyComparisonUI: React.FC<{
                         />
                     </div>
                 </div>
-                <div className="comparison-content custom-scrollbar">
-                    {attemptContent
-                        ? <MathHTML content={attemptContent} />
-                        : <div className="no-content">No solution attempt available</div>}
+                <div className="solution-panel-body custom-scrollbar">
+                    <MathHTML content={attemptDisplay} />
                 </div>
             </div>
 
-            <div className={`comparison-side${refinementWasPerformed ? '' : ' disabled-pane'}`}>
-                <div className="preview-header">
+            <div className={`solution-panel${refinementWasPerformed ? '' : ' disabled-pane'}`}>
+                <div className="solution-panel-header">
                     <h4 className="comparison-title no-padding-left">
                         <MIcon name={refinedIcon} /><span>{refinedTitle}</span>
                     </h4>
                     <div className="code-actions">
+                        {subStrategy.refinedSolutionTraceText && (
+                            <div className="response-view-toggle" aria-label="Refined solution view">
+                                <button type="button" className={`response-toggle-option ${refinedViewMode === 'submitted' ? 'active' : ''}`} onClick={() => setRefinedViewMode('submitted')}>Artifact</button>
+                                <button type="button" className={`response-toggle-option ${refinedViewMode === 'trace' ? 'active' : ''}`} onClick={() => setRefinedViewMode('trace')}>Trace</button>
+                            </div>
+                        )}
                         <ActionButton
                             type="copy"
                             disabled={!refinementWasPerformed}
@@ -228,10 +294,8 @@ export const SubStrategyComparisonUI: React.FC<{
                         />
                     </div>
                 </div>
-                <div className="comparison-content custom-scrollbar">
-                    {refinedContent
-                        ? <MathHTML content={refinedContent} />
-                        : <div className="no-content">No refined solution available</div>}
+                <div className="solution-panel-body custom-scrollbar">
+                    <MathHTML content={refinedDisplay} />
                     {subStrategy.error && <div className="error-content">{subStrategy.error}</div>}
                     {!refinementWasPerformed && <div className="disabled-overlay">Refinement Disabled</div>}
                 </div>
@@ -244,9 +308,47 @@ export const SubStrategyComparisonUI: React.FC<{
 export const EmbeddedModalContent: React.FC<{
     content: string;
     contentClass?: string;
-}> = ({ content, contentClass = 'critique-content' }) => (
-    <MathHTML content={content} className={contentClass} />
-);
+    interactionTraceText?: string;
+}> = ({ content, contentClass = 'critique-content', interactionTraceText }) => {
+    const [viewMode, setViewMode] = useState<'submitted' | 'trace'>('submitted');
+    const rootRef = useRef<HTMLDivElement>(null);
+    const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
+    const displayContent = viewMode === 'trace'
+        ? (interactionTraceText || 'No multi-turn interaction trace is available for this response.')
+        : content;
+
+    useLayoutEffect(() => {
+        setHeaderTarget(rootRef.current?.closest('.embedded-modal-content')?.querySelector<HTMLElement>('.embedded-modal-header-actions') || null);
+    }, []);
+
+    const toggle = interactionTraceText && (
+        <div className="response-view-toggle embedded-response-toggle" aria-label="Response view">
+                    <button
+                        type="button"
+                        className={`response-toggle-option ${viewMode === 'submitted' ? 'active' : ''}`}
+                        onClick={() => setViewMode('submitted')}
+                    >
+                        Artifact
+                    </button>
+                    <button
+                        type="button"
+                        className={`response-toggle-option ${viewMode === 'trace' ? 'active' : ''}`}
+                        onClick={() => setViewMode('trace')}
+                    >
+                        Trace
+                    </button>
+        </div>
+    );
+
+    return (
+        <div ref={rootRef} className="deepthink-embedded-response">
+            {headerTarget && toggle && createPortal(toggle, headerTarget)}
+            <div>
+                <MathHTML content={displayContent} className={contentClass} />
+            </div>
+        </div>
+    );
+};
 
 interface StructuredReasoningEvaluation {
     id: string;
@@ -364,6 +466,47 @@ export const StructuredReasoningContent: React.FC<{
     }
 
     return <div className={wrapperClassName}>{body}</div>;
+};
+
+export const StructuredResponseModalContent: React.FC<{
+    reasoning: unknown;
+    interactionTraceText?: string;
+    resultsClassName?: string;
+    emptyMessage?: string;
+}> = ({ reasoning, interactionTraceText, resultsClassName, emptyMessage }) => {
+    const [viewMode, setViewMode] = useState<'submitted' | 'trace'>('submitted');
+    const rootRef = useRef<HTMLDivElement>(null);
+    const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
+
+    useLayoutEffect(() => {
+        setHeaderTarget(rootRef.current?.closest('.embedded-modal-content')?.querySelector<HTMLElement>('.embedded-modal-header-actions') || null);
+    }, []);
+
+    const toggle = interactionTraceText && (
+        <div className="response-view-toggle embedded-response-toggle" aria-label="Response view">
+            <button type="button" className={`response-toggle-option ${viewMode === 'submitted' ? 'active' : ''}`} onClick={() => setViewMode('submitted')}>Artifact</button>
+            <button type="button" className={`response-toggle-option ${viewMode === 'trace' ? 'active' : ''}`} onClick={() => setViewMode('trace')}>Trace</button>
+        </div>
+    );
+
+    return (
+        <div ref={rootRef} className="deepthink-embedded-response">
+            {headerTarget && toggle && createPortal(toggle, headerTarget)}
+            {viewMode === 'trace' ? (
+                <div>
+                    <MathHTML content={interactionTraceText || 'No multi-turn interaction trace is available for this response.'} />
+                </div>
+            ) : (
+                <div>
+                    <StructuredReasoningContent
+                        reasoning={reasoning}
+                        resultsClassName={resultsClassName}
+                        emptyMessage={emptyMessage}
+                    />
+                </div>
+            )}
+        </div>
+    );
 };
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -526,7 +669,7 @@ const StrategyContent: React.FC<{
                     ))}
                 </div>
             )}
-            <div className="strategy-actions">
+            <div className="strategy-actions" style={{ display: 'flex', gap: '8px' }}>
                 {isSkipMode && directSub && (
                     <button
                         className="view-solution-button"

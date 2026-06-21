@@ -129,6 +129,18 @@ function getMarkdownFenceLanguage(className?: string): string {
     return token ? token.slice('language-'.length) : 'plaintext';
 }
 
+function isSandboxArtifactHref(href?: string): boolean {
+    if (!href) return false;
+    return href.includes('/api/sandbox/files/') ||
+        href.includes('/api/sandbox/artifacts/') ||
+        href.includes('/api/sandbox/workspace/file');
+}
+
+function isImageArtifactHref(href: string): boolean {
+    const pathname = href.split(/[?#]/, 1)[0];
+    return /\.(png|jpe?g|gif|webp|bmp|tiff?|svg)$/i.test(pathname);
+}
+
 function extractCodeBlockChild(children: React.ReactNode): { code: string; language: string } | null {
     for (const child of React.Children.toArray(children)) {
         if (!React.isValidElement(child)) {
@@ -445,7 +457,9 @@ const CodeBlock: React.FC<{
     language: string;
     label?: string;
     highlightingVersion: number;
-}> = ({ code, language, label, highlightingVersion }) => {
+    isFilePreview?: boolean;
+    downloadUrl?: string;
+}> = ({ code, language, label, highlightingVersion, isFilePreview, downloadUrl }) => {
     const [copied, setCopied] = useState(false);
     const resolvedLanguage = resolveLanguage(language || 'plaintext');
     const displayLabel = label || getLanguageDisplayName(resolvedLanguage);
@@ -465,13 +479,38 @@ const CodeBlock: React.FC<{
         }
     };
 
+    const handleDownload = () => {
+        if (!downloadUrl) return;
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = '';
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     return (
         <div className="code-block-container">
             <div className="code-block-header">
-                <span className="code-block-title">{displayLabel}</span>
-                <button className="code-copy-icon" type="button" title="Copy code" aria-label="Copy code" onClick={handleCopy}>
-                    <Icon name={copied ? 'check' : 'content_copy'} />
-                </button>
+                <span className="code-block-title">
+                    {displayLabel}
+                    {isFilePreview && <span style={{ color: 'var(--accent-blue, #3b82f6)' }}> (Referenced File)</span>}
+                </span>
+                {downloadUrl ? (
+                    <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
+                        <button className="code-copy-icon" type="button" title="Download file" aria-label="Download file" onClick={handleDownload} style={{ marginLeft: 0 }}>
+                            <Icon name="download" />
+                        </button>
+                        <button className="code-copy-icon" type="button" title="Copy code" aria-label="Copy code" onClick={handleCopy} style={{ marginLeft: 0 }}>
+                            <Icon name={copied ? 'check' : 'content_copy'} />
+                        </button>
+                    </div>
+                ) : (
+                    <button className="code-copy-icon" type="button" title="Copy code" aria-label="Copy code" onClick={handleCopy}>
+                        <Icon name={copied ? 'check' : 'content_copy'} />
+                    </button>
+                )}
             </div>
             <div className="code-block-content" dangerouslySetInnerHTML={{ __html: highlightedMarkup }} />
         </div>
@@ -582,6 +621,119 @@ const ExecutionImagesBlock: React.FC<{
     </div>
 );
 
+const SandboxFileViewer: React.FC<{ href: string }> = ({ href }) => {
+    const [content, setContent] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [isImage, setIsImage] = useState(() => isImageArtifactHref(href));
+    const [preview, setPreview] = useState<ImagePreviewData | null>(null);
+
+    const decodedHref = decodeURIComponent(href);
+    const filename = decodedHref.split('/').pop() || 'file';
+    const ext = href.split('.').pop() || '';
+    const language = ext.split('?')[0] || 'plaintext';
+
+    useEffect(() => {
+        const imageFromPath = isImageArtifactHref(href);
+        let cancelled = false;
+
+        setContent(null);
+        setIsImage(imageFromPath);
+        setLoading(true);
+
+        // Image extensions are known before a request is made. Never fetch
+        // their binary payload merely to turn it into text for a code block.
+        if (imageFromPath) {
+            setLoading(false);
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        fetch(href)
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                if (res.headers.get('content-type')?.toLowerCase().startsWith('image/')) {
+                    // This also protects older or mislabelled artifact URLs
+                    // whose filename does not retain its image extension.
+                    void res.body?.cancel();
+                    return null;
+                }
+                return res.text();
+            })
+            .then(text => {
+                if (cancelled) return;
+                if (text === null) {
+                    setIsImage(true);
+                    setLoading(false);
+                    return;
+                }
+                setContent(text);
+                setLoading(false);
+            })
+            .catch(err => {
+                if (cancelled) return;
+                setContent(`Error loading file content: ${err.message}`);
+                setLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [href]);
+
+    if (isImage) {
+        return (
+            <>
+                <div className="code-block-container sandbox-file-image-preview">
+                    <div className="code-block-header">
+                        <span className="code-block-title">
+                            {filename}
+                            <span style={{ color: 'var(--accent-blue, #3b82f6)' }}> (Referenced Image)</span>
+                        </span>
+                        <button
+                            className="code-copy-icon"
+                            type="button"
+                            title="Download image"
+                            aria-label="Download image"
+                            onClick={() => {
+                                const link = document.createElement('a');
+                                link.href = href;
+                                link.download = '';
+                                link.target = '_blank';
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                            }}
+                        >
+                            <Icon name="download" />
+                        </button>
+                    </div>
+                    <div className="exec-image-grid">
+                        <PreviewableImage
+                            src={href}
+                            alt={filename}
+                            format={language.toUpperCase() || 'IMAGE'}
+                            onPreview={setPreview}
+                        />
+                    </div>
+                </div>
+                <ImagePreviewModal data={preview} onClose={() => setPreview(null)} />
+            </>
+        );
+    }
+
+    return (
+        <CodeBlock 
+            code={loading ? 'Loading file content...' : (content || '')} 
+            language={loading ? 'plaintext' : language} 
+            highlightingVersion={1} 
+            label={filename}
+            isFilePreview={true}
+            downloadUrl={href}
+        />
+    );
+};
+
 const MarkdownSegmentContent: React.FC<{
     content: string;
     highlightingVersion: number;
@@ -615,6 +767,21 @@ const MarkdownSegmentContent: React.FC<{
                     imageClassName="markdown-image"
                     onPreview={onPreview}
                 />
+            );
+        },
+        a: ({ href, children }: { href?: string; children?: React.ReactNode }) => {
+            const sandboxArtifact = isSandboxArtifactHref(href);
+            if (sandboxArtifact) {
+                return <SandboxFileViewer key={href} href={href!} />;
+            }
+            return (
+                <a
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer"
+                >
+                    {children}
+                </a>
             );
         },
         code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {

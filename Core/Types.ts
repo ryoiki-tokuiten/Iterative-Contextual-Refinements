@@ -78,6 +78,8 @@ export interface ExportedConfig {
         dissectedObservationsEnabled: boolean;
         evolvingDfsEnabled: boolean;
         evolvingDfsDepth: number;
+        isolateBranches?: boolean;
+        disableSolutionPool?: boolean;
         provideAllSolutionsToCorrectors: boolean;
     };
     // Solution pool versions for evolution view

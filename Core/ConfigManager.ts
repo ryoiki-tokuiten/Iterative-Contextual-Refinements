@@ -56,6 +56,8 @@ import {
     getDissectedObservationsEnabled,
     getEvolvingDfsEnabled,
     getEvolvingDfsDepth,
+    getIsolateBranchesEnabled,
+    getSolutionPoolDisabled,
     getProvideAllSolutionsToCorrectors
 } from '../Routing';
 import { updateControlsState } from '../UI/Controls';
@@ -124,6 +126,8 @@ export async function exportConfiguration(format: ExportFormat = 'auto'): Promis
                 dissectedObservationsEnabled: getDissectedObservationsEnabled(),
                 evolvingDfsEnabled: getEvolvingDfsEnabled(),
                 evolvingDfsDepth: getEvolvingDfsDepth(),
+                isolateBranches: getIsolateBranchesEnabled(),
+                disableSolutionPool: getSolutionPoolDisabled(),
                 provideAllSolutionsToCorrectors: getProvideAllSolutionsToCorrectors(),
             },
         },
@@ -313,6 +317,11 @@ function restoreCustomPrompts(prompts: ExportedConfigV1['customPrompts']): void 
 function restoreModelParameters(params: NonNullable<ExportedConfigV1['modelParameters']>): void {
     const modelConfig = routingManager.getModelConfigManager();
 
+    // Older exports predate branch isolation, so importing one must restore the default-off behavior.
+    modelConfig.updateParameter('isolateBranches', params.isolateBranches === true);
+    // Older exports predate optional pool skipping, so they keep the normal pool behavior.
+    modelConfig.updateParameter('disableSolutionPool', params.disableSolutionPool === true);
+
     // Iterate over all keys in the params object and update if strictly defined
     // This automatically handles any new parameters added to the interface
     Object.keys(params).forEach(key => {
@@ -329,6 +338,7 @@ function restoreModelParameters(params: NonNullable<ExportedConfigV1['modelParam
     if (modelSelectionUI) {
         modelSelectionUI.syncUIWithParameters();
     }
+    routingManager.getDeepthinkConfigController().emitFullStateUpdate();
 }
 
 // ============================================================================

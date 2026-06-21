@@ -252,6 +252,7 @@ details.sidebar-section,
     display: flex;
     flex-direction: column;
     min-height: 0;
+    overflow: hidden;
 }
 
 /* Sidebar Section Styling */
