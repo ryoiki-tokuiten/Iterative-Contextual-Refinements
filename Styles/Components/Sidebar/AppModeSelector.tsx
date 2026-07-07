@@ -21,23 +21,11 @@ const MODE_DETAILS: Record<ApplicationMode, {
         tags: ['High Quality', 'Medium Compute', 'Orchestrator-Guided-Search'],
         description: 'Deepthink mode given to an agent. Uses quality filtering to evolve strategies. Does not support Evolving DFS or solution pools.'
     },
-    'dynamic-compute': {
-        title: 'Dynamic Compute Allocation',
-        buttonLabel: 'Dynamic Compute',
-        tags: ['Low Quality', 'Dynamic Compute Budget', 'Breadth-First-Search', 'No Critique Loop'],
-        description: 'Experimental. Setting dynamic budget to problems based on their complexity. Doesn\'t focuses on the quality of the output but rather on the diversity and uniqueness of each path. (Orthogonality)'
-    },
     'contextual': {
         title: 'Contextual (Solution Pool + Memory)',
         buttonLabel: 'Iterative Corrections',
         tags: ['Highest Quality (might be biased sometimes)', 'Highest Compute Budget', 'Depth-First-Search', 'Memory Bank Support'],
         description: 'Can work autonomously for hours.'
-    },
-    'agentic': {
-        title: 'Agentic Refinements',
-        buttonLabel: 'Agentic Refinements',
-        tags: ['Medium Quality', 'Medium Compute'],
-        description: 'Refine-Mode like standard refinements just done through tool use. Good for huge files where refine mode might struggle to output the full updated content each time. Has a verification sub-agent.'
     }
 };
 
@@ -72,7 +60,6 @@ export const AppModeSelector: React.FC = () => {
         if (lower.includes('highest compute') || lower.includes('highest compute budget')) return 'tag-compute-highest';
         if (lower.includes('medium compute')) return 'tag-compute-medium';
         if (lower.includes('low compute')) return 'tag-compute-low';
-        if (lower.includes('dynamic compute')) return 'tag-compute-dynamic';
 
         if (lower.includes('search')) return 'tag-search';
         if (lower.includes('memory bank')) return 'tag-feature-memory';
@@ -106,19 +93,10 @@ export const AppModeSelector: React.FC = () => {
     return (
         <div className="input-group">
             <div id="app-mode-selector" className="mode-selector-container" role="radiogroup" aria-label="Select Application Mode">
-                {/* Section 1: Deepthink Reasoning */}
                 <div className="mode-section">
-                    <div className="app-mode-section-label">Deepthink & Long-Horizon</div>
+                    <div className="app-mode-section-label">Application Mode</div>
                     <div className="mode-grid">
-                        {(['deepthink', 'adaptive-deepthink', 'dynamic-compute', 'contextual'] as ApplicationMode[]).map(renderGridItem)}
-                    </div>
-                </div>
-
-                {/* Section 2: Iterative Refinements */}
-                <div className="mode-section">
-                    <div className="app-mode-section-label">Iterative Refinements</div>
-                    <div className="mode-grid" style={{ gridTemplateColumns: '1fr' }}>
-                        {(['agentic'] as ApplicationMode[]).map(renderGridItem)}
+                        {(['deepthink', 'adaptive-deepthink', 'contextual'] as ApplicationMode[]).map(renderGridItem)}
                     </div>
                 </div>
 

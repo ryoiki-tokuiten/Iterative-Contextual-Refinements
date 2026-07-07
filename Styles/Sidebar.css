@@ -754,17 +754,6 @@ details.sidebar-section {
     }
 }
 
-.tag-compute-dynamic {
-    color: #facc15;
-    background: rgba(250, 204, 21, 0.08);
-    border-color: rgba(250, 204, 21, 0.25);
-
-    body.light-mode & {
-        color: #a16207;
-        background: rgba(202, 138, 4, 0.06);
-        border-color: rgba(202, 138, 4, 0.2);
-    }
-}
 
 /* Search */
 .tag-search {

@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import './FileUpload.css';
 import { Icon } from '../../../UI/Icons';
 import { getProviderForCurrentModel, getRoutingManager, getSelectedModel } from '../../../Routing';
+import { FileData } from '../../../Core/Types';
 import {
-    FileData,
     ACCEPTED_FILES,
     getFileConfig,
     isImage,

@@ -2,14 +2,13 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  * 
- * Adaptive Deepthink Mode - UI Integration using Agentic components
+ * Adaptive Deepthink Mode - UI Integration using Adaptive components
  * Uses REAL Deepthink rendering functions and styles from index.css
  */
 
 import React, { useState, useEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import type { AgenticState } from '../Agentic/AgenticCore';
-import { AgentActivityPanel } from '../Agentic/AgenticUI';
+import { AgentActivityPanel } from './AgentActivityPanel';
 import { Icon } from '../UI/Icons';
 import {
     AdaptiveDeepthinkStoreState,
@@ -121,22 +120,17 @@ const AdaptiveDeepthinkUIView: React.FC = () => {
 
     if (!state) return null;
 
-    const agenticState: AgenticState = {
-        id: state.id,
-        currentContent: state.coreState.question,
-        originalContent: state.coreState.question,
-        messages: state.messages,
-        contentHistory: [],
-        isProcessing: state.isProcessing,
-        isComplete: state.isComplete,
-        error: state.error
-    };
-
     return (
         <div className="adaptive-deepthink-ui-container">
             <DeepthinkEmbeddedPanel state={state} />
             <div className="adaptive-deepthink-agent-panel-wrapper">
-                <AgentActivityPanel state={agenticState} onStop={stopAdaptiveDeepthinkProcess} />
+                <AgentActivityPanel
+                    messages={state.messages}
+                    isProcessing={state.isProcessing}
+                    isComplete={state.isComplete}
+                    error={state.error}
+                    onStop={stopAdaptiveDeepthinkProcess}
+                />
             </div>
         </div>
     );

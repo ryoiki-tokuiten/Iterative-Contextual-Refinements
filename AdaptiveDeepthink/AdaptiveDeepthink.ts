@@ -7,7 +7,7 @@
 
 import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import { nanoid } from 'nanoid';
-import { AgenticMessage, ResponseSegment, SystemBlock } from '../Agentic/AgenticCore';
+import { AdaptiveMessage, ResponseSegment, SystemBlock } from './AdaptiveTypes';
 import { messageContentToText } from '../Core/LangGraphToolRuntime';
 import { describeProviderError } from '../Core/ProviderError';
 import { globalState } from '../Core/State';
@@ -43,7 +43,7 @@ import {
 export interface AdaptiveDeepthinkStoreState {
     id: string;
     coreState: AdaptiveDeepthinkState;
-    messages: AgenticMessage[];
+    messages: AdaptiveMessage[];
     isProcessing: boolean;
     isComplete: boolean;
     error?: string;
@@ -146,14 +146,14 @@ function buildAgentSegments(message: AIMessage): ResponseSegment[] {
             tool: {
                 type: label,
                 rawType
-            } as any
+            }
         });
     }
 
     return segments;
 }
 
-function buildAgentMessage(message: AIMessage): AgenticMessage | null {
+function buildAgentMessage(message: AIMessage): AdaptiveMessage | null {
     const segments = buildAgentSegments(message);
     if (segments.length === 0) {
         return null;
@@ -175,7 +175,7 @@ function buildAgentMessage(message: AIMessage): AgenticMessage | null {
     };
 }
 
-function buildSystemMessage(message: ToolMessage): AgenticMessage {
+function buildSystemMessage(message: ToolMessage): AdaptiveMessage {
     const content = messageContentToText(message.content);
     const artifact = (message.artifact ?? undefined) as AdaptiveDeepthinkToolResultArtifact | undefined;
     const tool = artifact?.tool ?? message.name ?? 'tool';
@@ -197,7 +197,7 @@ function buildSystemMessage(message: ToolMessage): AgenticMessage {
 
 function toAdaptiveMessage(
     message: AIMessage | ToolMessage
-): AgenticMessage | null {
+): AdaptiveMessage | null {
     if (message instanceof AIMessage) {
         return buildAgentMessage(message);
     }

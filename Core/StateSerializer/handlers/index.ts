@@ -7,14 +7,10 @@
 
 import { registerModeHandler } from '../ModeStateHandler';
 import { deepthinkStateHandler } from './DeepthinkStateHandler';
-import { agenticStateHandler } from './AgenticStateHandler';
 import { contextualStateHandler } from './ContextualStateHandler';
 import { adaptiveDeepthinkStateHandler } from './AdaptiveDeepthinkStateHandler';
-import { dynamicComputeStateHandler } from './DynamicComputeStateHandler';
 
 // Auto-register all handlers on module import
 registerModeHandler(deepthinkStateHandler);
-registerModeHandler(agenticStateHandler);
 registerModeHandler(contextualStateHandler);
 registerModeHandler(adaptiveDeepthinkStateHandler);
-registerModeHandler(dynamicComputeStateHandler);

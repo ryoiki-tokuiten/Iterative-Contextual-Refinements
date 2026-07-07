@@ -28,18 +28,12 @@ export const Sidebar: React.FC = () => {
     let labelText = 'Core Challenge:';
     let placeholderText = 'E.g., "Design a sustainable urban transportation system", "Analyze the impact of remote work on company culture"...';
 
-    if (currentMode === 'agentic') {
-        labelText = 'Content to Refine:';
-        placeholderText = 'Enter text, code, data report, or any content you want the agent to iteratively refine...';
-    } else if (currentMode === 'contextual') {
+    if (currentMode === 'contextual') {
         labelText = 'Initial User Request:';
         placeholderText = 'E.g., "Write a comprehensive guide on machine learning basics", "Create a detailed business plan for a coffee shop"...';
     } else if (currentMode === 'adaptive-deepthink') {
         labelText = 'Core Challenge:';
         placeholderText = 'E.g., "Solve this mathematical problem", "Design a scalable database architecture", "Analyze this complex scenario"...';
-    } else if (currentMode === 'dynamic-compute') {
-        labelText = 'Problem:';
-        placeholderText = 'Enter a problem to dynamically allocate compute over...';
     }
 
     return (

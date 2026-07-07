@@ -248,12 +248,6 @@ export class PromptsModal {
                     prompts: ["deepthink-post-quality-filter", "deepthink-memory-bank", "deepthink-final-judge"]
                 }
             ],
-            agentic: [
-                {
-                    groupTitle: "AGENTIC CONFIGURATION",
-                    prompts: ["agentic-system", "agentic-verifier"]
-                }
-            ],
             adaptiveDeepthink: [
                 {
                     groupTitle: "1. MAIN ORCHESTRATOR",
@@ -276,12 +270,6 @@ export class PromptsModal {
                 {
                     groupTitle: "CONTEXTUAL AGENTS",
                     prompts: ["contextual-main-generator", "contextual-iterative-agent", "contextual-solution-pool", "contextual-memory"]
-                }
-            ],
-            'dynamic-compute': [
-                {
-                    groupTitle: "DYNAMIC COMPUTE",
-                    prompts: ["dca-solution-generator", "dca-local-pool-agent"]
                 }
             ]
         };
@@ -318,10 +306,8 @@ export class PromptsModal {
         // Refine button, Diff button), but skip wiping options and adding imperative listeners.
         const reactContainerIds = new Set([
             'deepthink-prompts-container',
-            'agentic-prompts-container',
             'adaptiveDeepthink-prompts-container',
-            'contextual-prompts-container',
-            'dynamic-compute-prompts-container'
+            'contextual-prompts-container'
         ]);
 
         const modelSelectors = document.querySelectorAll('.prompt-model-select');
@@ -397,7 +383,6 @@ export class PromptsModal {
         // Reverse mapping from textarea ID to agent name
         const allMaps = {
             ...this.getDeepthinkAgentMap(),
-            ...this.getAgenticAgentMap(),
             ...this.getAdaptiveDeepthinkAgentMap(),
             ...this.getContextualAgentMap()
         };
@@ -427,13 +412,6 @@ export class PromptsModal {
             'memoryBank': 'sys-deepthink-memory-bank',
             'finalJudge': 'sys-deepthink-final-judge',
             'structuredSolutionPool': 'sys-deepthink-structured-solution-pool'
-        };
-    }
-
-    private getAgenticAgentMap(): { [key: string]: string } {
-        return {
-            'agentic': 'sys-agentic',
-            'agentic-verifier': 'sys-agentic-verifier'
         };
     }
 
@@ -763,12 +741,6 @@ export class PromptsModal {
             'structuredSolutionPool': 'sys-deepthink-structured-solution-pool'
         };
 
-        // Agentic mode agents
-        const agenticMap: { [key: string]: string } = {
-            'agentic': 'sys-agentic',
-            'agentic-verifier': 'sys-agentic-verifier'
-        };
-
         // Adaptive Deepthink mode agents
         const adaptiveDeepthinkMap: { [key: string]: string } = {
             'adaptive-main': 'sys-adaptive-main',
@@ -789,7 +761,7 @@ export class PromptsModal {
             'contextual-memory': 'sys-contextual-memory'
         };
 
-        return deepthinkMap[agentName] || agenticMap[agentName] || adaptiveDeepthinkMap[agentName] || contextualMap[agentName] || null;
+        return deepthinkMap[agentName] || adaptiveDeepthinkMap[agentName] || contextualMap[agentName] || null;
     }
 
     private openPromptRefiner(agentName: string): void {

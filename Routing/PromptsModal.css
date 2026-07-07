@@ -32,14 +32,7 @@
     height: 100%;
 }
 
-/* Special case for Agentic mode - use full width for both system and verifier prompts */
-#agentic-prompts-container .prompt-content-pane[data-prompt-key="agentic-system"].active,
-#agentic-prompts-container .prompt-content-pane[data-prompt-key="agentic-verifier"].active {
-    display: flex !important;
-    flex-direction: column;
-    gap: 1.5rem;
-    grid-template-rows: unset !important;
-}
+
 
 .prompt-pane-title {
     display: none;

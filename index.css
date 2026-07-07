@@ -5,7 +5,6 @@
 @import url('./Styles/Global.css');
 @import url('./Routing/ProviderManagement.css');
 @import url('./Routing/PromptRefiner.css');
-@import url('./Agentic/AgenticUI.css');
 @import url("./Styles/Layout.css");
 @import url("./Styles/Sidebar.css");
 @import url("./Styles/Inputs.css");
@@ -18,5 +17,4 @@
 @import url("./Deepthink/DeepthinkKnowledge.css");
 @import url("./Deepthink/DeepthinkAdaptive.css");
 @import url("./Deepthink/DeepthinkConfigPanel.css");
-@import url("./Deepthink/DCA/DCACSS.css");
 @import url("./Routing/PromptsModal.css");

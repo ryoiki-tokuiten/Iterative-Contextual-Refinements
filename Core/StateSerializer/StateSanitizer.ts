@@ -15,11 +15,9 @@ const STATUS_RESET_MAP: Record<string, string> = {
     'processing': 'pending',
     'retrying': 'pending',
 
-    // Running states → idle/stopped
     'running': 'stopped',
     'stopping': 'stopped',
     'orchestrating': 'idle',
-    'agentic_orchestrating': 'idle',
     'processing_workers': 'idle',
     'orchestrating_retrying': 'idle',
 };

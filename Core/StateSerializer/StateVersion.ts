@@ -47,16 +47,14 @@ export interface ExportedConfigV1 {
     // Mode-specific state (type depends on currentMode)
     modeState: unknown;
 
-    // Embedded states (e.g., Agentic state embedded in other modes)
+    // Embedded states (e.g., Adaptive state embedded in other modes)
     embeddedStates?: Record<string, unknown>;
 
     // Custom prompts for all modes
     customPrompts: {
         deepthink?: unknown;
-        agentic?: unknown;
         contextual?: unknown;
         adaptiveDeepthink?: unknown;
-        dca?: unknown;
     };
     // Model parameters
     modelParameters?: {
@@ -169,10 +167,8 @@ export function convertLegacyToVersioned(legacyConfig: Record<string, unknown>):
         embeddedStates: undefined,
         customPrompts: {
             deepthink: legacyConfig.customPromptsDeepthinkState,
-            agentic: legacyConfig.customPromptsAgentic,
             contextual: legacyConfig.customPromptsContextual,
             adaptiveDeepthink: legacyConfig.customPromptsAdaptiveDeepthink,
-            dca: legacyConfig.customPromptsDCA,
         },
         modelParameters: legacyConfig.modelParameters as ExportedConfigV1['modelParameters'],
         solutionPoolVersions: legacyConfig.solutionPoolVersions as ExportedConfigV1['solutionPoolVersions'],
@@ -204,14 +200,10 @@ function extractLegacyModeState(config: Record<string, unknown>, mode: Applicati
                 solutionPoolVersions: config.solutionPoolVersions,
                 activeTabId: (config.activeDeepthinkPipeline as any)?.activeTabId || 'strategic-solver'
             };
-        case 'agentic':
-            return config.activeAgenticState;
         case 'contextual':
             return config.activeContextualState;
         case 'adaptive-deepthink':
             return config.activeAdaptiveDeepthinkState;
-        case 'dynamic-compute':
-            return config.activeDCAState;
         default:
             return null;
     }

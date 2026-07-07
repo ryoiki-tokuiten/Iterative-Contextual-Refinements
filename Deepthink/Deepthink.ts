@@ -541,7 +541,11 @@ async function updateSolutionModalContent(modalBody: HTMLElement, subStrategyId:
     const currentArtifactTraceText = latestIteration?.correctedSolutionTraceText
         || (isCurrentBranch ? subStrategy.refinedSolutionTraceText || subStrategy.solutionAttemptTraceText : undefined);
 
-    const isProcessing = subStrategy.selfImprovementStatus === 'processing' ||
+    const isProcessing = subStrategy.status === 'processing' ||
+        subStrategy.status === 'pending' ||
+        subStrategy.solutionCritiqueStatus === 'processing' ||
+        subStrategy.solutionCritiqueStatus === 'pending' ||
+        subStrategy.selfImprovementStatus === 'processing' ||
         subStrategy.selfImprovementStatus === 'pending' ||
         evolvingDfsData?.status === 'processing';
 

@@ -33,7 +33,7 @@ export class PipelineStopRequestedError extends Error {
     }
 }
 
-export type ApplicationMode = 'deepthink' | 'agentic' | 'contextual' | 'adaptive-deepthink' | 'dynamic-compute';
+export type ApplicationMode = 'deepthink' | 'contextual' | 'adaptive-deepthink';
 
 
 export interface IterationData {
@@ -53,14 +53,12 @@ export interface ExportedConfig {
     initialIdea: string;
     selectedModel: string;
     activeDeepthinkPipeline?: DeepthinkPipelineState | null; // For deepthink
-    activeAgenticState?: any | null; // For agentic mode
     activeContextualState?: any | null; // For contextual mode
     activeAdaptiveDeepthinkState?: any | null; // For adaptive deepthink mode
     activeDeepthinkProblemTabId?: string; // For deepthink UI
     globalStatusText: string;
     globalStatusClass: string;
     customPromptsDeepthinkState?: CustomizablePromptsDeepthink;
-    customPromptsAgentic: { systemPrompt: string }; // Added for Agentic mode
     customPromptsAdaptiveDeepthink?: CustomizablePromptsAdaptiveDeepthink; // Added for Adaptive Deepthink mode
     customPromptsContextual?: CustomizablePromptsContextual; // Added for Contextual mode
     isCustomPromptsOpen?: boolean;
@@ -84,4 +82,11 @@ export interface ExportedConfig {
     };
     // Solution pool versions for evolution view
     solutionPoolVersions?: Array<{ content: string; title: string; timestamp: number }> | null;
+}
+
+export interface FileData {
+    base64: string;
+    mimeType: string;
+    name: string;
+    size: number;
 }

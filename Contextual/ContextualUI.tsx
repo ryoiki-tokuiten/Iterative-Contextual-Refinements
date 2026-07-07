@@ -3,13 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { ContextualState, ContextualMessage } from './ContextualCore';
 import RenderMathMarkdown from '../Styles/Components/RenderMathMarkdown';
 import { openEmbeddedModal } from '../Styles/Components/EmbeddedModal';
 import { Icon, setIconSlot } from '../UI/Icons';
+import { AgentActivityPanel as SharedAgentActivityPanel } from '../Styles/Components/AgentActivity/AgentActivityPanel';
 
 // Track React roots to prevent creating multiple roots on the same container
 const rootMap = new WeakMap<HTMLElement, Root>();
@@ -261,73 +262,28 @@ const CurrentBestGenerationPanel: React.FC<{ content: string; originalContent: s
 
 // Right Panel - Agent Activity
 const AgentActivityPanel: React.FC<{ state: ContextualState; onStop: () => void }> = ({ state, onStop }) => {
-    const messagesContainerRef = useRef<HTMLDivElement>(null);
-    const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
-
-    const handleScroll = useCallback(() => {
-        const el = messagesContainerRef.current;
-        if (el) {
-            const { scrollTop, scrollHeight, clientHeight } = el;
-            const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) <= 2;
-            setIsUserScrolledUp(!isAtBottom);
-        }
-    }, []);
-
-    useEffect(() => {
-        if (!isUserScrolledUp && messagesContainerRef.current) {
-            const el = messagesContainerRef.current;
-            el.scrollTop = el.scrollHeight;
-            requestAnimationFrame(() => {
-                if (!isUserScrolledUp && messagesContainerRef.current) {
-                    const el2 = messagesContainerRef.current;
-                    el2.scrollTop = el2.scrollHeight;
-                }
-            });
-        }
-    }, [state.messages, isUserScrolledUp]);
-
-    useEffect(() => {
-        if (state.isProcessing && messagesContainerRef.current) {
-            const el = messagesContainerRef.current;
-            el.scrollTop = el.scrollHeight;
-            setIsUserScrolledUp(false);
-        }
-    }, [state.isProcessing]);
-
     return (
-        <div className="contextual-agent-panel" style={{
-            flex: '0 0 32%',
-            minWidth: 0,
-            maxWidth: '32%'
-        }}>
-            <div className="agent-panel-header">
-                <h3 style={{ margin: 0 }}>Agent Activity</h3>
-                <div className="header-info">
-                    <span className="iteration-badge">{state.iterationCount}</span>
-                    {state.isProcessing && (
-                        <button className="stop-button" onClick={onStop}>
-                            <Icon name="stop_circle" />
-                            Stop
-                        </button>
-                    )}
-                </div>
-            </div>
-            <div className="agent-messages-container custom-scrollbar" ref={messagesContainerRef} onScroll={handleScroll}>
-                {state.messages.map((message) => (
-                    <MinimalMessageCard key={message.id} message={message} allMessages={state.messages} />
-                ))}
-                {state.isProcessing && (
-                    <div className="processing-indicator">
-                        <div className="spinner"></div>
-                        <span>Processing agent response...</span>
-                    </div>
-                )}
-            </div>
-        </div>
+        <SharedAgentActivityPanel
+            title="Agent Activity"
+            isProcessing={state.isProcessing}
+            error={null}
+            onStop={onStop}
+            headerExtra={<span className="iteration-badge">{state.iterationCount}</span>}
+            className="contextual-agent-panel"
+            style={{
+                flex: '0 0 32%',
+                minWidth: 0,
+                maxWidth: '32%'
+            }}
+        >
+            {state.messages.map((message) => (
+                <MinimalMessageCard key={message.id} message={message} allMessages={state.messages} />
+            ))}
+        </SharedAgentActivityPanel>
     );
 };
 
-// Minimal Message Card (similar to verification report in Agentic mode)
+// Minimal Message Card (similar to verification report in Adaptive mode)
 const MinimalMessageCard: React.FC<{ message: ContextualMessage; allMessages: ContextualMessage[] }> = ({ message, allMessages }) => {
     const getRoleLabel = (role: string) => {
         switch (role) {

@@ -16,7 +16,6 @@ export interface ModeConfig {
 
 const MODE_CONFIGS: Partial<Record<ApplicationMode, ModeConfig>> = {
     'deepthink': { title: 'Deepthink', bodyClass: 'mode-deepthink' },
-    'agentic': { title: 'Agentic Refinements', bodyClass: 'mode-agentic' },
     'contextual': { title: 'Contextual Refinements', bodyClass: 'mode-contextual' },
     'adaptive-deepthink': { title: 'Adaptive Deepthink', bodyClass: 'mode-adaptive-deepthink' }
 };
@@ -48,7 +47,6 @@ export function getModeRadioValue(): ApplicationMode {
 export function getHeaderTitleForMode(mode: ApplicationMode): string {
     switch (mode) {
         case 'deepthink': return 'Deepthink';
-        case 'agentic': return 'Agentic Refinements';
         case 'contextual': return 'Contextual Refinements';
         case 'adaptive-deepthink': return 'Adaptive Deepthink';
         default: return 'Deepthink';
@@ -57,12 +55,10 @@ export function getHeaderTitleForMode(mode: ApplicationMode): string {
 
 export function getControlVisibility(mode: ApplicationMode): {
     deepthink: boolean;
-    agentic: boolean;
     adaptiveDeepthink: boolean;
 } {
     return {
         deepthink: mode === 'deepthink',
-        agentic: mode === 'agentic',
         adaptiveDeepthink: mode === 'adaptive-deepthink'
     };
 }

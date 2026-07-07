@@ -96,8 +96,6 @@ function isElementVisible(element: HTMLElement | null): boolean {
 
 function hasInContentSidebarRestoreControl(): boolean {
     switch (globalState.currentMode) {
-        case 'agentic':
-            return !!document.querySelector('.agentic-text-panel');
         case 'contextual':
             return !!document.querySelector('.contextual-text-panel');
         case 'adaptive-deepthink':
@@ -119,8 +117,6 @@ export function getSidebarCollapseDisabledReason(): string | null {
     switch (globalState.currentMode) {
         case 'deepthink':
             return 'Sidebar collapse disabled in config view';
-        case 'agentic':
-            return 'Sidebar collapse disabled until an Agentic run is visible';
         case 'contextual':
             return 'Sidebar collapse disabled until a Contextual run is visible';
         case 'adaptive-deepthink':

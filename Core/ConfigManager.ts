@@ -39,8 +39,6 @@ import { updateUIAfterModeChange } from './AppRouter';
 import { createDefaultCustomPromptsDeepthink } from '../Deepthink/DeepthinkPrompts';
 import { createDefaultCustomPromptsContextual } from '../Contextual/ContextualPrompts';
 import { createDefaultCustomPromptsAdaptiveDeepthink } from '../AdaptiveDeepthink/AdaptiveDeepthinkPrompt';
-import { createDefaultCustomPromptsDCA } from '../Deepthink/DCA/DCAPrompts';
-import { AGENTIC_SYSTEM_PROMPT } from '../Agentic/AgenticModePrompt';
 import {
     routingManager,
     updateCustomPromptTextareasFromState,
@@ -109,10 +107,8 @@ export async function exportConfiguration(format: ExportFormat = 'auto'): Promis
             embeddedStates,
             customPrompts: {
                 deepthink: globalState.customPromptsDeepthinkState,
-                agentic: globalState.customPromptsAgenticState,
                 contextual: globalState.customPromptsContextualState,
                 adaptiveDeepthink: globalState.customPromptsAdaptiveDeepthinkState,
-                dca: globalState.customPromptsDCAState,
             },
             modelParameters: {
                 temperature: getSelectedTemperature(),
@@ -282,11 +278,6 @@ function restoreCustomPrompts(prompts: ExportedConfigV1['customPrompts']): void 
             getDefault: createDefaultCustomPromptsDeepthink
         },
         {
-            key: 'agentic' as const,
-            target: 'customPromptsAgenticState' as const,
-            getDefault: () => ({ systemPrompt: AGENTIC_SYSTEM_PROMPT })
-        },
-        {
             key: 'adaptiveDeepthink' as const,
             target: 'customPromptsAdaptiveDeepthinkState' as const,
             getDefault: createDefaultCustomPromptsAdaptiveDeepthink
@@ -295,11 +286,6 @@ function restoreCustomPrompts(prompts: ExportedConfigV1['customPrompts']): void 
             key: 'contextual' as const,
             target: 'customPromptsContextualState' as const,
             getDefault: createDefaultCustomPromptsContextual
-        },
-        {
-            key: 'dca' as const,
-            target: 'customPromptsDCAState' as const,
-            getDefault: createDefaultCustomPromptsDCA
         }
     ];
 

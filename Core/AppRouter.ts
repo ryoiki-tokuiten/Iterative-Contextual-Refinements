@@ -7,15 +7,11 @@ import { globalState } from './State';
 import { routingManager } from '../Routing';
 import {
     ensureAdaptiveDeepthinkInitialized,
-    ensureAgenticInitialized,
     ensureContextualInitialized,
     ensureDeepthinkInitialized,
-    ensureDCAInitialized,
     getLoadedAdaptiveDeepthinkModule,
-    getLoadedAgenticModule,
     getLoadedContextualModule,
-    getLoadedDeepthinkModule,
-    getLoadedDCAModule
+    getLoadedDeepthinkModule
 } from './ModeLoader';
 
 let renderToken = 0;
@@ -50,12 +46,7 @@ export function renderActiveMode() {
     window.dispatchEvent(new CustomEvent('beforeRenderActiveMode', { detail: { mode } }));
 
     void (async () => {
-        if (mode === 'agentic') {
-            const mod = await ensureAgenticInitialized();
-            if (mode !== globalState.currentMode || token !== renderToken) return;
-            mod.renderAgenticMode();
-            return;
-        } else if (mode === 'contextual') {
+        if (mode === 'contextual') {
             const mod = await ensureContextualInitialized();
             if (mode !== globalState.currentMode || token !== renderToken) return;
             mod.renderContextualMode();
@@ -64,14 +55,6 @@ export function renderActiveMode() {
             const mod = await ensureAdaptiveDeepthinkInitialized();
             if (mode !== globalState.currentMode || token !== renderToken) return;
             mod.renderAdaptiveDeepthinkMode();
-            return;
-        } else if (mode === 'dynamic-compute') {
-            const mod = await ensureDCAInitialized();
-            if (mode !== globalState.currentMode || token !== renderToken) return;
-            const pipelinesContentContainer = document.getElementById('pipelines-content-container');
-            if (pipelinesContentContainer) {
-                mod.renderDCAMode(pipelinesContentContainer);
-            }
             return;
         } else if (mode === 'deepthink') {
             const mod = await ensureDeepthinkInitialized();
@@ -114,18 +97,12 @@ export function updateUIAfterModeChange() {
 
     if (!globalState.isGenerating) {
 
-        if (globalState.currentMode === 'agentic') {
-            const agentic = getLoadedAgenticModule();
-            if (agentic) agentic.cleanupAgenticMode();
-        } else if (globalState.currentMode === 'contextual') {
+        if (globalState.currentMode === 'contextual') {
             const contextual = getLoadedContextualModule();
             if (contextual) contextual.stopContextualProcess();
         } else if (globalState.currentMode === 'adaptive-deepthink') {
             const adaptive = getLoadedAdaptiveDeepthinkModule();
             if (adaptive) adaptive.cleanupAdaptiveDeepthinkMode();
-        } else if (globalState.currentMode === 'dynamic-compute') {
-            const dca = getLoadedDCAModule();
-            if (dca) dca.cleanupDCAMode();
         }
     }
 

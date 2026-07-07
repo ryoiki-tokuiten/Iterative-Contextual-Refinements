@@ -18,14 +18,12 @@ export const MainContent: React.FC = () => {
     }, []);
 
     const isDeepthinkConfig = currentMode === 'deepthink' && !globalState.activeDeepthinkPipeline;
-    const isAgentic = currentMode === 'agentic';
-    // Deepthink config panel and agentic mode hide the tabs nav
-    const showTabs = !isDeepthinkConfig && !isAgentic;
+    const showTabs = !isDeepthinkConfig;
 
     return (
         <main id="main-content" className="flow-canvas-wrapper" aria-labelledby="main-content-heading">
             <h2 id="main-content-heading" className="sr-only">Generation Pipelines Output</h2>
-            <div className="main-header-content" style={{ display: isAgentic ? 'none' : '' }}>
+            <div className="main-header-content">
                 <button
                     id="sidebar-expand-button"
                     className="sidebar-expand-button"

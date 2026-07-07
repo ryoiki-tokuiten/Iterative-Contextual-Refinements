@@ -4,34 +4,23 @@
  */
 
 import { CustomizablePromptsDeepthink } from '../Deepthink/DeepthinkPrompts';
-import { AgenticPromptsManager, AgenticPrompts } from '../Agentic/AgenticPromptsManager';
 import { CustomizablePromptsAdaptiveDeepthink } from '../AdaptiveDeepthink/AdaptiveDeepthinkPrompt';
 import { AdaptiveDeepthinkPromptsManager } from '../AdaptiveDeepthink/AdaptiveDeepthinkPromptsManager';
 import { CustomizablePromptsContextual } from '../Contextual/ContextualPrompts';
 import { ContextualPromptsManager } from '../Contextual/ContextualPromptsManager';
 import { DeepthinkPromptsManager } from '../Deepthink/DeepthinkPromptsManager';
 
-import { DCAPromptsState } from '../Deepthink/DCA/DCAPrompts';
-import { DCAPromptsManager } from '../Deepthink/DCA/DCAPromptsManager';
-
 export class PromptsManager {
     private deepthinkPromptsManager: DeepthinkPromptsManager;
-    private agenticPromptsManager: AgenticPromptsManager;
     private adaptiveDeepthinkPromptsManager?: AdaptiveDeepthinkPromptsManager;
     private contextualPromptsManager?: ContextualPromptsManager;
-    private dcaPromptsManager?: DCAPromptsManager;
 
     constructor(
         deepthinkPromptsRef: { current: CustomizablePromptsDeepthink },
-        agenticPromptsRef?: { current: AgenticPrompts },
         adaptiveDeepthinkPromptsRef?: { current: CustomizablePromptsAdaptiveDeepthink },
-        contextualPromptsRef?: { current: CustomizablePromptsContextual },
-        dcaPromptsRef?: { current: DCAPromptsState }
+        contextualPromptsRef?: { current: CustomizablePromptsContextual }
     ) {
         this.deepthinkPromptsManager = new DeepthinkPromptsManager(deepthinkPromptsRef);
-
-        const defaultAgenticRef = agenticPromptsRef || { current: { systemPrompt: '', verifierPrompt: '' } };
-        this.agenticPromptsManager = new AgenticPromptsManager(defaultAgenticRef.current);
 
         if (adaptiveDeepthinkPromptsRef) {
             this.adaptiveDeepthinkPromptsManager = new AdaptiveDeepthinkPromptsManager(adaptiveDeepthinkPromptsRef);
@@ -39,22 +28,6 @@ export class PromptsManager {
         if (contextualPromptsRef) {
             this.contextualPromptsManager = new ContextualPromptsManager(contextualPromptsRef);
         }
-        if (dcaPromptsRef) {
-            this.dcaPromptsManager = new DCAPromptsManager(dcaPromptsRef);
-        }
-    }
-
-    // DCA Prompts
-    public getDCAPromptsManager(): DCAPromptsManager | undefined {
-        return this.dcaPromptsManager;
-    }
-
-    public getDCAPrompts(): DCAPromptsState | undefined {
-        return this.dcaPromptsManager?.getPrompts();
-    }
-
-    public setDCAPrompts(prompts: DCAPromptsState): void {
-        this.dcaPromptsManager?.setPrompts(prompts);
     }
 
     // Deepthink prompts
@@ -68,19 +41,6 @@ export class PromptsManager {
 
     public setDeepthinkPrompts(prompts: CustomizablePromptsDeepthink): void {
         this.deepthinkPromptsManager.setPrompts(prompts);
-    }
-
-    // Agentic prompts
-    public getAgenticPromptsManager(): AgenticPromptsManager {
-        return this.agenticPromptsManager;
-    }
-
-    public getAgenticPrompts(): AgenticPrompts {
-        return this.agenticPromptsManager.getAgenticPrompts();
-    }
-
-    public setAgenticPrompts(prompts: AgenticPrompts): void {
-        this.agenticPromptsManager.setAgenticPrompts(prompts);
     }
 
     // Adaptive Deepthink prompts

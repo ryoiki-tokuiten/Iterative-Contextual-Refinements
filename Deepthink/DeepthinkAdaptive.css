@@ -70,7 +70,7 @@
 }
 
 /* Remove containerization from agent panel in Adaptive Deepthink mode */
-.adaptive-deepthink-agent-panel-wrapper .agentic-agent-panel {
+.adaptive-deepthink-agent-panel-wrapper .adaptive-agent-panel {
     background: transparent;
     border: none;
     border-radius: 0;
@@ -82,14 +82,14 @@
 
 /* Remove extra padding from agent panel header for proper alignment */
 .adaptive-deepthink-agent-panel-wrapper .agent-panel-header,
-.adaptive-deepthink-agent-panel-wrapper>.agentic-agent-panel>.agent-panel-header {
+.adaptive-deepthink-agent-panel-wrapper>.adaptive-agent-panel>.agent-panel-header {
     padding-left: 0 !important;
     padding-right: 0 !important;
 }
 
 /* Full-bleed header so glass background reaches the left separator */
 #adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper .agent-panel-header,
-#adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper>.agentic-agent-panel>.agent-panel-header {
+#adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper>.adaptive-agent-panel>.agent-panel-header {
     margin-left: -1rem !important;
     /* cancel wrapper padding-left */
     width: calc(100% + 1rem) !important;
@@ -101,7 +101,7 @@
 
 /* Remove extra padding from messages container */
 .adaptive-deepthink-agent-panel-wrapper .agent-messages-container,
-.adaptive-deepthink-agent-panel-wrapper>.agentic-agent-panel>.agent-messages-container {
+.adaptive-deepthink-agent-panel-wrapper>.adaptive-agent-panel>.agent-messages-container {
     padding-left: 0 !important;
     padding-right: 0 !important;
     overflow-y: auto !important;
@@ -113,7 +113,7 @@
 
 /* Glassy header: strong blur background for Agent Activity header in Adaptive Deepthink */
 #adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper .agent-panel-header,
-#adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper>.agentic-agent-panel>.agent-panel-header {
+#adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper>.adaptive-agent-panel>.agent-panel-header {
     position: relative;
     background: transparent !important;
     /* let overlay render */
@@ -122,7 +122,7 @@
 
 /* Glass overlay to ensure blur is applied even when vendor-prefixed property is unsupported */
 #adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper .agent-panel-header::before,
-#adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper>.agentic-agent-panel>.agent-panel-header::before {
+#adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper>.adaptive-agent-panel>.agent-panel-header::before {
     content: '';
     position: absolute;
     inset: 0;
@@ -143,14 +143,14 @@
 }
 
 #adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper .agent-panel-header>*,
-#adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper>.agentic-agent-panel>.agent-panel-header>* {
+#adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper>.adaptive-agent-panel>.agent-panel-header>* {
     position: relative;
     z-index: 1;
 }
 
 /* Glassy Stop button */
 #adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper .agent-panel-header .stop-button,
-#adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper>.agentic-agent-panel>.agent-panel-header .stop-button {
+#adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper>.adaptive-agent-panel>.agent-panel-header .stop-button {
     background: linear-gradient(180deg, rgba(var(--accent-pink-rgb), 0.22), rgba(var(--accent-pink-rgb), 0.16)) !important;
     color: var(--accent-pink) !important;
     border: 1px solid rgba(var(--accent-pink-rgb), 0.45) !important;
@@ -159,15 +159,15 @@
 }
 
 #adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper .agent-panel-header .stop-button:hover,
-#adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper>.agentic-agent-panel>.agent-panel-header .stop-button:hover {
+#adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper>.adaptive-agent-panel>.agent-panel-header .stop-button:hover {
     background: linear-gradient(180deg, rgba(var(--accent-pink-rgb), 0.28), rgba(var(--accent-pink-rgb), 0.2)) !important;
 }
 
 /* Glassy Completed badge */
 #adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper .agent-panel-header .status-badge,
 #adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper .agent-panel-header .status-badge.status-completed,
-#adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper>.agentic-agent-panel>.agent-panel-header .status-badge,
-#adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper>.agentic-agent-panel>.agent-panel-header .status-badge.status-completed {
+#adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper>.adaptive-agent-panel>.agent-panel-header .status-badge,
+#adaptive-deepthink-container .adaptive-deepthink-agent-panel-wrapper>.adaptive-agent-panel>.agent-panel-header .status-badge.status-completed {
     background: linear-gradient(135deg, rgba(var(--accent-green-rgb), 0.22), rgba(var(--accent-green-rgb), 0.12)) !important;
     color: var(--accent-green) !important;
     border: 1px solid rgba(var(--accent-green-rgb), 0.45) !important;
@@ -306,3 +306,343 @@
     z-index: 1000;
     pointer-events: none;
 }
+
+/* ========================================
+   AGENT ACTIVITY PANEL & SUBCOMPONENTS (Decoupled from legacy components)
+   ======================================== */
+
+/* Right Panel - Agent Activity */
+.adaptive-agent-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: rgba(var(--card-bg-base-rgb), 0.1);
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+}
+
+.agent-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--space-3) var(--space-4);  /* 12px 16px */
+    min-height: var(--button-height-lg);  /* 44px */
+    margin: 0;
+    border-bottom: 1px solid var(--border-color);
+    background: rgba(var(--bg-color-rgb), 0.5);
+}
+
+.agent-panel-header h3 {
+    margin: 0;
+    font-size: var(--font-size-md);  /* 18px */
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-tight);
+    letter-spacing: var(--letter-spacing-tight);
+    color: var(--text-color);
+}
+
+
+
+/* Message Cards */
+.adaptive-message-card {
+    background: rgba(var(--bg-color-rgb), 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    padding: var(--card-padding-sm);  /* 16px */
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.adaptive-message-card.agent-message {
+    background: rgba(var(--accent-purple-rgb), 0.05);
+    border-color: rgba(var(--accent-purple-rgb), 0.2);
+}
+
+.adaptive-message-card.user-message {
+    background: rgba(var(--accent-blue-rgb), 0.05);
+    border-color: rgba(var(--accent-blue-rgb), 0.2);
+}
+
+.adaptive-message-card.system-success {
+    background: rgba(var(--accent-green-rgb), 0.05);
+    border-color: rgba(var(--accent-green-rgb), 0.2);
+}
+
+.adaptive-message-card.system-error {
+    background: rgba(var(--accent-pink-rgb), 0.05);
+    border-color: rgba(var(--accent-pink-rgb), 0.2);
+}
+
+.message-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(var(--border-color-rgb), 0.3);
+}
+
+.message-icon {
+    font-size: 1.2rem;
+}
+
+.message-role {
+    font-weight: 600;
+    text-transform: capitalize;
+    color: var(--text-color);
+}
+
+.message-time {
+    margin-left: auto;
+    font-size: 0.8rem;
+    color: var(--text-tertiary-color);
+}
+
+.message-content {
+    color: var(--text-secondary-color);
+    line-height: 1.6;
+    font-size: 0.95rem;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
+}
+
+.message-inline-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.agent-text-segment {
+    color: var(--text-secondary-color);
+}
+
+.agent-text-segment > :first-child {
+    margin-top: 0;
+}
+
+.agent-text-segment > :last-child {
+    margin-bottom: 0;
+}
+
+/* Command and Tool displays */
+.message-commands,
+.message-tools {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(var(--border-color-rgb), 0.3);
+}
+
+.commands-header,
+.tools-header {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary-color);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.command-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: rgba(var(--bg-color-rgb), 0.5);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    padding: 0.25rem 0.5rem;
+    margin: 0.25rem 0.5rem 0.25rem 0;
+    font-family: var(--font-family-mono);
+    font-size: 0.85rem;
+}
+
+/* Enhanced tool call indicator with icons */
+.tool-call-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(var(--accent-blue-rgb), 0.08);
+    border: 1px solid rgba(var(--accent-blue-rgb), 0.25);
+    border-radius: var(--border-radius-md);
+    padding: 0.5rem 0.75rem;
+    margin: 0.5rem 0;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--accent-blue);
+}
+
+.tool-call-indicator.deepthink-tool-indicator {
+    background: linear-gradient(135deg, 
+        rgba(var(--accent-blue-rgb), 0.1), 
+        rgba(var(--accent-purple-rgb), 0.05));
+    border-color: rgba(var(--accent-blue-rgb), 0.3);
+}
+
+.tool-indicator-icon {
+    font-size: 1.2rem;
+    color: var(--accent-blue);
+}
+
+.tool-call-indicator .tool-name {
+    font-family: var(--font-family-mono);
+    font-size: 0.85rem;
+}
+
+.command-item.diff-command {
+    background: rgba(var(--accent-yellow-rgb), 0.1);
+    border-color: rgba(var(--accent-yellow-rgb), 0.3);
+    color: var(--accent-yellow);
+}
+
+.command-item.tool-call {
+    background: rgba(var(--accent-blue-rgb), 0.1);
+    border-color: rgba(var(--accent-blue-rgb), 0.3);
+    color: var(--accent-blue);
+}
+
+.command-type {
+    font-weight: 600;
+}
+
+.command-params {
+    color: var(--text-secondary-color);
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Tool result display */
+.tool-result {
+    background: rgba(var(--bg-color-rgb), 0.5);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+
+.tool-result-header {
+    background: rgba(var(--accent-blue-rgb), 0.1);
+    color: var(--accent-blue);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tool-result-content {
+    padding: 0.75rem;
+    margin: 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary-color);
+    max-height: 200px;
+    overflow-y: auto;
+    word-break: break-word;
+}
+
+/* Verifier result special styling */
+.verifier-result {
+    background: rgba(var(--accent-purple-rgb), 0.04);
+    border: 1px solid rgba(var(--accent-purple-rgb), 0.25);
+}
+
+.verifier-header {
+    background: rgba(var(--accent-purple-rgb), 0.08);
+    color: var(--accent-purple);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(var(--accent-purple-rgb), 0.2);
+}
+
+.verifier-icon {
+    font-size: 1.1rem;
+    color: var(--accent-purple);
+}
+
+/* Deepthink agent result special styling */
+.deepthink-agent-result {
+    background: rgba(var(--accent-blue-rgb), 0.04);
+    border: 1px solid rgba(var(--accent-blue-rgb), 0.25);
+}
+
+.deepthink-agent-header {
+    background: rgba(var(--accent-blue-rgb), 0.08);
+    color: var(--accent-blue);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(var(--accent-blue-rgb), 0.2);
+}
+
+.deepthink-agent-icon {
+    font-size: 1.1rem;
+    color: var(--accent-blue);
+}
+
+/* Concise tool result display */
+.tool-result.concise {
+    margin: 0.5rem 0;
+}
+
+.tool-result.concise .tool-result-header {
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+}
+
+.tool-result-summary {
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary-color);
+    font-style: italic;
+    border-top: 1px solid rgba(var(--border-color-rgb), 0.3);
+}
+
+/* System blocks styling */
+.system-blocks {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.system-block {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--border-radius-md);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.system-block.error {
+    background: rgba(var(--accent-pink-rgb), 0.08);
+    border: 1px solid rgba(var(--accent-pink-rgb), 0.2);
+    color: var(--accent-pink);
+}
+
+.block-icon {
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+

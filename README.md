@@ -4,7 +4,7 @@ The system integrates with major AI providers (Google AI, OpenAI, Anthropic) and
 
 ## Operational Modes
 
-The system operates in four distinct modes, each optimized for specific use cases.
+The system operates in three distinct modes, each optimized for specific use cases.
 
 
 ### 1. Deepthink Mode
@@ -40,7 +40,7 @@ See [Deepthink architecture and context flow](Deepthink/DeepthinkDocs.md) for th
 **Purpose**: Provide full access of deepthink mode to an agent.
 
 **Architecture**:
-- Hybrid system merging Agentic mode UI with Deepthink agent tools
+- Hybrid system merging deep agent tool execution with natural user conversation
 - Conversation manager maintains context across tool invocations
 - Real-time UI updates as agents execute
 
@@ -110,40 +110,6 @@ User Request → Main Generator → Generated Content
 5. Cycle continues until completion criteria met
 
 
-### 4. Agentic Mode
-
-**Purpose**: General-purpose iterative refinement with tool-based content manipulation.
-
-**Architecture**:
-- LangGraph-driven tool loop with provider-aware LangChain chat models
-- Structured tool calling across hosted and local providers
-- Diff-based editing system for precise modifications
-
-**Core Components**:
-- `AgenticCore.ts`: Streams graph execution into the UI state
-- `AgenticToolGraph.ts`: Defines the LangGraph workflow, tools, and model factory
-- `AgenticEdits.ts`: Applies draft mutations for `multi_edit`
-- `AgenticUI.tsx`: Real-time activity visualization
-
-**Tool System**:
-- `multi_edit`: Apply structured batch edits
-- `read_current_content`: Inspect the current working draft
-- `verify_current_content`: Run an independent verification pass
-- `searchacademia`: Search arXiv for supporting material
-
-**Key Features**:
-- Streaming response handling
-- Structured tool calls with no custom response parsing
-- Sequential tool execution with graph-managed control flow
-- System blocks for progress tracking
-
-**Workflow**:
-1. User submits request in conversational format
-2. AI analyzes and determines necessary tools
-3. Tools execute with real-time feedback
-4. Content iteratively refined through diff operations
-5. Process continues until user satisfaction
-
 
 ## Configuration
 
@@ -186,7 +152,7 @@ User Input → Routing Layer → AI Provider → Response Parser → Mode Handle
 Global State (index.tsx) → Mode-Specific State → Component State → UI Rendering
 ```
 
-### Agent Communication (Contextual/Agentic)
+### Agent Communication (Contextual/Adaptive)
 ```
 User → Main Agent → [Tools/Sub-Agents] → Response Integration → History Management
 ```
@@ -216,7 +182,6 @@ Supported operations:
 
 ### Project Structure
 ```
-/Agentic          - Agentic mode implementation
 /AdaptiveDeepthink - Adaptive Deepthink mode
 /Components       - Shared UI components
 /Contextual       - Contextual mode implementation

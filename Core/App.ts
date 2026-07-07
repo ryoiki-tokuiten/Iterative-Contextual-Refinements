@@ -8,10 +8,8 @@ import { updateUIAfterModeChange } from './AppRouter';
 import { initializeEvolutionConvergenceButtons } from '../Styles/Components/Sidebar/ModelParameters';
 import {
     ensureAdaptiveDeepthinkInitialized,
-    ensureAgenticInitialized,
     ensureContextualInitialized,
     ensureDeepthinkInitialized,
-    setAgenticPromptsManagerForLazyLoad
 } from './ModeLoader';
 
 import {
@@ -103,25 +101,12 @@ export class App {
             const firstImage = globalState.currentProblemImages.length > 0 ? globalState.currentProblemImages[0] : null;
             const deepthink = await ensureDeepthinkInitialized();
             await deepthink.startDeepthinkAnalysisProcess(initialIdea, firstImage?.base64, firstImage?.mimeType);
-        } else if (globalState.currentMode === 'agentic') {
-            console.log('Starting Agentic process');
-            try {
-                const agentic = await ensureAgenticInitialized();
-                await agentic.startAgenticProcess(initialIdea);
-            } catch (e) {
-                console.error('Error starting Agentic process:', e);
-            }
         } else if (globalState.currentMode === 'contextual') {
             const contextual = await ensureContextualInitialized();
             await contextual.startContextualProcess(initialIdea, globalState.customPromptsContextualState);
         } else if (globalState.currentMode === 'adaptive-deepthink') {
             const adaptive = await ensureAdaptiveDeepthinkInitialized();
             await adaptive.startAdaptiveDeepthinkProcess(initialIdea, globalState.customPromptsAdaptiveDeepthinkState, globalState.currentProblemImages);
-        } else if (globalState.currentMode === 'dynamic-compute') {
-            const { ensureDCAInitialized } = await import('./ModeLoader');
-            await ensureDCAInitialized();
-            const { startDCAProcess } = await import('../Deepthink/DCA/DCACore');
-            startDCAProcess(initialIdea);
         } else {
             console.warn('Unknown or unsupported application mode:', globalState.currentMode);
         }
@@ -138,15 +123,8 @@ export class App {
     private static initializeCustomPromptTextareas() {
         routingManager.initializePromptsManager(
             { current: globalState.customPromptsDeepthinkState },
-            { current: globalState.customPromptsAgenticState },
             { current: globalState.customPromptsAdaptiveDeepthinkState },
-            { current: globalState.customPromptsContextualState },
-            { current: globalState.customPromptsDCAState }
+            { current: globalState.customPromptsContextualState }
         );
-
-        const agenticPromptsManager = routingManager.getAgenticPromptsManager();
-        if (agenticPromptsManager) {
-            setAgenticPromptsManagerForLazyLoad(agenticPromptsManager);
-        }
     }
 }

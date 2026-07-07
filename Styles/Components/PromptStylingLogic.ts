@@ -110,7 +110,7 @@ function getOwnerWindow(node: Node): Window | null {
 function getMutationObserverConstructor(
   root: Node
 ): MutationObserverConstructor | undefined {
-  const ownerConstructor = getOwnerWindow(root)?.MutationObserver;
+  const ownerConstructor = (getOwnerWindow(root) as any)?.MutationObserver;
 
   if (ownerConstructor) {
     return ownerConstructor;

@@ -552,7 +552,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process }) =
                                 <div className="terminal-dot red"></div>
                                 <div className="terminal-dot yellow"></div>
                                 <div className="terminal-dot green"></div>
-                                <span className="terminal-title font-mono">deepthink-agentic-console.log</span>
+                                <span className="terminal-title font-mono">deepthink-agent-console.log</span>
                             </div>
                             <div className="terminal-actions-right">
                                 <div className="console-filter-tabs">

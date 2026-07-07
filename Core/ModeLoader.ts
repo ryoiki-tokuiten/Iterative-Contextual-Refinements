@@ -5,7 +5,6 @@
  * ModeLoader - Centralized lazy-loading and one-time initialization for heavy modes.
  */
 
-import type { AgenticPromptsManager } from '../Agentic/AgenticPromptsManager';
 import {
     routingManager,
     getSelectedModel,
@@ -36,26 +35,15 @@ import { setupCodeExecutionToggle } from '../UI/setupCodeExecutionToggle';
 
 type DeepthinkModule = typeof import('../Deepthink/Deepthink');
 type SolutionPoolModule = typeof import('../Deepthink/SolutionPool');
-type AgenticModule = typeof import('../Agentic/AgenticUI_Bridge');
 type ContextualModule = typeof import('../Contextual/Contextual');
 type AdaptiveDeepthinkModule = typeof import('../AdaptiveDeepthink/AdaptiveDeepthinkMode');
-type DCAModule = typeof import('../Deepthink/DCA/DCA');
 
 let deepthinkModule: DeepthinkModule | null = null;
 let deepthinkModulePromise: Promise<DeepthinkModule> | null = null;
 let deepthinkInitialized = false;
 
-let dcaModule: DCAModule | null = null;
-let dcaModulePromise: Promise<DCAModule> | null = null;
-let dcaInitialized = false;
-
 let solutionPoolModule: SolutionPoolModule | null = null;
 let solutionPoolModulePromise: Promise<SolutionPoolModule> | null = null;
-
-let agenticModule: AgenticModule | null = null;
-let agenticModulePromise: Promise<AgenticModule> | null = null;
-let agenticInitialized = false;
-let agenticPromptsManager: AgenticPromptsManager | null = null;
 
 let contextualModule: ContextualModule | null = null;
 let contextualModulePromise: Promise<ContextualModule> | null = null;
@@ -63,13 +51,6 @@ let contextualInitialized = false;
 
 let adaptiveDeepthinkModule: AdaptiveDeepthinkModule | null = null;
 let adaptiveDeepthinkModulePromise: Promise<AdaptiveDeepthinkModule> | null = null;
-
-export function setAgenticPromptsManagerForLazyLoad(manager: AgenticPromptsManager | null): void {
-    agenticPromptsManager = manager;
-    if (agenticModule && manager) {
-        agenticModule.setAgenticPromptsManager(manager);
-    }
-}
 
 async function loadDeepthinkModule(): Promise<DeepthinkModule> {
     if (!deepthinkModulePromise) {
@@ -91,16 +72,6 @@ async function loadSolutionPoolModule(): Promise<SolutionPoolModule> {
     return solutionPoolModulePromise;
 }
 
-async function loadAgenticModule(): Promise<AgenticModule> {
-    if (!agenticModulePromise) {
-        agenticModulePromise = import('../Agentic/AgenticUI_Bridge').then((mod) => {
-            agenticModule = mod;
-            return mod;
-        });
-    }
-    return agenticModulePromise;
-}
-
 async function loadContextualModule(): Promise<ContextualModule> {
     if (!contextualModulePromise) {
         contextualModulePromise = import('../Contextual/Contextual').then((mod) => {
@@ -119,16 +90,6 @@ async function loadAdaptiveDeepthinkModule(): Promise<AdaptiveDeepthinkModule> {
         });
     }
     return adaptiveDeepthinkModulePromise;
-}
-
-async function loadDCAModule(): Promise<DCAModule> {
-    if (!dcaModulePromise) {
-        dcaModulePromise = import('../Deepthink/DCA/DCA').then((mod) => {
-            dcaModule = mod;
-            return mod;
-        });
-    }
-    return dcaModulePromise;
 }
 
 export async function ensureDeepthinkInitialized(): Promise<DeepthinkModule> {
@@ -174,21 +135,6 @@ export async function ensureDeepthinkInitialized(): Promise<DeepthinkModule> {
     return mod;
 }
 
-export async function ensureAgenticInitialized(): Promise<AgenticModule> {
-    const mod = await loadAgenticModule();
-    if (!agenticInitialized) {
-        if (agenticPromptsManager) {
-            mod.initializeAgenticMode(agenticPromptsManager);
-        } else {
-            mod.initializeAgenticMode();
-        }
-        agenticInitialized = true;
-    } else if (agenticPromptsManager) {
-        mod.setAgenticPromptsManager(agenticPromptsManager);
-    }
-    return mod;
-}
-
 export async function ensureContextualInitialized(): Promise<ContextualModule> {
     const mod = await loadContextualModule();
     if (!contextualInitialized) {
@@ -202,29 +148,12 @@ export async function ensureAdaptiveDeepthinkInitialized(): Promise<AdaptiveDeep
     return loadAdaptiveDeepthinkModule();
 }
 
-export async function ensureDCAInitialized(): Promise<DCAModule> {
-    const mod = await loadDCAModule();
-    if (!dcaInitialized) {
-        mod.initializeDCAModule();
-        dcaInitialized = true;
-    }
-    return mod;
-}
-
-export function getLoadedDCAModule(): DCAModule | null {
-    return dcaModule;
-}
-
 export function getLoadedDeepthinkModule(): DeepthinkModule | null {
     return deepthinkModule;
 }
 
 export function getLoadedSolutionPoolModule(): SolutionPoolModule | null {
     return solutionPoolModule;
-}
-
-export function getLoadedAgenticModule(): AgenticModule | null {
-    return agenticModule;
 }
 
 export function getLoadedContextualModule(): ContextualModule | null {

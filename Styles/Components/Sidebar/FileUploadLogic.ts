@@ -1,12 +1,6 @@
 import { globalState } from '../../../Core/State';
 import { getEncoding } from 'js-tiktoken';
-
-export interface FileData {
-    base64: string;
-    mimeType: string;
-    name: string;
-    size: number;
-}
+import { FileData } from '../../../Core/Types';
 
 export interface FileTypeConfig {
     icon: string;
