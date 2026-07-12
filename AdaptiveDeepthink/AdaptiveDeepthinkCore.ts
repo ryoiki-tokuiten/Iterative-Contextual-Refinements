@@ -195,17 +195,11 @@ function addAdaptiveLiveEvent(
 }
 
 function seedFiles(): SeedFile[] {
-    const direct = globalState.directContextFiles.map((file, index) => ({
+    return globalState.directContextFiles.map((file, index) => ({
         name: file.name || `adaptive-upload-${index + 1}`,
         mimeType: file.mimeType,
         base64: file.base64,
     }));
-    const filesystem = globalState.filesystemContextFiles.map((file, index) => ({
-        name: file.name || `adaptive-fs-${index + 1}`,
-        mimeType: file.mimeType,
-        base64: file.base64,
-    }));
-    return [...direct, ...filesystem];
 }
 
 function roleLabel(role: AdaptiveAgentRole): string {
@@ -912,17 +906,14 @@ export async function executeAdaptiveDeepthinkTool(
                     output = '[ERROR: Virtual Environment is disabled. Enable Sandbox Terminal Environment in the Deepthink configuration.]';
                     break;
                 }
-                const executionId = nanoid(8);
-                addAdaptiveLiveEvent(context, 'Orchestrator Virtual Environment', 'Running orchestrator command', 'agent_start', { prompt: toolCall.command, codeExecutionEnabled: true, executionId });
                 const result = await runVirtualEnvironmentCommand({
                     sessionId: `adaptive-${safeSegment(state.id)}-orchestrator`,
                     command: toolCall.command,
                     timeoutMs: toolCall.timeoutMs,
-                    seedFiles: seedFiles(),
+                    seedFiles: [...seedFiles(), ...globalState.filesystemContextFiles],
                     repositoryAccess: { repositoryId: state.id, fullRepositoryRead: true, fullRepositoryWrite: true },
                 });
                 output = `<VirtualEnvironment exitCode="${result.exitCode}" durationMs="${result.durationMs}">\n${result.stdout}${result.stderr ? `\nSTDERR:\n${result.stderr}` : ''}${result.error ? `\nERROR:\n${result.error}` : ''}\n</VirtualEnvironment>`;
-                addAdaptiveLiveEvent(context, 'Orchestrator Virtual Environment', result.ok ? 'Orchestrator command completed' : 'Orchestrator command failed', result.ok ? 'agent_complete' : 'agent_error', { response: output, error: result.error || undefined, codeExecutionEnabled: true, executionId });
                 break;
             }
             case 'submit_final_output':

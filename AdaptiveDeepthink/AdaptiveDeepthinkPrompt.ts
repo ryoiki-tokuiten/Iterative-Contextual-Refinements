@@ -120,7 +120,7 @@ A pass is NOT complete merely because an execution returned. A pass becomes comp
 3. Replaces the heavy prior-pass context with file links.
 4. Advances to a fresh pass and immediately runs the requested next executions.
 
-Use read_files only when a compacted file is materially needed for a decision. The file links are the complete source of truth for compacted passes. Do not assume full prior output remains in your active context. The orchestrator context is deliberately compacted so you can continue iterating without blindly carrying 125k+ token histories.
+Use read_files ONLY to read the agent context from previous passes that were compacted as file links. You CANNOT use read_files to read general workspace files. To read, write, or interact with actual files in the project workspace, you MUST use the virtual_environment tool to execute bash commands. The file links are the complete source of truth for compacted passes. Do not assume full prior output remains in your active context. The orchestrator context is deliberately compacted so you can continue iterating without blindly carrying 125k+ token histories.
 
 Before finalizing, make these decisions:
 • Should you save strategies whose correction genuinely earned permanence?

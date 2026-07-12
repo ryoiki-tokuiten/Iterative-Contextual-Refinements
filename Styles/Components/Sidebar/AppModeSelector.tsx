@@ -85,7 +85,6 @@ export const AppModeSelector: React.FC = () => {
                     style={{ position: 'absolute', opacity: 0, width: 0, height: 0 }}
                 />
                 <span className="mode-button-text">{details.buttonLabel}</span>
-                {isActive && <div className="active-dot" />}
             </label>
         );
     };

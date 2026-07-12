@@ -725,6 +725,7 @@ function buildSystemPrompt(
         '- Direct-context files are supplied in the initial model message and are also mounted read-only under /workspace/direct_context for sandbox processing.',
         '- Additional user uploads are mounted read-only under /workspace/user_uploaded.',
         '- Generated or modified image files with png, jpg, jpeg, gif, webp, bmp, tif, or tiff extensions are returned to you as native image inputs.',
+        '- If you need to visually inspect an existing image file (e.g. from user_uploaded or generated in a previous turn), you can run the `view <filename>` or `open <filename>` command. This attaches the image natively to your next turn.',
         '- Do not print or paste base64. Refer to image files by filename.',
         '',
         'Output visibility rules:',

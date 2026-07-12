@@ -296,7 +296,7 @@ export const MessageCard: React.FC<{ message: AdaptiveMessage }> = ({ message })
                                         <span>{getAdaptiveDeepthinkAgentDisplayName(block.tool)} completed</span>
                                     </div>
                                     <div className="tool-result-summary">
-                                        {getToolResultSummary(block.tool, block.result)}
+                                        <CollapsibleContent content={block.result} maxLines={30} />
                                     </div>
                                 </div>
                             );
@@ -330,7 +330,7 @@ export const MessageCard: React.FC<{ message: AdaptiveMessage }> = ({ message })
                         {message.role === 'agent'
                             ? (message.segments?.[0]?.kind === 'tool' ? getAdaptiveDeepthinkAgentDisplayName(message.segments[0].tool.rawType || message.segments[0].tool.type) : 'Orchestrator')
                             : message.role === 'system'
-                            ? 'Deepthink Agent'
+                            ? 'Deepthink Agent Output'
                             : 'User'}
                     </span>
                 </div>

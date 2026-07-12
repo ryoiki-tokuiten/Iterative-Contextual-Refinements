@@ -2043,7 +2043,7 @@ function buildDockerArgs(args: {
         getSandboxImage(),
         'bash',
         '-c',
-        `umask 077; ${args.command}`,
+        `umask 077; view() { for f in "$@"; do touch -c "$f" 2>/dev/null || cp "$f" ./ 2>/dev/null; done; }; open() { view "$@"; }; ${args.command}`,
     ];
 }
 
@@ -2117,7 +2117,7 @@ function buildBubblewrapArgs(args: {
         '--setenv', 'PATH', getSandboxPath(args.hostRustSysroot, workspaceHome),
         'bash',
         '-c',
-        `umask 077; ${args.command}`,
+        `umask 077; view() { for f in "$@"; do touch -c "$f" 2>/dev/null || cp "$f" ./ 2>/dev/null; done; }; open() { view "$@"; }; ${args.command}`,
     ];
 }
 
