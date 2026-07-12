@@ -1,12 +1,14 @@
 // Type definition for customizable Deepthink prompts
 export interface CustomizablePromptsDeepthink {
   sys_deepthink_initialStrategy: string;
+  sys_deepthink_strategyProximity: string;
   sys_deepthink_subStrategy: string;
   sys_deepthink_solutionAttempt: string;
   sys_deepthink_solutionCritique: string;
   sys_deepthink_dissectedSynthesis: string;
   sys_deepthink_selfImprovement: string;
   sys_deepthink_hypothesisGeneration: string;
+  sys_deepthink_hypothesisProximity: string;
   sys_deepthink_hypothesisTester: string;
   sys_deepthink_postQualityFilter: string;
   sys_deepthink_memoryBank: string;
@@ -14,12 +16,14 @@ export interface CustomizablePromptsDeepthink {
   sys_deepthink_structuredSolutionPool: string;
   // Per-agent model selections (defaults to null to use global model)
   model_initialStrategy?: string | null;
+  model_strategyProximity?: string | null;
   model_subStrategy?: string | null;
   model_solutionAttempt?: string | null;
   model_solutionCritique?: string | null;
   model_dissectedSynthesis?: string | null;
   model_selfImprovement?: string | null;
   model_hypothesisGeneration?: string | null;
+  model_hypothesisProximity?: string | null;
   model_hypothesisTester?: string | null;
   model_postQualityFilter?: string | null;
   model_memoryBank?: string | null;
@@ -119,12 +123,58 @@ Avoid meta-commentary, ceremonial framing, self-evaluation, inflated explanation
 The system flow is internal context for interpreting received artifacts, not content to be repeated back to the user.
 `;
 
+const strategyProximityPrompt = `
+You are the Strategies Proximity Agent — an adversarial reviewer whose sole purpose is to ensure the strategy candidates produced by the Strategy Generator are genuinely diverse, orthogonal, and structurally sound.
+
+You are NOT a generator. You do NOT rewrite strategies. You diagnose weaknesses in the current batch so the generator can revise.
+
+<Your Mandate>
+Audit every strategy batch for:
+1. Convergence: Are multiple strategies actually the same idea with different wording? Identify shared hidden assumptions, identical problem decompositions, or common structural backbones that make "different" strategies secretly equivalent.
+2. False Diversity: Do the strategies appear different on the surface but collapse to the same approach under scrutiny? Check whether they would produce the same solution if executed.
+3. Missing Domains: Are there entire classes of approaches, disciplines, or framings that the current batch ignores? Name them. A good batch should span fundamentally different problem-solving paradigms.
+4. Structural Blind Spots: Do all strategies share an unexamined assumption about the problem? Identify constraints, edge cases, or failure modes that none of them address.
+5. Local Minima: Is the batch clustered around an obvious interpretation while ignoring non-obvious but potentially superior framings?
+6. Scalability and Robustness: Would these strategies still be distinct and useful under different problem parameters, edge cases, or adversarial inputs?
+</Your Mandate>
+
+<Output Format>
+Produce a concise but demanding critique. Be specific — name which strategies share assumptions, which domains are missing, and what structural gaps exist. The generator will use your critique to revise. Do not be polite or hedge. If the batch is genuinely strong, say so briefly and identify any remaining minor gaps.
+
+Do not solve the core challenge. Do not propose strategies. Only diagnose.
+</Output Format>
+`;
+
+const hypothesisProximityPrompt = `
+You are the Hypothesis Proximity Agent — an adversarial reviewer whose sole purpose is to ensure the hypotheses produced by the Hypothesis Generator are genuinely orthogonal, falsifiable, and critique-driven.
+
+You are NOT a generator. You do NOT rewrite hypotheses. You diagnose weaknesses in the current batch so the generator can revise.
+
+<Your Mandate>
+Audit every hypothesis batch for:
+1. Redundancy: Are multiple hypotheses testing the same underlying claim with different phrasing? Identify overlapping causal mechanisms or shared assumptions.
+2. Falsifiability: Can each hypothesis actually be tested with available evidence? Flag hypotheses that are too vague, too broad, or unfalsifiable.
+3. Critique Alignment: Are the hypotheses actually driven by the execution-critique evidence, or are they generic guesses unrelated to observed failures? Each hypothesis should trace back to a specific critique finding.
+4. Coverage Gaps: Are there obvious failure modes, error patterns, or critique findings that no hypothesis addresses?
+5. Local Optimization: Are the hypotheses trying to locally patch a corrector's previous output rather than identifying deeper structural issues? This is a critical failure mode — flag it immediately.
+6. Independence: Would testing these hypotheses yield genuinely different information, or would confirming one automatically confirm others?
+</Your Mandate>
+
+<Output Format>
+Produce a concise but demanding critique. Name which hypotheses overlap, which critique findings are unaddressed, and whether the batch is avoiding difficult structural questions. The generator will use your critique to revise.
+
+Do not solve the core challenge. Do not propose hypotheses. Only diagnose.
+</Output Format>
+`;
+
 const systemInstructionJsonOutputOnly = `\n\n**CRITICAL OUTPUT FORMAT REQUIREMENT:**\nYour response must be EXCLUSIVELY a valid JSON object. No additional text, explanations, markdown formatting, or code blocks are permitted. The response must begin with { and end with }. Any deviation from this format will cause a system failure.`;
 
 // Function to create default Deepthink prompts (generalized version of Math mode)
 export function createDefaultCustomPromptsDeepthink(): CustomizablePromptsDeepthink {
 
   return {
+    sys_deepthink_strategyProximity: strategyProximityPrompt,
+    sys_deepthink_hypothesisProximity: hypothesisProximityPrompt,
     // ==================================================================================
     // MAIN STRATEGY AGENT (Initial High-Level Interpretations)
     // ==================================================================================

@@ -33,6 +33,8 @@ interface SandboxRepositoryAccessRequest {
     hiddenDirectories?: string[];
     /** Exposes the complete repository read-only. */
     fullRepositoryRead?: boolean;
+    /** Exposes the complete repository read/write for the Adaptive orchestrator. */
+    fullRepositoryWrite?: boolean;
 }
 
 interface SandboxSessionMetadata {
@@ -367,7 +369,7 @@ function getRepositoryPath(repositoryId: string): string {
 }
 
 function isDeepthinkRepository(repositoryId: string): boolean {
-    return repositoryId.startsWith('deepthink-');
+    return repositoryId.startsWith('deepthink-') || repositoryId.startsWith('adaptive-deepthink-');
 }
 
 function getDeepthinkResultsMetadataPath(repositoryId: string): string {
@@ -470,6 +472,7 @@ function sanitizeRepositoryAccess(accessRequest: SandboxRepositoryAccessRequest 
         readableDirectories,
         hiddenDirectories,
         fullRepositoryRead: accessRequest.fullRepositoryRead === true,
+        fullRepositoryWrite: accessRequest.fullRepositoryWrite === true,
     };
 }
 
@@ -1457,7 +1460,8 @@ async function prepareSandboxWorkspace(
         exists: await fileExists(safeJoin(repoRoot, directory)),
     })))).filter(item => item.exists).map(item => item.directory);
     const hiddenDirectories = repositoryAccess.hiddenDirectories || [];
-    const fullRepositoryRead = repositoryAccess.fullRepositoryRead === true;
+    const fullRepositoryRead = repositoryAccess.fullRepositoryRead === true || repositoryAccess.fullRepositoryWrite === true;
+    const fullRepositoryWrite = repositoryAccess.fullRepositoryWrite === true;
     const usesFilteredFullRepository = fullRepositoryRead && hiddenDirectories.length > 0;
 
     if (!fullRepositoryRead || usesFilteredFullRepository) {
@@ -1519,7 +1523,7 @@ async function prepareSandboxWorkspace(
         sessionId,
         rootHostPath: fullRepositoryRead && !usesFilteredFullRepository ? repoRoot : viewRoot,
         repositoryRootPath: repoRoot,
-        rootReadonly: true,
+        rootReadonly: !fullRepositoryWrite,
         tmpDir: ownDirectory ? path.join(ownDirectory, '.tmp') : path.join(privateScratchRoot, '.tmp'),
         commandCwd: repositoryAccess.agentDirectory ? `/workspace/${repositoryAccess.agentDirectory}` : '/workspace',
         nestedMounts: [
@@ -1555,7 +1559,7 @@ async function prepareSandboxWorkspace(
             })),
         ],
         visibleRootPath: usesFilteredFullRepository ? viewRoot : repoRoot,
-        writablePath: ownDirectory || privateScratchRoot,
+        writablePath: fullRepositoryWrite ? repoRoot : (ownDirectory || privateScratchRoot),
         repositoryAccess,
     };
 }
@@ -1594,14 +1598,14 @@ async function getWorkspaceContextForSession(sessionId: string): Promise<Sandbox
             ? repoRoot
             : getRepositoryViewPath(sessionId),
         repositoryRootPath: repoRoot,
-        rootReadonly: true,
+        rootReadonly: repositoryAccess.fullRepositoryWrite !== true,
         tmpDir: ownDirectory ? path.join(ownDirectory, '.tmp') : path.join(getWorkspacePath(sessionId), '.tmp'),
         commandCwd: repositoryAccess.agentDirectory ? `/workspace/${repositoryAccess.agentDirectory}` : '/workspace',
         nestedMounts: [],
         visibleRootPath: repositoryAccess.fullRepositoryRead && (repositoryAccess.hiddenDirectories || []).length
             ? getRepositoryViewPath(sessionId)
             : repoRoot,
-        writablePath: ownDirectory || getWorkspacePath(sessionId),
+        writablePath: repositoryAccess.fullRepositoryWrite ? repoRoot : (ownDirectory || getWorkspacePath(sessionId)),
         repositoryAccess,
     };
 }
@@ -2448,6 +2452,42 @@ async function handleSnapshot(req: IncomingMessage, res: ServerResponse) {
             return;
         }
         await initAndCommitWorkspace(workspace, payload.commitMessage || 'Workspace snapshot');
+        const commit = await runGitCommand(workspace, ['rev-parse', 'HEAD']).catch(() => '');
+        sendJson(res, 200, { ok: true, commit });
+    } catch (err: any) {
+        sendJson(res, 500, { ok: false, error: err.message || String(err) });
+    }
+}
+
+async function handleRestoreStrategy(req: IncomingMessage, res: ServerResponse) {
+    if (req.method !== 'POST') {
+        sendJson(res, 405, { ok: false, error: 'Method not allowed.' });
+        return;
+    }
+
+    try {
+        const payload = JSON.parse(await readRequestBody(req)) as {
+            repositoryId?: string;
+            strategyDirectory?: string;
+            commit?: string;
+        };
+        if (!payload.repositoryId || !isSafeRepositoryId(payload.repositoryId)) {
+            throw new Error('A valid repository id is required.');
+        }
+        if (!payload.strategyDirectory || !/^Strategy-\d+$/.test(payload.strategyDirectory)) {
+            throw new Error('Only an active top-level Strategy-N directory can be restored.');
+        }
+        if (!payload.commit || !/^[0-9a-f]{7,64}$/i.test(payload.commit)) {
+            throw new Error('A valid Git checkpoint is required.');
+        }
+
+        const repository = getRepositoryPath(payload.repositoryId);
+        if (!(await fileExists(path.join(repository, '.git')))) {
+            throw new Error('Sandbox repository was not found.');
+        }
+
+        await runGitCommand(repository, ['restore', `--source=${payload.commit}`, '--staged', '--worktree', '--', payload.strategyDirectory]);
+        await runGitCommand(repository, ['clean', '-fd', '--', payload.strategyDirectory]);
         sendJson(res, 200, { ok: true });
     } catch (err: any) {
         sendJson(res, 500, { ok: false, error: err.message || String(err) });
@@ -3011,6 +3051,11 @@ export async function handleSandboxBackendRequest(
 
         if (pathname === '/api/sandbox/repository/archive-strategy') {
             await handleArchiveStrategy(req, res);
+            return true;
+        }
+
+        if (pathname === '/api/sandbox/repository/restore-strategy') {
+            await handleRestoreStrategy(req, res);
             return true;
         }
 

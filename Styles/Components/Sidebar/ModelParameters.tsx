@@ -87,7 +87,7 @@ export const ModelParameters: React.FC = () => {
                         <input type="checkbox" id="provide-all-solutions-toggle" />
                     </div>
 
-                    <div id="contextual-mode-controls" style={{ display: currentMode === 'contextual' ? '' : 'none' }}>
+                    <div id="contextual-mode-controls" style={{ display: (currentMode === 'contextual' || currentMode === 'adaptive-deepthink') ? '' : 'none' }}>
                         <div className="code-execution-container">
                             <div className="code-execution-header">
                                 <Icon name="code" />
@@ -107,7 +107,7 @@ export const ModelParameters: React.FC = () => {
                                 <span className="toggle-label">Enable Sandbox Execution</span>
                             </div>
                             <div className="code-execution-description">
-                                Allow contextual agents to use a persistent sandbox terminal for calculations, verification, scripts, plots, and image manipulation.
+                                Allow agents to use a persistent sandbox terminal for calculations, verification, scripts, plots, and image manipulation.
                             </div>
                         </div>
                     </div>

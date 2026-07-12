@@ -239,17 +239,16 @@
     box-shadow: 0 4px 12px rgba(var(--accent-blue-rgb), 0.3) !important;
 }
 
-/* Content wrapper for embedded Deepthink - MUST SCROLL */
+/* Content wrapper for embedded Deepthink - MUST DELEGATE SCROLLING TO TABS */
 .adaptive-deepthink-embedded-panel .pipelines-content-container {
     flex: 1;
-    /* Take remaining space */
-    overflow-y: auto !important;
-    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    /* Let the tabs handle their own scrolling (Live tab, solver tabs, etc.) */
+    overflow: hidden !important;
     padding: 1rem;
     min-height: 0;
-    /* CRITICAL for flex scrolling */
-    max-height: 100%;
-    /* Constrain height */
+    height: 100%;
     position: relative;
 }
 
@@ -645,4 +644,122 @@
     font-size: 1rem;
     flex-shrink: 0;
 }
+
+/* Tool Arguments Card & Details rendering */
+.tool-arguments-card {
+    margin-top: 0.4rem;
+    margin-bottom: 0.4rem;
+    background: rgba(var(--card-bg-base-rgb), 0.2);
+    border: 1px solid rgba(var(--border-color-rgb), 0.4);
+    border-radius: var(--border-radius-md);
+    padding: var(--space-2) var(--space-3);
+    font-size: 0.8rem;
+    color: var(--text-secondary-color);
+    box-sizing: border-box;
+}
+
+.tool-args-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.tool-args-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.tool-args-label {
+    font-weight: 600;
+    color: var(--text-tertiary-color);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.02em;
+}
+
+.tool-args-value-badge {
+    background: rgba(var(--accent-purple-rgb), 0.1);
+    color: var(--accent-purple);
+    border: 1px solid rgba(var(--accent-purple-rgb), 0.2);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-weight: 600;
+    font-size: 0.75rem;
+}
+
+.tool-args-badge {
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-weight: 600;
+    font-size: 0.75rem;
+    border: 1px solid currentColor;
+    background: rgba(currentColor, 0.05);
+}
+
+.text-accent-purple {
+    color: var(--accent-purple) !important;
+}
+
+.text-accent-blue {
+    color: var(--accent-blue) !important;
+}
+
+.text-accent-green {
+    color: var(--accent-green) !important;
+}
+
+.text-accent-orange {
+    color: #f97316 !important;
+}
+
+.tool-args-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.tool-args-context-block {
+    margin-top: 0.25rem;
+    background: rgba(var(--bg-color-rgb), 0.4);
+    border-radius: 4px;
+    padding: var(--space-2);
+}
+
+.tool-args-context-text {
+    margin: 0;
+    font-family: var(--font-family-mono);
+    font-size: 0.75rem;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 80px;
+    overflow-y: auto;
+    color: var(--text-secondary-color);
+}
+
+.tool-args-code {
+    font-family: var(--font-family-mono);
+    background: rgba(0, 0, 0, 0.25);
+    padding: 2px 4px;
+    border-radius: 3px;
+    word-break: break-all;
+}
+
+.tool-args-executions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.tool-args-exec-item {
+    border-bottom: 1px solid rgba(var(--border-color-rgb), 0.2);
+    padding-bottom: 0.25rem;
+}
+
+.tool-args-exec-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
 

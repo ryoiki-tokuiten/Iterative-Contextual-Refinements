@@ -4,32 +4,40 @@
  */
 
 const ADAPTIVE_DEEPTHINK_AGENT_META: Record<string, { displayName: string; icon: string }> = {
-    GenerateStrategies: {
+    generate_strategies: {
         displayName: 'Strategy Generation Agent',
         icon: 'psychology'
     },
-    GenerateHypotheses: {
+    generate_hypothesis: {
         displayName: 'Hypothesis Generation Agent',
         icon: 'science'
     },
-    TestHypotheses: {
+    test_hypothesis: {
         displayName: 'Hypothesis Testing Agent',
         icon: 'troubleshoot'
     },
-    ExecuteStrategies: {
-        displayName: 'Strategy Execution Agent',
+    execute: {
+        displayName: 'Execution / Critique / Correction',
         icon: 'settings_suggest'
     },
-    SolutionCritique: {
-        displayName: 'Solution Critique Agent',
-        icon: 'security'
+    finalize_pass_and_execute: {
+        displayName: 'Finalize Pass / Execute',
+        icon: 'forward'
     },
-    CorrectedSolutions: {
-        displayName: 'Solution Correction Agent',
-        icon: 'auto_fix'
+    save: {
+        displayName: 'Save Strategy',
+        icon: 'bookmark_added'
     },
-    SelectBestSolution: {
-        displayName: 'Final Judge Agent',
+    read_files: {
+        displayName: 'Read Pass Artifacts',
+        icon: 'description'
+    },
+    virtual_environment: {
+        displayName: 'Virtual Environment',
+        icon: 'terminal'
+    },
+    submit_final_output: {
+        displayName: 'Orchestrator Final Output',
         icon: 'flag'
     }
 };

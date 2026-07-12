@@ -37,33 +37,26 @@ See [Deepthink architecture and context flow](Deepthink/DeepthinkDocs.md) for th
 
 ### 2. Adaptive Deepthink Mode
 
-**Purpose**: Provide full access of deepthink mode to an agent.
+**Purpose**: An orchestrator-directed, pass-based Deepthink workflow for divergent strategic search without a separate final judge.
 
-**Architecture**:
-- Hybrid system merging deep agent tool execution with natural user conversation
-- Conversation manager maintains context across tool invocations
-- Real-time UI updates as agents execute
+**Worker topology**:
+- Strategy Generator ↔ Strategies Proximity
+- Hypothesis Generator ↔ Hypothesis Proximity
+- Test Hypothesis
+- Execution → Critique → Correction for each selected strategy
 
-**Tool System**:
-- `GenerateStrategies`: Creates main problem-solving strategies
-- `GenerateHypotheses`: Produces testable hypotheses
-- `TestHypotheses`: Validates hypothesis viability
-- `ExecuteStrategies`: Implements strategic solutions
-- `SolutionCritique`: Provides critical evaluation
-- `CorrectedSolutions`: Applies refinements
-- `SelectBestSolution`: Determines optimal solution
+Each generation/proximity pair runs a bounded three-round internal revision loop. The orchestrator remains responsible for judging evidence, selectively routing tested hypotheses, saving successful strategies, replacing failed unsaved slots, and submitting the final answer.
 
-**Key Components**:
-- `AdaptiveDeepthinkCore.ts`: Manages tool execution and state
-- `AdaptiveDeepthinkConversationManager`: Handles context and history
-- Integration with Deepthink rendering pipeline for visualization
+**Tool system**:
+- `generate_strategies` — generates or updates up to five unsaved strategies.
+- `generate_hypothesis` and `test_hypothesis` — create critique-driven, non-strategy-aware hypotheses and test them independently.
+- `execute` — parallel per-strategy Execution → Critique → Correction, with optional per-branch `specialContext`.
+- `save` — permanently reserves a strategy and its corrected branch state.
+- `finalize_pass_and_execute` — compacts the completed pass into Markdown/trace files, advances the pass, then executes the requested next branches.
+- `read_files`, `virtual_environment`, and `submit_final_output` — restore compacted evidence, use the shared sandbox repository, and let the orchestrator submit the final answer.
 
-**Workflow**:
-1. User engages in natural conversation
-2. AI determines when to invoke deep reasoning tools
-3. Tools execute with full Deepthink pipeline visualization
-4. Results integrated back into conversation context
-5. Process continues iteratively until solution reached
+**Filesystem and UI**:
+Adaptive runs project directly into the Deepthink Live and Filesystem tabs. When the Sandbox Terminal Environment is enabled, every worker receives the corresponding Deepthink role permissions and `final_output`; the orchestrator receives an explicit root read/write virtual-environment tool. Full agent outputs and JSON traces are written to the Results repository. Before an unsaved branch's correction runs, its strategy directory is checkpointed; the checkpoint is restored before a later pass reuses that strategy, so discarded corrections cannot leak into future executions.
 
 
 ### 3. Contextual Mode

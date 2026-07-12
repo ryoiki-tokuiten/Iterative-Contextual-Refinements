@@ -1,7 +1,4 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
+/** LangGraph shell for the Adaptive Deepthink orchestrator. */
 
 import type { ToolDefinition } from '@langchain/core/language_models/base';
 import { AIMessage, BaseMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
@@ -11,7 +8,7 @@ import { z } from 'zod';
 import {
     createToolCallingAgentModel,
     invokeGeminiToolAgentTurn,
-    resolveProviderForModel
+    resolveProviderForModel,
 } from '../Core/LangGraphToolRuntime';
 import {
     createAdaptiveDeepthinkState,
@@ -19,253 +16,84 @@ import {
     type AdaptiveDeepthinkState,
     type AdaptiveDeepthinkToolCall,
     type AdaptiveDeepthinkToolExecutionContext,
-    type AdaptiveDeepthinkToolPrompts
+    type AdaptiveDeepthinkToolPrompts,
 } from './AdaptiveDeepthinkCore';
 
-const positiveCountSchema = z.number().int().positive().max(12);
-const optionalContextSchema = z.string().trim().min(1).max(4000).optional();
-const nonEmptyIdsSchema = z.array(z.string().trim().min(1)).min(1).max(24);
+const boundedCount = z.number().int().min(1).max(5);
+const optionalContext = z.string().trim().min(1).max(8_000).optional();
+const strategyIds = z.array(z.string().trim().regex(/^S[1-5]$/)).min(1).max(5);
+const hypothesisIds = z.array(z.string().trim().regex(/^H[1-5]$/)).min(1).max(5);
+
+const executionRequestSchema = z.object({
+    strategyId: z.string().trim().regex(/^S[1-5]$/),
+    hypothesisIds: z.array(z.string().trim().regex(/^H[1-5]$/)).max(5),
+    specialContext: optionalContext,
+});
 
 const generateStrategiesSchema = z.object({
-    numStrategies: positiveCountSchema.describe('Number of high-level strategies to generate.'),
-    specialContext: optionalContextSchema.describe('Optional guidance that redirects or constrains the generated strategies.')
+    count: boundedCount,
+    specialContext: optionalContext,
+    replaceStrategyIds: z.array(z.string().trim().regex(/^S[1-5]$/)).max(5).optional(),
 });
+const generateHypothesisSchema = z.object({ count: boundedCount, specialContext: optionalContext });
+const testHypothesisSchema = z.object({ hypothesisIds });
+const executeSchema = z.object({ executions: z.array(executionRequestSchema).min(1).max(5), specialContext: optionalContext });
+const saveSchema = z.object({ strategyIds });
+const readFilesSchema = z.object({ paths: z.array(z.string().trim().min(1).max(160)).min(1).max(12) });
+const virtualEnvironmentSchema = z.object({ command: z.string().trim().min(1).max(12_000), timeoutMs: z.number().int().min(1_000).max(300_000).optional() });
+const submitFinalOutputSchema = z.object({ response: z.string().trim().min(1).max(80_000) });
 
-const generateHypothesesSchema = z.object({
-    numHypotheses: positiveCountSchema.describe('Number of hypotheses to generate.'),
-    specialContext: optionalContextSchema.describe('Optional guidance that focuses the hypothesis search.')
-});
-
-const testHypothesesSchema = z.object({
-    hypothesisIds: nonEmptyIdsSchema.describe('Hypothesis IDs to test.'),
-    specialContext: optionalContextSchema.describe('Optional testing guidance or requested edge cases.')
-});
-
-const executeStrategiesSchema = z.object({
-    executions: z.array(z.object({
-        strategyId: z.string().trim().min(1).describe('Strategy ID to execute.'),
-        hypothesisIds: z.array(z.string().trim().min(1)).max(24).describe('Hypothesis IDs whose test results should be included for this execution.')
-    })).min(1).max(16).describe('Strategy executions to run in parallel.'),
-    specialContext: optionalContextSchema.describe('Optional instructions to guide the execution pass.')
-});
-
-const solutionCritiqueSchema = z.object({
-    executionIds: nonEmptyIdsSchema.describe('Execution or corrected-solution IDs to critique.'),
-    specialContext: optionalContextSchema.describe('Optional critique focus areas or requested rigor.')
-});
-
-const correctedSolutionsSchema = z.object({
-    executionIds: nonEmptyIdsSchema.describe('Execution or corrected-solution IDs to improve.')
-});
-
-const selectBestSolutionSchema = z.object({
-    solutionIds: nonEmptyIdsSchema.describe('Candidate solution IDs to compare and judge.')
-});
-
-const exitSchema = z.object({
-    note: z.string().trim().max(200).optional().describe('Optional short note before exiting.')
-});
-
-const countParameters = (field: string, description: string) => ({
-    type: 'object',
-    properties: {
-        [field]: {
-            type: 'integer',
-            description
-        },
-        specialContext: {
-            type: 'string',
-            description: 'Optional additional guidance for the agent.'
-        }
-    },
-    required: [field],
-    additionalProperties: false
-} as const);
-
-const generateStrategiesParameters = countParameters('numStrategies', 'Number of high-level strategies to generate.');
-const generateHypothesesParameters = countParameters('numHypotheses', 'Number of hypotheses to generate.');
-
-const testHypothesesParameters = {
-    type: 'object',
-    properties: {
-        hypothesisIds: {
-            type: 'array',
-            description: 'Hypothesis IDs to test.',
-            items: { type: 'string' },
-            minItems: 1,
-            maxItems: 24
-        },
-        specialContext: {
-            type: 'string',
-            description: 'Optional additional testing guidance.'
-        }
-    },
-    required: ['hypothesisIds'],
-    additionalProperties: false
-} as const;
-
-const executeStrategiesParameters = {
-    type: 'object',
-    properties: {
-        executions: {
-            type: 'array',
-            description: 'Strategy executions to run in parallel.',
-            minItems: 1,
-            maxItems: 16,
-            items: {
-                type: 'object',
-                properties: {
-                    strategyId: {
-                        type: 'string',
-                        description: 'Strategy ID to execute.'
-                    },
-                    hypothesisIds: {
-                        type: 'array',
-                        description: 'Hypothesis IDs whose test results should be provided.',
-                        items: { type: 'string' },
-                        maxItems: 24
-                    }
-                },
-                required: ['strategyId', 'hypothesisIds'],
-                additionalProperties: false
-            }
-        },
-        specialContext: {
-            type: 'string',
-            description: 'Optional execution guidance.'
-        }
-    },
-    required: ['executions'],
-    additionalProperties: false
-} as const;
-
-const solutionCritiqueParameters = {
-    type: 'object',
-    properties: {
-        executionIds: {
-            type: 'array',
-            description: 'Execution or corrected-solution IDs to critique.',
-            items: { type: 'string' },
-            minItems: 1,
-            maxItems: 24
-        },
-        specialContext: {
-            type: 'string',
-            description: 'Optional critique focus guidance.'
-        }
-    },
-    required: ['executionIds'],
-    additionalProperties: false
-} as const;
-
-const correctedSolutionsParameters = {
-    type: 'object',
-    properties: {
-        executionIds: {
-            type: 'array',
-            description: 'Execution or corrected-solution IDs to improve.',
-            items: { type: 'string' },
-            minItems: 1,
-            maxItems: 24
-        }
-    },
-    required: ['executionIds'],
-    additionalProperties: false
-} as const;
-
-const selectBestSolutionParameters = {
-    type: 'object',
-    properties: {
-        solutionIds: {
-            type: 'array',
-            description: 'Candidate solution IDs to compare and judge.',
-            items: { type: 'string' },
-            minItems: 1,
-            maxItems: 24
-        }
-    },
-    required: ['solutionIds'],
-    additionalProperties: false
-} as const;
-
-const exitParameters = {
-    type: 'object',
-    properties: {
-        note: {
-            type: 'string',
-            description: 'Optional short note before exiting.'
-        }
-    },
-    additionalProperties: false
-} as const;
-
-function defineTool(name: string, description: string, parameters: ToolDefinition['function']['parameters']): ToolDefinition {
-    return {
-        type: 'function',
-        function: {
-            name,
-            description,
-            parameters
-        }
-    };
+function definition(name: string, description: string, parameters: ToolDefinition['function']['parameters']): ToolDefinition {
+    return { type: 'function', function: { name, description, parameters } };
 }
 
-const adaptiveDeepthinkToolDefinitions: ToolDefinition[] = [
-    defineTool(
-        'GenerateStrategies',
-        'Generate high-level strategic interpretations of the challenge.',
-        generateStrategiesParameters
-    ),
-    defineTool(
-        'GenerateHypotheses',
-        'Generate testable hypotheses that can inform later strategy execution.',
-        generateHypothesesParameters
-    ),
-    defineTool(
-        'TestHypotheses',
-        'Test one or more hypotheses and return the evidence gathered for each.',
-        testHypothesesParameters
-    ),
-    defineTool(
-        'ExecuteStrategies',
-        'Execute one or more strategies, optionally with selected hypothesis-testing results.',
-        executeStrategiesParameters
-    ),
-    defineTool(
-        'SolutionCritique',
-        'Critique one or more executions or corrected solutions.',
-        solutionCritiqueParameters
-    ),
-    defineTool(
-        'CorrectedSolutions',
-        'Produce improved solutions for previously critiqued executions or corrections.',
-        correctedSolutionsParameters
-    ),
-    defineTool(
-        'SelectBestSolution',
-        'Compare candidate solutions and select the strongest final answer.',
-        selectBestSolutionParameters
-    ),
-    defineTool(
-        'Exit',
-        'Finish the orchestration after a final solution has already been selected.',
-        exitParameters
-    )
+const tools: ToolDefinition[] = [
+    definition('generate_strategies', 'Generate or update up to five divergent strategies. This internally runs the generator/proximity revision loop three times. Saved IDs cannot be replaced.', {
+        type: 'object', properties: {
+            count: { type: 'integer', minimum: 1, maximum: 5, description: 'Number of unsaved strategy candidates to produce.' },
+            specialContext: { type: 'string', description: 'Failure analysis or desired orthogonal search direction.' },
+            replaceStrategyIds: { type: 'array', items: { type: 'string' }, maxItems: 5, description: 'Only these unsaved slots are replaced. Omit for a fresh unsaved batch.' },
+        }, required: ['count'], additionalProperties: false,
+    }),
+    definition('generate_hypothesis', 'Generate critique-driven hypotheses, then run the hypothesis/proximity revision loop three times. This replaces every prior hypothesis and test packet.', {
+        type: 'object', properties: {
+            count: { type: 'integer', minimum: 1, maximum: 5 },
+            specialContext: { type: 'string', description: 'What the latest execution/critique evidence still fails to explain.' },
+        }, required: ['count'], additionalProperties: false,
+    }),
+    definition('test_hypothesis', 'Independently test the supplied current hypotheses. Test agents see only the individual hypothesis and core challenge.', {
+        type: 'object', properties: { hypothesisIds: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 5 } }, required: ['hypothesisIds'], additionalProperties: false,
+    }),
+    definition('execute', 'Run each selected strategy in parallel through Execution -> Critique -> Correction. Each branch may receive a different specialContext; critiques deliberately do not receive hypothesis context.', {
+        type: 'object', properties: {
+            executions: { type: 'array', minItems: 1, maxItems: 5, items: { type: 'object', properties: { strategyId: { type: 'string' }, hypothesisIds: { type: 'array', items: { type: 'string' }, maxItems: 5 }, specialContext: { type: 'string' } }, required: ['strategyId', 'hypothesisIds'], additionalProperties: false } },
+            specialContext: { type: 'string', description: 'Shared execution-only guidance for this call.' },
+        }, required: ['executions'], additionalProperties: false,
+    }),
+    definition('save', 'Permanently save strategy IDs whose correction properly addressed the critique. Saved slots are immutable, reserved, and never run again.', {
+        type: 'object', properties: { strategyIds: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 5 } }, required: ['strategyIds'], additionalProperties: false,
+    }),
+    definition('finalize_pass_and_execute', 'Finalize the current pass, compact its full outputs into file links, advance to a fresh pass, and immediately run execute with the same parameters.', {
+        type: 'object', properties: {
+            executions: { type: 'array', minItems: 1, maxItems: 5, items: { type: 'object', properties: { strategyId: { type: 'string' }, hypothesisIds: { type: 'array', items: { type: 'string' }, maxItems: 5 }, specialContext: { type: 'string' } }, required: ['strategyId', 'hypothesisIds'], additionalProperties: false } },
+            specialContext: { type: 'string' },
+        }, required: ['executions'], additionalProperties: false,
+    }),
+    definition('read_files', 'Read full adaptive pass output files after compaction. Use this selectively when a linked result is materially relevant.', {
+        type: 'object', properties: { paths: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 12 } }, required: ['paths'], additionalProperties: false,
+    }),
+    definition('virtual_environment', 'Run one bash command in the same repository-backed virtual environment used by Deepthink. The orchestrator has root read/write access for this explicit command.', {
+        type: 'object', properties: { command: { type: 'string' }, timeoutMs: { type: 'integer', minimum: 1000, maximum: 300000 } }, required: ['command'], additionalProperties: false,
+    }),
+    definition('submit_final_output', 'Submit the final answer yourself once you have judged the saved/available corrections. There is no final judge agent.', {
+        type: 'object', properties: { response: { type: 'string' } }, required: ['response'], additionalProperties: false,
+    }),
 ];
 
 export const AdaptiveDeepthinkGraphAnnotation = Annotation.Root({
-    messages: Annotation<BaseMessage[]>({
-        reducer: messagesStateReducer,
-        default: () => []
-    }),
-    coreState: Annotation<AdaptiveDeepthinkState>({
-        reducer: (_, value) => value,
-        default: () => createAdaptiveDeepthinkState('')
-    }),
-    shouldExit: Annotation<boolean>({
-        reducer: (_, value) => value,
-        default: () => false
-    })
+    messages: Annotation<BaseMessage[]>({ reducer: messagesStateReducer, default: () => [] }),
+    coreState: Annotation<AdaptiveDeepthinkState>({ reducer: (_, value) => value, default: () => createAdaptiveDeepthinkState('') }),
+    shouldExit: Annotation<boolean>({ reducer: (_, value) => value, default: () => false }),
 });
 
 export type AdaptiveDeepthinkGraphState = typeof AdaptiveDeepthinkGraphAnnotation.State;
@@ -287,253 +115,136 @@ interface AdaptiveDeepthinkGraphOptions {
 
 interface ToolExecutionResult {
     content: string;
-    status?: 'success' | 'error';
+    status: 'success' | 'error';
     artifact: AdaptiveDeepthinkToolResultArtifact;
     statePatch?: Partial<Omit<AdaptiveDeepthinkGraphState, 'messages'>>;
 }
 
-function createToolArtifact(tool: string, toolCall?: AdaptiveDeepthinkToolCall): AdaptiveDeepthinkToolResultArtifact {
+function artifact(tool: string, toolCall?: AdaptiveDeepthinkToolCall): AdaptiveDeepthinkToolResultArtifact {
     return toolCall ? { tool, toolCall } : { tool };
-}
-
-function createToolResult(
-    content: string,
-    artifact: AdaptiveDeepthinkToolResultArtifact,
-    status: 'success' | 'error' = 'success',
-    statePatch?: Partial<Omit<AdaptiveDeepthinkGraphState, 'messages'>>
-): ToolExecutionResult {
-    return {
-        content,
-        status,
-        artifact,
-        ...(statePatch ? { statePatch } : {})
-    };
 }
 
 export function normalizeAdaptiveDeepthinkToolCall(name: string, args: unknown): AdaptiveDeepthinkToolCall | null {
     switch (name) {
-        case 'GenerateStrategies': {
-            const parsed = generateStrategiesSchema.safeParse(args ?? {});
-            return parsed.success ? { type: 'GenerateStrategies', ...parsed.data } : null;
-        }
-
-        case 'GenerateHypotheses': {
-            const parsed = generateHypothesesSchema.safeParse(args ?? {});
-            return parsed.success ? { type: 'GenerateHypotheses', ...parsed.data } : null;
-        }
-
-        case 'TestHypotheses': {
-            const parsed = testHypothesesSchema.safeParse(args ?? {});
-            return parsed.success ? { type: 'TestHypotheses', ...parsed.data } : null;
-        }
-
-        case 'ExecuteStrategies': {
-            const parsed = executeStrategiesSchema.safeParse(args ?? {});
-            return parsed.success ? { type: 'ExecuteStrategies', ...parsed.data } : null;
-        }
-
-        case 'SolutionCritique': {
-            const parsed = solutionCritiqueSchema.safeParse(args ?? {});
-            return parsed.success ? { type: 'SolutionCritique', ...parsed.data } : null;
-        }
-
-        case 'CorrectedSolutions': {
-            const parsed = correctedSolutionsSchema.safeParse(args ?? {});
-            return parsed.success ? { type: 'CorrectedSolutions', ...parsed.data } : null;
-        }
-
-        case 'SelectBestSolution': {
-            const parsed = selectBestSolutionSchema.safeParse(args ?? {});
-            return parsed.success ? { type: 'SelectBestSolution', ...parsed.data } : null;
-        }
-
-        case 'Exit': {
-            return exitSchema.safeParse(args ?? {}).success ? { type: 'Exit' } : null;
-        }
-
-        default:
-            return null;
+        case 'generate_strategies': { const parsed = generateStrategiesSchema.safeParse(args ?? {}); return parsed.success ? { type: 'generate_strategies', ...parsed.data } : null; }
+        case 'generate_hypothesis': { const parsed = generateHypothesisSchema.safeParse(args ?? {}); return parsed.success ? { type: 'generate_hypothesis', ...parsed.data } : null; }
+        case 'test_hypothesis': { const parsed = testHypothesisSchema.safeParse(args ?? {}); return parsed.success ? { type: 'test_hypothesis', ...parsed.data } : null; }
+        case 'execute': { const parsed = executeSchema.safeParse(args ?? {}); return parsed.success ? { type: 'execute', ...parsed.data } : null; }
+        case 'save': { const parsed = saveSchema.safeParse(args ?? {}); return parsed.success ? { type: 'save', ...parsed.data } : null; }
+        case 'finalize_pass_and_execute': { const parsed = executeSchema.safeParse(args ?? {}); return parsed.success ? { type: 'finalize_pass_and_execute', ...parsed.data } : null; }
+        case 'read_files': { const parsed = readFilesSchema.safeParse(args ?? {}); return parsed.success ? { type: 'read_files', ...parsed.data } : null; }
+        case 'virtual_environment': { const parsed = virtualEnvironmentSchema.safeParse(args ?? {}); return parsed.success ? { type: 'virtual_environment', ...parsed.data } : null; }
+        case 'submit_final_output': { const parsed = submitFinalOutputSchema.safeParse(args ?? {}); return parsed.success ? { type: 'submit_final_output', ...parsed.data } : null; }
+        default: return null;
     }
 }
 
-function buildAdaptiveDeepthinkSystemPrompt(state: AdaptiveDeepthinkGraphState, systemPrompt: string): string {
-    const inventory = [
-        `${state.coreState.strategies.size} strategies`,
-        `${state.coreState.hypotheses.size} hypotheses`,
-        `${state.coreState.hypothesisTestings.size} hypothesis tests`,
-        `${state.coreState.executions.size} executions`,
-        `${state.coreState.critiques.size} critiques`,
-        `${state.coreState.correctedSolutions.size} corrections`
-    ].join(', ');
+function compactedContext(state: AdaptiveDeepthinkState): string {
+    return state.compactedContextLinks.length
+        ? `Completed pass outputs have been compacted. Read only needed files with read_files: ${state.compactedContextLinks.map(path => `[${path}]`).join(', ')}`
+        : 'No pass has been compacted yet.';
+}
 
+function buildAdaptiveDeepthinkSystemPrompt(state: AdaptiveDeepthinkGraphState, systemPrompt: string): string {
+    const strategies = Array.from(state.coreState.strategies.values()).map(strategy => `${strategy.id}${strategy.saved ? ' (saved)' : ''}`).join(', ') || 'none';
+    const hypotheses = Array.from(state.coreState.hypotheses.keys()).join(', ') || 'none';
     return [
         systemPrompt,
-        'All assistant text is shown directly in the UI. Keep it concise, professional, and free of fake tool syntax.',
-        'Before every tool call, include a brief visible reasoning summary in plain text so the UI shows your current plan.',
-        'That visible reasoning should summarize what you learned and why the next tool is the right move.',
-        'Call tools through the provided function interface only.',
-        'Use at most one tool per turn.',
-        'Track IDs exactly as returned by tool results.',
-        state.coreState.selectedSolution
-            ? 'A final solution has already been selected. Briefly conclude and call Exit.'
-            : 'No final solution has been selected yet. Continue until you can confidently call SelectBestSolution, then Exit.',
-        `Current inventory: ${inventory}.`
+        '',
+        '<Runtime State>',
+        `Current pass: ${state.coreState.passNumber}.`,
+        `Strategies: ${strategies}.`,
+        `Current hypotheses: ${hypotheses}.`,
+        compactedContext(state.coreState),
+        '</Runtime State>',
+        '',
+        'Use exactly one orchestration tool call per turn. Keep visible narration short and decision-oriented. Tool IDs are authoritative. Do not invent tool syntax, file content, or tool results.',
     ].join('\n');
+}
+
+function messagesForOrchestrator(state: AdaptiveDeepthinkGraphState): BaseMessage[] {
+    const boundary = state.coreState.compactionBoundary;
+    if (!boundary || state.messages.length <= boundary) return state.messages;
+    // Keep the original challenge, discard the heavy prior pass conversations,
+    // and retain only post-finalization reasoning/tool traffic.
+    return [state.messages[0], ...state.messages.slice(boundary)].filter(Boolean) as BaseMessage[];
 }
 
 async function executeToolCall(
     state: AdaptiveDeepthinkGraphState,
     name: string,
     rawArgs: unknown,
-    options: AdaptiveDeepthinkGraphOptions
+    options: AdaptiveDeepthinkGraphOptions,
 ): Promise<ToolExecutionResult> {
-    if (name === 'Exit') {
-        exitSchema.parse(rawArgs ?? {});
-
-        if (!state.coreState.selectedSolution?.trim()) {
-            return createToolResult(
-                'Exit rejected: select a final solution before finishing.',
-                createToolArtifact('Exit', { type: 'Exit' }),
-                'error'
-            );
-        }
-
-        return createToolResult(
-            'Adaptive Deepthink orchestration completed.',
-            createToolArtifact('Exit', { type: 'Exit' }),
-            'success',
-            {
-                shouldExit: true,
-                coreState: state.coreState
-            }
-        );
-    }
-
     const toolCall = normalizeAdaptiveDeepthinkToolCall(name, rawArgs);
-    if (!toolCall || toolCall.type === 'Exit') {
-        return createToolResult(
-            `[TOOL_ERROR: Invalid arguments for ${name}]`,
-            createToolArtifact(name),
-            'error'
-        );
-    }
-
-    const content = await executeAdaptiveDeepthinkTool(
-        toolCall,
-        state.coreState,
-        options.createExecutionContext(toolCall),
-        options.deepthinkPrompts,
-        options.images ?? []
-    );
-
-    return createToolResult(
+    if (!toolCall) return { content: `[TOOL_ERROR: Invalid arguments for ${name}]`, status: 'error', artifact: artifact(name) };
+    const content = await executeAdaptiveDeepthinkTool(toolCall, state.coreState, options.createExecutionContext(toolCall), options.deepthinkPrompts, options.images ?? []);
+    return {
         content,
-        createToolArtifact(name, toolCall),
-        content.includes('[ERROR:') ? 'error' : 'success',
-        {
-            coreState: state.coreState
-        }
-    );
+        status: content.includes('[ERROR:') ? 'error' : 'success',
+        artifact: artifact(name, toolCall),
+        statePatch: {
+            coreState: state.coreState,
+            ...(toolCall.type === 'submit_final_output' ? { shouldExit: true } : {}),
+        },
+    };
 }
 
 function getLastAiMessage(state: AdaptiveDeepthinkGraphState): AIMessage | null {
-    const lastMessage = state.messages[state.messages.length - 1];
-    return lastMessage instanceof AIMessage ? lastMessage : null;
+    const last = state.messages[state.messages.length - 1];
+    return last instanceof AIMessage ? last : null;
 }
 
-async function executeToolsNode(
-    state: AdaptiveDeepthinkGraphState,
-    options: AdaptiveDeepthinkGraphOptions
-): Promise<Partial<AdaptiveDeepthinkGraphState>> {
+async function executeToolsNode(state: AdaptiveDeepthinkGraphState, options: AdaptiveDeepthinkGraphOptions): Promise<Partial<AdaptiveDeepthinkGraphState>> {
     const lastMessage = getLastAiMessage(state);
-    if (!lastMessage?.tool_calls?.length) {
-        return {};
-    }
-
-    let workingState: AdaptiveDeepthinkGraphState = {
-        ...state
-    };
+    if (!lastMessage?.tool_calls?.length) return {};
+    let workingState = { ...state };
     const toolMessages: ToolMessage[] = [];
 
-    for (const toolInvocation of lastMessage.tool_calls) {
+    for (const invocation of lastMessage.tool_calls) {
         let result: ToolExecutionResult;
-
         try {
-            result = await executeToolCall(
-                workingState,
-                toolInvocation.name,
-                toolInvocation.args,
-                options
-            );
+            result = await executeToolCall(workingState, invocation.name, invocation.args, options);
         } catch (error) {
-            result = createToolResult(
-                `[TOOL_ERROR: ${error instanceof Error ? error.message : 'Unknown tool error'}]`,
-                createToolArtifact(
-                    toolInvocation.name,
-                    normalizeAdaptiveDeepthinkToolCall(toolInvocation.name, toolInvocation.args) ?? undefined
-                ),
-                'error'
-            );
+            result = { content: `[TOOL_ERROR: ${error instanceof Error ? error.message : 'Unknown tool error'}]`, status: 'error', artifact: artifact(invocation.name) };
         }
-
-        workingState = {
-            ...workingState,
-            ...result.statePatch
-        };
-
+        workingState = { ...workingState, ...result.statePatch };
         toolMessages.push(new ToolMessage({
-            name: toolInvocation.name,
+            name: invocation.name,
             content: result.content,
-            tool_call_id: toolInvocation.id ?? nanoid(8),
+            tool_call_id: invocation.id ?? nanoid(8),
             status: result.status,
-            artifact: result.artifact
+            artifact: result.artifact,
         }));
+        if (result.artifact.toolCall?.type === 'finalize_pass_and_execute') {
+            // The next agent turn receives the compact link summary from the
+            // system prompt rather than all prior full execution blocks.
+            // Keep this call's AI invocation and fresh execution result, but
+            // remove every older pass conversation on the next orchestrator
+            // turn. Tool messages remain paired with their AI tool call.
+            workingState.coreState.compactionBoundary = Math.max(1, state.messages.length - 1);
+        }
     }
-
-    return {
-        messages: toolMessages,
-        coreState: workingState.coreState,
-        shouldExit: workingState.shouldExit
-    };
+    return { messages: toolMessages, coreState: workingState.coreState, shouldExit: workingState.shouldExit };
 }
 
 function shouldRunTools(state: AdaptiveDeepthinkGraphState) {
-    const lastMessage = getLastAiMessage(state);
-    return lastMessage?.tool_calls?.length ? 'tools' : END;
-}
-
-function afterTools(state: AdaptiveDeepthinkGraphState) {
-    return state.shouldExit ? END : 'agent';
+    return getLastAiMessage(state)?.tool_calls?.length ? 'tools' : END;
 }
 
 export function createAdaptiveDeepthinkGraph(options: AdaptiveDeepthinkGraphOptions) {
     const { providerName, providerConfig } = resolveProviderForModel(options.modelName);
-    if (!providerConfig?.isConfigured || !providerConfig.apiKey) {
-        throw new Error(`No configured provider found for model: ${options.modelName}`);
-    }
-
-    const model = providerName === 'gemini'
-        ? null
-        : createToolCallingAgentModel(providerName, providerConfig, options).bindTools(adaptiveDeepthinkToolDefinitions);
-
+    if (!providerConfig?.isConfigured || !providerConfig.apiKey) throw new Error(`No configured provider found for model: ${options.modelName}`);
+    const model = providerName === 'gemini' ? null : createToolCallingAgentModel(providerName, providerConfig, options).bindTools(tools);
     const agentNode = async (state: AdaptiveDeepthinkGraphState) => {
         const systemPrompt = buildAdaptiveDeepthinkSystemPrompt(state, options.systemPrompt);
+        const messages = messagesForOrchestrator(state);
         const response = providerName === 'gemini'
-            ? await invokeGeminiToolAgentTurn(
-                providerConfig,
-                state.messages,
-                systemPrompt,
-                adaptiveDeepthinkToolDefinitions,
-                options
-            )
-            : await model!.invoke([
-                new SystemMessage(systemPrompt),
-                ...state.messages
-            ]);
-
+            ? await invokeGeminiToolAgentTurn(providerConfig, messages, systemPrompt, tools, options)
+            : await model!.invoke([new SystemMessage(systemPrompt), ...messages]);
         return { messages: [response] };
     };
-
+    const afterTools = (state: AdaptiveDeepthinkGraphState) => state.shouldExit ? END : 'agent';
     return new StateGraph(AdaptiveDeepthinkGraphAnnotation)
         .addNode('agent', agentNode)
         .addNode('tools', (state: AdaptiveDeepthinkGraphState) => executeToolsNode(state, options))

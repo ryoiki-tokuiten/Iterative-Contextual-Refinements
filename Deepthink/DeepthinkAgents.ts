@@ -25,6 +25,18 @@ export interface AgentExecutionContext {
     getSelectedTemperature: () => number;
     getSelectedModel: () => string;
     getSelectedTopP: () => number;
+    /**
+     * Optional transport used by modes that run these shared roles inside the
+     * Deepthink sandbox. Keeping the agent contracts here lets Adaptive
+     * Deepthink reuse the exact same prompts/parsers without duplicating a
+     * second set of agents.
+     */
+    runPrompt?: (args: {
+        promptText: string;
+        systemPrompt: string;
+        isJson: boolean;
+        images: ImageInput;
+    }) => Promise<string>;
 }
 
 // ========== SHARED HELPERS ==========
@@ -52,10 +64,10 @@ function buildStrategyPrompt(question: string, numStrategies: number): string {
 Generate exactly ${numStrategies} distinct high-level strategic interpretations. Return JSON with a "strategies" array. Do not solve the challenge.`;
 }
 
-function buildHypothesisGenerationPrompt(question: string, numHypotheses: number): string {
+function buildHypothesisGenerationPrompt(question: string, numHypotheses: number, allowFewer = false): string {
     return `Core Challenge: ${question}
 
-Generate exactly ${numHypotheses} hypotheses worth testing. Return JSON with a "hypotheses" array. Do not solve the challenge.`;
+Generate ${allowFewer ? `up to ${numHypotheses}` : `exactly ${numHypotheses}`} hypotheses worth testing. Return JSON with a "hypotheses" array. Do not solve the challenge.`;
 }
 
 function buildHypothesisTestingPrompt(question: string, hypothesis: string): string {
@@ -132,6 +144,15 @@ async function callAgent(
     systemPrompt: string,
     isJson: boolean
 ): Promise<string> {
+    if (context.runPrompt) {
+        return context.runPrompt({
+            promptText,
+            systemPrompt,
+            isJson,
+            images,
+        });
+    }
+
     const response = await context.callAI(
         buildPromptParts(promptText, images),
         context.getSelectedTemperature(),
@@ -141,6 +162,26 @@ async function callAgent(
         context.getSelectedTopP()
     );
     return context.cleanOutputByType(response.text || '', isJson ? 'json' : undefined);
+}
+
+function buildProximityPrompt(
+    kind: 'strategies' | 'hypotheses',
+    question: string,
+    candidates: string[],
+    conversationHistory: string
+): string {
+    const label = kind === 'strategies' ? 'Strategy' : 'Hypothesis';
+    return `Core Challenge: ${question}
+
+<Current ${label} Candidates>
+${candidates.map((candidate, index) => `<${label} ${index + 1}>\n${candidate}\n</${label} ${index + 1}>`).join('\n\n')}
+</Current ${label} Candidates>
+
+<Generator Proximity History>
+${conversationHistory || 'This is the first proximity review.'}
+</Generator Proximity History>
+
+Act as the ${kind === 'strategies' ? 'Strategies' : 'Hypothesis'} Proximity Agent. Audit the candidate set for convergence, duplication, missing orthogonal domains, structural blind spots, untested assumptions, and local-minimum behavior. Be demanding and specific. Do not solve the core challenge and do not rewrite the candidates. Return a concise critique that a generator can use for its next revision.`;
 }
 
 /** Wraps an async agent body with standard error handling. */
@@ -188,10 +229,11 @@ export async function generateHypothesesAgent(
     specialContext: string,
     systemPrompt: string,
     context: AgentExecutionContext,
-    images: ImageInput = []
+    images: ImageInput = [],
+    allowFewer = false
 ): Promise<AgentResponse> {
     return wrapAgent(async () => {
-        const prompt = appendContext(buildHypothesisGenerationPrompt(question, numHypotheses), specialContext);
+        const prompt = appendContext(buildHypothesisGenerationPrompt(question, numHypotheses, allowFewer), specialContext);
         const rawText = await callAgent(prompt, images, context, systemPrompt, true);
         const parsed = context.parseJsonSafe(rawText, 'GenerateHypotheses');
 
@@ -199,6 +241,50 @@ export async function generateHypothesesAgent(
             return { success: false, error: 'Failed to parse hypotheses from response', rawResponse: rawText };
         }
         return { success: true, data: { hypotheses: parsed.hypotheses }, rawResponse: rawText };
+    });
+}
+
+/**
+ * Independent adversarial proximity review for a strategy batch. The
+ * generator owns revisions; this role only diagnoses weak diversity and
+ * structural coverage so the two cannot silently agree with themselves.
+ */
+export async function strategiesProximityAgent(
+    question: string,
+    strategies: string[],
+    conversationHistory: string,
+    specialContext: string,
+    systemPrompt: string,
+    context: AgentExecutionContext,
+    images: ImageInput = []
+): Promise<AgentResponse> {
+    return wrapAgent(async () => {
+        const prompt = appendContext(
+            buildProximityPrompt('strategies', question, strategies, conversationHistory),
+            specialContext
+        );
+        const review = await callAgent(prompt, images, context, systemPrompt, false);
+        return { success: true, data: { review }, rawResponse: review };
+    });
+}
+
+/** See strategiesProximityAgent; hypotheses use the same independent review contract. */
+export async function hypothesesProximityAgent(
+    question: string,
+    hypotheses: string[],
+    conversationHistory: string,
+    specialContext: string,
+    systemPrompt: string,
+    context: AgentExecutionContext,
+    images: ImageInput = []
+): Promise<AgentResponse> {
+    return wrapAgent(async () => {
+        const prompt = appendContext(
+            buildProximityPrompt('hypotheses', question, hypotheses, conversationHistory),
+            specialContext
+        );
+        const review = await callAgent(prompt, images, context, systemPrompt, false);
+        return { success: true, data: { review }, rawResponse: review };
     });
 }
 

@@ -38,12 +38,8 @@ export function isGeminiProvider(): boolean {
     return getCurrentProvider() === 'gemini';
 }
 
-export function isContextualMode(mode: string): boolean {
-    return mode === 'contextual';
-}
-
 export function shouldShowCodeExecutionToggle(currentMode: string): boolean {
-    return isContextualMode(currentMode);
+    return currentMode === 'contextual' || currentMode === 'adaptive-deepthink';
 }
 
 export function setToggleChecked(checked: boolean): void {

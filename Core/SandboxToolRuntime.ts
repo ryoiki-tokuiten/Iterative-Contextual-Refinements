@@ -57,6 +57,8 @@ export interface SandboxRepositoryAccess {
     hiddenDirectories?: string[];
     /** Mount the complete repository read-only instead of selected peers. */
     fullRepositoryRead?: boolean;
+    /** Reserved for the Adaptive Deepthink orchestrator's global workspace. */
+    fullRepositoryWrite?: boolean;
 }
 
 export interface SandboxFinalOutputContract {
@@ -82,13 +84,38 @@ export async function snapshotSandboxRepository(sessionId: string, commitMessage
     if (!response.ok) throw new Error(`Sandbox snapshot failed (${response.status}).`);
 }
 
-export async function snapshotSandboxRepositoryById(repositoryId: string, commitMessage: string): Promise<void> {
+export async function snapshotSandboxRepositoryById(repositoryId: string, commitMessage: string): Promise<string | undefined> {
     const response = await fetch(`${getSandboxApiBasePath()}/snapshot`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ repositoryId, commitMessage }),
     });
     if (!response.ok) throw new Error(`Sandbox snapshot failed (${response.status}).`);
+    const payload = await response.json().catch(() => ({}));
+    return payload?.commit as string | undefined;
+}
+
+/** Restore only one strategy branch to a pre-correction repository checkpoint. */
+export async function restoreSandboxRepositoryStrategy(
+    repositoryId: string,
+    strategyDirectory: string,
+    commit: string
+): Promise<void> {
+    const response = await fetch(`${getSandboxApiBasePath()}/repository/restore-strategy`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ repositoryId, strategyDirectory, commit }),
+    });
+    if (!response.ok) {
+        let message = `Sandbox strategy restore failed (${response.status}).`;
+        try {
+            const payload = await response.json();
+            message = payload?.error || message;
+        } catch {
+            // Keep the useful HTTP-level error when the response is not JSON.
+        }
+        throw new Error(message);
+    }
 }
 
 /** A file rendered from orchestration state into the durable Deepthink Results
@@ -567,7 +594,10 @@ function buildRepositoryFilesystemRules(access: SandboxRepositoryAccess): string
     const readableDirectories = Array.from(new Set(access.readableDirectories || []))
         .filter(directory => directory && directory !== access.agentDirectory);
     const writableDirectory = access.agentDirectory;
-    const readableScope = access.fullRepositoryRead
+    const fullRepositoryWrite = access.fullRepositoryWrite === true;
+    const readableScope = fullRepositoryWrite
+        ? '- You may read and write the complete repository. This is the orchestrator-only global workspace.'
+        : access.fullRepositoryRead
         ? '- You may read every directory and file in this repository. The complete repository is mounted read-only except for your explicitly assigned writable directory, if any.'
         : readableDirectories.length
             ? `- You may read these peer directories, mounted read-only: ${readableDirectories.map(directory => `/workspace/${directory}`).join(', ')}.`
@@ -577,23 +607,35 @@ function buildRepositoryFilesystemRules(access: SandboxRepositoryAccess): string
         : '';
 
     return [
-        writableDirectory
+        fullRepositoryWrite
+            ? '- This run uses one shared repository mounted read/write at /workspace.'
+            : writableDirectory
             ? `- This run uses a shared repository mounted at /workspace. Your writable working directory is /workspace/${writableDirectory}.`
             : '- This run uses a shared repository mounted read-only at /workspace. Your private scratch directory is /tmp.',
-        writableDirectory
+        fullRepositoryWrite
+            ? '- Every sandbox command starts in the repository root.'
+            : writableDirectory
             ? '- Every sandbox command starts inside your writable directory.'
             : '- Every sandbox command starts in the read-only repository root. Use /tmp for temporary scripts, caches, or experimental files.',
-        '- /workspace itself is read-only. You can list and read visible root files, but you cannot write in the repository root.',
-        writableDirectory
+        fullRepositoryWrite
+            ? '- /workspace is writable for this orchestrator session; preserve strategy branch boundaries.'
+            : '- /workspace itself is read-only. You can list and read visible root files, but you cannot write in the repository root.',
+        fullRepositoryWrite
+            ? '- You may create, modify, and delete repository files anywhere under /workspace.'
+            : writableDirectory
             ? `- You may create, modify, and delete repository files only under /workspace/${writableDirectory}.`
             : '- You may not create, modify, or delete repository files or directories. Do not mistake /tmp scratch files for shared repository artifacts.',
         '- Original direct-context files are mounted read-only at /workspace/direct_context; additional filesystem uploads are mounted read-only at /workspace/user_uploaded.',
         readableScope,
         hiddenScope,
-        access.fullRepositoryRead
+        fullRepositoryWrite
+            ? '- Changes are shared repository state. Do not overwrite branch artifacts unless the orchestration decision explicitly requires it.'
+            : access.fullRepositoryRead
             ? '- Repository files outside the writable directory, if one exists, are mounted read-only. Treat them as shared evidence, not scratch space.'
             : '- Directories other than the locations listed above are not mounted into your sandbox view. Treat absent directories as unavailable context, not as empty evidence.',
-        writableDirectory
+        fullRepositoryWrite
+            ? '- Keep strategy-local artifacts in their Strategy-N directory whenever possible.'
+            : writableDirectory
             ? '- If you need to modify a readable peer file, copy it into your own writable directory first and edit the copy.'
             : '- If you need to experiment with a readable file, copy it into /tmp first and keep the repository unchanged.',
     ];
@@ -769,6 +811,39 @@ async function executeSandboxTool(
         throw new Error(payload?.error || 'Sandbox backend request failed.');
     }
     return normalizeSandboxToolResponseUrls(payload as SandboxToolResponse);
+}
+
+export interface VirtualEnvironmentCommandOptions {
+    sessionId: string;
+    command: string;
+    seedFiles?: SeedFile[];
+    repositoryAccess?: SandboxRepositoryAccess;
+    timeoutMs?: number;
+}
+
+/**
+ * Direct terminal transport for a tool-calling orchestrator. It deliberately
+ * uses the same backend session and repository access contract as sandbox_exec
+ * so its files appear in the Deepthink Filesystem tab.
+ */
+export async function runVirtualEnvironmentCommand(
+    options: VirtualEnvironmentCommandOptions
+): Promise<Pick<SandboxToolResponse, 'ok' | 'exitCode' | 'stdout' | 'stderr' | 'error' | 'durationMs'>> {
+    const result = await executeSandboxTool(
+        options.sessionId,
+        options.command,
+        options.seedFiles ?? null,
+        options.repositoryAccess,
+        options.timeoutMs,
+    );
+    return {
+        ok: result.ok,
+        exitCode: result.exitCode,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        error: result.error,
+        durationMs: result.durationMs,
+    };
 }
 
 async function getSandboxEnvironmentProfile(): Promise<SandboxEnvironmentProfile | null> {

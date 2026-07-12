@@ -23,6 +23,7 @@ import {
     getVisibleDeepthinkTabs,
     setActiveDeepthinkPipelineForImport,
 } from '../Deepthink/Deepthink';
+import { getDeepthinkConfigController } from '../Routing';
 
 let adaptiveDeepthinkRoot: Root | null = null;
 
@@ -41,7 +42,8 @@ const DeepthinkEmbeddedPanel: React.FC<{ state: AdaptiveDeepthinkStoreState }> =
 
     const allTabs = getVisibleDeepthinkTabs(pipelineState);
     const deepthinkContent = createDeepthinkTabContent(pipelineState, {
-        onStrategyTabClick: updateAdaptiveDeepthinkStrategyTab
+        onStrategyTabClick: updateAdaptiveDeepthinkStrategyTab,
+        hideStopButton: true
     });
 
     // Ensure the active tab is valid
@@ -115,7 +117,8 @@ const AdaptiveDeepthinkUIView: React.FC = () => {
     const [state, setState] = useState<AdaptiveDeepthinkStoreState | null>(getAdaptiveDeepthinkState());
 
     useEffect(() => {
-        return subscribeToAdaptiveDeepthinkState(setState);
+        const unsubscribe = subscribeToAdaptiveDeepthinkState(setState);
+        return () => { unsubscribe(); };
     }, []);
 
     if (!state) return null;

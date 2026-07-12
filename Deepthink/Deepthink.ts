@@ -737,6 +737,7 @@ type DeepthinkTabContentCallbacks = {
     onViewCritique?: (id: string) => void;
     onViewSubStrategyCritique?: (id: string) => void;
     onViewReasoning?: (id: string) => void;
+    hideStopButton?: boolean;
 };
 
 export function getVisibleDeepthinkTabs(process: DeepthinkPipelineState): DeepthinkTabDefinition[] {
@@ -782,7 +783,7 @@ export function createDeepthinkTabContent(
 
     switch (process.activeTabId) {
         case 'live':
-            return React.createElement(DeepthinkLiveTab, { process });
+            return React.createElement(DeepthinkLiveTab, { process, hideStopButton: callbacks.hideStopButton });
         case 'filesystem':
             return React.createElement(DeepthinkFilesystemTab, { key: process.id });
         case 'strategic-solver':

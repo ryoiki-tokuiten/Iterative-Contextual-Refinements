@@ -57,7 +57,7 @@ export const AdaptivePromptsContent: React.FC = () => {
 
             {/* Strategy Generation */}
             <div className="prompt-content-pane" data-prompt-key="adaptive-strategy-gen">
-                <h4 className="prompt-pane-title">Strategy Generation</h4>
+                <h4 className="prompt-pane-title">Strategy Generator</h4>
                 <div className="prompt-card">
                     <div className="prompt-card-header">
                         <span className="prompt-card-title">System Instruction</span>
@@ -83,9 +83,37 @@ export const AdaptivePromptsContent: React.FC = () => {
                 </div>
             </div>
 
+            {/* Strategies Proximity */}
+            <div className="prompt-content-pane" data-prompt-key="adaptive-strategy-proximity">
+                <h4 className="prompt-pane-title">Strategies Proximity (Adversarial Reviewer)</h4>
+                <div className="prompt-card">
+                    <div className="prompt-card-header">
+                        <span className="prompt-card-title">System Instruction</span>
+                        <div className="prompt-model-selector">
+                            <select
+                                className="prompt-model-select"
+                                value={prompts.model_strategyProximity || ''}
+                                onChange={handleModelChange('model_strategyProximity')}
+                            >
+                                <option value="">Use Global Model</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="prompt-card-body">
+                        <PromptStylingEditor
+                            className="prompt-textarea"
+                            rows={10}
+                            placeholder="Strategies proximity agent system prompt (adversarial reviewer)..."
+                            value={prompts.sys_adaptiveDeepthink_strategyProximity || ''}
+                            onChange={handleTextChange('sys_adaptiveDeepthink_strategyProximity')}
+                        />
+                    </div>
+                </div>
+            </div>
+
             {/* Hypothesis Generation */}
             <div className="prompt-content-pane" data-prompt-key="adaptive-hypothesis-gen">
-                <h4 className="prompt-pane-title">Hypothesis Generation</h4>
+                <h4 className="prompt-pane-title">Hypothesis Generator</h4>
                 <div className="prompt-card">
                     <div className="prompt-card-header">
                         <span className="prompt-card-title">System Instruction</span>
@@ -106,6 +134,34 @@ export const AdaptivePromptsContent: React.FC = () => {
                             placeholder="Hypothesis generation agent system prompt..."
                             value={prompts.sys_adaptiveDeepthink_hypothesisGeneration || ''}
                             onChange={handleTextChange('sys_adaptiveDeepthink_hypothesisGeneration')}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Hypothesis Proximity */}
+            <div className="prompt-content-pane" data-prompt-key="adaptive-hypothesis-proximity">
+                <h4 className="prompt-pane-title">Hypothesis Proximity (Adversarial Reviewer)</h4>
+                <div className="prompt-card">
+                    <div className="prompt-card-header">
+                        <span className="prompt-card-title">System Instruction</span>
+                        <div className="prompt-model-selector">
+                            <select
+                                className="prompt-model-select"
+                                value={prompts.model_hypothesisProximity || ''}
+                                onChange={handleModelChange('model_hypothesisProximity')}
+                            >
+                                <option value="">Use Global Model</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div className="prompt-card-body">
+                        <PromptStylingEditor
+                            className="prompt-textarea"
+                            rows={10}
+                            placeholder="Hypothesis proximity agent system prompt (adversarial reviewer)..."
+                            value={prompts.sys_adaptiveDeepthink_hypothesisProximity || ''}
+                            onChange={handleTextChange('sys_adaptiveDeepthink_hypothesisProximity')}
                         />
                     </div>
                 </div>
@@ -223,33 +279,6 @@ export const AdaptivePromptsContent: React.FC = () => {
                 </div>
             </div>
 
-            {/* Final Judge */}
-            <div className="prompt-content-pane" data-prompt-key="adaptive-judge">
-                <h4 className="prompt-pane-title">Final Judge</h4>
-                <div className="prompt-card">
-                    <div className="prompt-card-header">
-                        <span className="prompt-card-title">System Instruction</span>
-                        <div className="prompt-model-selector">
-                            <select
-                                className="prompt-model-select"
-                                value={prompts.model_finalJudge || ''}
-                                onChange={handleModelChange('model_finalJudge')}
-                            >
-                                <option value="">Use Global Model</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div className="prompt-card-body">
-                        <PromptStylingEditor
-                            className="prompt-textarea"
-                            rows={10}
-                            placeholder="Final judge agent system prompt..."
-                            value={prompts.sys_adaptiveDeepthink_finalJudge || ''}
-                            onChange={handleTextChange('sys_adaptiveDeepthink_finalJudge')}
-                        />
-                    </div>
-                </div>
-            </div>
         </div>
     );
 };

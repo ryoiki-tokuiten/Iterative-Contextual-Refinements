@@ -8,7 +8,9 @@
 // Export all agents for reuse
 export {
     generateStrategiesAgent,
+    strategiesProximityAgent,
     generateHypothesesAgent,
+    hypothesesProximityAgent,
     testHypothesesAgent,
     executeStrategiesAgent,
     solutionCritiqueAgent,

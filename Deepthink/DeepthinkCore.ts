@@ -315,6 +315,9 @@ export interface DeepthinkLiveEvent {
     temperature?: number;
     topP?: number;
     codeExecutionEnabled?: boolean;
+    executionId?: string;
+    executionGroupId?: string;
+    executionGroupName?: string;
 }
 
 export class PipelineStopRequestedError extends Error {

@@ -6,6 +6,7 @@
 export type ToolCall = {
     type: string;
     rawType?: string;
+    args?: any;
 };
 
 export type ResponseSegment =

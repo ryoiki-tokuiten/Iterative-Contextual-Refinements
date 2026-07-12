@@ -16,37 +16,31 @@ import { AgentActivityPanel as SharedAgentActivityPanel } from '../Styles/Compon
 
 function getToolResultSummary(toolName: string, result: string): string {
     switch (toolName) {
-        case 'GenerateStrategies': {
-            const strategyMatches = result.match(/<Strategy ID: strategy-\d+-\d+>/g);
+        case 'generate_strategies': {
+            const strategyMatches = result.match(/<Strategy id="S[1-5]">/g);
             const count = strategyMatches ? strategyMatches.length : 0;
             return count > 0 ? `Generated ${count} strategic ${count === 1 ? 'approach' : 'approaches'}` : 'Generated strategic approaches';
         }
-        case 'GenerateHypotheses': {
-            const hypothesisMatches = result.match(/<Hypothesis ID: hypothesis-\d+-\d+>/g);
+        case 'generate_hypothesis': {
+            const hypothesisMatches = result.match(/<Hypothesis id="H[1-5]">/g);
             const count = hypothesisMatches ? hypothesisMatches.length : 0;
             return count > 0 ? `Created ${count} ${count === 1 ? 'hypothesis' : 'hypotheses'}` : 'Created hypotheses for testing';
         }
-        case 'TestHypotheses': {
-            const testMatches = result.match(/<hypothesis-\d+-\d+>/g);
+        case 'test_hypothesis': {
+            const testMatches = result.match(/<HypothesisTest id="H[1-5]"/g);
             const count = testMatches ? testMatches.length : 0;
             return count > 0 ? `Evaluated ${count} ${count === 1 ? 'hypothesis' : 'hypotheses'}` : 'Evaluated hypotheses and gathered evidence';
         }
-        case 'ExecuteStrategies': {
-            const executionMatches = result.match(/<Execution ID: execution-strategy-\d+-\d+>/g);
+        case 'execute':
+        case 'finalize_pass_and_execute': {
+            const executionMatches = result.match(/<StrategyResult id="S[1-5]">/g);
             const count = executionMatches ? executionMatches.length : 0;
-            return count > 0 ? `Executed ${count} ${count === 1 ? 'strategy' : 'strategies'} and generated solutions` : 'Executed strategies';
+            return count > 0 ? `Executed, critiqued, and corrected ${count} ${count === 1 ? 'strategy' : 'strategies'}` : 'Completed strategy execution pass';
         }
-        case 'SolutionCritique': {
-            return 'Analyzed and critiqued proposed solutions';
-        }
-        case 'CorrectedSolutions': {
-            const correctedMatches = result.match(/<execution-strategy-\d+-\d+:Corrected>/g);
-            const count = correctedMatches ? correctedMatches.length : 0;
-            return count > 0 ? `Refined ${count} ${count === 1 ? 'solution' : 'solutions'} based on feedback` : 'Refined solutions';
-        }
-        case 'SelectBestSolution': {
-            return 'Selected optimal solution from candidates';
-        }
+        case 'save': return 'Permanently saved selected strategy branches';
+        case 'read_files': return 'Read compacted pass artifacts';
+        case 'virtual_environment': return 'Ran command in the shared virtual environment';
+        case 'submit_final_output': return 'Submitted orchestrator final output';
         default:
             return 'Tool execution completed';
     }
@@ -79,6 +73,143 @@ const CollapsibleContent: React.FC<{ content: string; maxLines: number }> = ({ c
             <button className="action-btn" onClick={() => setExpanded(true)}>
                 Show all
             </button>
+        </div>
+    );
+};
+
+// Component for displaying tool arguments visually
+const ToolArgumentsCard: React.FC<{ toolName: string; args?: any }> = ({ toolName, args }) => {
+    if (!args || typeof args !== 'object' || Object.keys(args).length === 0) return null;
+
+    const renderDetails = () => {
+        switch (toolName) {
+            case 'generate_strategies': {
+                const replaceIds = args.replaceStrategyIds || [];
+                if (replaceIds.length === 0 && !args.specialContext) return null;
+                return (
+                    <div className="tool-args-details">
+                        {replaceIds.length > 0 && (
+                            <div className="tool-args-row">
+                                <span className="tool-args-label">Replace:</span>
+                                <div className="tool-args-badges">
+                                    {replaceIds.map((id: string) => (
+                                        <span key={id} className="tool-args-badge text-accent-red">{id}</span>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        {args.specialContext && (
+                            <div className="tool-args-context-block">
+                                <span className="tool-args-label">Special Context:</span>
+                                <pre className="tool-args-context-text">{args.specialContext}</pre>
+                            </div>
+                        )}
+                    </div>
+                );
+            }
+            case 'generate_hypothesis': {
+                if (!args.specialContext) return null;
+                return (
+                    <div className="tool-args-details">
+                        <div className="tool-args-context-block">
+                            <span className="tool-args-label">Special Context:</span>
+                            <pre className="tool-args-context-text">{args.specialContext}</pre>
+                        </div>
+                    </div>
+                );
+            }
+            case 'test_hypothesis': {
+                const ids: string[] = args.hypothesisIds || [];
+                return (
+                    <div className="tool-args-details">
+                        <div className="tool-args-row">
+                            <span className="tool-args-label">Hypotheses:</span>
+                            <div className="tool-args-badges">
+                                {ids.map(id => (
+                                    <span key={id} className="tool-args-badge text-accent-purple">{id}</span>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+            case 'execute':
+            case 'finalize_pass_and_execute': {
+                const executions: Array<{ strategyId: string; specialContext?: string; context?: string }> = args.executions || [];
+                return (
+                    <div className="tool-args-details">
+                        <div className="tool-args-executions">
+                            {executions.map((exec, idx) => (
+                                <div key={idx} className="tool-args-exec-item">
+                                    <div className="tool-args-row">
+                                        <span className="tool-args-label">Strategy:</span>
+                                        <span className="tool-args-badge text-accent-blue">{exec.strategyId}</span>
+                                    </div>
+                                    {(exec.context || exec.specialContext) && (
+                                        <div className="tool-args-context-block">
+                                            <span className="tool-args-label">Context:</span>
+                                            <pre className="tool-args-context-text">{exec.context || exec.specialContext}</pre>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                );
+            }
+            case 'save': {
+                return null;
+            }
+            case 'read_files': {
+                const paths: string[] = args.paths || [];
+                return (
+                    <div className="tool-args-details">
+                        <div className="tool-args-row">
+                            <span className="tool-args-label">Read files:</span>
+                            <div className="tool-args-badges">
+                                {paths.map(p => {
+                                    const parts = p.split('/');
+                                    const name = parts[parts.length - 1] || p;
+                                    return (
+                                        <span key={p} className="tool-args-badge text-accent-orange" title={p}>{name}</span>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+            case 'virtual_environment': {
+                return (
+                    <div className="tool-args-details">
+                        <div className="tool-args-row">
+                            <span className="tool-args-label">Command:</span>
+                            <code className="tool-args-code">{args.command}</code>
+                        </div>
+                    </div>
+                );
+            }
+            default: {
+                return (
+                    <div className="tool-args-details">
+                        {Object.entries(args).map(([key, val]) => (
+                            <div key={key} className="tool-args-row">
+                                <span className="tool-args-label">{key}:</span>
+                                <span className="tool-args-value">{JSON.stringify(val)}</span>
+                            </div>
+                        ))}
+                    </div>
+                );
+            }
+        }
+    };
+
+    const details = renderDetails();
+    if (!details) return null;
+
+    return (
+        <div className="tool-arguments-card">
+            {details}
         </div>
     );
 };
@@ -125,11 +256,14 @@ export const MessageCard: React.FC<{ message: AdaptiveMessage }> = ({ message })
                         const agentIcon = rawToolType ? getAdaptiveDeepthinkAgentIcon(rawToolType) : 'smart_toy';
 
                         return (
-                            <div key={`seg-${idx}`} className={`tool-call-indicator ${isDeepthinkTool ? 'deepthink-tool-indicator' : ''}`}>
-                                {isDeepthinkTool && agentIcon && (
-                                    <Icon name={agentIcon} className="tool-indicator-icon" />
-                                )}
-                                <span className="tool-name">{toolType}</span>
+                            <div key={`seg-${idx}`} className="tool-segment-wrapper">
+                                <div className={`tool-call-indicator ${isDeepthinkTool ? 'deepthink-tool-indicator' : ''}`}>
+                                    {isDeepthinkTool && agentIcon && (
+                                        <Icon name={agentIcon} className="tool-indicator-icon" />
+                                    )}
+                                    <span className="tool-name">{toolType}</span>
+                                </div>
+                                <ToolArgumentsCard toolName={rawToolType || toolType} args={tool.args} />
                             </div>
                         );
                     }
@@ -194,7 +328,7 @@ export const MessageCard: React.FC<{ message: AdaptiveMessage }> = ({ message })
                 <div className="message-sender-info">
                     <span className="message-sender">
                         {message.role === 'agent'
-                            ? (message.segments?.[0]?.kind === 'tool' ? getAdaptiveDeepthinkAgentDisplayName(message.segments[0].tool.type) : 'Orchestrator')
+                            ? (message.segments?.[0]?.kind === 'tool' ? getAdaptiveDeepthinkAgentDisplayName(message.segments[0].tool.rawType || message.segments[0].tool.type) : 'Orchestrator')
                             : message.role === 'system'
                             ? 'Deepthink Agent'
                             : 'User'}

@@ -9,9 +9,10 @@ import './DeepthinkLiveTab.css';
 
 interface DeepthinkLiveTabProps {
     process: DeepthinkPipelineState;
+    hideStopButton?: boolean;
 }
 
-export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process }) => {
+export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hideStopButton }) => {
     const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
     const [selectedAgentName, setSelectedAgentName] = useState<string | null>(null);
     const [filterType, setFilterType] = useState<'all' | 'agents' | 'info' | 'errors'>('all');
@@ -138,12 +139,13 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process }) =
     // Find currently running agents to determine parallel execution
     const activeAgents: string[] = [];
     events.forEach(ev => {
+        const key = ev.executionId || ev.agentName;
         if (ev.eventType === 'agent_start') {
-            if (!activeAgents.includes(ev.agentName)) {
-                activeAgents.push(ev.agentName);
+            if (!activeAgents.includes(key)) {
+                activeAgents.push(key);
             }
         } else if (ev.eventType === 'agent_complete' || ev.eventType === 'agent_error') {
-            const idx = activeAgents.indexOf(ev.agentName);
+            const idx = activeAgents.indexOf(key);
             if (idx !== -1) {
                 activeAgents.splice(idx, 1);
             }
@@ -174,11 +176,12 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process }) =
     const agentEventsMap = new Map<string, DeepthinkLiveEvent>();
     events.forEach(ev => {
         if (ev.agentName) {
+            const key = ev.executionId || ev.agentName;
             if (ev.eventType === 'agent_start' || ev.eventType === 'agent_complete') {
-                agentEventsMap.set(ev.agentName, ev);
+                agentEventsMap.set(key, ev);
             } else if (ev.eventType === 'agent_error') {
                 // If the agent failed/errored, remove it from the timeline
-                agentEventsMap.delete(ev.agentName);
+                agentEventsMap.delete(key);
             }
         }
     });
@@ -196,7 +199,8 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process }) =
     if (!selectedEvent && !selectedAgentName && allTimelineAgents.length > 0) {
         const firstAgent = allTimelineAgents[0];
         if (firstAgent && firstAgent.agentName) {
-            const latestAgentEvent = agentEventsMap.get(firstAgent.agentName);
+            const key = firstAgent.executionId || firstAgent.agentName;
+            const latestAgentEvent = agentEventsMap.get(key);
             if (latestAgentEvent) {
                 selectedEvent = latestAgentEvent;
             }
@@ -209,7 +213,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process }) =
 
     const selectEvent = (event: DeepthinkLiveEvent) => {
         setSelectedEventId(event.id);
-        setSelectedAgentName(event.agentName || null);
+        setSelectedAgentName(event.executionId || event.agentName || null);
     };
 
     useEffect(() => {
@@ -217,7 +221,10 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process }) =
     }, [selectedEvent?.id]);
 
     const renderTimelineNode = (agent: DeepthinkLiveEvent) => {
-        const isActive = selectedEvent?.agentName === agent.agentName;
+        const isActive = selectedEvent ? (
+            (selectedEvent.executionId && selectedEvent.executionId === agent.executionId) ||
+            (!selectedEvent.executionId && selectedEvent.agentName === agent.agentName)
+        ) : false;
         const category = getAgentCategory(agent.agentName, agent.stepDescription);
         let statusClass = 'pending';
         let statusIcon = 'hourglass_empty';
@@ -275,7 +282,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process }) =
                                 <span className="stat-label">INVOKED:</span>
                                 <span className="stat-value font-mono">{allTimelineAgents.length}</span>
                             </div>
-                            {(process.status === 'processing' || process.status === 'retrying') && (
+                            {!hideStopButton && (process.status === 'processing' || process.status === 'retrying') && (
                                 <button
                                     className="stop-button"
                                     onClick={() => {
@@ -320,22 +327,57 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process }) =
                         {allTimelineAgents.length === 0 ? (
                             <div className="timeline-empty">Waiting for agent execution...</div>
                         ) : (
-                            <>
-                                {completedAgents.map(renderTimelineNode)}
-                                {runningAgents.length > 1 ? (
-                                    <div className="parallel-active-window">
-                                        <div className="parallel-window-header">
-                                            <MIcon name="bolt" className="parallel-icon" />
-                                            <span>Executing in Parallel</span>
-                                        </div>
-                                        <div className="parallel-window-body">
-                                            {runningAgents.map(renderTimelineNode)}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    runningAgents.map(renderTimelineNode)
-                                )}
-                            </>
+                            (() => {
+                                const sortedAgents = [...allTimelineAgents].sort((a, b) => a.timestamp - b.timestamp);
+                                const blocks: Array<
+                                    | { type: 'single'; agent: DeepthinkLiveEvent }
+                                    | { type: 'group'; id: string; name: string; agents: DeepthinkLiveEvent[] }
+                                > = [];
+                                
+                                sortedAgents.forEach(agent => {
+                                    if (agent.executionGroupId) {
+                                        const existingGroup = blocks.find(b => b.type === 'group' && b.id === agent.executionGroupId);
+                                        if (existingGroup && existingGroup.type === 'group') {
+                                            existingGroup.agents.push(agent);
+                                        } else {
+                                            blocks.push({ type: 'group', id: agent.executionGroupId, name: agent.executionGroupName || 'Execution Loop', agents: [agent] });
+                                        }
+                                    } else {
+                                        blocks.push({ type: 'single', agent });
+                                    }
+                                });
+
+                                // Check if we have multiple generic running agents to group into a "Parallel" block
+                                // We'll just map over the blocks and render.
+                                return blocks.map((block, idx) => {
+                                    if (block.type === 'single') {
+                                        return renderTimelineNode(block.agent);
+                                    } else {
+                                        const isRunning = block.agents.some(a => a.eventType === 'agent_start' || a.eventType === 'agent_retry');
+                                        return (
+                                            <div key={block.id} className={`parallel-active-window ${isRunning ? 'running' : 'completed'}`} style={{
+                                                border: isRunning ? '1px solid rgba(var(--accent-blue-rgb, 0, 210, 255), 0.25)' : '1px solid rgba(0, 230, 118, 0.25)',
+                                                background: isRunning ? 'rgba(var(--accent-blue-rgb, 0, 210, 255), 0.03)' : 'rgba(0, 230, 118, 0.03)',
+                                                borderRadius: '12px',
+                                                padding: '0.5rem',
+                                                marginBottom: '0.5rem'
+                                            }}>
+                                                <div className="parallel-window-header" style={{
+                                                    display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.25rem 0.5rem 0.75rem',
+                                                    color: isRunning ? 'var(--accent-blue, #00d2ff)' : '#00e676',
+                                                    fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase'
+                                                }}>
+                                                    <MIcon name={isRunning ? "sync" : "check_circle"} className={isRunning ? "parallel-icon spin" : "parallel-icon"} style={{ fontSize: '1rem', animation: isRunning ? 'spin 4s linear infinite' : 'none' }} />
+                                                    <span>{block.name}</span>
+                                                </div>
+                                                <div className="parallel-window-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                                    {block.agents.map(renderTimelineNode)}
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                });
+                            })()
                         )}
                     </div>
                     

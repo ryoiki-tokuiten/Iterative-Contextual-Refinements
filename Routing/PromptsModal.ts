@@ -260,10 +260,6 @@ export class PromptsModal {
                 {
                     groupTitle: "3. EXECUTION & REFINEMENT",
                     prompts: ["adaptive-execution", "adaptive-critique", "adaptive-corrector"]
-                },
-                {
-                    groupTitle: "4. FINAL JUDGMENT",
-                    prompts: ["adaptive-judge"]
                 }
             ],
             contextual: [
@@ -423,8 +419,7 @@ export class PromptsModal {
             'adaptive-hypothesis-test': 'sys-adaptive-hypothesis-test',
             'adaptive-execution': 'sys-adaptive-execution',
             'adaptive-critique': 'sys-adaptive-critique',
-            'adaptive-corrector': 'sys-adaptive-corrector',
-            'adaptive-judge': 'sys-adaptive-judge'
+            'adaptive-corrector': 'sys-adaptive-corrector'
         };
     }
 
@@ -749,8 +744,7 @@ export class PromptsModal {
             'adaptive-hypothesis-test': 'sys-adaptive-hypothesis-test',
             'adaptive-execution': 'sys-adaptive-execution',
             'adaptive-critique': 'sys-adaptive-critique',
-            'adaptive-corrector': 'sys-adaptive-corrector',
-            'adaptive-judge': 'sys-adaptive-judge'
+            'adaptive-corrector': 'sys-adaptive-corrector'
         };
 
         // Contextual mode agents
