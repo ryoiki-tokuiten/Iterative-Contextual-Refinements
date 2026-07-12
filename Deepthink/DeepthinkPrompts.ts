@@ -161,48 +161,6 @@ Do not avoid a strategy because it seems complex, difficult, expensive, weird, o
 
 A strategy can mention what kind of work a branch should emphasize, but it must not contain the final product or final possible answers or final possible conclusions.
 
-A strategy must not say:
-* "prove that the answer is X";
-* "show why option A is best";
-* "write the final solution using result Y";
-* "assume the claim is true";
-* "demonstrate that this specific final answer follows";
-* "the correct implementation is probably...";
-* "the story should end with...";
-* "the legal conclusion should be...";
-* "the policy should recommend...".
-
-Instead, phrase strategies as exploration lenses:
-* "Analyze the problem through...";
-* "Frame the work around...";
-* "Explore whether...";
-* "Construct the output by prioritizing...";
-* "Investigate the constraints implied by...";
-* "Develop the artifact under the assumption that the central challenge is...";
-* "Treat the task as primarily a problem of...".
-
-The strategy may define a methodology, emphasis, interpretive frame, or branch identity. It may not force a final conclusion.
-A good strategy is:
-* high-level but concrete;
-* self-contained;
-* domain-adapted;
-* intellectually distinct from the others;
-* capable of guiding a downstream agent's whole work product;
-* broad enough to be useful, but not so broad that it becomes generic;
-* precise about the axis of variation it explores;
-* free of final-answer leakage.
-
-A bad strategy is:
-* a checklist step;
-* a generic instruction like "analyze carefully";
-* a restatement of the Core Challenge;
-* a thin paraphrase of another strategy;
-* a final answer in disguise;
-* a downstream execution plan;
-* a critique report;
-* a hypothesis test;
-* a vague label with no operational meaning.
-
 You must identify:
 * What kind of artifact or answer the user ultimately wants.
 * What counts as success in that domain.
@@ -215,133 +173,9 @@ You must identify:
 
 Do not force a single universal template onto all problems. The strategy space is different in every domain.
 
-Good strategies might frame the task as:
-* algebraic normalization;
-* geometric or topological interpretation;
-* invariant discovery;
-* extremal/minimal-counterexample reasoning;
-* constructive witness search;
-* dual problem analysis;
-* computational experimentation as conjecture generation;
-* bounding/relaxation;
-* reduction to known structures;
-* adversarial counterexample search.
-
-Good strategies might frame the task as:
-* correctness-first reference implementation;
-* performance-driven redesign;
-* minimal-change patch;
-* type-safe and maintainable architecture;
-* security-hardening pass;
-* failure-mode and observability design;
-* data-structure-centered approach;
-* concurrency or distributed-systems framing;
-* compatibility-preserving migration;
-* test-driven reconstruction.
-
-Good strategies might frame the task as:
-* psychological realism;
-* mythic or archetypal structure;
-* unreliable narration;
-* minimalist restraint;
-* high-sensory immersive prose;
-* dialogue-driven tension;
-* nonlinear memory structure;
-* satire or irony;
-* character-wound-driven arc;
-* atmosphere-first horror;
-* comedic escalation;
-* symbolic motif architecture.
-
-Good strategies might frame the task as:
-* procedural vulnerability analysis;
-* substantive merits argument;
-* burden-of-proof and evidence-chain analysis;
-* precedent-centered reasoning;
-* textualist/statutory interpretation;
-* policy consequences and stakeholder impact;
-* settlement or risk mitigation;
-* rights-based framing;
-* compliance implementation;
-* adversarial counterargument anticipation.
-
-Good strategies might frame the task as:
-* customer-discovery-first;
-* competitive differentiation;
-* operational scalability;
-* financial viability and unit economics;
-* niche wedge expansion;
-* enterprise sales motion;
-* product-led growth;
-* partnership/channel strategy;
-* risk-reduction roadmap;
-* user-experience-first product definition.
-
-Good strategies might frame the task as:
-* theory-first synthesis;
-* empirical validation;
-* causal inference;
-* methodological critique;
-* measurement design;
-* comparative literature mapping;
-* mechanism discovery;
-* failure-mode investigation;
-* replication and robustness;
-* interdisciplinary reframing.
-
-Good strategies might frame the task as:
-* utilitarian consequences;
-* rights and duties;
-* virtue/character;
-* care ethics;
-* legitimacy and consent;
-* epistemic uncertainty;
-* stakeholder pluralism;
-* conceptual clarification;
-* precedent analogy;
-* practical governance constraints.
-
-Good strategies might frame the task as:
-* clarity and compression;
-* persuasive restructuring;
-* voice-preserving polish;
-* executive-summary orientation;
-* technical precision;
-* emotional warmth;
-* formal/professional tone;
-* audience-specific reframing;
-* narrative flow;
-* error-correction and consistency.
-
-Good strategies might frame the task as:
-* accessibility-first;
-* conversion-focused;
-* information-hierarchy-first;
-* minimalist usability;
-* expressive brand identity;
-* mobile-first interaction;
-* component-system architecture;
-* user-research-driven;
-* error-state robustness;
-* onboarding clarity.
-
-When tasks are truly independent, strategies may need to map to tasks rather than to methods. For example:
-* Strategy 1 may cover assignment A completely.
-* Strategy 2 may cover assignment B completely.
-* Strategy 3 may cover assignment C completely.
 
 If the requested number of strategies is too small to cover independent tasks, prioritize full task coverage over artificial numerical constraints when the role prompt or system configuration allows it. If the output must contain exactly a specified number, make each strategy explicitly cover a coherent grouping of tasks without losing any required assignment. Assignment is just an example... user could request codebase refactoring by providing N files of it. You have to resolve it internally and decide how many strategies you are going to produce and how many files you are going to assign to each strategy.
 
-Before finalizing, internally check:
-* Would two downstream agents receiving different strategies produce substantially different work?
-* Does each strategy emphasize a different success mechanism?
-* Does each strategy use a different domain-relevant axis of variation?
-* Does each strategy stand alone without referencing the other strategies?
-* Does any strategy merely rephrase another strategy?
-* Does any strategy leak a final answer?
-* Does any strategy become a step-by-step plan?
-* Does the set cover both obvious and non-obvious high-value directions?
-* Does the set include enough domain-specific depth to guide real downstream work?
 
 For objective tasks, include strategies that attack correctness from different directions: constructive, adversarial, structural, empirical, formal, boundary-case, or abstraction-based.
 For subjective or generative tasks, include strategies that create different final experiences: tone, voice, audience, form, structure, emotional core, style, theme, constraint, or genre.
@@ -450,45 +284,6 @@ You must:
 
 Do not include final answers, final claims, final recommendations, final code, final prose, final legal conclusions, final proof results, or final design decisions unless they are explicitly part of the user's fixed requirements.
 
-Do not write:
-* "prove that X is true";
-* "implement using Y as the final design";
-* "conclude that party A wins";
-* "write the scene where X happens";
-* "show that the answer is...";
-* "the best option is...".
-Instead, write:
-* "emphasize...";
-* "frame the branch around...";
-* "investigate...";
-* "treat the key difficulty as...";
-* "develop the output through...";
-* "focus downstream work on...";
-* "use the parent strategy by narrowing it to...".
-
-A sub-strategy should define the path, not the destination.
-It may specify:
-* a narrower methodological focus;
-* a sub-domain lens;
-* a particular constraint class;
-* a style or tone inside a creative strategy;
-* a proof method inside a mathematical strategy;
-* an architectural boundary inside a software strategy;
-* a stakeholder perspective inside a policy strategy;
-* an evidence type inside a research strategy;
-* a rhetorical angle inside an argument strategy;
-* a failure mode inside an optimization strategy;
-* an edge-case family inside a correctness strategy.
-
-It should not specify:
-* a chronological phase;
-* a checklist item;
-* a final answer;
-* a full implementation plan;
-* a full outline;
-* a critique report;
-* a hypothesis test;
-* a duplicate of the Main Strategy.
 
 Your sub-strategies must show domain intelligence. They should not be generic labels that could apply to every problem.
 For a mathematical strategy, sub-strategies should look like mathematical sub-methodologies, not generic productivity steps.
@@ -496,45 +291,6 @@ For a creative-writing strategy, sub-strategies should look like narrative, styl
 For a software strategy, sub-strategies should look like architecture, algorithm, interface, state, performance, reliability, security, or testing sub-lenses, not "write code/test code/fix code."
 For a legal strategy, sub-strategies should look like doctrinal, procedural, evidentiary, interpretive, adversarial, or stakeholder-specific sub-lenses, not "research/write/revise."
 For a product strategy, sub-strategies should look like user-segment, requirement, metric, workflow, risk, prioritization, or implementation-constraint sub-lenses, not "brainstorm/list features/finalize."\
-
-Example under a "structural invariant" main strategy:
-"Sub-strategy 1: Focus the invariant search on quantities preserved by local transformations, treating each allowed operation as a conservation constraint and using the resulting fixed quantities to narrow the downstream proof space without asserting the final result."
-
-Example under a "correctness-first implementation" main strategy:
-"Sub-strategy 1: Center the branch on explicit state modeling, requiring downstream work to make each valid state, invalid state, and transition visible in the code structure before optimizing for brevity or performance."
-
-Example under a "psychological tension" main strategy:
-"Sub-strategy 1: Develop the parent strategy through unreliable interiority, making the branch emphasize contradictions between what the narrator notices, denies, and misinterprets rather than relying on external plot escalation."
-
-Example under a "procedural vulnerability" main strategy:
-"Sub-strategy 1: Narrow the branch to timing and notice defects, treating procedural compliance as the central pressure point and focusing downstream argumentation on whether required process conditions were satisfied before substantive merits are reached."
-
-Example under a "user-journey failure point" main strategy:
-"Sub-strategy 1: Focus the branch on onboarding friction, treating early user confusion and activation failure as the main source of product requirements, prioritization logic, and acceptance criteria."
-
-Example under an "empirical validation" main strategy:
-"Sub-strategy 1: Narrow the branch to measurement validity, treating the reliability and construct fit of the observed variables as the central determinant of whether downstream empirical claims can be trusted."
-
-Example under a "stakeholder pluralism" main strategy:
-"Sub-strategy 1: Focus the branch on asymmetrically affected stakeholders, treating the ethical center as the gap between those who receive benefits and those who bear concentrated risks."
-
-Example under a "clarity and compression" main strategy:
-"Sub-strategy 1: Narrow the branch to structural compression, treating paragraph order, redundancy removal, and information hierarchy as the main levers for improving readability while preserving the user's intended meaning."
-
-Example under an "accessibility-first" main strategy:
-"Sub-strategy 1: Focus the branch on interaction accessibility, treating keyboard flow, focus states, contrast, and assistive-technology clarity as the primary design constraints for downstream work."
-
-Before finalizing, internally check:
-* Does each sub-strategy clearly belong under the Main Strategy?
-* Does each sub-strategy explore a different internal axis?
-* Would downstream agents receiving different sub-strategies produce meaningfully different work?
-* Is each sub-strategy self-contained?
-* Is each sub-strategy domain-specific?
-* Is any sub-strategy just a step in a sequence?
-* Is any sub-strategy merely a duplicate of the parent strategy?
-* Is any sub-strategy actually a different main strategy?
-* Does any sub-strategy leak a final answer?
-* Does any sub-strategy require another sub-strategy to happen first?
 
 If the Main Strategy is extremely broad, use sub-strategies to create useful narrower branches.
 If the Main Strategy is extremely narrow, use sub-strategies to vary by constraints, evidence, edge cases, style, implementation detail, or failure modes inside that narrow frame.
@@ -1129,22 +885,14 @@ The output of a refresh must therefore be a current best set of independent hypo
 
 Most importantly, in this mode you will be aware of the active strategies and must decide which completed hypothesis-testing results would be useful to which strategies. Make that decision only through the separate strategy-routing metadata requested by the selective-mode JSON schema. The hypothesis text itself must not name, address, cite, or depend on any strategy. The correction and pool agents in a strategy receive only the completed results selectively routed to them, so you may route hypotheses 3 and 4 to one strategy and hypotheses 1 and 3 to another without mentioning either strategy inside those hypotheses.
 
-Unlike you, the correction agent, or the critique agent, hypothesis testing agents have no history of earlier tests or hypotheses and know nothing about the active strategies. Treat each tester as a fresh independent agent receiving only the Core Challenge and one hypothesis text. Strategy-aware generation happens entirely on your side: formulate a self-contained claim first, then independently assign its routing metadata.
+Unlike you, the hypothesis testing agents have no history of earlier tests or hypotheses and know nothing about the active strategies. Treat each tester as a fresh independent agent receiving only the Core Challenge and one hypothesis text. Strategy-aware generation happens entirely on your side: formulate a self-contained claim first, then independently assign its routing metadata.
 
 A strong EDFS refresh hypothesis may:
-* test whether a repeated critique is actually valid;
-* test some genuinely new and high quality ideas that you have about the problem or the core challenge;
-* test whether a branch's central assumption is false;
-* test whether two branches are making incompatible assumptions;
-* test whether a proposed improvement metric is the right metric;
+* test whether a repeated critique is actually valid; because the correction agents (the most important agents continuing the actual execution / producing real work) are locked-in with the critique and they can be only steered with them. No matter how many hypothesis you produce, if testing them are not directly being helpful and useful to resolve the critique then it's almost useless. The correction agent won't take it seriously. Be extremely and obsessively mindful about the critique(s), see if you can synthesize and produce modular hypotheses for testing. For example, test a boundary case that repeatedly appears in the critiques, or generate some genuinely high quality tests that when tested attacks the corrector agent's fixated point of view and inevitably escape the local minima. this is the most important part for any refresh: new hypothesis are built based on the feedback loop (critique directions). Do not just ignore the critique plainly by internally assuming that this is impossiblity / can't be real / critique is too aggresive. If you have such doubts, then just create a new independent hypothesis to test that. You don't make assumptions.
 * test whether a recurring failure is caused by missing evidence, bad framing, weak implementation, wrong audience, or domain mismatch;
-* test a boundary case that repeatedly appears in critiques;
-* test whether a branch is overfitting to critique while losing the Core Challenge;
 * test whether a solution-pool idea is actually transferable to another strategy;
-* test whether a supposed impossibility is real;
-* test whether the user-specified constraints imply a hidden requirement;
-* test whether the current iteration loop is optimizing the wrong objective.
-* test some orthogonal directions, inverse perspectives and cross domain tricks that might be useful to the entire system;
+* test some genuinely new and high quality ideas that you have about the problem or the core challenge; always have some sort of orthogonal directions, inverse perspectives and cross domain tricks that might be useful to the entire system;
+* test whether the current iteration loop is optimizing the wrong objective (for example trying to justify or prove a result that might be foundationally flawed / wrong direction to pursue).
 * isolate a repeatedly failing complex component in a simplified case and test the governing principle before another full correction attempts it;
 * fully solve or characterize a tractable subproblem whose result would supply a reusable lemma, construction, bound, mechanism, reproduction, or boundary for later work;
 * test whether a reduced-case insight actually transfers to the full problem or fails at a precise boundary;
@@ -1167,54 +915,6 @@ For mathematical, logical, algorithmic, engineering, and scientific tasks, every
 
 The cross-domain requirement renews on every refresh because one analogy does not permanently diversify the search. Previous structural probes may have been refuted, absorbed into branch assumptions, or reduced to another local convention. Use the latest packet and branch histories to identify which representation is now dominant, then test a genuinely different structural model or a sharper consequence that could overturn the new consensus. Repeating the same mapping with different wording does not satisfy this requirement.
 
-
-Only write the testable statement and enough targeting/method context inside the string to make it useful for the isolated tester.
-Bad:
-"Hypothesis 1: The correct final answer is 42." or writing this same thing in more complex way lol. Don't do that.
-Bad:
-"Hypothesis 2: The best legal conclusion is that party A wins."
-Bad:
-"Hypothesis 3: The story should end with the protagonist dying."
-Bad:
-"Hypothesis 4: The optimal implementation is a trie."
-
-Good:
-"Hypothesis 1: The problem constraints imply an invariant that rules out at least one class of otherwise plausible constructions."
-Good:
-"Hypothesis 2: The legal argument depends on whether the available facts satisfy a specific evidentiary burden rather than on the broader policy rationale."
-Good:
-"Hypothesis 3: The requested emotional effect can be achieved more reliably through delayed revelation than through explicit exposition."
-Good:
-"Hypothesis 4: The performance bottleneck is dominated by lookup complexity rather than serialization or I/O."
-
-A hypothesis may point toward what to investigate. It must not declare the Core Challenge's authoritative final result. It may state a proposed exact result for a deliberately reduced subproblem when that scoped claim is itself the object of testing.
-It is not:
-* a question;
-* a strategy;
-* a task instruction;
-* a final solution;
-* a vague topic;
-* a critique paragraph;
-* a literature review request;
-* a branch summary;
-* a reference to a strategy, branch, correction, pool entry, previous hypothesis, or any other context unavailable to its isolated tester.
-
-Convert vague questions into testable claims.
-Bad question:
-"Does the algorithm handle edge cases?"
-Better hypothesis:
-"Hypothesis 1: The current algorithmic framing fails on at least one boundary case where the input is empty, minimal, duplicated, cyclic, or otherwise degenerate."
-
-Bad topic:
-"Legal precedents."
-Better hypothesis:
-"Hypothesis 1: The strongest legal route depends on whether a binding precedent can be analogized on procedural posture rather than only on substantive facts."
-
-Bad strategy:
-"Use dynamic programming."
-Better hypothesis:
-"Hypothesis 1: The problem has overlapping substructure and a finite state representation small enough for dynamic programming to be a viable downstream method."
-
 Do not create chains like:
 * Hypothesis 1 establishes X.
 * Hypothesis 2 assumes X and tests Y.
@@ -1235,60 +935,6 @@ You must identify:
 * Which hypotheses would produce information useful to correction agents and solution-pool agents.
 * Which hypotheses would waste testing resources because they are too vague, too obvious, too final-answer-like, or too detached from current branch behavior.
 
-Hypothesis generation must be domain-adapted. Different domains require different kinds of hypotheses.
-A math hypothesis should be testable by proof, disproof, construction, or counterexample search.
-Bad:
-"Hypothesis 1: Solve the problem algebraically."
-Good:
-"Hypothesis 1: The constraints preserve a nontrivial invariant under the allowed transformations, and this invariant excludes at least one superficially plausible class of outcomes."
-
-A software hypothesis should be testable by reasoning from code, constructing tests, analyzing complexity, checking contracts, or examining failure modes.
-Bad:
-"Hypothesis 1: Use better code."
-Good:
-"Hypothesis 1: The observed failure is caused by an implicit state transition that is valid in the happy path but invalid when initialization, reset, retry, or concurrent access occurs out of the assumed order."
-
-A creative hypothesis should be testable by close reading, genre reasoning, audience-effect analysis, or consistency analysis. It should not pretend that subjective writing has a single mathematical truth, but it can still identify testable claims about craft effects.
-Bad:
-"Hypothesis 1: The story should be better."
-Good:
-"Hypothesis 1: The draft's intended emotional tension depends more on unresolved character motivation than on external plot events, so revisions that clarify the internal contradiction should improve the piece more than adding new incidents."
-
-A legal/policy hypothesis should be testable by checking facts, authorities, procedural posture, stakeholder consequences, or argument structure.
-Bad:
-"Hypothesis 1: Party A wins."
-Good:
-"Hypothesis 1: The strongest version of the argument depends on a procedural threshold that must be satisfied before the substantive merits can carry the conclusion."
-
-A business/product hypothesis should be testable by market logic, user behavior evidence, constraints, economics, or operational reasoning.
-Bad:
-"Hypothesis 1: The product will succeed."
-Good:
-"Hypothesis 1: The main adoption barrier is not feature completeness but the user's inability to reach the first meaningful outcome quickly enough during onboarding."
-
-A research hypothesis should be testable through evidence standards appropriate to the field.
-Bad:
-"Hypothesis 1: The paper is correct."
-Good:
-"Hypothesis 1: The central empirical claim cannot be supported unless the proposed measurement distinguishes the target construct from at least one plausible confounding construct."
-
-A philosophy/ethics hypothesis should be testable by conceptual analysis, counterexample, consistency check, stakeholder analysis, or normative comparison.
-Bad:
-"Hypothesis 1: The action is ethical."
-Good:
-"Hypothesis 1: The disagreement depends on an unresolved distinction between preventing harm and imposing benefit, and clarifying that distinction changes which normative framework appears strongest."
-
-An editing hypothesis should be testable by comparing the document to the intended audience and communication goal.
-Bad:
-"Hypothesis 1: Make it cleaner."
-Good:
-"Hypothesis 1: The document's main weakness is information hierarchy rather than sentence-level style, so reorganizing the order of claims would improve comprehension more than local wording changes."
-
-A design hypothesis should be testable by user-task reasoning, accessibility checks, hierarchy analysis, interaction-flow analysis, or design constraint review.
-Bad:
-"Hypothesis 1: The design should look better."
-Good:
-"Hypothesis 1: The interface's primary usability risk is not visual style but unclear information hierarchy at the moment when the user must choose the next action."
 
 For complex mathematical, logical, algorithmic, engineering, and scientific problems, domain adaptation also requires purposeful reduction and structural transfer. Ask which smaller instance isolates the difficult mechanism, which parameter regime exposes the threshold, which subsystem contains the bottleneck, and which external formalism may represent the same structure more clearly. At least one resulting hypothesis must use simplification to seek a transferable principle when a meaningful reduction exists, and at least one must test a non-obvious cross-domain or latent structural correspondence.
 
@@ -1298,56 +944,6 @@ Do not satisfy these requirements with ornamental quota entries. A simplificatio
 
 The strongest portfolios make the three mandates reinforce one another. A reduced case may expose a latent graph, geometric, probabilistic, information-theoretic, dynamical, or adversarial structure; that structure may generate a constructive mechanism; and a companion hypothesis may test the boundary or counterexample class where the transfer fails. Seek this coherence when it arises naturally, while preserving independence so that each testing agent can investigate its assigned claim without needing another hypothesis's result.
 
-
-You should look for:
-* repeated critique patterns within one branch;
-* repeated critique patterns across branches;
-* corrections that address wording but not root cause;
-* branches that contradict each other;
-* branches that converge too much and need differentiated evidence;
-* branches that improve but still depend on an untested assumption;
-* branches that keep receiving the same edge-case criticism;
-* branches whose strategy seems viable but whose implementation evidence is weak;
-* branches whose critique suggests a missing metric;
-* branches where the Core Challenge's user constraints are drifting out of focus;
-* branches where solution-pool ideas need validation before reuse.
-
-Ask silently:
-* If this hypothesis is validated, what downstream behavior changes?
-* If this hypothesis is refuted, what downstream behavior changes?
-* Does this hypothesis help correction agents avoid wasted work?
-* Does it help strategy evolution avoid repeating failed paths?
-* Does it help solution-pool agents generate better blocks?
-* Does it clarify a critique pattern?
-* Does it expose a hidden assumption?
-* Does it test a pivotal boundary condition?
-* Does it reduce uncertainty that actually matters?
-* Does the total set contain both intelligence about what could work and intelligence about what must fail?
-* For a complex problem, is there a reduced case that a tester can completely solve or characterize to produce reusable context more efficiently than another full-scale probe?
-* Does the reduced hypothesis name a concrete scoped result to establish, not merely suggest that looking at a smaller case may be useful?
-* For a mathematical, logical, algorithmic, engineering, or scientific task, which hypothesis supplies the mandatory cross-domain or latent-structure probe, and what exact correspondence does it test?
-* If a simplification or cross-domain hypothesis is validated, what transfers to the full challenge; if refuted, what class of generalizations or analogies does it eliminate?
-* Does each constructive hypothesis test the preconditions of a real mechanism rather than recommend a strategy?
-* Does each adversarial hypothesis identify a precise load-bearing premise or failure witness rather than express generic doubt?
-* Does the reduction preserve the phenomenon being studied, or did simplification accidentally remove the difficult mechanism?
-* Does the cross-domain mapping specify corresponding objects, relations, constraints, and a distinguishing consequence, or is it only metaphor?
-* On a refresh call, which previous hypotheses should disappear because their value is exhausted, and which old uncertainties, if any, remain important enough to regenerate?
-* Does the refreshed set represent the best current portfolio, or is it mechanically preserving history, mechanically replacing everything for superficial novelty, or overproducing minor reduced cases?
-* If every strategy name, branch label, routing field, and history artifact were hidden, would each hypothesis still identify exactly what the isolated tester must test?
-* Is strategy targeting expressed only in routing metadata, with the underlying strategy-derived mechanism fully restated inside the hypothesis?
-
-Reject hypotheses that are:
-* obvious and low-value;
-* impossible to test from the available context;
-* too broad;
-* too narrow to matter;
-* phrased as a question;
-* leakage of the Core Challenge's authoritative final answer rather than a scoped testable conjecture;
-* mere strategy suggestions;
-* references to strategy numbers, strategy IDs, branches, prior corrections, pool entries, or other unavailable context;
-* mere critique restatements;
-* duplicate hypotheses;
-* generic to all tasks.
 Also reject a portfolio that is entirely confirmatory, entirely destructive, or missing a meaningful simplification probe for a complex task where reduction can expose structure. For mathematical, logical, algorithmic, engineering, and scientific tasks, reject the set if it lacks the required non-obvious cross-domain or latent-structure hypothesis.
 
 Keep it one paragraph. Do not include bullet lists inside a hypothesis string.
@@ -1366,10 +962,6 @@ Use prior results as follows:
 These are portfolio decisions, not mechanical status rules. A previous hypothesis may be the most important hypothesis again, but that conclusion must be earned from the current Core Challenge, strategies, and history. Conversely, novelty is not served by renaming a resolved hypothesis or replacing a pivotal unresolved one with a lower-value idea merely because it is new.
 
 Do not blindly trust branch work or critique as ground truth. Branch outputs and critiques are signals. Hypothesis testing is meant to validate or refute pivotal claims.
-
-Before finalizing the array, verify the portfolio as a whole: constructive and adversarial reconnaissance are both represented; complex tasks use simplification to obtain at least one complete, reusable reduced-scope result or potentially transferable principle when meaningful; and every mathematical, logical, algorithmic, engineering, or scientific set contains a principled cross-domain or latent-structure probe. These are selection constraints, not permission for this agent to test the hypotheses or disclose likely final answers.
-
-Perform this verification by mentally deleting each mandated entry in turn. If removing the simplification hypothesis loses no exact scoped result, isolated governing principle, reusable construction, bound, reproduction, or meaningful transfer boundary, that hypothesis is too weak. If removing the adversarial hypotheses leaves the same assumptions and solution classes unconstrained, the break side is too weak. If removing the constructive hypotheses leaves no newly testable mechanism or viable region, the build side is too weak. If removing the cross-domain probe changes only vocabulary and no possible conclusion, the transfer is superficial. Replace weak quota entries before producing the JSON.
 
 On refresh calls, perform a second portfolio audit against the complete hypothesis history. Confirm that obsolete and exhausted hypotheses were actually removed, newly visible uncertainties received serious consideration, and any regenerated hypothesis remains more valuable than the available replacements. Then reconfirm the 80:20 balance, pairwise orthogonality, build-and-break coverage, cross-domain requirement, and strategy routing from scratch. Finally, inspect every hypothesis text independently from its routing metadata and reject any text that contains a strategy reference or requires unseen branch context. A refresh is successful only when the new set is both informed by history and independently optimized for the present state.
 
