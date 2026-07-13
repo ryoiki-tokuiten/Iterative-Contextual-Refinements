@@ -14,37 +14,6 @@ import {
 import { Icon } from '../UI/Icons';
 import { AgentActivityPanel as SharedAgentActivityPanel } from '../Styles/Components/AgentActivity/AgentActivityPanel';
 
-function getToolResultSummary(toolName: string, result: string): string {
-    switch (toolName) {
-        case 'generate_strategies': {
-            const strategyMatches = result.match(/<Strategy id="S[1-5]">/g);
-            const count = strategyMatches ? strategyMatches.length : 0;
-            return count > 0 ? `Generated ${count} strategic ${count === 1 ? 'approach' : 'approaches'}` : 'Generated strategic approaches';
-        }
-        case 'generate_hypothesis': {
-            const hypothesisMatches = result.match(/<Hypothesis id="H[1-5]">/g);
-            const count = hypothesisMatches ? hypothesisMatches.length : 0;
-            return count > 0 ? `Created ${count} ${count === 1 ? 'hypothesis' : 'hypotheses'}` : 'Created hypotheses for testing';
-        }
-        case 'test_hypothesis': {
-            const testMatches = result.match(/<HypothesisTest id="H[1-5]"/g);
-            const count = testMatches ? testMatches.length : 0;
-            return count > 0 ? `Evaluated ${count} ${count === 1 ? 'hypothesis' : 'hypotheses'}` : 'Evaluated hypotheses and gathered evidence';
-        }
-        case 'execute':
-        case 'finalize_pass_and_execute': {
-            const executionMatches = result.match(/<StrategyResult id="S[1-5]">/g);
-            const count = executionMatches ? executionMatches.length : 0;
-            return count > 0 ? `Executed, critiqued, and corrected ${count} ${count === 1 ? 'strategy' : 'strategies'}` : 'Completed strategy execution pass';
-        }
-        case 'save': return 'Permanently saved selected strategy branches';
-        case 'read_files': return 'Read compacted pass artifacts';
-        case 'virtual_environment': return 'Ran command in the shared virtual environment';
-        case 'submit_final_output': return 'Submitted orchestrator final output';
-        default:
-            return 'Tool execution completed';
-    }
-}
 
 // Collapsible content component for large outputs
 const CollapsibleContent: React.FC<{ content: string; maxLines: number }> = ({ content, maxLines }) => {
@@ -138,6 +107,12 @@ const ToolArgumentsCard: React.FC<{ toolName: string; args?: any }> = ({ toolNam
                 const executions: Array<{ strategyId: string; specialContext?: string; context?: string }> = args.executions || [];
                 return (
                     <div className="tool-args-details">
+                        {args.specialContext && (
+                            <div className="tool-args-context-block" style={{ marginBottom: '12px' }}>
+                                <span className="tool-args-label">Global Special Context:</span>
+                                <pre className="tool-args-context-text">{args.specialContext}</pre>
+                            </div>
+                        )}
                         <div className="tool-args-executions">
                             {executions.map((exec, idx) => (
                                 <div key={idx} className="tool-args-exec-item">

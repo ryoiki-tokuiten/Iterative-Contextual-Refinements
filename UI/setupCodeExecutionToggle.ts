@@ -24,10 +24,12 @@ export function getSandboxToolExecutionEnabled(): boolean {
 
 export function setGeminiCodeExecutionEnabled(enabled: boolean): void {
     globalState.geminiCodeExecutionEnabled = enabled;
+    window.dispatchEvent(new CustomEvent('sandboxToggled', { detail: { enabled } }));
 }
 
 export function setSandboxToolExecutionEnabled(enabled: boolean): void {
     globalState.geminiCodeExecutionEnabled = enabled;
+    window.dispatchEvent(new CustomEvent('sandboxToggled', { detail: { enabled } }));
 }
 
 export function getCurrentProvider(): string {

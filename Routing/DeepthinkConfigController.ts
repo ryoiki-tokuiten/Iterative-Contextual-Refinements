@@ -420,6 +420,7 @@ export class DeepthinkConfigController extends EventTarget {
     public setCodeExecutionEnabled(enabled: boolean): void {
         this.modelConfig.updateParameter('deepthinkCodeExecutionEnabled', enabled);
         this.emitChange('codeExecutionEnabled');
+        window.dispatchEvent(new CustomEvent('sandboxToggled', { detail: { enabled } }));
     }
 
     /**

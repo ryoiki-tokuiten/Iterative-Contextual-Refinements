@@ -8,7 +8,7 @@ import { describeProviderError } from '../Core/ProviderError';
 import { globalState } from '../Core/State';
 import type { DeepthinkPipelineState } from '../Deepthink/DeepthinkCore';
 import { setActiveDeepthinkPipelineForImport } from '../Deepthink/Deepthink';
-import { callAI, getDeepthinkConfigController, getSelectedModel, getSelectedTemperature, getSelectedTopP } from '../Routing';
+import { callAI, getSelectedModel, getSelectedTemperature, getSelectedTopP } from '../Routing';
 import { updateControlsState } from '../UI/Controls';
 import {
     createAdaptiveDeepthinkState,
@@ -193,9 +193,36 @@ function createToolExecutionContext(
     return {
         pipeline,
         callAI: callAI as any,
-        cleanOutputByType: (raw: string) => raw,
+        cleanOutputByType: (raw: string, type?: string) => {
+            if (type === 'json') {
+                try {
+                    const trimmed = raw.trim().replace(/```json\s*/g, '').replace(/```\s*/g, '');
+                    const start = trimmed.indexOf('{');
+                    const end = trimmed.lastIndexOf('}');
+                    if (start !== -1 && end !== -1 && start < end) {
+                        return trimmed.slice(start, end + 1);
+                    }
+                    return trimmed;
+                } catch {
+                    return raw;
+                }
+            }
+            return raw;
+        },
         parseJsonSafe: (raw: string) => {
-            try { return JSON.parse(raw); } catch { return null; }
+            try {
+                return JSON.parse(raw);
+            } catch {
+                try {
+                    const trimmed = raw.trim().replace(/```json\s*/g, '').replace(/```\s*/g, '');
+                    const start = trimmed.indexOf('{');
+                    const end = trimmed.lastIndexOf('}');
+                    if (start !== -1 && end !== -1 && start < end) {
+                        return JSON.parse(trimmed.slice(start, end + 1));
+                    }
+                } catch {}
+                return null;
+            }
         },
         getSelectedTemperature,
         getSelectedModel,
@@ -223,6 +250,22 @@ async function syncGraphState(graphState: AdaptiveDeepthinkGraphState, processed
     syncAdaptiveDeepthinkPipeline(graphState.coreState, activeAdaptiveDeepthinkState.deepthinkPipelineState);
     setActiveDeepthinkPipelineForImport(activeAdaptiveDeepthinkState.deepthinkPipelineState);
     notifyAdaptiveDeepthinkListeners();
+}
+
+function getDirectTextContext(): string {
+    const textFiles = globalState.directContextFiles.filter(file => file.mimeType.startsWith('text/') || file.mimeType === 'application/json');
+    if (!textFiles.length) return '';
+    const decoder = new TextDecoder();
+    const contents = textFiles.map(file => {
+        try {
+            const binary = atob(file.base64);
+            const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+            return `\n\n--- ${file.name || 'uploaded text file'} ---\n${decoder.decode(bytes)}\n--- end file ---`;
+        } catch {
+            return `\n\n--- ${file.name || 'uploaded text file'} ---\n[Unable to decode file]\n--- end file ---`;
+        }
+    });
+    return `\n\nDirect context files:${contents.join('')}`;
 }
 
 export async function startAdaptiveDeepthinkProcess(
@@ -266,8 +309,16 @@ async function runAdaptiveDeepthinkGraph(question: string, customPrompts: Custom
             images,
             createExecutionContext: () => createToolExecutionContext(pipeline, customPrompts),
         });
+        const directTextContext = getDirectTextContext();
         const stream = await graph.stream({
-            messages: [new HumanMessage(`Core Challenge:\n${question}`)],
+            messages: [
+                new HumanMessage({
+                    content: [
+                        ...images.map(img => ({ inlineData: { mimeType: img.mimeType, data: img.base64 } })),
+                        { text: `Core Challenge:\n${question}${directTextContext}` }
+                    ]
+                })
+            ],
             coreState: activeAdaptiveDeepthinkState.coreState,
             shouldExit: false,
         }, {

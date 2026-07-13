@@ -23,7 +23,6 @@ import {
     getVisibleDeepthinkTabs,
     setActiveDeepthinkPipelineForImport,
 } from '../Deepthink/Deepthink';
-import { getDeepthinkConfigController } from '../Routing';
 
 let adaptiveDeepthinkRoot: Root | null = null;
 

@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import './FileUpload.css';
 import { Icon } from '../../../UI/Icons';
 import { getProviderForCurrentModel, getRoutingManager, getSelectedModel } from '../../../Routing';
-import { FileData } from '../../../Core/Types';
+import { FileData, ApplicationMode } from '../../../Core/Types';
+import { globalState } from '../../../Core/State';
 import {
     ACCEPTED_FILES,
     getFileConfig,
@@ -157,15 +158,44 @@ export const FileUpload: React.FC = () => {
     const dragTarget = useRef<'direct' | 'filesystem' | null>(null);
     const [, setModelCapabilityRevision] = useState(0);
 
+    const [currentMode, setCurrentMode] = useState<ApplicationMode>(globalState.currentMode as ApplicationMode);
+    const [deepthinkSandboxEnabled, setDeepthinkSandboxEnabled] = useState(false);
+    const [adaptiveSandboxEnabled, setAdaptiveSandboxEnabled] = useState(globalState.geminiCodeExecutionEnabled);
+
+    React.useEffect(() => {
+        try {
+            setDeepthinkSandboxEnabled(getRoutingManager().getDeepthinkConfigController().isCodeExecutionEnabled());
+        } catch (e) {
+            console.warn(e);
+        }
+    }, []);
+
     React.useEffect(() => {
         const refreshCapability = () => setModelCapabilityRevision(revision => revision + 1);
         const providerManager = getRoutingManager().getApiKeyManager().getProviderManager();
         window.addEventListener('selectedModelChanged', refreshCapability);
         providerManager.addModelUpdateListener(refreshCapability);
 
+        const handleModeChange = () => {
+            setCurrentMode(globalState.currentMode as ApplicationMode);
+        };
+        const handleSandboxToggle = () => {
+            setAdaptiveSandboxEnabled(globalState.geminiCodeExecutionEnabled);
+            try {
+                setDeepthinkSandboxEnabled(getRoutingManager().getDeepthinkConfigController().isCodeExecutionEnabled());
+            } catch (e) {
+                console.warn(e);
+            }
+        };
+
+        window.addEventListener('appModeChanged', handleModeChange);
+        window.addEventListener('sandboxToggled', handleSandboxToggle);
+
         return () => {
             window.removeEventListener('selectedModelChanged', refreshCapability);
             providerManager.removeModelUpdateListener(refreshCapability);
+            window.removeEventListener('appModeChanged', handleModeChange);
+            window.removeEventListener('sandboxToggled', handleSandboxToggle);
         };
     }, []);
 
@@ -358,11 +388,19 @@ export const FileUpload: React.FC = () => {
         </section>;
     };
 
+    const showFilesystemSection = currentMode !== 'contextual' && (
+        currentMode === 'deepthink' 
+            ? deepthinkSandboxEnabled 
+            : currentMode === 'adaptive-deepthink' 
+                ? adaptiveSandboxEnabled 
+                : false
+    );
+
     return (
         <>
             <div className="file-upload-wrapper">
                 {renderSection('direct', directFiles, directInputRef)}
-                {renderSection('filesystem', filesystemFiles, filesystemInputRef)}
+                {showFilesystemSection && renderSection('filesystem', filesystemFiles, filesystemInputRef)}
             </div>
 
             {draggedFile && createPortal(

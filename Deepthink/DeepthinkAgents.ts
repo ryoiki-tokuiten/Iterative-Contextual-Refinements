@@ -108,22 +108,15 @@ ${execution}
 Critique the solution attempt. Identify errors, gaps, unjustified claims, and strategy-fidelity issues. Do not fix the solution.`;
 }
 
-function buildCorrectionPrompt(question: string, strategy: string, execution: string, critique: string): string {
-    return `Core Challenge: ${question}
-
-<Assigned Strategy>
-${strategy}
-</Assigned Strategy>
-
-<Previous Solution Attempt>
-${execution}
-</Previous Solution Attempt>
-
-<Critique>
-${critique}
-</Critique>
-
-Produce a corrected solution that addresses the critique while remaining faithful to the assigned strategy.`;
+function buildCorrectionPrompt(question: string, strategy: string, execution: string, critique: string, hypothesisPacket?: string): string {
+    return [
+        `Core Challenge: ${question}`,
+        `<Assigned Strategy>\n${strategy}\n</Assigned Strategy>`,
+        hypothesisPacket ? `<Hypotheses>\n${hypothesisPacket}\n</Hypotheses>` : '',
+        `<Previous Solution Attempt>\n${execution}\n</Previous Solution Attempt>`,
+        `<Critique>\n${critique}\n</Critique>`,
+        `Produce a corrected solution that addresses the critique while remaining faithful to the assigned strategy.`
+    ].filter(Boolean).join('\n\n');
 }
 
 function buildFinalJudgePrompt(question: string, allSolutions: string): string {
@@ -399,7 +392,7 @@ export async function correctedSolutionsAgent(
     question: string,
     executionIds: string[],
     executionsData: Map<string, { strategy: string; execution: string }>,
-    critiquesData: Map<string, { critique: string }>,
+    critiquesData: Map<string, { critique: string; hypothesisPacket?: string }>,
     systemPrompt: string,
     context: AgentExecutionContext,
     images: ImageInput = []
@@ -411,7 +404,7 @@ export async function correctedSolutionsAgent(
                 const critique = critiquesData.get(id);
                 if (!execution || !critique) return { id, success: false, error: 'Execution or critique not found' };
 
-                const prompt = buildCorrectionPrompt(question, execution.strategy, execution.execution, critique.critique);
+                const prompt = buildCorrectionPrompt(question, execution.strategy, execution.execution, critique.critique, critique.hypothesisPacket);
                 const correctedSolution = await callAgent(prompt, images, context, systemPrompt, false);
                 return { id, success: true, correctedSolution };
             })

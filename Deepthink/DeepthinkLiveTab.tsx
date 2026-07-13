@@ -186,8 +186,6 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
         }
     });
     const allTimelineAgents = Array.from(agentEventsMap.values());
-    const completedAgents = allTimelineAgents.filter(a => a.eventType === 'agent_complete').sort((a, b) => a.timestamp - b.timestamp);
-    const runningAgents = allTimelineAgents.filter(a => a.eventType === 'agent_start').sort((a, b) => a.timestamp - b.timestamp);
 
     // Follow a selected agent from start to completion, but never replace a
     // deliberate selection with whichever agent happened to run most recently.
@@ -348,8 +346,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                 });
 
                                 // Check if we have multiple generic running agents to group into a "Parallel" block
-                                // We'll just map over the blocks and render.
-                                return blocks.map((block, idx) => {
+                                return blocks.map((block) => {
                                     if (block.type === 'single') {
                                         return renderTimelineNode(block.agent);
                                     } else {

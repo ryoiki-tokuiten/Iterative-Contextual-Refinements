@@ -165,7 +165,7 @@ export interface AdaptiveDeepthinkToolExecutionContext {
 }
 
 const MAX_BATCH_SIZE = 5;
-const MAX_PROXIMITY_ROUNDS = 3;
+const MAX_PROXIMITY_ROUNDS = 2;
 
 /**
  * Adaptive owns its embedded React tree. Mutating the shared pipeline without
@@ -384,7 +384,7 @@ function syncAgentContext(
                     modelName,
                     temperature: context.getSelectedTemperature(),
                     topP: context.getSelectedTopP(),
-                    seedFiles: [...seedFiles(), ...images.map((image, index) => ({ name: `adaptive-image-${index + 1}.png`, mimeType: image.mimeType, base64: image.base64 }))],
+                    seedFiles: seedFiles(),
                     runScopeDescription: 'same Adaptive Deepthink run',
                     repositoryAccess: access,
                     agentFilesystemRules: [
@@ -441,14 +441,6 @@ function firstError(response: { success: boolean; error?: string }): string | nu
     return response.success ? null : (response.error || 'Agent call failed.');
 }
 
-function strategyHistoryBlock(history: string[], candidates: string[]): string {
-    return [
-        ...history,
-        '<Current Candidates>',
-        ...candidates.map((candidate, index) => `${index + 1}. ${candidate}`),
-        '</Current Candidates>',
-    ].join('\n\n');
-}
 
 function recentExecutionCritiques(state: AdaptiveDeepthinkState): string {
     const latestPass = Math.max(0, ...Array.from(state.executions.values()).map(record => record.passNumber));
@@ -529,6 +521,52 @@ function setStrategies(
     return assigned;
 }
 
+function getDirectTextContext(): string {
+    const textFiles = globalState.directContextFiles.filter(file => file.mimeType.startsWith('text/') || file.mimeType === 'application/json');
+    if (!textFiles.length) return '';
+    const decoder = new TextDecoder();
+    const contents = textFiles.map(file => {
+        try {
+            const binary = atob(file.base64);
+            const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+            return `\n\n--- ${file.name || 'uploaded text file'} ---\n${decoder.decode(bytes)}\n--- end file ---`;
+        } catch {
+            return `\n\n--- ${file.name || 'uploaded text file'} ---\n[Unable to decode file]\n--- end file ---`;
+        }
+    });
+    return `\n\nDirect context files:${contents.join('')}`;
+}
+
+async function executeWithRetry<T extends { success: boolean; error?: string }>(
+    agentCall: () => Promise<T>,
+    context: AdaptiveDeepthinkToolExecutionContext,
+    agentRole: string,
+    maxRetries = 2
+): Promise<T> {
+    let lastResponse: T | null = null;
+    for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+        if (context.abortSignal?.aborted) {
+            throw new Error('Adaptive Deepthink process was stopped.');
+        }
+        try {
+            const response = await agentCall();
+            if (response.success && (response as any).data) {
+                return response;
+            }
+            lastResponse = response;
+            const errorMsg = response.error || 'Unknown agent error';
+            console.warn(`[Retry Warning] Agent ${agentRole} attempt ${attempt} failed: ${errorMsg}`);
+            addAdaptiveLiveEvent(context, 'Orchestrator' as any, `Agent ${agentRole} attempt ${attempt} failed internally. Retrying... (Error: ${errorMsg})`, 'info');
+        } catch (err: any) {
+            const errorMsg = err?.message || String(err);
+            console.warn(`[Retry Warning] Agent ${agentRole} attempt ${attempt} threw error: ${errorMsg}`);
+            addAdaptiveLiveEvent(context, 'Orchestrator' as any, `Agent ${agentRole} attempt ${attempt} threw error internally. Retrying... (Error: ${errorMsg})`, 'info');
+            lastResponse = { success: false, error: errorMsg } as unknown as T;
+        }
+    }
+    return lastResponse || ({ success: false, error: 'Internal retry loop failed to complete' } as unknown as T);
+}
+
 async function generateStrategyBatch(
     state: AdaptiveDeepthinkState,
     toolCall: Extract<AdaptiveDeepthinkToolCall, { type: 'generate_strategies' }>,
@@ -546,24 +584,38 @@ async function generateStrategyBatch(
     const executionGroupId = `group-${nanoid(8)}`;
     const executionGroupName = 'Strategy Generation Loop';
 
+    const previousHistoryContext = state.strategyGenerationHistory.length > 0
+        ? `<Previous Strategy Generation History>\n${state.strategyGenerationHistory.join('\n\n')}\n</Previous Strategy Generation History>`
+        : '';
+    const initialSpecialContext = [toolCall.specialContext || '', previousHistoryContext].filter(Boolean).join('\n\n');
+
     const generatorContext = syncAgentContext(state, context, 'strategy-generator', prompts.sys_deepthink_initialStrategy, undefined, undefined, [], executionGroupId, executionGroupName);
-    const initial = await generateStrategiesAgent(state.question, count, toolCall.specialContext || '', prompts.sys_deepthink_initialStrategy, generatorContext, images);
+    const initial = await executeWithRetry(
+        () => generateStrategiesAgent(state.question + getDirectTextContext(), count, initialSpecialContext, prompts.sys_deepthink_initialStrategy, generatorContext, images),
+        context,
+        'strategy-generator'
+    );
     const initialError = firstError(initial);
     if (initialError || !initial.data) return `[ERROR: ${initialError}]`;
 
     let candidates: string[] = (initial.data.strategies as unknown[]).slice(0, count).map(value => String(value));
-    const history: string[] = [];
+    const history: string[] = [...state.strategyGenerationHistory];
+    history.push(`<Initial Seed Candidates>\n${candidates.map((candidate, index) => `${index + 1}. ${candidate}`).join('\n\n')}\n</Initial Seed Candidates>`);
     for (let round = 1; round <= MAX_PROXIMITY_ROUNDS; round++) {
         if (context.abortSignal?.aborted) throw new Error('Adaptive Deepthink process was stopped.');
         const proximityContext = syncAgentContext(state, context, 'strategy-proximity', prompts.sys_deepthink_strategyProximity, undefined, undefined, [], executionGroupId, executionGroupName);
-        const proximity = await strategiesProximityAgent(
-            state.question,
-            candidates,
-            strategyHistoryBlock(history, candidates),
-            toolCall.specialContext || '',
-            prompts.sys_deepthink_strategyProximity,
-            proximityContext,
-            images,
+        const proximity = await executeWithRetry(
+            () => strategiesProximityAgent(
+                state.question + getDirectTextContext(),
+                candidates,
+                history.join('\n\n'),
+                initialSpecialContext,
+                prompts.sys_deepthink_strategyProximity,
+                proximityContext,
+                images,
+            ),
+            context,
+            'strategy-proximity'
         );
         const proximityError = firstError(proximity);
         if (proximityError || !proximity.data) return `[ERROR: ${proximityError}]`;
@@ -571,13 +623,16 @@ async function generateStrategyBatch(
         history.push(`<Round ${round} Proximity Review>\n${review}\n</Round ${round} Proximity Review>`);
         recordArtifact(state, `${pathFor(state, undefined, 'strategy-proximity', `-Round-${round}`)}.md`, review);
 
-        if (round === MAX_PROXIMITY_ROUNDS) break;
         const revisionContext = [
-            toolCall.specialContext || '',
-            strategyHistoryBlock(history, candidates),
+            initialSpecialContext,
+            history.join('\n\n'),
             'Revise the current strategies in response to the latest proximity review. Preserve valuable coverage, replace convergent or structurally weak ideas, and return the same number of distinct strategies.',
         ].filter(Boolean).join('\n\n');
-        const revised = await generateStrategiesAgent(state.question, count, revisionContext, prompts.sys_deepthink_initialStrategy, generatorContext, images);
+        const revised = await executeWithRetry(
+            () => generateStrategiesAgent(state.question + getDirectTextContext(), count, revisionContext, prompts.sys_deepthink_initialStrategy, generatorContext, images),
+            context,
+            'strategy-generator'
+        );
         const revisedError = firstError(revised);
         if (revisedError || !revised.data) return `[ERROR: ${revisedError}]`;
         candidates = (revised.data.strategies as unknown[]).slice(0, count).map(value => String(value));
@@ -611,41 +666,63 @@ async function generateHypothesisBatch(
     ].filter(Boolean).join('\n\n');
     const executionGroupId = `group-${nanoid(8)}`;
     const executionGroupName = 'Hypothesis Generation Loop';
+
+    const previousHistoryContext = state.hypothesisGenerationHistory.length > 0
+        ? `<Previous Hypothesis Generation History>\n${state.hypothesisGenerationHistory.join('\n\n')}\n</Previous Hypothesis Generation History>`
+        : '';
+    const initialBaseContext = [baseContext, previousHistoryContext].filter(Boolean).join('\n\n');
     
     const generatorContext = syncAgentContext(state, context, 'hypothesis-generator', prompts.sys_deepthink_hypothesisGeneration, undefined, undefined, [], executionGroupId, executionGroupName);
-    const initial = await generateHypothesesAgent(state.question, count, baseContext, prompts.sys_deepthink_hypothesisGeneration, generatorContext, images, true);
+    const initial = await executeWithRetry(
+        () => generateHypothesesAgent(state.question + getDirectTextContext(), count, initialBaseContext, prompts.sys_deepthink_hypothesisGeneration, generatorContext, images, true),
+        context,
+        'hypothesis-generator'
+    );
     const initialError = firstError(initial);
     if (initialError || !initial.data) return `[ERROR: ${initialError}]`;
 
     let candidates: string[] = (initial.data.hypotheses as unknown[]).slice(0, count).map(value => String(value));
-    const history: string[] = [];
+    const history: string[] = [...state.hypothesisGenerationHistory];
+    history.push(`<Initial Seed Hypotheses>\n${candidates.map((candidate, index) => `${index + 1}. ${candidate}`).join('\n\n')}\n</Initial Seed Hypotheses>`);
     for (let round = 1; round <= MAX_PROXIMITY_ROUNDS; round++) {
         if (context.abortSignal?.aborted) throw new Error('Adaptive Deepthink process was stopped.');
         const proximityContext = syncAgentContext(state, context, 'hypothesis-proximity', prompts.sys_deepthink_hypothesisProximity, undefined, undefined, [], executionGroupId, executionGroupName);
-        const proximity = await hypothesesProximityAgent(
-            state.question,
-            candidates,
-            strategyHistoryBlock(history, candidates),
-            toolCall.specialContext || '',
-            prompts.sys_deepthink_hypothesisProximity,
-            proximityContext,
-            images,
+        const proximity = await executeWithRetry(
+            () => hypothesesProximityAgent(
+                state.question + getDirectTextContext(),
+                candidates,
+                history.join('\n\n'),
+                initialBaseContext,
+                prompts.sys_deepthink_hypothesisProximity,
+                proximityContext,
+                images,
+            ),
+            context,
+            'hypothesis-proximity'
         );
         const proximityError = firstError(proximity);
         if (proximityError || !proximity.data) return `[ERROR: ${proximityError}]`;
         const review = String(proximity.data.review);
         history.push(`<Round ${round} Proximity Review>\n${review}\n</Round ${round} Proximity Review>`);
         recordArtifact(state, `${pathFor(state, undefined, 'hypothesis-proximity', `-Round-${round}`)}.md`, review);
-        if (round === MAX_PROXIMITY_ROUNDS) break;
 
-        const revised = await generateHypothesesAgent(
-            state.question,
-            count,
-            [baseContext, strategyHistoryBlock(history, candidates), 'Revise hypotheses against the latest proximity review. Keep them falsifiable, orthogonal, and critique-driven.'].join('\n\n'),
-            prompts.sys_deepthink_hypothesisGeneration,
-            generatorContext,
-            images,
-            true,
+        const revisionContext = [
+            initialBaseContext,
+            history.join('\n\n'),
+            'Revise hypotheses against the latest proximity review. Keep them falsifiable, orthogonal, and critique-driven.',
+        ].filter(Boolean).join('\n\n');
+        const revised = await executeWithRetry(
+            () => generateHypothesesAgent(
+                state.question + getDirectTextContext(),
+                count,
+                revisionContext,
+                prompts.sys_deepthink_hypothesisGeneration,
+                generatorContext,
+                images,
+                true,
+            ),
+            context,
+            'hypothesis-generator'
         );
         const revisedError = firstError(revised);
         if (revisedError || !revised.data) return `[ERROR: ${revisedError}]`;
@@ -681,14 +758,18 @@ async function testHypotheses(
         const hypothesis = state.hypotheses.get(id);
         if (!hypothesis) return { id, error: 'Hypothesis not found.' };
         const localHypotheses = new Map([[id, { text: hypothesis.text }]]);
-        const response = await testHypothesesAgent(
-            state.question,
-            [id],
-            localHypotheses,
-            '',
-            prompts.sys_deepthink_hypothesisTester,
-            syncAgentContext(state, context, 'hypothesis-testing', prompts.sys_deepthink_hypothesisTester, undefined, id, [], executionGroupId, executionGroupName),
-            images,
+        const response = await executeWithRetry(
+            () => testHypothesesAgent(
+                state.question + getDirectTextContext(),
+                [id],
+                localHypotheses,
+                '',
+                prompts.sys_deepthink_hypothesisTester,
+                syncAgentContext(state, context, 'hypothesis-testing', prompts.sys_deepthink_hypothesisTester, undefined, id, [], executionGroupId, executionGroupName),
+                images,
+            ),
+            context,
+            'hypothesis-testing'
         );
         const error = firstError(response);
         const result = response.data?.results?.[0];
@@ -736,19 +817,23 @@ async function executeOneStrategy(
         const testing = state.hypothesisTestings.get(id)!;
         return [id, { hypothesis: testing.hypothesis, testing: testing.testing }] as const;
     }));
-    const execution = await executeStrategiesAgent(
-        state.question,
-        [{ strategyId: strategy.id, hypothesisIds: selectedHypothesisIds }],
-        strategyMap,
-        testMap,
-        [
-            previousExecutionCritiqueForStrategy(state, strategy.id),
-            globalSpecialContext,
-            request.specialContext || '',
-        ].filter(Boolean).join('\n\n'),
-        prompts.sys_deepthink_solutionAttempt,
-        syncAgentContext(state, context, 'execution', prompts.sys_deepthink_solutionAttempt, strategy, undefined, selectedHypothesisIds, executionGroupId, executionGroupName),
-        images,
+    const execution = await executeWithRetry(
+        () => executeStrategiesAgent(
+            state.question + getDirectTextContext(),
+            [{ strategyId: strategy.id, hypothesisIds: selectedHypothesisIds }],
+            strategyMap,
+            testMap,
+            [
+                previousExecutionCritiqueForStrategy(state, strategy.id),
+                globalSpecialContext,
+                request.specialContext || '',
+            ].filter(Boolean).join('\n\n'),
+            prompts.sys_deepthink_solutionAttempt,
+            syncAgentContext(state, context, 'execution', prompts.sys_deepthink_solutionAttempt, strategy, undefined, selectedHypothesisIds, executionGroupId, executionGroupName),
+            images,
+        ),
+        context,
+        'execution'
     );
     const executionError = firstError(execution);
     const executionResult = execution.data?.results?.[0];
@@ -757,15 +842,19 @@ async function executeOneStrategy(
 
     const executionId = `P${state.passNumber}-${strategy.id}`;
     const executionMap = new Map([[executionId, { strategy: strategy.text, execution: executionResult.execution }]]);
-    const critique = await solutionCritiqueAgent(
-        state.question,
-        [executionId],
-        executionMap,
-        '',
-        prompts.sys_deepthink_solutionCritique,
-        // The critique receives no hypothesis packet or branch special context.
-        syncAgentContext(state, context, 'critique', prompts.sys_deepthink_solutionCritique, strategy, undefined, [], executionGroupId, executionGroupName),
-        images,
+    const critique = await executeWithRetry(
+        () => solutionCritiqueAgent(
+            state.question + getDirectTextContext(),
+            [executionId],
+            executionMap,
+            '',
+            prompts.sys_deepthink_solutionCritique,
+            // The critique receives no hypothesis packet or branch special context.
+            syncAgentContext(state, context, 'critique', prompts.sys_deepthink_solutionCritique, strategy, undefined, [], executionGroupId, executionGroupName),
+            images,
+        ),
+        context,
+        'critique'
     );
     const critiqueError = firstError(critique);
     const critiqueResult = critique.data?.results?.[0];
@@ -776,14 +865,29 @@ async function executeOneStrategy(
         const commit = await snapshotSandboxRepositoryById(state.id, `Adaptive pass ${state.passNumber} ${strategy.id} before correction`);
         if (commit) strategy.preCorrectionSnapshot = { commit, passNumber: state.passNumber };
     }
-    const correction = await correctedSolutionsAgent(
-        state.question,
-        [executionId],
-        executionMap,
-        new Map([[executionId, { critique: critiqueResult.critique }]]),
-        prompts.sys_deepthink_selfImprovement,
-        syncAgentContext(state, context, 'correction', prompts.sys_deepthink_selfImprovement, strategy, undefined, [], executionGroupId, executionGroupName),
-        images,
+    const hypothesisEntries = selectedHypothesisIds
+        .map((id, idx) => {
+            const testing = state.hypothesisTestings.get(id);
+            return testing
+                ? `<Hypothesis ${idx + 1}>\nHypothesis: ${testing.hypothesis}\nHypothesis Testing: ${testing.testing}\n</Hypothesis ${idx + 1}>\n`
+                : '';
+        })
+        .filter(Boolean)
+        .join('\n');
+    const hypothesisPacket = hypothesisEntries ? `<Full Information Packet>\n${hypothesisEntries}</Full Information Packet>` : undefined;
+
+    const correction = await executeWithRetry(
+        () => correctedSolutionsAgent(
+            state.question + getDirectTextContext(),
+            [executionId],
+            executionMap,
+            new Map([[executionId, { critique: critiqueResult.critique, hypothesisPacket }]]),
+            prompts.sys_deepthink_selfImprovement,
+            syncAgentContext(state, context, 'correction', prompts.sys_deepthink_selfImprovement, strategy, undefined, selectedHypothesisIds, executionGroupId, executionGroupName),
+            images,
+        ),
+        context,
+        'correction'
     );
     const correctionError = firstError(correction);
     const correctionResult = correction.data?.results?.[0];
