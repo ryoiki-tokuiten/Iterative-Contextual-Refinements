@@ -501,10 +501,9 @@
     right: var(--spacing-section-sm);
     z-index: 10;
 
-    display: grid;
-    grid-template-columns: repeat(auto-fit, var(--button-height-md));
-    grid-auto-flow: column;
-    grid-template-rows: repeat(5, var(--button-height-md));
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
     gap: var(--gap-xs);
     padding: var(--space-3);
 
@@ -1431,6 +1430,9 @@
         position: static;
         margin: 0 0 1.5rem 0;
         width: fit-content;
+    }
+
+    .strategy-tab-number-grid {
         grid-template-rows: repeat(3, 36px);
     }
 
@@ -1454,4 +1456,33 @@
     .dissected-critique-rail {
         min-height: 350px;
     }
+}
+
+.proximity-history-nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-xs);
+}
+
+.strategy-tab-number-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, var(--button-height-md));
+    grid-auto-flow: column;
+    grid-template-rows: repeat(5, var(--button-height-md));
+    justify-content: start;
+    gap: var(--gap-xs);
+}
+
+.proximity-history-pill {
+    justify-content: center;
+    background: rgba(var(--accent-purple-rgb), 0.12);
+    border-color: rgba(var(--accent-purple-rgb), 0.28);
+}
+
+.proximity-history-activity > .agent-panel-header {
+    display: none;
+}
+
+.hypothesis-round-content > .proximity-history-pill {
+    margin-bottom: 1rem;
 }

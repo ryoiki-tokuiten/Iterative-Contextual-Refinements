@@ -8,7 +8,14 @@ import { describeProviderError } from '../Core/ProviderError';
 import { globalState } from '../Core/State';
 import type { DeepthinkPipelineState } from '../Deepthink/DeepthinkCore';
 import { setActiveDeepthinkPipelineForImport } from '../Deepthink/Deepthink';
-import { callAI, getSelectedModel, getSelectedTemperature, getSelectedTopP } from '../Routing';
+import {
+    callAI,
+    getHypothesisProximityLoops,
+    getSelectedModel,
+    getSelectedTemperature,
+    getSelectedTopP,
+    getStrategyProximityLoops,
+} from '../Routing';
 import { updateControlsState } from '../UI/Controls';
 import {
     createAdaptiveDeepthinkState,
@@ -227,6 +234,8 @@ function createToolExecutionContext(
         getSelectedTemperature,
         getSelectedModel,
         getSelectedTopP,
+        getStrategyProximityLoops,
+        getHypothesisProximityLoops,
         getModelFor: role => customPrompts[ROLE_MODEL_MAP[role]] || getSelectedModel(),
         sandboxEnabled: sandboxEnabled(),
         notifyUpdate: () => notifyAdaptiveDeepthinkListeners(),

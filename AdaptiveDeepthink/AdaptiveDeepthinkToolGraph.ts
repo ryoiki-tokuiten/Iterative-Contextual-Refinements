@@ -48,14 +48,14 @@ function definition(name: string, description: string, parameters: ToolDefinitio
 }
 
 const tools: ToolDefinition[] = [
-    definition('generate_strategies', 'Generate or update up to five divergent strategies. This internally runs the generator/proximity revision loop three times. Saved IDs cannot be replaced.', {
+    definition('generate_strategies', 'Generate or update up to five divergent strategies. This internally runs the configured shared generator/proximity revision loop and always ends on a generator result. Saved IDs cannot be replaced.', {
         type: 'object', properties: {
             count: { type: 'integer', minimum: 1, maximum: 5, description: 'Number of unsaved strategy candidates to produce.' },
             specialContext: { type: 'string', description: 'Failure analysis or desired orthogonal search direction.' },
             replaceStrategyIds: { type: 'array', items: { type: 'string' }, maxItems: 5, description: 'Only these unsaved slots are replaced. Omit for a fresh unsaved batch.' },
         }, required: ['count'], additionalProperties: false,
     }),
-    definition('generate_hypothesis', 'Generate critique-driven hypotheses, then run the hypothesis/proximity revision loop three times. This replaces every prior hypothesis and test packet.', {
+    definition('generate_hypothesis', 'Generate critique-driven hypotheses through the configured shared hypothesis/proximity revision loop, which always ends on a generator result. This replaces every prior hypothesis and test packet.', {
         type: 'object', properties: {
             count: { type: 'integer', minimum: 1, maximum: 5 },
             specialContext: { type: 'string', description: 'What the latest execution/critique evidence still fails to explain.' },

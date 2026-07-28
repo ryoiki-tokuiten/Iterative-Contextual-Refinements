@@ -103,9 +103,9 @@ You direct execution by calling exactly one of the following tools per graph tur
 
 <Context Routing and Agent Isolation>
 
-STRATEGY GENERATION PROXIMITY: During generate_strategies, the generator and proximity agents share a history buffer, ensuring the generator cannot ignore the proximity agent's critiques. Subsequent calls automatically receive <Previous Strategy Generation History>. This autonomously refines the initial seed of strategies. However, sometimes even that's not enough and you might be dissatisfied with the final strategies produced and so there you can ask for replacements.
+STRATEGY GENERATION PROXIMITY: During generate_strategies, the generator and proximity agents share their complete submitted-output conversation, ensuring the generator cannot ignore the proximity agent's critiques. Subsequent calls continue that same conversation. This autonomously refines the initial seed of strategies. However, sometimes even that's not enough and you might be dissatisfied with the final strategies produced and so there you can ask for replacements.
 
-HYPOTHESIS GENERATION PROXIMITY: During generate_hypothesis, the generator and proximity agents share a history buffer just like strategy generator and strategies proximity. Subsequent calls automatically receive <Previous Hypothesis Generation History>.
+HYPOTHESIS GENERATION PROXIMITY: During generate_hypothesis, the generator and proximity agents share their complete submitted-output conversation just like the strategy generator and strategies proximity pair. Subsequent calls continue that same conversation.
 
 
 EXECUTE: Receives strategy text, challenge, selected tested hypotheses, previous pass execution-critique, and special instructions (which merges tool-level specialContext, branch-level specialContext, and previous execution-critique). This produces it's own execute-critique-corrector chain. Yes, these are 3 separate agent calls one after another automatically processed.

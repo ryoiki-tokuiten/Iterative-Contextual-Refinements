@@ -404,18 +404,10 @@ Decision must be exactly "keep" or "update". Mark update only when the branch's 
 export function buildStrategyUpdatePrompt(args: {
     challenge: string;
     decisionVector: PqfDecision[];
-    allCurrentStrategies: StrategySnapshot[];
-    previousStrategies: StrategySnapshot[];
     updateRequests: StrategyUpdateRequest[];
 }): PromptMessage[] {
-    const allCurrent = args.allCurrentStrategies.map(strategy => `${strategy.id} (v${strategy.branchVersion}): ${strategy.strategyText}`).join('\n\n');
-    const previous = args.previousStrategies.length
-        ? args.previousStrategies.map(strategy => `${strategy.id} (v${strategy.branchVersion}, replaced at global ${strategy.replacedAtGlobalIteration ?? 'unknown'}): ${strategy.strategyText}`).join('\n\n')
-        : 'No prior replaced strategies yet.';
-
     const failedContext = args.updateRequests.map(request => [
         `<UpdateRequest strategyId="${request.strategyId}">`,
-        fence('Old Strategy Text', request.oldStrategyText),
         fence('PQF Reasoning', request.pqfReasoning),
         fence('Latest Correction Or Execution', request.latestSolution),
         fence('Latest Critique', request.latestCritique),
@@ -430,17 +422,11 @@ ${args.challenge}
 ${JSON.stringify(args.decisionVector, null, 2)}
 </Consolidated PQF Decision Vector>
 
-<Current Active Strategies>
-${allCurrent}
-</Current Active Strategies>
-
-<Previously Replaced Strategies To Avoid Repeating>
-${previous}
-</Previously Replaced Strategies To Avoid Repeating>
-
 <Failed Strategy Context For Updates>
 ${failedContext}
 </Failed Strategy Context For Updates>
+
+The complete prior Strategy Generator / Strategies Proximity conversation is supplied separately by the shared generation loop. Use it to avoid repeating any current or previously replaced strategy.
 
 Generate exactly one replacement strategy for every strategy marked "update". Keep the same strategy_id slot, but the text must be a genuinely new branch that avoids the failed strategy's conceptual trap.
 
@@ -461,58 +447,10 @@ export function buildHypothesisRefreshPrompt(args: {
     challenge: string;
     hypothesisCount: number;
     completedGlobalIteration: number;
-    previousRounds: HypothesisRoundSnapshot[];
     currentStrategies: StrategySnapshot[];
     recentHistoryByStrategy: Record<string, BranchHistoryEntry[]>;
     updatedStrategyIds: string[];
 }): PromptMessage[] {
-    const strategyIds = Array.from(new Set([
-        ...args.currentStrategies.map(strategy => strategy.id),
-        ...args.previousRounds.flatMap(round => Object.keys(round.strategyPackets || {})),
-    ]));
-
-    const formatMappings = (round: HypothesisRoundSnapshot): string => {
-        const byStrategy = new Map<string, string[]>();
-        strategyIds.forEach(id => byStrategy.set(id, []));
-
-        const packetRegex = /<Hypothesis\s+(\d+)>\s*[\s\S]*?Target Strategies:\s*([^\n]+)[\s\S]*?<\/Hypothesis\s+\d+>/g;
-        let packetMatch: RegExpExecArray | null;
-        while ((packetMatch = packetRegex.exec(round.packet || '')) !== null) {
-            const label = `Hypothesis ${packetMatch[1]}`;
-            const rawTargets = packetMatch[2].trim();
-            const targets = rawTargets.toLowerCase() === 'all'
-                ? strategyIds
-                : rawTargets.split(',').map(target => target.trim()).filter(Boolean);
-            targets.forEach(target => {
-                if (!byStrategy.has(target)) byStrategy.set(target, []);
-                byStrategy.get(target)!.push(label);
-            });
-        }
-
-        if ([...byStrategy.values()].every(items => items.length === 0)) {
-            Object.entries(round.strategyPackets || {}).forEach(([strategyId, packet]) => {
-                const labels = Array.from(packet.matchAll(/<Hypothesis\s+([^>]+)>/g)).map(match => `Hypothesis ${match[1]}`);
-                byStrategy.set(strategyId, labels);
-            });
-        }
-
-        return strategyIds.map(strategyId => {
-            const labels = byStrategy.get(strategyId) || [];
-            return `${strategyId}: ${labels.length ? labels.join(', ') : 'None'}`;
-        }).join('\n');
-    };
-
-    const previous = args.previousRounds.length
-        ? args.previousRounds.map(round => [
-            `<HypothesisRound round="${round.roundNumber}" globalIteration="${round.globalIteration}">`,
-            round.packet,
-            '<Resolved Hypothesis Mappings>',
-            formatMappings(round),
-            '</Resolved Hypothesis Mappings>',
-            '</HypothesisRound>',
-        ].join('\n')).join('\n\n')
-        : 'No previous hypothesis rounds are available.';
-
     const strategies = args.currentStrategies.map(strategy => [
         `<Strategy id="${strategy.id}" branchVersion="${strategy.branchVersion}">`,
         fence('StrategyText', strategy.strategyText),
@@ -533,13 +471,11 @@ Generate exactly ${args.hypothesisCount} new or updated hypotheses.
 Mode: selective, strategy-aware routing only.
 </Hypothesis Heartbeat>
 
-<Previous Hypotheses And Testing Packets>
-${previous}
-</Previous Hypotheses And Testing Packets>
-
 <Current Active Strategies And Last Two Histories>
 ${strategies}
 </Current Active Strategies And Last Two Histories>
+
+The complete prior Hypothesis Generator / Hypothesis Proximity conversation is supplied separately by the shared generation loop. Use that conversation to avoid repeating prior hypotheses or proximity critiques.
 
 <Strategy Update Note>
 ${updateNote}

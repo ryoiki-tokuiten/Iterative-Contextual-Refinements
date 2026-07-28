@@ -47,7 +47,9 @@ import {
     getSelectedTopP,
     getSelectedStrategiesCount,
     getSelectedSubStrategiesCount,
+    getStrategyProximityLoops,
     getSelectedHypothesisCount,
+    getHypothesisProximityLoops,
     getSelectedPqfAggressiveness,
     getRefinementEnabled,
     getSkipSubStrategies,
@@ -114,8 +116,10 @@ export async function exportConfiguration(format: ExportFormat = 'auto'): Promis
                 temperature: getSelectedTemperature(),
                 topP: getSelectedTopP(),
                 strategiesCount: getSelectedStrategiesCount(),
+                strategyProximityLoops: getStrategyProximityLoops(),
                 subStrategiesCount: getSelectedSubStrategiesCount(),
                 hypothesisCount: getSelectedHypothesisCount(),
+                hypothesisProximityLoops: getHypothesisProximityLoops(),
                 pqfAggressiveness: getSelectedPqfAggressiveness(),
                 refinementEnabled: getRefinementEnabled(),
                 skipSubStrategies: getSkipSubStrategies(),
@@ -307,6 +311,9 @@ function restoreModelParameters(params: NonNullable<ExportedConfigV1['modelParam
     modelConfig.updateParameter('isolateBranches', params.isolateBranches === true);
     // Older exports predate optional pool skipping, so they keep the normal pool behavior.
     modelConfig.updateParameter('disableSolutionPool', params.disableSolutionPool === true);
+    // Older exports predate generator/proximity controls.
+    modelConfig.updateParameter('strategyProximityLoops', params.strategyProximityLoops ?? 2);
+    modelConfig.updateParameter('hypothesisProximityLoops', params.hypothesisProximityLoops ?? 2);
 
     // Iterate over all keys in the params object and update if strictly defined
     // This automatically handles any new parameters added to the interface

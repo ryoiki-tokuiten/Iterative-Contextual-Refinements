@@ -12,8 +12,10 @@ import { MAX_HYPOTHESIS_COUNT, ModelConfigManager, type ModelParameters } from '
 export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): { min: number; max: number } {
     const evolvingDfsEnabled = params.refinementEnabled && params.evolvingDfsEnabled;
     const strategiesCount = evolvingDfsEnabled ? Math.min(params.strategiesCount, 5) : params.strategiesCount;
+    const strategyGenerationCalls = 1 + (2 * Math.max(1, Math.min(5, params.strategyProximityLoops || 2)));
     const subStrategiesCount = params.subStrategiesCount;
     const hypothesisCount = Math.max(0, Math.min(MAX_HYPOTHESIS_COUNT, params.hypothesisCount));
+    const hypothesisGenerationCalls = 1 + (2 * Math.max(1, Math.min(5, params.hypothesisProximityLoops || 2)));
     const skipSubStrategies = evolvingDfsEnabled ? true : params.skipSubStrategies;
     const refinementEnabled = params.refinementEnabled;
     const dissectedObservationsEnabled = params.dissectedObservationsEnabled;
@@ -21,9 +23,9 @@ export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): {
     let minCalls = 0;
     let maxCalls = 0;
 
-    // 1. Initial Strategy Generation (1 call)
-    minCalls += 1;
-    maxCalls += 1;
+    // 1. Initial strategy seed plus N proximity/revision pairs.
+    minCalls += strategyGenerationCalls;
+    maxCalls += strategyGenerationCalls;
 
     // 2. Sub-Strategy Generation (N calls - one per strategy, if not skipped)
     if (!skipSubStrategies && !evolvingDfsEnabled) {
@@ -39,8 +41,8 @@ export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): {
         // Initial hypothesis round, plus a heartbeat at every even completed global iteration.
         if (hypothesisCount > 0) {
             const hypothesisRounds = 1 + Math.floor(evolvingDfsDepth / 2);
-            minCalls += hypothesisRounds * (1 + hypothesisCount);
-            maxCalls += hypothesisRounds * (1 + hypothesisCount);
+            minCalls += hypothesisRounds * (hypothesisGenerationCalls + hypothesisCount);
+            maxCalls += hypothesisRounds * (hypothesisGenerationCalls + hypothesisCount);
         }
 
         // For each active strategy branch:
@@ -54,7 +56,7 @@ export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): {
         const maintenancePasses = Math.floor(evolvingDfsDepth / 5);
         const pqfAgentCount = Math.ceil(strategiesCount / 2);
         minCalls += maintenancePasses * (strategiesCount + pqfAgentCount);
-        maxCalls += maintenancePasses * (strategiesCount + pqfAgentCount + 1 + (strategiesCount * 2));
+        maxCalls += maintenancePasses * (strategiesCount + pqfAgentCount + strategyGenerationCalls + (strategiesCount * 2));
     } else {
         // 3. Solution Attempts
         minCalls += solutionCount;
@@ -62,8 +64,8 @@ export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): {
 
         // 4-5. Hypothesis Track (only if hypothesis count > 0)
         if (hypothesisCount > 0) {
-            minCalls += 1 + hypothesisCount;
-            maxCalls += 1 + hypothesisCount;
+            minCalls += hypothesisGenerationCalls + hypothesisCount;
+            maxCalls += hypothesisGenerationCalls + hypothesisCount;
         }
 
         if (refinementEnabled) {
@@ -152,8 +154,10 @@ export class ApiCallEstimator {
         // Listen to all parameter changes
         const sliders = [
             'strategies-slider',
+            'dt-strategy-proximity-slider',
             'sub-strategies-slider',
             'hypothesis-slider',
+            'dt-hypothesis-proximity-slider',
             'dt-evolving-dfs-depth-slider'
         ];
 

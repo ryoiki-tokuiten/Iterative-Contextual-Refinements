@@ -13,6 +13,11 @@ import { archiveSandboxRepositoryStrategy, ensureDeepthinkResultsRepository, run
 import { describeProviderError } from '../Core/ProviderError';
 import { globalState } from '../Core/State';
 import { CustomizablePromptsDeepthink } from './DeepthinkPrompts';
+import {
+    normalizeProximityHistory,
+    refineWithProximity,
+    type ProximityTurn,
+} from './DeepthinkProximity';
 import { addSolutionPoolVersion } from './SolutionPool';
 import { buildDeepthinkSandboxRepositoryAccess, DEEPTHINK_SANDBOX_DIRECTORY_POLICY } from './DeepthinkSandboxAccess';
 import {
@@ -252,8 +257,10 @@ export interface DeepthinkPipelineState {
     isStopRequested?: boolean;
     retryAttempt?: number;
     requestPromptInitialStrategyGen?: string;
+    strategyGenerationHistory?: ProximityTurn[];
     initialStrategies: DeepthinkMainStrategyData[];
     requestPromptHypothesisGen?: string;
+    hypothesisGenerationHistory?: ProximityTurn[];
     hypotheses: DeepthinkHypothesisData[];
     hypothesisHistory?: DeepthinkHypothesisData[][];
     hypothesisRounds?: HypothesisRoundSnapshot[];
@@ -340,8 +347,10 @@ export interface DeepthinkCoreDeps {
     getSelectedTopP: () => number;
     getSelectedStrategiesCount: () => number;
     getSelectedSubStrategiesCount: () => number;
+    getStrategyProximityLoops: () => number;
     getRefinementEnabled: () => boolean;
     getSelectedHypothesisCount: () => number;
+    getHypothesisProximityLoops: () => number;
     getSelectedPqfAggressiveness: () => string;
     getSkipSubStrategies: () => boolean;
     getDissectedObservationsEnabled: () => boolean;
@@ -375,6 +384,8 @@ const HYPOTHESIS_HEARTBEAT_INTERVAL = 2;
 const NO_SOLUTION_POOL_AVAILABLE = 'No solution pool available';
 
 const MODEL_MAP: [string, keyof CustomizablePromptsDeepthink][] = [
+    ['Strategies Proximity', 'model_strategyProximity'],
+    ['Hypothesis Proximity', 'model_hypothesisProximity'],
     ['Initial Strategy Generation', 'model_initialStrategy'],
     ['Sub-Strategy Generation', 'model_subStrategy'],
     ['Solution Attempt', 'model_solutionAttempt'],
@@ -638,10 +649,11 @@ function createFullRepositorySandboxAccess(args: {
         | 'Dissected Observations Synthesis'
         | 'Final Judge'>;
     sessionParts?: Array<string | number | undefined>;
+    agentName?: string;
 }): DeepthinkSandboxAgentAccess {
     return {
         kind: args.kind,
-        agentName: `${args.kind} Agent`,
+        agentName: args.agentName || `${args.kind} Agent`,
         sessionId: buildDeepthinkSandboxSessionId(args.process, [args.kind, ...(args.sessionParts || [])]),
         repositoryAccess: buildDeepthinkSandboxRepositoryAccess({
             repositoryId: args.process.id,
@@ -1040,6 +1052,61 @@ Return only JSON:
 </Initial Strategy Generation Request>`;
 }
 
+function withGeneratorProximityConversation(
+    taskPrompt: string,
+    conversationText: string,
+    revisionInstruction?: string,
+): string {
+    return [
+        taskPrompt,
+        conversationText,
+        revisionInstruction || '',
+    ].filter(Boolean).join('\n\n');
+}
+
+function buildProximityReviewPrompt(
+    kind: 'strategy' | 'hypothesis',
+    challengeText: string,
+    taskPrompt: string,
+    conversationText: string,
+): string {
+    const label = kind === 'strategy' ? 'strategies' : 'hypotheses';
+    return [
+        `Core Challenge:\n${challengeText}`,
+        `Current ${kind} generation task:\n${taskPrompt}`,
+        conversationText,
+        `Review the most recent generator submission as the ${kind === 'strategy' ? 'Strategies' : 'Hypothesis'} Proximity Agent. Diagnose convergence, repetition, structural blind spots, and missing orthogonal coverage. The next generator turn will receive this complete conversation. Do not rewrite the ${label}; submit only the proximity critique.`,
+    ].join('\n\n');
+}
+
+interface StrategyGenerationCandidate {
+    id: string;
+    text: string;
+}
+
+interface HypothesisGenerationCandidate {
+    text: string;
+    targetStrategyIds: string[];
+}
+
+function formatStrategyGeneratorSubmission(candidates: StrategyGenerationCandidate[]): string {
+    return JSON.stringify({
+        strategies: candidates.map(candidate => ({
+            strategy_id: candidate.id,
+            strategy: candidate.text,
+        })),
+    }, null, 2);
+}
+
+function formatHypothesisGeneratorSubmission(candidates: HypothesisGenerationCandidate[]): string {
+    return JSON.stringify({
+        hypotheses: candidates.map(candidate => ({
+            text: candidate.text,
+            target_strategies: candidate.targetStrategyIds,
+        })),
+    }, null, 2);
+}
+
 function buildSubStrategyPrompt(args: {
     challengeText: string;
     currentMainStrategy: string;
@@ -1078,6 +1145,20 @@ function buildHypothesisGenerationPrompt(args: {
     const mappingInstruction = args.mode === 'selective_injection'
         ? `Each hypothesis must include "target_strategies" as an array of strategy IDs. Use an empty array only for globally useful hypotheses.`
         : `Hypotheses may be globally useful and do not need strategy mappings.`;
+    const outputExample = args.mode === 'selective_injection'
+        ? `{
+  "hypotheses": [
+    {
+      "text": "Hypothesis text",
+      "target_strategies": ["main1"]
+    }
+  ]
+}`
+        : `{
+  "hypotheses": [
+    "Hypothesis text"
+  ]
+}`;
 
     return `Core Challenge:
 ${args.challengeText}
@@ -1091,14 +1172,7 @@ Generate exactly ${args.count} hypotheses to investigate before execution.
 Do not solve the Core Challenge and do not include final answers.
 ${mappingInstruction}
 Return only JSON:
-{
-  "hypotheses": [
-    {
-      "text": "Hypothesis text",
-      "target_strategies": ["main1"]
-    }
-  ]
-}
+${outputExample}
 </Hypothesis Generation Request>`;
 }
 
@@ -1299,6 +1373,10 @@ export function getActiveDeepthinkPipeline() {
 }
 
 export function setActiveDeepthinkPipelineForImport(pipeline: DeepthinkPipelineState | null) {
+    if (pipeline) {
+        pipeline.strategyGenerationHistory = normalizeProximityHistory(pipeline.strategyGenerationHistory);
+        pipeline.hypothesisGenerationHistory = normalizeProximityHistory(pipeline.hypothesisGenerationHistory);
+    }
     activeDeepthinkPipeline = pipeline;
     if (setActiveDeepthinkPipeline) setActiveDeepthinkPipeline(pipeline);
 }
@@ -1475,7 +1553,9 @@ function createPipeline(challengeText: string, imageBase64?: string | null, imag
         challengeText,
         challengeImageBase64: imageBase64,
         challengeImageMimeType: imageMimeType || undefined,
+        strategyGenerationHistory: [],
         initialStrategies: [],
+        hypothesisGenerationHistory: [],
         hypotheses: [],
         hypothesisHistory: [],
         hypothesisRounds: [],
@@ -1805,43 +1885,115 @@ function parsePoolResponse(raw: string, strategyId: string): SolutionPoolParsedR
     }
 }
 
+async function generateStrategyCandidates(args: {
+    process: DeepthinkPipelineState;
+    parts: Part[];
+    challengeText: string;
+    taskPrompt: string;
+    strategyIds: string[];
+    updateIteration?: number;
+}): Promise<StrategyGenerationCandidate[]> {
+    const isUpdate = args.updateIteration !== undefined;
+    const result = await refineWithProximity<StrategyGenerationCandidate>({
+        loops: deps.getStrategyProximityLoops(),
+        history: args.process.strategyGenerationHistory,
+        generate: async (conversationText, revision, round) => {
+            const prompt = withGeneratorProximityConversation(
+                args.taskPrompt,
+                conversationText,
+                revision
+                    ? (isUpdate
+                        ? 'Revise every proposed replacement against the latest proximity critique. Keep each requested strategy_id and return one genuinely new, orthogonal branch per slot.'
+                        : 'Revise the strategy set against the latest proximity critique. Preserve orthogonal coverage and return the requested number of strategies.')
+                    : undefined,
+            );
+            const response = await callAgent({
+                process: args.process,
+                parts: args.parts.concat([{ text: prompt }]),
+                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_initialStrategy,
+                isJson: true,
+                stepDescription: isUpdate
+                    ? `Strategy Updates ${revision ? `Revision ${round}` : 'Seed'} after PQF Iteration ${args.updateIteration}`
+                    : `Initial Strategy Generation ${revision ? `Revision ${round}` : 'Seed'}`,
+                target: args.process,
+                retryField: 'retryAttempt',
+                critical: true,
+                sandboxAccess: createFullRepositorySandboxAccess({
+                    process: args.process,
+                    kind: 'Main Strategy Generation',
+                    sessionParts: ['generator-proximity', 'generator'],
+                    agentName: 'Strategy Generator Agent',
+                }),
+                finalOutputContract: strategyOutputContract(args.strategyIds.length, isUpdate ? 'update' : 'initial'),
+            });
+            const parsed = parseJson(response.contextText, isUpdate ? 'Strategy Updates' : 'Initial Strategy Generation');
+            const items = Array.isArray(parsed.strategies) ? parsed.strategies : [];
+            const candidates = isUpdate
+                ? args.strategyIds.map((id, index) => {
+                    const item = items.find((value: any) => String(value?.strategy_id || value?.id || '').trim() === id) || items[index];
+                    return { id, text: typeof item === 'string' ? item : String(item?.strategy || item?.strategyText || item?.text || '') };
+                })
+                : asStringArray(parsed.strategies || parsed.features || parsed.suggestions)
+                    .slice(0, args.strategyIds.length)
+                    .map((text, index) => ({ id: args.strategyIds[index], text }));
+            if (!candidates.length || candidates.some(candidate => !candidate.text.trim())) {
+                throw new Error(`${isUpdate ? 'Strategy update' : 'Initial strategy'} generation returned incomplete strategies.`);
+            }
+            return {
+                candidates,
+                output: isUpdate
+                    ? formatStrategyGeneratorSubmission(candidates)
+                    : JSON.stringify({ strategies: candidates.map(candidate => candidate.text) }, null, 2),
+            };
+        },
+        review: async (_candidates, conversationText, round) => {
+            const response = await callAgent({
+                process: args.process,
+                parts: args.parts.concat([{ text: buildProximityReviewPrompt('strategy', args.challengeText, args.taskPrompt, conversationText) }]),
+                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_strategyProximity,
+                isJson: false,
+                stepDescription: `Strategies Proximity Round ${round}${isUpdate ? ` after PQF Iteration ${args.updateIteration}` : ''}`,
+                target: args.process,
+                retryField: 'retryAttempt',
+                critical: true,
+                sandboxAccess: createFullRepositorySandboxAccess({
+                    process: args.process,
+                    kind: 'Main Strategy Generation',
+                    sessionParts: ['generator-proximity', 'proximity'],
+                    agentName: 'Strategies Proximity Agent',
+                }),
+            });
+            return response.contextText;
+        },
+        onHistory: history => {
+            args.process.strategyGenerationHistory = history;
+            render();
+        },
+    });
+    return result.candidates;
+}
+
 async function generateStrategies(process: DeepthinkPipelineState, parts: Part[], challengeText: string, evolvingDfsMode: boolean): Promise<void> {
     const requestedCount = evolvingDfsMode
         ? Math.min(deps.getSelectedStrategiesCount(), 5)
         : deps.getSelectedStrategiesCount();
-    const prompt = buildInitialStrategyPrompt(challengeText, requestedCount);
+    const taskPrompt = buildInitialStrategyPrompt(challengeText, requestedCount);
 
-    process.requestPromptInitialStrategyGen = prompt;
+    process.requestPromptInitialStrategyGen = taskPrompt;
+    process.strategyGenerationHistory = normalizeProximityHistory(process.strategyGenerationHistory);
     render();
 
-    const responseOutput = await callAgent({
+    const strategies = await generateStrategyCandidates({
         process,
-        parts: parts.concat([{ text: prompt }]),
-        systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_initialStrategy,
-        isJson: true,
-        stepDescription: 'Initial Strategy Generation',
-        target: process,
-        retryField: 'retryAttempt',
-        critical: true,
-        sandboxAccess: createFullRepositorySandboxAccess({
-            process,
-            kind: 'Main Strategy Generation',
-            sessionParts: ['initial'],
-        }),
-        finalOutputContract: strategyOutputContract(requestedCount),
+        parts,
+        challengeText,
+        taskPrompt,
+        strategyIds: Array.from({ length: requestedCount }, (_, index) => `main${index + 1}`),
     });
-    const response = responseOutput.contextText;
 
-    const parsed = parseJson(response, 'Initial Strategy Generation');
-    const strategies = asStringArray(parsed.strategies || parsed.features || parsed.suggestions).slice(0, requestedCount || undefined);
-
-    if (strategies.length === 0) {
-        throw new Error('Initial strategy generation returned no strategies.');
-    }
-
-    process.initialStrategies = strategies.map((strategyText, index) => ({
-        id: `main${index + 1}`,
-        strategyText,
+    process.initialStrategies = strategies.map(candidate => ({
+        id: candidate.id,
+        strategyText: candidate.text,
         subStrategies: [],
         status: 'pending',
         isDetailsOpen: false,
@@ -1969,8 +2121,9 @@ async function runHypothesisRound(args: {
     args.process.hypotheses = [];
     render();
 
-    const prompt = args.prompt || initialHypothesisPrompt(args.process, args.challengeText, args.mode, count);
-    args.process.requestPromptHypothesisGen = prompt;
+    const taskPrompt = args.prompt || initialHypothesisPrompt(args.process, args.challengeText, args.mode, count);
+    args.process.requestPromptHypothesisGen = taskPrompt;
+    args.process.hypothesisGenerationHistory = normalizeProximityHistory(args.process.hypothesisGenerationHistory);
 
     let systemInstruction = deps.customPromptsDeepthinkState.sys_deepthink_hypothesisGeneration
         .replace(/\{\{NUM_HYPOTHESES\}\}/g, String(count));
@@ -1980,43 +2133,91 @@ async function runHypothesisRound(args: {
     }
 
     try {
-        const responseOutput = await callAgent({
-            process: args.process,
-            parts: args.parts.concat([{ text: prompt }]),
-            systemInstruction,
-            isJson: true,
-            stepDescription: args.roundNumber === 1 ? 'Hypothesis Generation' : `Hypothesis Generation Heartbeat ${args.roundNumber}`,
-            target: args.process,
-            retryField: 'hypothesisGenRetryAttempt',
-            timeoutMs: AGENT_TIMEOUT_MS,
-            critical: false,
-            sandboxAccess: createFullRepositorySandboxAccess({
-                process: args.process,
-                kind: 'Hypothesis Generation',
-                sessionParts: [`round-${args.roundNumber}`, `global-${args.globalIteration}`],
-            }),
-            finalOutputContract: hypothesisOutputContract(count, args.mode),
+        const result = await refineWithProximity<HypothesisGenerationCandidate>({
+            loops: deps.getHypothesisProximityLoops(),
+            history: args.process.hypothesisGenerationHistory,
+            version: args.roundNumber,
+            generate: async (conversationText, revision, round) => {
+                const prompt = withGeneratorProximityConversation(
+                    taskPrompt,
+                    conversationText,
+                    revision
+                        ? 'Revise the most recent hypothesis set in direct response to the latest proximity critique. Keep the same count and preserve only hypotheses that are orthogonal, falsifiable, and useful for the current generation task.'
+                        : undefined,
+                );
+                const responseOutput = await callAgent({
+                    process: args.process,
+                    parts: args.parts.concat([{ text: prompt }]),
+                    systemInstruction,
+                    isJson: true,
+                    stepDescription: !revision
+                        ? (args.roundNumber === 1 ? 'Hypothesis Generation Seed' : `Hypothesis Generation Heartbeat ${args.roundNumber} Seed`)
+                        : `Hypothesis Generation Revision ${round} for Heartbeat ${args.roundNumber}`,
+                    target: args.process,
+                    retryField: 'hypothesisGenRetryAttempt',
+                    timeoutMs: AGENT_TIMEOUT_MS,
+                    critical: false,
+                    sandboxAccess: createFullRepositorySandboxAccess({
+                        process: args.process,
+                        kind: 'Hypothesis Generation',
+                        sessionParts: ['generator-proximity', 'generator'],
+                        agentName: 'Hypothesis Generator Agent',
+                    }),
+                    finalOutputContract: hypothesisOutputContract(count, args.mode),
+                });
+                const parsed = parseJson(responseOutput.contextText, 'Hypothesis Generation');
+                const rawHypotheses = Array.isArray(parsed.hypotheses) ? parsed.hypotheses : [];
+                const hypotheses: HypothesisGenerationCandidate[] = rawHypotheses.slice(0, count).map((raw: any): HypothesisGenerationCandidate => {
+                    const isObject = raw && typeof raw === 'object';
+                    const targetStrategyIds = isObject && Array.isArray(raw.target_strategies)
+                        ? raw.target_strategies.map((value: unknown) => String(value).trim()).filter(Boolean)
+                        : [];
+                    return {
+                        text: isObject ? String(raw.text || '') : String(raw || ''),
+                        targetStrategyIds: args.mode === 'selective_injection' ? targetStrategyIds : [],
+                    };
+                }).filter((candidate: HypothesisGenerationCandidate) => candidate.text.trim());
+                return {
+                    candidates: hypotheses,
+                    output: args.mode === 'selective_injection'
+                        ? formatHypothesisGeneratorSubmission(hypotheses)
+                        : JSON.stringify({ hypotheses: hypotheses.map(hypothesis => hypothesis.text) }, null, 2),
+                };
+            },
+            review: async (_candidates, conversationText, round) => {
+                const response = await callAgent({
+                    process: args.process,
+                    parts: args.parts.concat([{ text: buildProximityReviewPrompt('hypothesis', args.challengeText, taskPrompt, conversationText) }]),
+                    systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_hypothesisProximity,
+                    isJson: false,
+                    stepDescription: `Hypothesis Proximity Round ${round} for Heartbeat ${args.roundNumber}`,
+                    target: args.process,
+                    retryField: 'hypothesisGenRetryAttempt',
+                    timeoutMs: AGENT_TIMEOUT_MS,
+                    critical: false,
+                    sandboxAccess: createFullRepositorySandboxAccess({
+                        process: args.process,
+                        kind: 'Hypothesis Generation',
+                        sessionParts: ['generator-proximity', 'proximity'],
+                        agentName: 'Hypothesis Proximity Agent',
+                    }),
+                });
+                return response.contextText;
+            },
+            onHistory: history => {
+                args.process.hypothesisGenerationHistory = history;
+                render();
+            },
         });
-        const response = responseOutput.contextText;
-
-        const parsed = parseJson(response, 'Hypothesis Generation');
-        const hypotheses = Array.isArray(parsed.hypotheses) ? parsed.hypotheses : [];
-
-        args.process.hypotheses = hypotheses.slice(0, count).map((raw: any, index: number) => {
-            const isObject = raw && typeof raw === 'object';
-            const targetIds = isObject && Array.isArray(raw.target_strategies)
-                ? raw.target_strategies.map((value: unknown) => String(value).trim()).filter(Boolean)
-                : undefined;
-            return {
+        args.process.hypotheses = result.candidates.map((candidate, index) => ({
                 id: `hyp${args.roundNumber}-${index + 1}`,
-                hypothesisText: isObject ? String(raw.text || '') : String(raw || ''),
+                hypothesisText: candidate.text,
                 testerStatus: 'pending',
                 isDetailsOpen: false,
-                targetStrategyIds: args.mode === 'selective_injection' ? targetIds : undefined,
+                targetStrategyIds: args.mode === 'selective_injection' ? candidate.targetStrategyIds : undefined,
                 roundNumber: args.roundNumber,
                 globalIteration: args.globalIteration,
-            };
-        }).filter((hypothesis: DeepthinkHypothesisData) => hypothesis.hypothesisText.trim());
+            }));
 
         args.process.hypothesisGenStatus = 'completed';
         render();
@@ -2786,26 +2987,6 @@ async function updateStrategiesFromPqf(args: {
     const updateDecisions = args.decisions.filter(decision => decision.decision === 'update');
     if (updateDecisions.length === 0) return [];
 
-    const currentSnapshots = allSnapshots(args.process, args.runtimes);
-    const previousSnapshots: StrategySnapshot[] = [];
-    activeStrategies(args.process).forEach((strategy, index) => {
-        (strategy.replacementHistory || []).forEach(record => {
-            previousSnapshots.push({
-                id: record.strategyId,
-                strategyText: record.previousStrategyText,
-                slotIndex: index,
-                branchVersion: record.previousBranchVersion,
-                branchIterationCount: 0,
-                globalIteration: record.replacedAtGlobalIteration,
-                latestSolution: record.latestSolution,
-                latestCritique: record.latestCritique,
-                memoryBank: record.memoryBank,
-                replacedAtGlobalIteration: record.replacedAtGlobalIteration,
-                replacementReason: record.pqfReasoning,
-            });
-        });
-    });
-
     const updateRequests: StrategyUpdateRequest[] = updateDecisions.map(decision => {
         const strategy = args.process.initialStrategies.find(candidate => candidate.id === decision.strategyId)!;
         const runtime = args.runtimes.get(strategy.id)!;
@@ -2825,41 +3006,26 @@ async function updateStrategiesFromPqf(args: {
         };
     });
 
-    const prompt = messageText(buildStrategyUpdatePrompt({
+    const taskPrompt = messageText(buildStrategyUpdatePrompt({
         challenge: args.challengeText,
         decisionVector: args.decisions,
-        allCurrentStrategies: currentSnapshots,
-        previousStrategies: previousSnapshots,
         updateRequests,
     }));
+    args.process.strategyGenerationHistory = normalizeProximityHistory(args.process.strategyGenerationHistory);
 
-    const responseOutput = await callAgent({
+    const replacements = await generateStrategyCandidates({
         process: args.process,
-        parts: args.parts.concat([{ text: prompt }]),
-        systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_initialStrategy,
-        isJson: true,
-        stepDescription: `Strategy Updates after PQF Iteration ${args.globalIteration}`,
-        target: args.process,
-        retryField: 'retryAttempt',
-        critical: true,
-        sandboxAccess: createFullRepositorySandboxAccess({
-            process: args.process,
-            kind: 'Main Strategy Generation',
-            sessionParts: ['strategy-updates', `global-${args.globalIteration}`],
-        }),
-        finalOutputContract: strategyOutputContract(updateRequests.length, 'update'),
+        parts: args.parts,
+        challengeText: args.challengeText,
+        taskPrompt,
+        strategyIds: updateRequests.map(request => request.strategyId),
+        updateIteration: args.globalIteration,
     });
-    const response = responseOutput.contextText;
-
-    const parsed = parseJson(response, 'Strategy Updates');
-    const replacementItems = Array.isArray(parsed.strategies) ? parsed.strategies : [];
     const updatedIds: string[] = [];
 
     for (const [index, request] of updateRequests.entries()) {
-        const replacement = replacementItems.find((item: any) => String(item.strategy_id || item.id || '').trim() === request.strategyId) || replacementItems[index];
-        const replacementText = typeof replacement === 'string'
-            ? replacement
-            : String(replacement?.strategy || replacement?.strategyText || replacement?.text || '');
+        const replacement = replacements.find(candidate => candidate.id === request.strategyId) || replacements[index];
+        const replacementText = replacement?.text || '';
         if (!replacementText.trim()) continue;
 
         const strategy = args.process.initialStrategies.find(candidate => candidate.id === request.strategyId);
@@ -3082,7 +3248,6 @@ async function runHypothesisHeartbeatIfDue(args: {
         challenge: args.challengeText,
         hypothesisCount: deps.getSelectedHypothesisCount(),
         completedGlobalIteration: args.globalIteration,
-        previousRounds: args.process.hypothesisRounds || [],
         currentStrategies: snapshots,
         recentHistoryByStrategy,
         updatedStrategyIds: args.updatedStrategyIds,

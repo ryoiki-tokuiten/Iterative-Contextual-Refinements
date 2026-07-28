@@ -61,8 +61,10 @@ export interface ExportedConfigV1 {
         temperature: number;
         topP: number;
         strategiesCount: number;
+        strategyProximityLoops?: number;
         subStrategiesCount: number;
         hypothesisCount: number;
+        hypothesisProximityLoops?: number;
         pqfAggressiveness: string;
         refinementEnabled: boolean;
         skipSubStrategies: boolean;

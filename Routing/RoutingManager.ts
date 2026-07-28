@@ -161,6 +161,14 @@ export class RoutingManager {
         return this.modelConfigManager.getSubStrategiesCount();
     }
 
+    public getStrategyProximityLoops(): number {
+        return this.modelConfigManager.getStrategyProximityLoops();
+    }
+
+    public getHypothesisProximityLoops(): number {
+        return this.modelConfigManager.getHypothesisProximityLoops();
+    }
+
     public getHypothesisCount(): number {
         return this.modelConfigManager.getHypothesisCount();
     }

@@ -10,12 +10,14 @@ export interface DeepthinkPromptsContentProps {
 
 type SystemPromptKey =
     | 'sys_deepthink_initialStrategy'
+    | 'sys_deepthink_strategyProximity'
     | 'sys_deepthink_subStrategy'
     | 'sys_deepthink_solutionAttempt'
     | 'sys_deepthink_solutionCritique'
     | 'sys_deepthink_dissectedSynthesis'
     | 'sys_deepthink_selfImprovement'
     | 'sys_deepthink_hypothesisGeneration'
+    | 'sys_deepthink_hypothesisProximity'
     | 'sys_deepthink_hypothesisTester'
     | 'sys_deepthink_postQualityFilter'
     | 'sys_deepthink_memoryBank'
@@ -24,12 +26,14 @@ type SystemPromptKey =
 
 type ModelPromptKey =
     | 'model_initialStrategy'
+    | 'model_strategyProximity'
     | 'model_subStrategy'
     | 'model_solutionAttempt'
     | 'model_solutionCritique'
     | 'model_dissectedSynthesis'
     | 'model_selfImprovement'
     | 'model_hypothesisGeneration'
+    | 'model_hypothesisProximity'
     | 'model_hypothesisTester'
     | 'model_postQualityFilter'
     | 'model_memoryBank'
@@ -53,6 +57,14 @@ const SYSTEM_PROMPT_PANES: SystemPaneDefinition[] = [
         agentName: 'initialStrategy',
         systemKey: 'sys_deepthink_initialStrategy',
         modelKey: 'model_initialStrategy',
+    },
+    {
+        promptKey: 'deepthink-strategy-proximity',
+        title: 'Strategies Proximity',
+        textareaId: 'sys-deepthink-strategy-proximity',
+        agentName: 'strategyProximity',
+        systemKey: 'sys_deepthink_strategyProximity',
+        modelKey: 'model_strategyProximity',
     },
     {
         promptKey: 'deepthink-sub-strategy',
@@ -101,6 +113,14 @@ const SYSTEM_PROMPT_PANES: SystemPaneDefinition[] = [
         agentName: 'hypothesisGeneration',
         systemKey: 'sys_deepthink_hypothesisGeneration',
         modelKey: 'model_hypothesisGeneration',
+    },
+    {
+        promptKey: 'deepthink-hypothesis-proximity',
+        title: 'Hypothesis Proximity',
+        textareaId: 'sys-deepthink-hypothesis-proximity',
+        agentName: 'hypothesisProximity',
+        systemKey: 'sys_deepthink_hypothesisProximity',
+        modelKey: 'model_hypothesisProximity',
     },
     {
         promptKey: 'deepthink-hypothesis-tester',

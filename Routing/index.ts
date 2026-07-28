@@ -70,8 +70,16 @@ export function getSelectedSubStrategiesCount(): number {
     return getRoutingManager().getSubStrategiesCount();
 }
 
+export function getStrategyProximityLoops(): number {
+    return getRoutingManager().getStrategyProximityLoops();
+}
+
 export function getSelectedHypothesisCount(): number {
     return getRoutingManager().getHypothesisCount();
+}
+
+export function getHypothesisProximityLoops(): number {
+    return getRoutingManager().getHypothesisProximityLoops();
 }
 
 export function getSelectedPqfAggressiveness(): string {

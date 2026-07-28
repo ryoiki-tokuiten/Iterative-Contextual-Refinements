@@ -96,7 +96,9 @@ interface DeepthinkModuleState {
     cleanTextOutput: (text: string) => string;
     getSelectedStrategiesCount: () => number;
     getSelectedSubStrategiesCount: () => number;
+    getStrategyProximityLoops: () => number;
     getSelectedHypothesisCount: () => number;
+    getHypothesisProximityLoops: () => number;
     getSelectedPqfAggressiveness: () => string;
     getRefinementEnabled: () => boolean;
     getEvolvingDfsEnabled: () => boolean;
@@ -110,7 +112,9 @@ const moduleState: DeepthinkModuleState = {
     cleanTextOutput: (s) => s,
     getSelectedStrategiesCount: () => 0,
     getSelectedSubStrategiesCount: () => 0,
+    getStrategyProximityLoops: () => 2,
     getSelectedHypothesisCount: () => 0,
+    getHypothesisProximityLoops: () => 2,
     getSelectedPqfAggressiveness: () => 'off',
     getRefinementEnabled: () => false,
     getEvolvingDfsEnabled: () => false,
@@ -143,8 +147,10 @@ export function initializeDeepthinkModule(dependencies: {
     getSelectedTopP: () => number;
     getSelectedStrategiesCount: () => number;
     getSelectedSubStrategiesCount: () => number;
+    getStrategyProximityLoops: () => number;
     getRefinementEnabled: () => boolean;
     getSelectedHypothesisCount: () => number;
+    getHypothesisProximityLoops: () => number;
     getSelectedPqfAggressiveness: () => string;
     getSkipSubStrategies: () => boolean;
     getDissectedObservationsEnabled: () => boolean;
@@ -171,7 +177,9 @@ export function initializeDeepthinkModule(dependencies: {
         cleanTextOutput: dependencies.cleanTextOutput,
         getSelectedStrategiesCount: dependencies.getSelectedStrategiesCount,
         getSelectedSubStrategiesCount: dependencies.getSelectedSubStrategiesCount,
+        getStrategyProximityLoops: dependencies.getStrategyProximityLoops,
         getSelectedHypothesisCount: dependencies.getSelectedHypothesisCount,
+        getHypothesisProximityLoops: dependencies.getHypothesisProximityLoops,
         getSelectedPqfAggressiveness: dependencies.getSelectedPqfAggressiveness,
         getRefinementEnabled: dependencies.getRefinementEnabled,
         getEvolvingDfsEnabled: dependencies.getEvolvingDfsEnabled,

@@ -23,8 +23,10 @@ export type HypothesisInjectionMode = 'parallel' | 'strategy_aware' | 'selective
 
 export interface DeepthinkConfigPanelProps {
     strategiesCount: number;
+    strategyProximityLoops: number;
     subStrategiesCount: number;
     hypothesisCount: number;
+    hypothesisProximityLoops: number;
     skipSubStrategies: boolean;
     hypothesisEnabled: boolean;
     pqfMode: string;
@@ -41,8 +43,10 @@ export interface DeepthinkConfigPanelProps {
     shareHypothesesToDissected: boolean;
 
     onStrategiesChange: (count: number) => void;
+    onStrategyProximityLoopsChange: (count: number) => void;
     onSubStrategiesChange: (count: number) => void;
     onHypothesisChange: (count: number) => void;
+    onHypothesisProximityLoopsChange: (count: number) => void;
     onSkipSubStrategiesToggle: (skip: boolean) => void;
     onHypothesisToggle: (enabled: boolean) => void;
     onPqfModeChange: (mode: string) => void;
@@ -74,9 +78,11 @@ interface TokenSeriesDescriptor {
 type StrategyExecutionSectionProps = Pick<
     DeepthinkConfigPanelProps,
     | 'strategiesCount'
+    | 'strategyProximityLoops'
     | 'subStrategiesCount'
     | 'evolvingDfsEnabled'
     | 'onStrategiesChange'
+    | 'onStrategyProximityLoopsChange'
     | 'onSubStrategiesChange'
     | 'onSkipSubStrategiesToggle'
 >;
@@ -90,11 +96,13 @@ type InformationPacketSectionProps = Pick<
     DeepthinkConfigPanelProps,
     | 'hypothesisEnabled'
     | 'hypothesisCount'
+    | 'hypothesisProximityLoops'
     | 'hypothesisInjectionMode'
     | 'evolvingDfsEnabled'
     | 'disableSolutionPool'
     | 'onHypothesisToggle'
     | 'onHypothesisChange'
+    | 'onHypothesisProximityLoopsChange'
     | 'onHypothesisInjectionModeChange'
 >;
 
@@ -452,9 +460,11 @@ const SvgArrowDiagram: React.FC<SvgArrowDiagramProps> = ({
 
 const StrategyExecutionSection: React.FC<StrategyExecutionSectionProps> = ({
     strategiesCount,
+    strategyProximityLoops,
     subStrategiesCount,
     evolvingDfsEnabled,
     onStrategiesChange,
+    onStrategyProximityLoopsChange,
     onSubStrategiesChange,
     onSkipSubStrategiesToggle,
 }) => {
@@ -482,6 +492,17 @@ const StrategyExecutionSection: React.FC<StrategyExecutionSectionProps> = ({
                             max={evolvingDfsEnabled ? 5 : 10}
                             color="#e86b6b"
                             onChange={onStrategiesChange}
+                        />
+                        <label htmlFor="dt-strategy-proximity-slider" className="input-label proximity-loop-label">
+                            Strategy–proximity loops: <span id="dt-strategy-proximity-value">{strategyProximityLoops}</span>
+                        </label>
+                        <SliderWithFill
+                            id="dt-strategy-proximity-slider"
+                            value={strategyProximityLoops}
+                            min={1}
+                            max={5}
+                            color="#e86b6b"
+                            onChange={onStrategyProximityLoopsChange}
                         />
                     </div>
                 </div>
@@ -811,11 +832,13 @@ const SandboxEnvironmentPanel: React.FC<{
 const InformationPacketSection: React.FC<InformationPacketSectionProps> = ({
     hypothesisEnabled,
     hypothesisCount,
+    hypothesisProximityLoops,
     hypothesisInjectionMode,
     evolvingDfsEnabled,
     disableSolutionPool,
     onHypothesisToggle,
     onHypothesisChange,
+    onHypothesisProximityLoopsChange,
     onHypothesisInjectionModeChange,
 }) => {
     const toggleHypotheses = (enabled: boolean) => {
@@ -869,6 +892,18 @@ const InformationPacketSection: React.FC<InformationPacketSectionProps> = ({
                                 color="var(--accent-blue)"
                                 disabled={!hypothesisEnabled}
                                 onChange={onHypothesisChange}
+                            />
+                            <label htmlFor="dt-hypothesis-proximity-slider" className="input-label proximity-loop-label">
+                                Hypothesis–proximity loops: <span id="dt-hypothesis-proximity-value">{hypothesisProximityLoops}</span>
+                            </label>
+                            <SliderWithFill
+                                id="dt-hypothesis-proximity-slider"
+                                value={hypothesisProximityLoops}
+                                min={1}
+                                max={5}
+                                color="var(--accent-blue)"
+                                disabled={!hypothesisEnabled}
+                                onChange={onHypothesisProximityLoopsChange}
                             />
                         </div>
                     </div>
@@ -1469,38 +1504,42 @@ export const DeepthinkConfigPanelComponent: React.FC<DeepthinkConfigPanelProps> 
                 <div className="config-row-inner">
                     <StrategyExecutionSection
                         strategiesCount={props.strategiesCount}
+                        strategyProximityLoops={props.strategyProximityLoops}
                         subStrategiesCount={props.subStrategiesCount}
                         evolvingDfsEnabled={props.evolvingDfsEnabled}
                         onStrategiesChange={props.onStrategiesChange}
+                        onStrategyProximityLoopsChange={props.onStrategyProximityLoopsChange}
                         onSubStrategiesChange={props.onSubStrategiesChange}
                         onSkipSubStrategiesToggle={props.onSkipSubStrategiesToggle}
                     />
-                    <EvolutionFilterSection
-                        pqfMode={props.pqfMode}
-                        evolvingDfsEnabled={props.evolvingDfsEnabled}
-                        onPqfModeChange={props.onPqfModeChange}
-                    />
+                    <div className="information-column">
+                        <SandboxEnvironmentPanel
+                            enabled={props.codeExecutionEnabled}
+                            onToggle={props.onCodeExecutionToggle}
+                        />
+                        <EvolutionFilterSection
+                            pqfMode={props.pqfMode}
+                            evolvingDfsEnabled={props.evolvingDfsEnabled}
+                            onPqfModeChange={props.onPqfModeChange}
+                        />
+                    </div>
                 </div>
             </div>
 
             <div className="config-row-container">
                 <div className="config-row-inner">
-                    <div className="information-column">
-                        <InformationPacketSection
-                            hypothesisEnabled={props.hypothesisEnabled}
-                            hypothesisCount={props.hypothesisCount}
-                            hypothesisInjectionMode={props.hypothesisInjectionMode}
-                            evolvingDfsEnabled={props.evolvingDfsEnabled}
-                            disableSolutionPool={props.disableSolutionPool}
-                            onHypothesisToggle={props.onHypothesisToggle}
-                            onHypothesisChange={props.onHypothesisChange}
-                            onHypothesisInjectionModeChange={props.onHypothesisInjectionModeChange}
-                        />
-                        <SandboxEnvironmentPanel
-                            enabled={props.codeExecutionEnabled}
-                            onToggle={props.onCodeExecutionToggle}
-                        />
-                    </div>
+                    <InformationPacketSection
+                        hypothesisEnabled={props.hypothesisEnabled}
+                        hypothesisCount={props.hypothesisCount}
+                        hypothesisProximityLoops={props.hypothesisProximityLoops}
+                        hypothesisInjectionMode={props.hypothesisInjectionMode}
+                        evolvingDfsEnabled={props.evolvingDfsEnabled}
+                        disableSolutionPool={props.disableSolutionPool}
+                        onHypothesisToggle={props.onHypothesisToggle}
+                        onHypothesisChange={props.onHypothesisChange}
+                        onHypothesisProximityLoopsChange={props.onHypothesisProximityLoopsChange}
+                        onHypothesisInjectionModeChange={props.onHypothesisInjectionModeChange}
+                    />
                     <RefinementSection
                         strategiesCount={props.strategiesCount}
                         refinementEnabled={props.refinementEnabled}
@@ -1535,8 +1574,10 @@ function deriveProps(controller: DeepthinkController): DeepthinkConfigPanelProps
     return {
         ...state,
         onStrategiesChange: value => controller.setStrategiesCount(value),
+        onStrategyProximityLoopsChange: value => controller.setStrategyProximityLoops(value),
         onSubStrategiesChange: value => controller.setSubStrategiesCount(value),
         onHypothesisChange: value => controller.setHypothesisCount(value),
+        onHypothesisProximityLoopsChange: value => controller.setHypothesisProximityLoops(value),
         onSkipSubStrategiesToggle: value => controller.setSkipSubStrategies(value),
         onHypothesisToggle: value => controller.setHypothesisEnabled(value),
         onPqfModeChange: value => controller.setPqfMode(value),

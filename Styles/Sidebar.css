@@ -149,6 +149,14 @@
     overscroll-behavior: contain;
 }
 
+.adaptive-proximity-loop-controls {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(var(--border-color-rgb), 0.45);
+}
+
 .sidebar-footer {
     flex-shrink: 0;
     min-width: 0;
@@ -798,4 +806,3 @@ details.sidebar-section {
     background: rgba(var(--card-bg-base-rgb), 0.08);
     border-color: var(--sub-panel-border-color);
 }
-

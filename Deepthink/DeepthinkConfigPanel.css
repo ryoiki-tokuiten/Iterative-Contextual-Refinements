@@ -184,7 +184,7 @@
    Interactive Sliders & Range Controls
    ========================================================================== */
 
-.deepthink-config-scroll-container .slider {
+:is(.deepthink-config-scroll-container .slider, .adaptive-proximity-slider) {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
@@ -220,7 +220,7 @@
         }
     }
 
-    & .strategy-execution-container .slider {
+    :is(& .strategy-execution-container .slider, .adaptive-strategy-proximity-slider) {
         &::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
@@ -626,7 +626,7 @@
         border-radius: var(--border-radius-md);
         background-color: rgba(var(--dt-blue-rgb), 0.015);
 
-        & .slider {
+        :is(& .slider, .adaptive-hypothesis-proximity-slider) {
             border-color: rgba(var(--dt-blue-rgb), 0.15);
 
             &::-webkit-slider-thumb {
@@ -674,6 +674,11 @@
     }
 }
 
+.proximity-loop-label {
+    display: block;
+    margin-top: 12px;
+}
+
 /* ==========================================================================
    Sandbox Terminal Environment Panel
    ========================================================================== */
@@ -684,7 +689,7 @@
     align-items: center;
     gap: 12px;
     padding: 12px 14px;
-    margin-top: var(--gap-sm);
+    margin-bottom: var(--gap-sm);
     border: 1px solid rgba(var(--dt-purple-rgb), 0.15);
     border-radius: var(--border-radius-md);
     background: rgba(var(--dt-purple-rgb), 0.04);

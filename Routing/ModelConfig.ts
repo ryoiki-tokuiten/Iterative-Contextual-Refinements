@@ -16,8 +16,10 @@ export interface ModelParameters {
     temperature: number;
     topP: number;
     strategiesCount: number;
+    strategyProximityLoops: number;
     subStrategiesCount: number;
     hypothesisCount: number;
+    hypothesisProximityLoops: number;
     pqfAggressiveness: string;
     refinementEnabled: boolean;
     skipSubStrategies: boolean;
@@ -44,8 +46,10 @@ export const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
     temperature: 1.0,
     topP: 0.95,
     strategiesCount: 3,
+    strategyProximityLoops: 2,
     subStrategiesCount: 0,
     hypothesisCount: 4,
+    hypothesisProximityLoops: 2,
     pqfAggressiveness: 'balanced',
     refinementEnabled: true,
     skipSubStrategies: true,
@@ -115,8 +119,16 @@ export class ModelConfigManager {
         return Math.max(2, Math.min(5, count));
     }
 
+    public getStrategyProximityLoops(): number {
+        return Math.max(1, Math.min(5, Math.round(this.parameters.strategyProximityLoops || 2)));
+    }
+
     public getHypothesisCount(): number {
         return Math.max(0, Math.min(MAX_HYPOTHESIS_COUNT, this.parameters.hypothesisCount));
+    }
+
+    public getHypothesisProximityLoops(): number {
+        return Math.max(1, Math.min(5, Math.round(this.parameters.hypothesisProximityLoops || 2)));
     }
 
     public getPqfAggressiveness(): string {

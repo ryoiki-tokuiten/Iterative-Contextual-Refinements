@@ -17,6 +17,8 @@ import {
 import { ActionButton } from '../Styles/Components/ActionButton';
 import RenderMathMarkdown from '../Styles/Components/RenderMathMarkdown';
 import { Icon } from '../UI/Icons';
+import { AgentActivityPanel } from '../Styles/Components/AgentActivity/AgentActivityPanel';
+import type { ProximityTurn } from './DeepthinkProximity';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Shared Primitives
@@ -48,6 +50,40 @@ const hypothesisTesterDisplay = (hypothesis: DeepthinkHypothesisData): string =>
 
 const StatusBadge: React.FC<{ status: string; label?: string }> = ({ status, label }) => (
     <span className={`status-badge status-${status}`}>{label || status}</span>
+);
+
+const ProximityHistoryModal: React.FC<{
+    kind: 'strategy' | 'hypothesis';
+    history: ProximityTurn[];
+    version: number;
+    onClose: () => void;
+}> = ({ kind, history, version, onClose }) => createPortal(
+    <BaseModal title={`Proximity History - v${version}`} isEmbedded noPadding onClose={onClose}>
+        <AgentActivityPanel
+            title=""
+            className="proximity-history-activity"
+            style={{ height: 'min(68vh, 720px)' }}
+        >
+            {history.filter(turn => turn.version === version).map((turn, index) => {
+                const isGenerator = turn.role === 'generator';
+                return (
+                    <article key={index} className={`adaptive-message-card ${isGenerator ? 'user-message' : 'agent-message'}`}>
+                        <div className="message-header">
+                            <MIcon name={isGenerator ? 'psychology' : 'manage_search'} />
+                            <span className="message-role">
+                                {isGenerator
+                                    ? `${kind === 'strategy' ? 'Strategy' : 'Hypothesis'} Generator`
+                                    : `${kind === 'strategy' ? 'Strategies' : 'Hypothesis'} Proximity`}
+                            </span>
+                            <span className="message-time">Turn {index + 1}</span>
+                        </div>
+                        <MathHTML content={turn.content} className="message-content" />
+                    </article>
+                );
+            })}
+        </AgentActivityPanel>
+    </BaseModal>,
+    document.body,
 );
 
 const ArtifactTracePane: React.FC<{
@@ -520,6 +556,9 @@ export const StrategicSolverTab: React.FC<{
     onStrategyTabClick: (idx: number) => void;
     onViewSolution: (subStrategyId: string, branchVersion?: number) => void;
 }> = ({ process, escapeHtml, onStrategyTabClick, onViewSolution }) => {
+    const [proximityVersion, setProximityVersion] = useState<number | null>(null);
+    const proximityVersions = Array.from(new Set((process.strategyGenerationHistory || []).map(turn => turn.version))).sort((a, b) => a - b);
+
     if (process.status === 'error' && process.error) {
         return <div className="status-message error"><pre>{escapeHtml(process.error)}</pre></div>;
     }
@@ -538,17 +577,31 @@ export const StrategicSolverTab: React.FC<{
                             <div className="strategy-card">
                                 {/* Nav buttons */}
                                 <div className="sub-tabs-nav">
-                                    {process.initialStrategies.map((s, idx) => (
-                                        <button
-                                            key={s.id}
-                                            className={`sub-tab-button${idx === activeIndex ? ' active' : ''}`}
-                                            title={`Strategy ${idx + 1}`}
-                                            data-strategy-index={idx}
-                                            onClick={() => onStrategyTabClick(idx)}
+                                    <div className="proximity-history-nav">
+                                        {proximityVersions.map(version => (
+                                            <button
+                                                key={version}
+                                                type="button"
+                                            className="view-solution-button proximity-history-pill"
+                                            onClick={() => setProximityVersion(version)}
                                         >
-                                            {idx + 1}
-                                        </button>
-                                    ))}
+                                                Proximity -v{version}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="strategy-tab-number-grid">
+                                        {process.initialStrategies.map((s, idx) => (
+                                            <button
+                                                key={s.id}
+                                                className={`sub-tab-button${idx === activeIndex ? ' active' : ''}`}
+                                                title={`Strategy ${idx + 1}`}
+                                                data-strategy-index={idx}
+                                                onClick={() => onStrategyTabClick(idx)}
+                                            >
+                                                {idx + 1}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
 
                                 <StrategyContent
@@ -570,6 +623,14 @@ export const StrategicSolverTab: React.FC<{
                     ))}
                 </div>
             </div>
+            {proximityVersion !== null && (
+                <ProximityHistoryModal
+                    kind="strategy"
+                    history={process.strategyGenerationHistory || []}
+                    version={proximityVersion}
+                    onClose={() => setProximityVersion(null)}
+                />
+            )}
         </div>
     );
 };
@@ -760,6 +821,7 @@ function resolveCritiqueBranchVersion(critique: any, _strategy?: DeepthinkMainSt
 type HypothesisRoundView = {
     key: string;
     label: string;
+    roundNumber?: number;
     hypotheses: DeepthinkHypothesisData[];
     packet: string;
 };
@@ -772,9 +834,11 @@ function hypothesisRoundLabel(roundNumber: number): string {
 function buildHypothesisRoundViews(process: DeepthinkPipelineState): HypothesisRoundView[] {
     const rounds = process.hypothesisRounds || [];
     if (rounds.length === 0) {
+        const roundNumber = process.hypotheses[0]?.roundNumber;
         return [{
             key: 'current',
-            label: 'Iteration-1,2',
+            label: hypothesisRoundLabel(roundNumber || 1),
+            roundNumber,
             hypotheses: process.hypotheses || [],
             packet: process.knowledgePacket || '',
         }];
@@ -788,6 +852,7 @@ function buildHypothesisRoundViews(process: DeepthinkPipelineState): HypothesisR
         return {
             key: `round-${round.roundNumber}`,
             label: hypothesisRoundLabel(round.roundNumber),
+            roundNumber: round.roundNumber,
             hypotheses,
             packet: round.packet || process.knowledgePacket || '',
         };
@@ -802,11 +867,15 @@ export const HypothesisExplorerTab: React.FC<{
 }> = ({ process, escapeHtml, onViewArgument }) => {
     const roundViews = buildHypothesisRoundViews(process);
     const [activeRoundIndex, setActiveRoundIndex] = useState(Math.max(0, roundViews.length - 1));
+    const [proximityVersion, setProximityVersion] = useState<number | null>(null);
     useEffect(() => {
         setActiveRoundIndex(Math.max(0, roundViews.length - 1));
     }, [roundViews.length]);
     const activeRound = roundViews[Math.min(activeRoundIndex, roundViews.length - 1)] || roundViews[0];
     const activeHypotheses = activeRound?.hypotheses || [];
+    const activeProximityVersion = activeRound?.roundNumber
+        ?? Math.max(0, ...(process.hypothesisGenerationHistory || []).map(turn => turn.version));
+    const hasProximityHistory = (process.hypothesisGenerationHistory || []).some(turn => turn.version === activeProximityVersion);
 
     if (process.hypothesisGenStatus === 'processing' && !roundViews.some(round => round.hypotheses.length)) return <div className="loading">Generating and testing hypotheses...</div>;
     if (!roundViews.some(round => round.hypotheses.length))
@@ -829,6 +898,15 @@ export const HypothesisExplorerTab: React.FC<{
                 </div>
 
                 <div className="hypothesis-round-content">
+                    {hasProximityHistory && (
+                        <button
+                            type="button"
+                            className="view-solution-button proximity-history-pill"
+                            onClick={() => setProximityVersion(activeProximityVersion)}
+                        >
+                            <MIcon name="forum" /> Proximity
+                        </button>
+                    )}
                     <div className="agent-grid hypothesis-agent-grid">
                         {activeHypotheses.map((h, i) => (
                             <div key={h.id} className="agent-card">
@@ -877,6 +955,15 @@ export const HypothesisExplorerTab: React.FC<{
                     </div>
                 </div>
             </div>
+
+            {proximityVersion !== null && (
+                <ProximityHistoryModal
+                    kind="hypothesis"
+                    history={process.hypothesisGenerationHistory || []}
+                    version={proximityVersion}
+                    onClose={() => setProximityVersion(null)}
+                />
+            )}
 
             {activeRound?.packet && (
                 <KnowledgePacketSection

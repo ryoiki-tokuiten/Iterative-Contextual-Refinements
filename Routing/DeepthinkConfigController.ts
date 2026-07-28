@@ -14,8 +14,10 @@ import { MAX_HYPOTHESIS_COUNT, ModelConfigManager } from './ModelConfig';
 
 export interface DeepthinkConfigState {
     strategiesCount: number;
+    strategyProximityLoops: number;
     subStrategiesCount: number;
     hypothesisCount: number;
+    hypothesisProximityLoops: number;
     skipSubStrategies: boolean;
     hypothesisEnabled: boolean;
     pqfMode: string;
@@ -59,8 +61,10 @@ export class DeepthinkConfigController extends EventTarget {
         const params = this.modelConfig.getParameters();
         return {
             strategiesCount: params.strategiesCount,
+            strategyProximityLoops: this.modelConfig.getStrategyProximityLoops(),
             subStrategiesCount: params.subStrategiesCount,
             hypothesisCount: this.modelConfig.getHypothesisCount(),
+            hypothesisProximityLoops: this.modelConfig.getHypothesisProximityLoops(),
             skipSubStrategies: params.skipSubStrategies,
             hypothesisEnabled: params.hypothesisCount > 0,
             pqfMode: params.pqfAggressiveness,
@@ -90,8 +94,16 @@ export class DeepthinkConfigController extends EventTarget {
         return this.modelConfig.getSubStrategiesCount();
     }
 
+    public getStrategyProximityLoops(): number {
+        return this.modelConfig.getStrategyProximityLoops();
+    }
+
     public getHypothesisCount(): number {
         return this.modelConfig.getHypothesisCount();
+    }
+
+    public getHypothesisProximityLoops(): number {
+        return this.modelConfig.getHypothesisProximityLoops();
     }
 
     public isHypothesisEnabled(): boolean {
@@ -163,6 +175,12 @@ export class DeepthinkConfigController extends EventTarget {
         this.emitChange('strategiesCount');
     }
 
+    public setStrategyProximityLoops(count: number): void {
+        const clampedCount = Math.max(1, Math.min(5, Math.round(count)));
+        this.modelConfig.updateParameter('strategyProximityLoops', clampedCount);
+        this.emitChange('strategyProximityLoops');
+    }
+
     /**
      * Set the sub-strategies count.
      * When set to 0, also sets skipSubStrategies to true.
@@ -208,6 +226,12 @@ export class DeepthinkConfigController extends EventTarget {
         const clampedCount = Math.max(0, Math.min(count, MAX_HYPOTHESIS_COUNT));
         this.modelConfig.updateParameter('hypothesisCount', clampedCount);
         this.emitChange('hypothesisCount');
+    }
+
+    public setHypothesisProximityLoops(count: number): void {
+        const clampedCount = Math.max(1, Math.min(5, Math.round(count)));
+        this.modelConfig.updateParameter('hypothesisProximityLoops', clampedCount);
+        this.emitChange('hypothesisProximityLoops');
     }
 
     /**
