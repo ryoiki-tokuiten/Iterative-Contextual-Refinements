@@ -9,17 +9,41 @@ import { GenerateContentResponse, Part } from "@google/genai";
 import { HumanMessage } from '@langchain/core/messages';
 import { nanoid } from 'nanoid';
 import { AIProvider, ThinkingConfig } from '../Routing/AIProvider';
-import { archiveSandboxRepositoryStrategy, ensureDeepthinkResultsRepository, runSandboxToolAgent, snapshotDeepthinkResultsRepository, snapshotSandboxRepositoryById, type DeepthinkResultsContextFile, type SandboxFinalOutputContract, type SandboxRepositoryAccess, type SeedFile } from '../Core/SandboxToolRuntime';
+import { archiveSandboxRepositoryStrategy, ensureDeepthinkResultsRepository, runSandboxToolAgent, snapshotDeepthinkResultsRepository, snapshotSandboxRepositoryById, type DeepthinkResultsContextFile, type SandboxFinalOutputContract } from '../Core/SandboxToolRuntime';
 import { describeProviderError } from '../Core/ProviderError';
 import { globalState } from '../Core/State';
 import { CustomizablePromptsDeepthink } from './DeepthinkPrompts';
+import {
+    DEEPTHINK_AGENT_REGISTRY,
+    deepthinkAgentModel,
+    deepthinkAgentSystemInstruction,
+    type DeepthinkAgentKind,
+} from './DeepthinkAgentRegistry';
+import {
+    buildAttachmentSeedFiles,
+    buildDeepthinkAttachments,
+    buildFilesystemAttachmentFiles,
+    buildProviderParts,
+    buildTextAttachmentContext,
+    selectRoutedHypotheses,
+    validateAllowedUniqueIds,
+    validateExactUniqueIdSet,
+    type DeepthinkAgentContextManifest,
+    type DeepthinkAttachmentRoute,
+    type DeepthinkRunConfig,
+    type HypothesisInjectionMode,
+} from './DeepthinkContext';
 import {
     normalizeProximityHistory,
     refineWithProximity,
     type ProximityTurn,
 } from './DeepthinkProximity';
 import { addSolutionPoolVersion } from './SolutionPool';
-import { buildDeepthinkSandboxRepositoryAccess, DEEPTHINK_SANDBOX_DIRECTORY_POLICY } from './DeepthinkSandboxAccess';
+import {
+    buildDeepthinkSandboxRepositoryAccess,
+    DEEPTHINK_SANDBOX_DIRECTORY_POLICY,
+    type DeepthinkSandboxAccessInput,
+} from './DeepthinkSandboxAccess';
 import {
     BranchHistoryEntry,
     HypothesisRoundSnapshot,
@@ -38,26 +62,19 @@ import {
     buildStrategyUpdatePrompt,
 } from './DeepthinkIterativeHistory';
 
-export type HypothesisInjectionMode = 'parallel' | 'strategy_aware' | 'selective_injection';
+export type { DeepthinkRunConfig, HypothesisInjectionMode } from './DeepthinkContext';
 
-type AgentStatus = 'pending' | 'processing' | 'retrying' | 'completed' | 'error' | 'cancelled';
+type AgentStatus = 'pending' | 'processing' | 'completed' | 'error' | 'cancelled';
 
 export interface DeepthinkSolutionCritiqueData {
     id: string;
-    subStrategyId: string;
     mainStrategyId: string;
     branchVersion?: number;
-    strategyTextSnapshot?: string;
-    requestPrompt?: string;
     critiqueResponse?: string;
     critiqueResponseDisplay?: string;
-    critiqueResponseFinal?: string;
     interactionTraceText?: string;
-    executionTraceText?: string;
     status: AgentStatus;
     error?: string;
-    retryAttempt?: number;
-    isDetailsOpen?: boolean;
     globalIteration?: number;
     branchIteration?: number;
 }
@@ -76,54 +93,38 @@ export interface SolutionPoolParsedResponse {
 }
 
 export interface DeepthinkStructuredSolutionPoolAgentData {
-    id: string;
     mainStrategyId: string;
     branchVersion?: number;
-    requestPrompt?: string;
     poolResponse?: string;
     parsedPoolResponse?: SolutionPoolParsedResponse;
     status: AgentStatus | 'skipped';
-    error?: string;
-    retryAttempt?: number;
-    isDetailsOpen?: boolean;
     globalIteration?: number;
     branchIteration?: number;
-    interactionTraceText?: string;
     executionTraceText?: string;
 }
 
 export interface DeepthinkSubStrategyData {
     id: string;
     subStrategyText: string;
-    requestPromptSolutionAttempt?: string;
     solutionAttempt?: string;
     solutionAttemptDisplay?: string;
     solutionAttemptFinal?: string;
     solutionAttemptTraceText?: string;
     solutionAttemptExecutionTraceText?: string;
-    requestPromptSolutionCritique?: string;
     solutionCritique?: string;
     solutionCritiqueDisplay?: string;
     solutionCritiqueFinal?: string;
     solutionCritiqueTraceText?: string;
     solutionCritiqueExecutionTraceText?: string;
     solutionCritiqueStatus?: AgentStatus;
-    solutionCritiqueError?: string;
-    solutionCritiqueRetryAttempt?: number;
-    requestPromptSelfImprovement?: string;
     refinedSolution?: string;
     refinedSolutionDisplay?: string;
     refinedSolutionFinal?: string;
     refinedSolutionTraceText?: string;
     refinedSolutionExecutionTraceText?: string;
-    selfImprovementStatus?: AgentStatus;
-    selfImprovementError?: string;
-    selfImprovementRetryAttempt?: number;
+    selfImprovementStatus?: AgentStatus | 'skipped';
     status: AgentStatus;
     error?: string;
-    isDetailsOpen?: boolean;
-    retryAttempt?: number;
-    subStrategyFormat?: string;
     branchIterationCount?: number;
     evolvingDfs?: {
         enabled: boolean;
@@ -134,31 +135,25 @@ export interface DeepthinkSubStrategyData {
             branchVersion?: number;
             critique: string;
             critiqueDisplay?: string;
-            critiqueFinal?: string;
             correctedSolution: string;
             correctedSolutionDisplay?: string;
-            correctedSolutionFinal?: string;
             correctedSolutionTraceText?: string;
             timestamp: number;
             label?: string;
         }>;
         status: 'idle' | 'processing' | 'completed' | 'error';
-        error?: string;
     };
 }
 
 export interface DeepthinkHypothesisData {
     id: string;
     hypothesisText: string;
-    testerRequestPrompt?: string;
     testerAttempt?: string;
     testerAttemptDisplay?: string;
     testerAttemptFinal?: string;
     testerAttemptTraceText?: string;
     testerAttemptExecutionTraceText?: string;
     testerStatus: AgentStatus;
-    testerError?: string;
-    isDetailsOpen?: boolean;
     targetStrategyIds?: string[];
     roundNumber?: number;
     globalIteration?: number;
@@ -167,36 +162,23 @@ export interface DeepthinkHypothesisData {
 export interface DeepthinkPostQualityFilterData {
     id: string;
     iterationNumber: number;
-    requestPrompt?: string;
     evaluationResponse?: string;
-    evaluationResponseDisplay?: string;
     evaluationResponseFinal?: string;
     interactionTraceText?: string;
     executionTraceText?: string;
     prunedStrategyIds: string[];
     continuedStrategyIds: string[];
     reasoning?: string;
-    rawResponse?: string;
     status: AgentStatus;
-    error?: string;
-    isDetailsOpen?: boolean;
-    retryAttempt?: number;
     groupIndex?: number;
     groupStrategyIds?: string[];
 }
 
 export interface DeepthinkMemoryBankAgentData {
-    id: string;
     mainStrategyId: string;
     branchVersion?: number;
-    requestPrompt?: string;
     memoryBank?: string;
-    status: AgentStatus;
-    error?: string;
-    retryAttempt?: number;
     globalIteration: number;
-    branchIterationStart: number;
-    branchIterationEnd: number;
 }
 
 export interface DeepthinkStrategyReplacementRecord {
@@ -205,15 +187,12 @@ export interface DeepthinkStrategyReplacementRecord {
     replacementStrategyText: string;
     replacedAtGlobalIteration: number;
     previousBranchVersion: number;
-    newBranchVersion: number;
     pqfReasoning: string;
     memoryBank?: string;
     latestSolution?: string;
     latestSolutionDisplay?: string;
-    latestSolutionFinal?: string;
     latestCritique?: string;
     latestCritiqueDisplay?: string;
-    latestCritiqueFinal?: string;
     branchHistory?: BranchHistoryEntry[];
     poolHistory?: PoolHistoryEntry[];
 }
@@ -221,88 +200,59 @@ export interface DeepthinkStrategyReplacementRecord {
 export interface DeepthinkMainStrategyData {
     id: string;
     strategyText: string;
-    requestPromptSubStrategyGen?: string;
     subStrategies: DeepthinkSubStrategyData[];
     status: AgentStatus;
     error?: string;
-    isDetailsOpen?: boolean;
-    retryAttempt?: number;
-    strategyFormat?: string;
-    generatedByPostQualityFilter?: boolean;
     updatedByPostQualityFilter?: boolean;
     postQualityFilterIteration?: number;
     branchVersion?: number;
     branchIterationCount?: number;
     memoryBank?: string;
     replacementHistory?: DeepthinkStrategyReplacementRecord[];
-    judgedBestSubStrategyId?: string;
-    judgedBestSolution?: string;
-    judgingRequestPrompt?: string;
-    judgingResponseText?: string;
-    judgingStatus?: AgentStatus;
-    judgingError?: string;
-    judgingRetryAttempt?: number;
+    awaitingFreshHypotheses?: boolean;
 }
 
 export interface DeepthinkPipelineState {
     id: string;
     challenge: string;
-    challengeText: string;
-    challengeImageBase64?: string | null;
-    challengeImageMimeType?: string;
-    status: 'idle' | 'processing' | 'retrying' | 'completed' | 'error' | 'stopping' | 'stopped' | 'cancelled';
+    status: 'idle' | 'processing' | 'completed' | 'error' | 'stopping' | 'stopped' | 'cancelled';
     error?: string;
     activeTabId: string;
     activeStrategyTab?: number;
     isStopRequested?: boolean;
-    retryAttempt?: number;
-    requestPromptInitialStrategyGen?: string;
     strategyGenerationHistory?: ProximityTurn[];
     initialStrategies: DeepthinkMainStrategyData[];
-    requestPromptHypothesisGen?: string;
     hypothesisGenerationHistory?: ProximityTurn[];
     hypotheses: DeepthinkHypothesisData[];
     hypothesisHistory?: DeepthinkHypothesisData[][];
     hypothesisRounds?: HypothesisRoundSnapshot[];
     hypothesisGenStatus?: AgentStatus;
-    hypothesisGenError?: string;
-    hypothesisGenRetryAttempt?: number;
     knowledgePacket?: string;
     solutionCritiques: DeepthinkSolutionCritiqueData[];
     solutionCritiquesStatus?: 'pending' | 'processing' | 'completed' | 'error' | 'cancelled';
-    solutionCritiquesError?: string;
     dissectedObservationsSynthesis?: string;
-    dissectedSynthesisTraceText?: string;
     dissectedSynthesisExecutionTraceText?: string;
-    dissectedSynthesisRequestPrompt?: string;
     dissectedSynthesisStatus?: AgentStatus;
     dissectedSynthesisError?: string;
-    dissectedSynthesisRetryAttempt?: number;
     postQualityFilterAgents: DeepthinkPostQualityFilterData[];
     postQualityFilterStatus?: 'pending' | 'processing' | 'completed' | 'error' | 'cancelled';
-    postQualityFilterError?: string;
-    postQualityFilterIterationCount?: number;
     memoryBankAgents?: DeepthinkMemoryBankAgentData[];
-    strategicSolverComplete?: boolean;
     hypothesisExplorerComplete?: boolean;
-    finalJudgedBestStrategyId?: string;
     finalJudgedBestSolution?: string;
-    finalJudgingRequestPrompt?: string;
     finalJudgingResponseText?: string;
-    finalJudgingTraceText?: string;
     finalJudgingExecutionTraceText?: string;
     finalJudgingStatus?: AgentStatus;
     finalJudgingError?: string;
-    finalJudgingRetryAttempt?: number;
-    finalJudgingStatusDescription?: string;
     structuredSolutionPoolEnabled?: boolean;
     structuredSolutionPool?: string;
     structuredSolutionPoolAgents: DeepthinkStructuredSolutionPoolAgentData[];
     structuredSolutionPoolStatus?: 'pending' | 'processing' | 'completed' | 'error' | 'cancelled';
-    structuredSolutionPoolError?: string;
-    hypothesisInjectionMode?: HypothesisInjectionMode;
     strategySpecificKnowledgePackets?: Record<string, string>;
     liveEvents?: DeepthinkLiveEvent[];
+    /** Immutable settings and prompts that produced this run. */
+    runConfig?: DeepthinkRunConfig;
+    /** Current committed repository baseline used for read-only agent views. */
+    repositoryRevision?: string;
 }
 
 export interface DeepthinkLiveEvent {
@@ -363,14 +313,13 @@ export interface DeepthinkCoreDeps {
     getPostQualityFilterEnabled: () => boolean;
     getDeepthinkCodeExecutionEnabled: () => boolean;
     getHypothesisInjectionMode: () => HypothesisInjectionMode;
-    escapeHtml: (unsafe: string) => string;
-    cleanTextOutput: (text: string) => string;
     updateControlsState: (newState: any) => void;
     getSelectedThinkingLevel?: () => 'low' | 'medium' | 'high' | 'minimal';
-    customPromptsDeepthinkState: CustomizablePromptsDeepthink;
+    getCustomPromptsDeepthinkState: () => CustomizablePromptsDeepthink;
 }
 
 let deps: DeepthinkCoreDeps = null!;
+const runAttachments = new Map<string, DeepthinkAttachmentRoute[]>();
 
 const RETRY_DELAYS_MS = [30_000, 60_000, 5 * 60_000] as const;
 const MAX_API_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
@@ -383,61 +332,50 @@ const PQF_GROUP_SIZE = 2;
 const HYPOTHESIS_HEARTBEAT_INTERVAL = 2;
 const NO_SOLUTION_POOL_AVAILABLE = 'No solution pool available';
 
-const MODEL_MAP: [string, keyof CustomizablePromptsDeepthink][] = [
-    ['Strategies Proximity', 'model_strategyProximity'],
-    ['Hypothesis Proximity', 'model_hypothesisProximity'],
-    ['Initial Strategy Generation', 'model_initialStrategy'],
-    ['Sub-Strategy Generation', 'model_subStrategy'],
-    ['Solution Attempt', 'model_solutionAttempt'],
-    ['Solution Critique', 'model_solutionCritique'],
-    ['Dissected Observations Synthesis', 'model_dissectedSynthesis'],
-    ['Self-Improvement', 'model_selfImprovement'],
-    ['Solution Correction', 'model_selfImprovement'],
-    ['Hypothesis Generation', 'model_hypothesisGeneration'],
-    ['Hypothesis Testing', 'model_hypothesisTester'],
-    ['PostQualityFilter', 'model_postQualityFilter'],
-    ['Strategy Updates', 'model_initialStrategy'],
-    ['Memory Bank', 'model_memoryBank'],
-    ['Structured Solution Pool', 'model_structuredSolutionPool'],
-    ['Final Judging', 'model_finalJudge'],
-];
+function captureRunConfig(): DeepthinkRunConfig {
+    const refinementEnabled = deps.getRefinementEnabled();
+    const evolvingDfsEnabled = refinementEnabled && deps.getEvolvingDfsEnabled();
+    const prompts = Object.freeze({ ...deps.getCustomPromptsDeepthinkState() });
+    return Object.freeze({
+        selectedModel: deps.getSelectedModel(),
+        temperature: deps.getSelectedTemperature(),
+        topP: deps.getSelectedTopP(),
+        thinkingLevel: deps.getSelectedThinkingLevel?.() || 'high',
+        strategyCount: evolvingDfsEnabled
+            ? Math.min(deps.getSelectedStrategiesCount(), 5)
+            : deps.getSelectedStrategiesCount(),
+        subStrategyCount: deps.getSelectedSubStrategiesCount(),
+        strategyProximityLoops: deps.getStrategyProximityLoops(),
+        refinementEnabled,
+        hypothesisCount: deps.getSelectedHypothesisCount(),
+        hypothesisProximityLoops: deps.getHypothesisProximityLoops(),
+        hypothesisInjectionMode: evolvingDfsEnabled
+            ? 'selective_injection'
+            : deps.getHypothesisInjectionMode(),
+        skipSubStrategies: evolvingDfsEnabled || deps.getSkipSubStrategies(),
+        dissectedObservationsEnabled: !evolvingDfsEnabled && deps.getDissectedObservationsEnabled(),
+        shareHypothesesToDissected: !evolvingDfsEnabled && deps.getShareHypothesesToDissected(),
+        evolvingDfsEnabled,
+        evolvingDfsDepth: Math.min(Math.max(deps.getEvolvingDfsDepth(), 1), 10),
+        isolateBranches: deps.getIsolateBranchesEnabled(),
+        solutionPoolDisabled: deps.getSolutionPoolDisabled(),
+        provideAllSolutionsToCorrectors: !evolvingDfsEnabled && deps.getProvideAllSolutionsToCorrectors(),
+        postQualityFilterEnabled: evolvingDfsEnabled || deps.getPostQualityFilterEnabled(),
+        pqfAggressiveness: deps.getSelectedPqfAggressiveness(),
+        codeExecutionEnabled: deps.getDeepthinkCodeExecutionEnabled(),
+        prompts,
+    });
+}
 
-const SANDBOX_TOOL_AGENTS = new Set<DeepthinkSandboxAgentKind>([
-    'Main Strategy Generation',
-    'Sub-Strategy Generation',
-    'Hypothesis Generation',
-    'Hypothesis Testing',
-    'Solution Attempt',
-    'Solution Critique',
-    'Dissected Observations Synthesis',
-    'Self-Improvement',
-    'Solution Correction',
-    'Post Quality Filter',
-    'Memory Bank',
-    'Structured Solution Pool',
-    'Final Judge',
-]);
+function configFor(process: DeepthinkPipelineState): DeepthinkRunConfig {
+    if (!process.runConfig) {
+        throw new Error('This Deepthink run has no immutable run configuration.');
+    }
+    return process.runConfig;
+}
 
-type DeepthinkSandboxAgentKind =
-    | 'Main Strategy Generation'
-    | 'Sub-Strategy Generation'
-    | 'Hypothesis Generation'
-    | 'Hypothesis Testing'
-    | 'Solution Attempt'
-    | 'Solution Critique'
-    | 'Dissected Observations Synthesis'
-    | 'Self-Improvement'
-    | 'Solution Correction'
-    | 'Post Quality Filter'
-    | 'Memory Bank'
-    | 'Structured Solution Pool'
-    | 'Final Judge';
-
-interface DeepthinkSandboxAgentAccess {
-    kind: DeepthinkSandboxAgentKind;
-    agentName: string;
-    sessionId: string;
-    repositoryAccess?: SandboxRepositoryAccess;
+function attachmentsFor(process: DeepthinkPipelineState): DeepthinkAttachmentRoute[] {
+    return runAttachments.get(process.id) || [];
 }
 
 interface DeepthinkAgentCallOutput {
@@ -449,7 +387,6 @@ interface DeepthinkAgentCallOutput {
 }
 
 interface BranchRuntime {
-    strategyId: string;
     branchVersion: number;
     branchIterationCount: number;
     globalIteration: number;
@@ -457,61 +394,6 @@ interface BranchRuntime {
     poolHistory: PoolHistoryEntry[];
     memoryBank?: string;
     lastMemoryHistoryCount: number;
-    lastHypothesisFlushGlobalIteration?: number;
-}
-
-function buildImageParts(imageBase64?: string | null, imageMimeType?: string | null): Part[] {
-    const directFiles = globalState.directContextFiles;
-    if (directFiles.length) {
-        return directFiles.map(file => ({ inlineData: { mimeType: file.mimeType, data: file.base64 } }));
-    }
-    return (imageBase64 && imageMimeType) ? [{ inlineData: { mimeType: imageMimeType, data: imageBase64 } }] : [];
-}
-
-function extensionForMimeType(mimeType: string): string {
-    switch (mimeType) {
-        case 'image/jpeg':
-            return '.jpg';
-        case 'image/gif':
-            return '.gif';
-        case 'image/webp':
-            return '.webp';
-        case 'image/bmp':
-            return '.bmp';
-        case 'image/tiff':
-            return '.tiff';
-        case 'image/png':
-        default:
-            return '.png';
-    }
-}
-
-function getDeepthinkSeedFiles(process: DeepthinkPipelineState): SeedFile[] {
-    if (globalState.directContextFiles.length) {
-        return globalState.directContextFiles.map((file, index) => ({
-            name: file.name || `deepthink-uploaded-file-${index + 1}${extensionForMimeType(file.mimeType)}`,
-            mimeType: file.mimeType,
-            base64: file.base64,
-        }));
-    }
-    if (!process.challengeImageBase64 || !process.challengeImageMimeType?.startsWith('image/')) return [];
-    return [{ name: `deepthink-uploaded-image${extensionForMimeType(process.challengeImageMimeType)}`, mimeType: process.challengeImageMimeType, base64: process.challengeImageBase64 }];
-}
-
-function getDirectTextContext(): string {
-    const textFiles = globalState.directContextFiles.filter(file => file.mimeType.startsWith('text/') || file.mimeType === 'application/json');
-    if (!textFiles.length) return '';
-    const decoder = new TextDecoder();
-    const contents = textFiles.map(file => {
-        try {
-            const binary = atob(file.base64);
-            const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
-            return `\n\n--- ${file.name || 'uploaded text file'} ---\n${decoder.decode(bytes)}\n--- end file ---`;
-        } catch {
-            return `\n\n--- ${file.name || 'uploaded text file'} ---\n[Unable to decode file]\n--- end file ---`;
-        }
-    });
-    return `\n\nDirect context files:${contents.join('')}`;
 }
 
 function safeSessionSegment(value: string | number | undefined, fallback: string): string {
@@ -532,7 +414,9 @@ function buildDeepthinkSandboxSessionId(process: DeepthinkPipelineState, parts: 
 }
 
 function strategySlotIndex(process: DeepthinkPipelineState, strategyId: string): number {
-    return Math.max(0, activeStrategies(process).findIndex(strategy => strategy.id === strategyId));
+    const index = activeStrategies(process).findIndex(strategy => strategy.id === strategyId);
+    if (index < 0) throw new Error(`Unknown active Deepthink strategy ID: ${strategyId}`);
+    return index;
 }
 
 function hypothesisDirectoryLabel(hypothesis: DeepthinkHypothesisData): string {
@@ -543,20 +427,76 @@ function currentHypothesisRoundNumber(process: DeepthinkPipelineState): number |
     return process.hypotheses[0]?.roundNumber;
 }
 
-function completedHypothesisRoundNumbers(process: DeepthinkPipelineState, currentRoundNumber: number): number[] {
-    return Array.from(new Set((process.hypothesisRounds || [])
-        .map(round => round.roundNumber)
-        .filter(roundNumber => roundNumber > 0 && roundNumber !== currentRoundNumber)))
-        .sort((left, right) => left - right);
+function renderStrategyHypothesisPacket(
+    strategyId: string,
+    hypotheses: readonly DeepthinkHypothesisData[],
+    awaitingFreshHypotheses = false,
+): string {
+    if (awaitingFreshHypotheses) {
+        return `<Strategy-Specific Information Packet for Strategy ${strategyId}>
+This replacement branch is awaiting a successful fresh hypothesis heartbeat. No earlier selective hypotheses are available.
+</Strategy-Specific Information Packet for Strategy ${strategyId}>`;
+    }
+    return [
+        `<Strategy-Specific Information Packet for Strategy ${strategyId}>`,
+        hypotheses.length
+            ? hypotheses.map(hypothesis => [
+                `<Hypothesis ${hypothesis.id}>`,
+                `Hypothesis: ${hypothesis.hypothesisText}`,
+                `Hypothesis Testing: ${hypothesis.testerAttempt || 'No testing output available'}`,
+                `</Hypothesis ${hypothesis.id}>`,
+            ].join('\n')).join('\n\n')
+            : 'No active strategy-specific hypotheses are currently available for this strategy.',
+        `</Strategy-Specific Information Packet for Strategy ${strategyId}>`,
+    ].join('\n');
 }
 
-function selectedHypothesisLabelsForStrategy(process: DeepthinkPipelineState, strategyId: string): string[] {
-    return process.hypotheses
-        .filter(hypothesis => {
-            if (!hypothesis.targetStrategyIds || hypothesis.targetStrategyIds.length === 0) return true;
-            return hypothesis.targetStrategyIds.includes(strategyId);
-        })
-        .map(hypothesisDirectoryLabel);
+function renderFullHypothesisPacket(hypotheses: readonly DeepthinkHypothesisData[]): string {
+    return [
+        '<Full Information Packet>',
+        ...hypotheses.map((hypothesis, index) => [
+            `<Hypothesis ${index + 1}>`,
+            `Hypothesis: ${hypothesis.hypothesisText}`,
+            `Target Strategies: ${hypothesis.targetStrategyIds?.join(', ') || 'All'}`,
+            `Hypothesis Testing: ${hypothesis.testerAttempt || 'No testing output available'}`,
+            `</Hypothesis ${index + 1}>`,
+        ].join('\n')),
+        '</Full Information Packet>',
+    ].join('\n');
+}
+
+interface StrategyHypothesisRoute {
+    packetText: string;
+    fullPacketText: string;
+    directoryLabels: string[];
+    roundNumber?: number;
+}
+
+function getStrategyHypothesisRoute(
+    process: DeepthinkPipelineState,
+    strategyId: string,
+): StrategyHypothesisRoute {
+    const strategy = activeStrategies(process).find(candidate => candidate.id === strategyId);
+    if (!strategy) throw new Error(`Cannot route hypotheses to unknown strategy ID: ${strategyId}`);
+    const hypotheses = selectRoutedHypotheses(
+        process.hypotheses,
+        strategyId,
+        strategy.awaitingFreshHypotheses,
+    );
+    return {
+        packetText: renderStrategyHypothesisPacket(
+            strategy.id,
+            hypotheses,
+            strategy.awaitingFreshHypotheses,
+        ),
+        fullPacketText: strategy.awaitingFreshHypotheses
+            ? renderStrategyHypothesisPacket(strategy.id, [], true)
+            : hypotheses.length
+                ? renderFullHypothesisPacket(hypotheses)
+                : process.knowledgePacket || renderFullHypothesisPacket([]),
+        directoryLabels: hypotheses.map(hypothesisDirectoryLabel),
+        roundNumber: currentHypothesisRoundNumber(process),
+    };
 }
 
 function peerStrategySlotIndexes(process: DeepthinkPipelineState, strategyId: string): number[] {
@@ -567,159 +507,571 @@ function peerStrategySlotIndexes(process: DeepthinkPipelineState, strategyId: st
 
 function getDeepthinkSandboxFilesystemRules(): string[] {
     return [
-        '- Every Deepthink role can use the sandbox when the Sandbox Terminal Environment is enabled for the run.',
+        '- Repository and attachment transport is role-scoped. Terminal commands are available only when Code Execution was explicitly enabled for the run.',
         '- Deepthink runs use one shared repository view rooted at /workspace.',
         '- A strategy branch is Strategy-N with direct work files at its root, a Critique child, and a SolutionPool child. Execution and correction workers write only direct branch files; child directories are role-owned mounts.',
         '- Critique workers write only inside Strategy-N/Critique and can read the matching branch except its SolutionPool child directory.',
-        '- Hypothesis testers write only inside Hypothesis-vN/Hypothesis-M and receive earlier Hypothesis-v directories read-only, never strategy directories.',
+        '- Hypothesis testers write only inside Hypothesis-vN/Hypothesis-M and never receive earlier hypothesis rounds or strategy directories.',
         '- Strategy, hypothesis, synthesis, and final-judge roles receive a full read-only repository view; PQF and memory roles receive only their explicitly assigned branch directories read-only.',
-        '- Correctors and Structured Solution Pool agents can read peer Strategy-N directories; selective hypothesis directories remain visible only to branches whose text context receives those same tested packets.',
+        '- Branch isolation removes peer prompt sections and peer directory mounts. Full Solution Context controls peer mounts for single-pass correction.',
+        '- Selective hypothesis directories remain visible only to branches whose text context receives those same tested packets.',
+        '- Read-only repository context is pinned to the orchestration barrier revision. Only the assigned writable directory and a critique\'s just-completed parent branch can use live worktree state.',
         '- Directories outside the current role-specific context contract are not mounted or visible.',
     ];
 }
 
-function createPersistentSandboxAccess(args: {
-    process: DeepthinkPipelineState;
-    kind: Exclude<DeepthinkSandboxAgentKind, 'Hypothesis Testing'>;
-    strategyId: string;
-    subStrategyId?: string;
-    branchVersion?: number;
-    includeAllSolutionContextDirectories?: boolean;
-}): DeepthinkSandboxAgentAccess {
-    const sessionId = buildDeepthinkSandboxSessionId(args.process, [
-        args.kind,
-        args.strategyId,
-        args.subStrategyId || 'direct',
-        `v${args.branchVersion || 1}`,
-    ]);
-    const slotIndex = strategySlotIndex(args.process, args.strategyId);
-    const includeCritiqueForCurrentStrategy = args.kind === 'Self-Improvement' || args.kind === 'Solution Correction';
-    const includeAllCritiqueDirectories = !!args.includeAllSolutionContextDirectories;
-    const peerIndexes = args.kind === 'Self-Improvement' || args.kind === 'Solution Correction'
-        ? peerStrategySlotIndexes(args.process, args.strategyId)
-        : args.includeAllSolutionContextDirectories
-            ? activeStrategies(args.process).map((_strategy, index) => index).filter(index => index !== slotIndex)
-            : [];
+type RepositoryScope = Omit<
+    DeepthinkSandboxAccessInput,
+    'repositoryId' | 'role' | 'repositoryRevision'
+>;
 
+function finalizeAgentContext(args: {
+    process: DeepthinkPipelineState;
+    agentKind: DeepthinkAgentKind;
+    promptText: string;
+    sessionParts: Array<string | number | undefined>;
+    repositoryScope?: RepositoryScope;
+    outputContract?: SandboxFinalOutputContract;
+    systemInstruction?: string;
+}): DeepthinkAgentContextManifest {
+    const config = configFor(args.process);
+    const metadata = DEEPTHINK_AGENT_REGISTRY[args.agentKind];
     return {
-        kind: args.kind,
-        agentName: `${args.kind} Agent`,
-        sessionId,
+        agentKind: args.agentKind,
+        agentName: `${metadata.label} Agent`,
+        sandboxSessionId: buildDeepthinkSandboxSessionId(args.process, args.sessionParts),
+        systemInstruction: args.systemInstruction
+            || deepthinkAgentSystemInstruction(args.agentKind, config.prompts),
+        promptText: args.promptText,
+        attachments: attachmentsFor(args.process),
         repositoryAccess: buildDeepthinkSandboxRepositoryAccess({
             repositoryId: args.process.id,
-            role: args.kind,
-            strategySlotIndex: slotIndex,
-            selectedHypothesisLabels: args.kind === 'Solution Attempt' || args.kind === 'Solution Correction'
-                ? selectedHypothesisLabelsForStrategy(args.process, args.strategyId)
-                : [],
-            selectedHypothesisRoundNumber: currentHypothesisRoundNumber(args.process),
-            peerStrategySlotIndexes: peerIndexes,
-            includeCritiqueForCurrentStrategy,
-            includeAllCritiqueDirectories,
+            role: metadata.sandboxRole,
+            repositoryRevision: args.process.repositoryRevision,
+            ...args.repositoryScope,
         }),
+        outputContract: args.outputContract,
     };
 }
 
-function createHypothesisSandboxAccess(process: DeepthinkPipelineState, hypothesis: DeepthinkHypothesisData): DeepthinkSandboxAgentAccess {
-    return {
-        kind: 'Hypothesis Testing',
-        agentName: 'Hypothesis Testing Agent',
-        sessionId: buildDeepthinkSandboxSessionId(process, [
-            'hypothesis-testing',
-            hypothesis.id,
-            `round-${hypothesis.roundNumber || 1}`,
-            `global-${hypothesis.globalIteration || 0}`,
-        ]),
-        repositoryAccess: buildDeepthinkSandboxRepositoryAccess({
-            repositoryId: process.id,
-            role: 'Hypothesis Testing',
-            hypothesisLabel: hypothesisDirectoryLabel(hypothesis),
-            hypothesisRoundNumber: hypothesis.roundNumber || 1,
-            previousHypothesisRoundNumbers: completedHypothesisRoundNumbers(process, hypothesis.roundNumber || 1),
-        }),
-    };
-}
-
-function createFullRepositorySandboxAccess(args: {
+function buildStrategyGenerationAgentContext(args: {
     process: DeepthinkPipelineState;
-    kind: Extract<DeepthinkSandboxAgentKind,
-        'Main Strategy Generation'
-        | 'Sub-Strategy Generation'
-        | 'Hypothesis Generation'
-        | 'Dissected Observations Synthesis'
-        | 'Final Judge'>;
-    sessionParts?: Array<string | number | undefined>;
-    agentName?: string;
-}): DeepthinkSandboxAgentAccess {
-    return {
-        kind: args.kind,
-        agentName: args.agentName || `${args.kind} Agent`,
-        sessionId: buildDeepthinkSandboxSessionId(args.process, [args.kind, ...(args.sessionParts || [])]),
-        repositoryAccess: buildDeepthinkSandboxRepositoryAccess({
-            repositoryId: args.process.id,
-            role: args.kind,
-        }),
-    };
-}
-
-function createPqfSandboxAccess(args: {
-    process: DeepthinkPipelineState;
-    groupIndex: number;
-    globalIteration: number;
+    taskPrompt: string;
+    conversationText: string;
     strategyIds: string[];
-}): DeepthinkSandboxAgentAccess {
-    const assignedStrategySlotIndexes = args.strategyIds.map(strategyId => strategySlotIndex(args.process, strategyId));
-    return {
-        kind: 'Post Quality Filter',
-        agentName: 'Post Quality Filter Agent',
-        sessionId: buildDeepthinkSandboxSessionId(args.process, ['pqf', args.groupIndex + 1, `global-${args.globalIteration}`]),
-        repositoryAccess: buildDeepthinkSandboxRepositoryAccess({
-            repositoryId: args.process.id,
-            role: 'Post Quality Filter',
-            assignedStrategySlotIndexes,
-        }),
-    };
+    revision: boolean;
+    isUpdate: boolean;
+}): DeepthinkAgentContextManifest {
+    return finalizeAgentContext({
+        process: args.process,
+        agentKind: 'initialStrategy',
+        promptText: withGeneratorProximityConversation(
+            args.taskPrompt,
+            args.conversationText,
+            args.revision
+                ? (args.isUpdate
+                    ? 'Revise every proposed replacement against the latest proximity critique. Keep each requested strategy_id and return one genuinely new, orthogonal branch per slot.'
+                    : 'Revise the strategy set against the latest proximity critique. Preserve orthogonal coverage and return the requested number of strategies.')
+                : undefined,
+        ),
+        sessionParts: ['initialStrategy', 'generator-proximity', 'generator'],
+        outputContract: strategyOutputContract(
+            args.strategyIds.length,
+            args.isUpdate ? 'update' : 'initial',
+            args.isUpdate ? args.strategyIds : [],
+        ),
+    });
 }
 
-function createMemoryBankSandboxAccess(args: {
+function buildStrategyProximityAgentContext(args: {
     process: DeepthinkPipelineState;
-    strategyId: string;
-    branchVersion: number;
-    globalIteration: number;
-}): DeepthinkSandboxAgentAccess {
-    const slotIndex = strategySlotIndex(args.process, args.strategyId);
-    return {
-        kind: 'Memory Bank',
-        agentName: 'Memory Bank Agent',
-        sessionId: buildDeepthinkSandboxSessionId(args.process, ['memory-bank', args.strategyId, `v${args.branchVersion}`, `global-${args.globalIteration}`]),
-        repositoryAccess: buildDeepthinkSandboxRepositoryAccess({
-            repositoryId: args.process.id,
-            role: 'Memory Bank',
-            strategySlotIndex: slotIndex,
-        }),
-    };
+    challengeText: string;
+    taskPrompt: string;
+    conversationText: string;
+}): DeepthinkAgentContextManifest {
+    return finalizeAgentContext({
+        process: args.process,
+        agentKind: 'strategyProximity',
+        promptText: buildProximityReviewPrompt(
+            'strategy',
+            args.challengeText,
+            args.taskPrompt,
+            args.conversationText,
+        ),
+        sessionParts: ['strategyProximity', 'generator-proximity', 'proximity'],
+    });
 }
 
-function createSolutionPoolSandboxAccess(args: {
+function buildSubStrategyAgentContext(args: {
     process: DeepthinkPipelineState;
-    strategyId: string;
-    branchVersion: number;
-    globalIteration: number;
-}): DeepthinkSandboxAgentAccess {
-    const slotIndex = strategySlotIndex(args.process, args.strategyId);
-    return {
-        kind: 'Structured Solution Pool',
-        agentName: 'Structured Solution Pool Agent',
-        sessionId: buildDeepthinkSandboxSessionId(args.process, ['solution-pool', args.strategyId, `v${args.branchVersion}`, `global-${args.globalIteration}`]),
-        repositoryAccess: buildDeepthinkSandboxRepositoryAccess({
-            repositoryId: args.process.id,
-            role: 'Structured Solution Pool',
-            strategySlotIndex: slotIndex,
-            selectedHypothesisLabels: selectedHypothesisLabelsForStrategy(args.process, args.strategyId),
-            selectedHypothesisRoundNumber: currentHypothesisRoundNumber(args.process),
-            peerStrategySlotIndexes: peerStrategySlotIndexes(args.process, args.strategyId),
+    challengeText: string;
+    strategy: DeepthinkMainStrategyData;
+}): DeepthinkAgentContextManifest {
+    const count = configFor(args.process).subStrategyCount;
+    const otherStrategies = args.process.initialStrategies
+        .filter(candidate => candidate.id !== args.strategy.id)
+        .map((candidate, index) => `Strategy ${index + 1}: ${candidate.strategyText}`)
+        .join('\n\n') || 'No other strategies.';
+    return finalizeAgentContext({
+        process: args.process,
+        agentKind: 'subStrategy',
+        promptText: buildSubStrategyPrompt({
+            challengeText: args.challengeText,
+            currentMainStrategy: args.strategy.strategyText,
+            otherMainStrategies: otherStrategies,
+            subStrategyCount: count,
         }),
-    };
+        sessionParts: ['subStrategy', args.strategy.id],
+        outputContract: subStrategyOutputContract(count),
+    });
+}
+
+function buildHypothesisGenerationAgentContext(args: {
+    process: DeepthinkPipelineState;
+    taskPrompt: string;
+    conversationText: string;
+    mode: HypothesisInjectionMode;
+    revision: boolean;
+}): DeepthinkAgentContextManifest {
+    const config = configFor(args.process);
+    const count = config.hypothesisCount;
+    let systemInstruction = deepthinkAgentSystemInstruction('hypothesisGeneration', config.prompts)
+        .replace(/\{\{NUM_HYPOTHESES\}\}/g, String(count));
+    if (args.mode === 'selective_injection') {
+        systemInstruction += '\n\nReturn only JSON. Each hypothesis must be an object with "text" and "target_strategies".';
+    }
+    return finalizeAgentContext({
+        process: args.process,
+        agentKind: 'hypothesisGeneration',
+        promptText: withGeneratorProximityConversation(
+            args.taskPrompt,
+            args.conversationText,
+            args.revision
+                ? 'Revise the most recent hypothesis set in direct response to the latest proximity critique. Keep the same count and preserve only hypotheses that are orthogonal, falsifiable, and useful for the current generation task.'
+                : undefined,
+        ),
+        sessionParts: ['hypothesisGeneration', 'generator-proximity', 'generator'],
+        outputContract: hypothesisOutputContract(
+            count,
+            args.mode,
+            activeStrategies(args.process).map(strategy => strategy.id),
+        ),
+        systemInstruction,
+    });
+}
+
+function buildHypothesisProximityAgentContext(args: {
+    process: DeepthinkPipelineState;
+    challengeText: string;
+    taskPrompt: string;
+    conversationText: string;
+}): DeepthinkAgentContextManifest {
+    return finalizeAgentContext({
+        process: args.process,
+        agentKind: 'hypothesisProximity',
+        promptText: buildProximityReviewPrompt(
+            'hypothesis',
+            args.challengeText,
+            args.taskPrompt,
+            args.conversationText,
+        ),
+        sessionParts: ['hypothesisProximity', 'generator-proximity', 'proximity'],
+    });
+}
+
+function buildHypothesisTesterAgentContext(args: {
+    process: DeepthinkPipelineState;
+    challengeText: string;
+    hypothesis: DeepthinkHypothesisData;
+}): DeepthinkAgentContextManifest {
+    const roundNumber = args.hypothesis.roundNumber || 1;
+    return finalizeAgentContext({
+        process: args.process,
+        agentKind: 'hypothesisTester',
+        promptText: buildHypothesisTesterPrompt(args.challengeText, args.hypothesis.hypothesisText),
+        sessionParts: [
+            'hypothesis-testing',
+            args.hypothesis.id,
+            `round-${roundNumber}`,
+            `global-${args.hypothesis.globalIteration || 0}`,
+        ],
+        repositoryScope: {
+            hypothesisLabel: hypothesisDirectoryLabel(args.hypothesis),
+            hypothesisRoundNumber: roundNumber,
+        },
+    });
+}
+
+function buildSolutionAttemptAgentContext(args: {
+    process: DeepthinkPipelineState;
+    challengeText: string;
+    strategy: DeepthinkMainStrategyData;
+    subStrategy: DeepthinkSubStrategyData;
+}): DeepthinkAgentContextManifest {
+    const route = getStrategyHypothesisRoute(args.process, args.strategy.id);
+    const otherStrategyContext = activeStrategies(args.process)
+        .filter(strategy => strategy.id !== args.strategy.id)
+        .map(strategy => `<Strategy-${strategy.id} branchVersion="${strategy.branchVersion || 1}">\n${strategy.strategyText}\n</Strategy-${strategy.id}>`)
+        .join('\n\n');
+    return finalizeAgentContext({
+        process: args.process,
+        agentKind: 'solutionAttempt',
+        promptText: buildSolutionAttemptPrompt({
+            challengeText: args.challengeText,
+            mainStrategy: args.strategy.strategyText,
+            subStrategy: args.subStrategy.subStrategyText,
+            knowledgePacket: configFor(args.process).hypothesisInjectionMode === 'selective_injection'
+                ? route.packetText
+                : route.fullPacketText,
+            otherStrategyContext,
+            branchContext: args.strategy.branchVersion
+                ? `<BranchIdentity strategy="${args.strategy.id}" branchVersion="${args.strategy.branchVersion}" branchIterationCount="${args.strategy.branchIterationCount || 0}" />`
+                : undefined,
+        }),
+        sessionParts: [
+            'solutionAttempt',
+            args.strategy.id,
+            args.subStrategy.id,
+            `v${args.strategy.branchVersion || 1}`,
+        ],
+        repositoryScope: {
+            strategySlotIndex: strategySlotIndex(args.process, args.strategy.id),
+            selectedHypothesisLabels: route.directoryLabels,
+            selectedHypothesisRoundNumber: route.roundNumber,
+        },
+    });
+}
+
+function buildSolutionCritiqueAgentContext(args: {
+    process: DeepthinkPipelineState;
+    challengeText: string;
+    strategy: DeepthinkMainStrategyData;
+    subStrategy: DeepthinkSubStrategyData;
+    solution: string;
+    runtime?: BranchRuntime;
+    globalIteration?: number;
+    branchIteration?: number;
+}): DeepthinkAgentContextManifest {
+    const promptText = args.runtime && args.globalIteration !== undefined && args.branchIteration !== undefined
+        ? messageText(buildCritiquePrompt({
+            challenge: args.challengeText,
+            strategy: runtimeSnapshot(args.strategy, args.runtime),
+            solutionToCritique: args.solution,
+            globalIteration: args.globalIteration,
+            branchIteration: args.branchIteration,
+            previousHistory: args.runtime.history,
+        }))
+        : buildNonIterativeCritiquePrompt({
+            challengeText: args.challengeText,
+            mainStrategy: args.strategy.strategyText,
+            subStrategyId: args.subStrategy.id,
+            subStrategyText: args.subStrategy.subStrategyText,
+            solution: args.solution,
+        });
+    return finalizeAgentContext({
+        process: args.process,
+        agentKind: 'solutionCritique',
+        promptText,
+        sessionParts: [
+            'solutionCritique',
+            args.strategy.id,
+            args.subStrategy.id,
+            `v${args.runtime?.branchVersion || args.strategy.branchVersion || 1}`,
+        ],
+        repositoryScope: {
+            strategySlotIndex: strategySlotIndex(args.process, args.strategy.id),
+        },
+    });
+}
+
+function buildCorrectionAgentContext(args: {
+    process: DeepthinkPipelineState;
+    challengeText: string;
+    strategy: DeepthinkMainStrategyData;
+    runtime: BranchRuntime;
+    runtimes: Map<string, BranchRuntime>;
+    globalIteration: number;
+    branchIteration: number;
+}): DeepthinkAgentContextManifest {
+    const includePeers = !configFor(args.process).isolateBranches;
+    const current = runtimeSnapshot(args.strategy, args.runtime);
+    const route = getStrategyHypothesisRoute(args.process, args.strategy.id);
+    const context = buildCorrectionRepository({
+        current,
+        currentHistory: args.runtime.history,
+        currentPoolHistory: args.runtime.poolHistory,
+        allStrategies: includePeers ? allSnapshots(args.process, args.runtimes) : [current],
+        maxHistoryEntries: CORRECTION_HISTORY_WINDOW,
+    });
+    return finalizeAgentContext({
+        process: args.process,
+        agentKind: 'solutionCorrection',
+        promptText: messageText(buildCorrectionPrompt({
+            challenge: args.challengeText,
+            current,
+            context,
+            hypothesisPacket: route.packetText,
+            globalIteration: args.globalIteration,
+            branchIteration: args.branchIteration,
+        })),
+        sessionParts: [
+            'solutionCorrection',
+            args.strategy.id,
+            ensureDirectSubStrategy(args.strategy).id,
+            `v${args.runtime.branchVersion}`,
+        ],
+        repositoryScope: {
+            strategySlotIndex: strategySlotIndex(args.process, args.strategy.id),
+            selectedHypothesisLabels: route.directoryLabels,
+            selectedHypothesisRoundNumber: route.roundNumber,
+            peerStrategySlotIndexes: includePeers
+                ? peerStrategySlotIndexes(args.process, args.strategy.id)
+                : [],
+        },
+    });
+}
+
+function buildSolutionPoolAgentContext(args: {
+    process: DeepthinkPipelineState;
+    challengeText: string;
+    strategy: DeepthinkMainStrategyData;
+    runtime: BranchRuntime;
+    runtimes: Map<string, BranchRuntime>;
+    globalIteration: number;
+    branchIteration: number;
+}): DeepthinkAgentContextManifest {
+    const includePeers = !configFor(args.process).isolateBranches;
+    const current = runtimeSnapshot(args.strategy, args.runtime);
+    const route = getStrategyHypothesisRoute(args.process, args.strategy.id);
+    const context = buildSolutionPoolRepository({
+        current,
+        currentHistory: args.runtime.history,
+        currentPoolHistory: args.runtime.poolHistory,
+        allStrategies: includePeers ? allSnapshots(args.process, args.runtimes) : [current],
+        maxPoolHistoryEntries: POOL_HISTORY_WINDOW,
+    });
+    return finalizeAgentContext({
+        process: args.process,
+        agentKind: 'structuredSolutionPool',
+        promptText: messageText(buildSolutionPoolPrompt({
+            challenge: args.challengeText,
+            current,
+            context,
+            hypothesisPacket: route.packetText,
+            globalIteration: args.globalIteration,
+            branchIteration: args.branchIteration,
+        })),
+        sessionParts: [
+            'solution-pool',
+            args.strategy.id,
+            `v${args.runtime.branchVersion}`,
+            `global-${args.globalIteration}`,
+        ],
+        repositoryScope: {
+            strategySlotIndex: strategySlotIndex(args.process, args.strategy.id),
+            selectedHypothesisLabels: route.directoryLabels,
+            selectedHypothesisRoundNumber: route.roundNumber,
+            peerStrategySlotIndexes: includePeers
+                ? peerStrategySlotIndexes(args.process, args.strategy.id)
+                : [],
+        },
+        outputContract: solutionPoolOutputContract(args.strategy.id),
+    });
+}
+
+function buildSelfImprovementAgentContext(args: {
+    process: DeepthinkPipelineState;
+    challengeText: string;
+    strategy: DeepthinkMainStrategyData;
+    subStrategy: DeepthinkSubStrategyData;
+}): DeepthinkAgentContextManifest {
+    const includePeers = configFor(args.process).provideAllSolutionsToCorrectors;
+    const peerContext = includePeers
+        ? activeStrategies(args.process).flatMap(strategy => strategy.subStrategies.map(sub => [
+            `<Candidate strategy="${strategy.id}" subStrategy="${sub.id}" assigned="${sub.id === args.subStrategy.id}">`,
+            strategy.strategyText,
+            sub.subStrategyText,
+            sub.solutionAttempt || '',
+            sub.solutionCritique || '',
+            '</Candidate>',
+        ].join('\n'))).join('\n\n')
+        : '';
+    const solutionSection = [
+        args.subStrategy.solutionCritique || 'No critique available.',
+        args.process.dissectedObservationsSynthesis
+            ? `\n\n<Dissected Observations Synthesis>\n${args.process.dissectedObservationsSynthesis}\n</Dissected Observations Synthesis>`
+            : '',
+        peerContext ? `\n\n<All Solutions Context>\n${peerContext}\n</All Solutions Context>` : '',
+    ].join('');
+    return finalizeAgentContext({
+        process: args.process,
+        agentKind: 'selfImprovement',
+        promptText: buildSelfImprovementPrompt({
+            challengeText: args.challengeText,
+            mainStrategy: args.strategy.strategyText,
+            subStrategy: args.subStrategy.subStrategyText,
+            solutionAttempt: args.subStrategy.solutionAttempt || '',
+            solutionSection,
+        }),
+        sessionParts: [
+            'selfImprovement',
+            args.strategy.id,
+            args.subStrategy.id,
+            `v${args.strategy.branchVersion || 1}`,
+        ],
+        repositoryScope: {
+            strategySlotIndex: strategySlotIndex(args.process, args.strategy.id),
+            peerStrategySlotIndexes: includePeers
+                ? peerStrategySlotIndexes(args.process, args.strategy.id)
+                : [],
+        },
+    });
+}
+
+function buildDissectedSynthesisAgentContext(
+    process: DeepthinkPipelineState,
+    challengeText: string,
+): DeepthinkAgentContextManifest {
+    const solutionsWithCritiques = activeStrategies(process).map(strategy => {
+        const subStrategies = strategy.subStrategies.filter(sub => sub.solutionAttempt);
+        if (!subStrategies.length) return '';
+        return [
+            `<Strategy id="${strategy.id}">`,
+            strategy.strategyText,
+            ...subStrategies.map(sub => [
+                `<SubStrategy id="${sub.id}">`,
+                sub.subStrategyText,
+                '<SolutionAttempt>',
+                sub.solutionAttempt || '',
+                '</SolutionAttempt>',
+                '<Critique>',
+                sub.solutionCritique || 'No critique available.',
+                '</Critique>',
+                '</SubStrategy>',
+            ].join('\n')),
+            '</Strategy>',
+        ].join('\n');
+    }).filter(Boolean).join('\n\n');
+    const config = configFor(process);
+    return finalizeAgentContext({
+        process,
+        agentKind: 'dissectedSynthesis',
+        promptText: buildDissectedSynthesisPrompt({
+            challengeText,
+            knowledgePacket: config.shareHypothesesToDissected
+                ? process.knowledgePacket || 'No hypothesis exploration performed.'
+                : 'Hypothesis exploration sharing is disabled for dissected observations.',
+            solutionsWithCritiques,
+        }),
+        sessionParts: ['dissectedSynthesis', 'non-iterative'],
+    });
+}
+
+function buildMemoryBankAgentContext(args: {
+    process: DeepthinkPipelineState;
+    challengeText: string;
+    strategy: DeepthinkMainStrategyData;
+    runtime: BranchRuntime;
+    historyWindow: BranchHistoryEntry[];
+    globalIteration: number;
+}): DeepthinkAgentContextManifest {
+    return finalizeAgentContext({
+        process: args.process,
+        agentKind: 'memoryBank',
+        promptText: messageText(buildMemoryBankPrompt({
+            challenge: args.challengeText,
+            strategy: runtimeSnapshot(args.strategy, args.runtime),
+            previousMemoryBank: args.runtime.memoryBank,
+            historyWindow: args.historyWindow,
+            windowStartBranchIteration: args.historyWindow[0].branchIteration,
+            windowEndBranchIteration: args.historyWindow[args.historyWindow.length - 1].branchIteration,
+        })),
+        sessionParts: [
+            'memory-bank',
+            args.strategy.id,
+            `v${args.runtime.branchVersion}`,
+            `global-${args.globalIteration}`,
+        ],
+        repositoryScope: {
+            strategySlotIndex: strategySlotIndex(args.process, args.strategy.id),
+        },
+    });
+}
+
+function buildPqfAgentContext(args: {
+    process: DeepthinkPipelineState;
+    challengeText: string;
+    runtimes: Map<string, BranchRuntime>;
+    maintenanceStrategies: DeepthinkMainStrategyData[];
+    group: DeepthinkMainStrategyData[];
+    groupIndex: number;
+    groupCount: number;
+    globalIteration: number;
+}): DeepthinkAgentContextManifest {
+    const strategyIds = args.group.map(strategy => strategy.id);
+    const groupSnapshots = args.group.map(strategy =>
+        runtimeSnapshot(strategy, args.runtimes.get(strategy.id) || createRuntime(strategy)));
+    const historyByStrategy = Object.fromEntries(args.maintenanceStrategies.map(strategy => [
+        strategy.id,
+        args.runtimes.get(strategy.id)?.history.slice(-MEMORY_INTERVAL) || [],
+    ]));
+    return finalizeAgentContext({
+        process: args.process,
+        agentKind: 'postQualityFilter',
+        promptText: messageText(buildPqfPrompt({
+            challenge: args.challengeText,
+            groupIndex: args.groupIndex,
+            groupCount: args.groupCount,
+            strategiesInGroup: groupSnapshots,
+            allActiveStrategies: allSnapshots(args.process, args.runtimes),
+            historyByStrategy,
+            aggressiveness: pqfAggressivenessText(configFor(args.process).pqfAggressiveness),
+        })),
+        sessionParts: ['pqf', args.groupIndex + 1, `global-${args.globalIteration}`],
+        repositoryScope: {
+            assignedStrategySlotIndexes: strategyIds.map(strategyId =>
+                strategySlotIndex(args.process, strategyId)),
+        },
+        outputContract: pqfOutputContract(strategyIds),
+    });
+}
+
+interface FinalSolutionCandidate {
+    id: string;
+    solution: string;
+    mainStrategyId: string;
+    subStrategyText: string;
+}
+
+function buildFinalJudgeAgentContext(
+    process: DeepthinkPipelineState,
+    challengeText: string,
+    candidates: FinalSolutionCandidate[],
+): DeepthinkAgentContextManifest {
+    const candidateText = candidates.map((candidate, index) => [
+        `<SOLUTION_${index + 1}>`,
+        `ID: ${candidate.id}`,
+        `Main Strategy: ${candidate.mainStrategyId}`,
+        `Sub-Strategy: ${candidate.subStrategyText}`,
+        'Solution Text:',
+        candidate.solution,
+        `</SOLUTION_${index + 1}>`,
+    ].join('\n')).join('\n\n');
+    return finalizeAgentContext({
+        process,
+        agentKind: 'finalJudge',
+        promptText: `Original Challenge:
+${challengeText}
+
+Below are ${candidates.length} candidate solutions from different strategic approaches. Select the single overall best solution.
+
+Return JSON:
+{"best_solution_id":"ID of the winning solution","final_reasoning":"Detailed comparison based only on provided texts"}
+
+${candidateText}`,
+        sessionParts: ['finalJudge', 'final'],
+        outputContract: finalJudgeOutputContract(candidates.map(candidate => candidate.id)),
+    });
 }
 
 function textAgentOutput(text: string): DeepthinkAgentCallOutput {
@@ -754,18 +1106,6 @@ function parseJson(raw: string, context: string): any {
     } catch {
         return JSON.parse(cleanJsonText(raw));
     }
-}
-
-function asStringArray(value: unknown): string[] {
-    if (!Array.isArray(value)) return [];
-    return value.map(item => {
-        if (typeof item === 'string') return item;
-        if (item && typeof item === 'object') {
-            const record = item as Record<string, unknown>;
-            return String(record.strategy || record.text || record.content || '');
-        }
-        return String(item ?? '');
-    }).filter(Boolean);
 }
 
 type JsonObject = Record<string, unknown>;
@@ -820,7 +1160,11 @@ const STRING_ARRAY_SCHEMA = (count?: number) => ({
     ...(count === undefined ? {} : { description: `Exactly ${count} entries are required.` }),
 });
 
-function strategyOutputContract(count: number, mode: 'initial' | 'update' = 'initial'): SandboxFinalOutputContract {
+function strategyOutputContract(
+    count: number,
+    mode: 'initial' | 'update' = 'initial',
+    requestedIds: string[] = [],
+): SandboxFinalOutputContract {
     if (mode === 'update') {
         return structuredContract('Strategy Update', {
             type: 'object',
@@ -852,6 +1196,14 @@ function strategyOutputContract(count: number, mode: 'initial' | 'update' = 'ini
                 requireString(entry.strategy_id, `Strategy Update response.strategies[${index}].strategy_id`);
                 requireString(entry.strategy, `Strategy Update response.strategies[${index}].strategy`);
             });
+            validateExactUniqueIdSet(
+                root.strategies.map((strategy, index) => {
+                    const entry = asJsonObject(strategy, `Strategy Update response.strategies[${index}]`);
+                    return entry.strategy_id as string;
+                }),
+                requestedIds,
+                'Strategy Update response.strategies',
+            );
         });
     }
 
@@ -880,7 +1232,11 @@ function subStrategyOutputContract(count: number): SandboxFinalOutputContract {
     });
 }
 
-function hypothesisOutputContract(count: number, mode: HypothesisInjectionMode): SandboxFinalOutputContract {
+function hypothesisOutputContract(
+    count: number,
+    mode: HypothesisInjectionMode,
+    activeStrategyIds: string[],
+): SandboxFinalOutputContract {
     const selective = mode === 'selective_injection';
     const modeName = mode === 'selective_injection'
         ? 'Selective Injection'
@@ -924,6 +1280,12 @@ function hypothesisOutputContract(count: number, mode: HypothesisInjectionMode):
             requireExactKeys(entry, `Hypothesis Generation response.hypotheses[${index}]`, ['text', 'target_strategies']);
             requireString(entry.text, `Hypothesis Generation response.hypotheses[${index}].text`);
             requireStringArray(entry.target_strategies, `Hypothesis Generation response.hypotheses[${index}].target_strategies`);
+            validateAllowedUniqueIds(
+                entry.target_strategies,
+                activeStrategyIds,
+                `Hypothesis Generation response.hypotheses[${index}].target_strategies`,
+                { allowEmpty: true },
+            );
         });
     });
 }
@@ -1018,7 +1380,7 @@ function solutionPoolOutputContract(strategyId: string): SandboxFinalOutputContr
     });
 }
 
-function finalJudgeOutputContract(): SandboxFinalOutputContract {
+function finalJudgeOutputContract(candidateIds: string[]): SandboxFinalOutputContract {
     return structuredContract('Final Judge', {
         type: 'object',
         properties: {
@@ -1032,6 +1394,11 @@ function finalJudgeOutputContract(): SandboxFinalOutputContract {
         requireExactKeys(root, 'Final Judge response', ['best_solution_id', 'final_reasoning']);
         requireString(root.best_solution_id, 'Final Judge response.best_solution_id');
         requireString(root.final_reasoning, 'Final Judge response.final_reasoning');
+        validateAllowedUniqueIds(
+            [root.best_solution_id],
+            candidateIds,
+            'Final Judge response.best_solution_id',
+        );
     });
 }
 
@@ -1324,19 +1691,6 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, description: str
     });
 }
 
-function isSandboxToolEnabledFor(access: DeepthinkSandboxAgentAccess | undefined): boolean {
-    return !!access && SANDBOX_TOOL_AGENTS.has(access.kind)
-        && (deps.getDeepthinkCodeExecutionEnabled()
-            || globalState.directContextFiles.length > 0
-            || globalState.filesystemContextFiles.length > 0);
-}
-
-function modelFor(stepDescription: string): string {
-    const matched = MODEL_MAP.find(([key]) => stepDescription.includes(key));
-    if (!matched) return deps.getSelectedModel();
-    return (deps.customPromptsDeepthinkState[matched[1]] as string | null | undefined) || deps.getSelectedModel();
-}
-
 function addLiveEvent(
     process: DeepthinkPipelineState,
     agentName: string,
@@ -1373,51 +1727,41 @@ export function getActiveDeepthinkPipeline() {
 }
 
 export function setActiveDeepthinkPipelineForImport(pipeline: DeepthinkPipelineState | null) {
-    if (pipeline) {
-        pipeline.strategyGenerationHistory = normalizeProximityHistory(pipeline.strategyGenerationHistory);
-        pipeline.hypothesisGenerationHistory = normalizeProximityHistory(pipeline.hypothesisGenerationHistory);
-    }
     activeDeepthinkPipeline = pipeline;
     if (setActiveDeepthinkPipeline) setActiveDeepthinkPipeline(pipeline);
 }
 
-export function setActiveDeepthinkPipelineInternal(pipeline: DeepthinkPipelineState | null) {
-    activeDeepthinkPipeline = pipeline;
-}
-
 async function callDeepthinkSandboxToolAgent(args: {
     process: DeepthinkPipelineState;
-    promptText: string;
-    systemInstruction: string;
+    manifest: DeepthinkAgentContextManifest;
     modelName: string;
     temperature: number;
     topP?: number;
-    access: DeepthinkSandboxAgentAccess;
-    finalOutputContract?: SandboxFinalOutputContract;
 }): Promise<DeepthinkAgentCallOutput> {
-    const promptMessage = new HumanMessage(args.promptText);
+    const promptMessage = new HumanMessage(args.manifest.promptText);
 
     const result = await runSandboxToolAgent({
-        agentName: args.access.agentName,
-        sessionId: args.access.sessionId,
+        agentName: args.manifest.agentName,
+        sessionId: args.manifest.sandboxSessionId,
         messages: [promptMessage],
-        systemPrompt: args.systemInstruction,
+        systemPrompt: args.manifest.systemInstruction,
         modelName: args.modelName,
         temperature: args.temperature,
         topP: args.topP,
-        seedFiles: getDeepthinkSeedFiles(args.process),
+        seedFiles: buildAttachmentSeedFiles(args.manifest.attachments),
+        filesystemFiles: buildFilesystemAttachmentFiles(args.manifest.attachments),
         runScopeDescription: 'same Deepthink run',
         agentFilesystemRules: getDeepthinkSandboxFilesystemRules(),
-        repositoryAccess: args.access.repositoryAccess,
-        finalOutputContract: args.finalOutputContract,
+        repositoryAccess: args.manifest.repositoryAccess,
+        finalOutputContract: args.manifest.outputContract,
     });
 
     return {
         // Structured contracts must be parsed from the raw final tool payload,
         // not from UI-rendered text that may include artifact links.
-        contextText: args.finalOutputContract ? result.finalText : (result.promptText || result.finalText || result.text),
+        contextText: args.manifest.outputContract ? result.finalText : (result.promptText || result.finalText || result.text),
         displayText: result.text,
-        finalText: args.finalOutputContract ? result.finalText : (result.promptText || result.finalText || result.text),
+        finalText: args.manifest.outputContract ? result.finalText : (result.promptText || result.finalText || result.text),
         interactionTraceText: result.interactionTraceText,
         executionTraceText: result.executionTraceText,
     };
@@ -1425,67 +1769,62 @@ async function callDeepthinkSandboxToolAgent(args: {
 
 async function callAgent(args: {
     process: DeepthinkPipelineState;
-    parts: Part[];
-    systemInstruction: string;
-    isJson: boolean;
+    manifest: DeepthinkAgentContextManifest;
     stepDescription: string;
-    target: any;
-    retryField: string;
     timeoutMs?: number;
-    critical: boolean;
-    sandboxAccess?: DeepthinkSandboxAgentAccess;
-    finalOutputContract?: SandboxFinalOutputContract;
 }): Promise<DeepthinkAgentCallOutput> {
-    const promptText = args.parts.map(part => part.text || (part.inlineData ? `[Attached Image: ${part.inlineData.mimeType}]` : '')).join('\n');
+    const config = configFor(args.process);
+    const promptText = args.manifest.promptText;
     const startedAt = Date.now();
+    const executionId = `inv-${nanoid(10)}`;
+    const agentModel = deepthinkAgentModel(args.manifest.agentKind, config.prompts, config.selectedModel);
+    const temperature = config.temperature;
+    const topP = config.topP;
+    const sandboxTransport = usesSandboxTransportForRun(args.process);
+    const nativeJsonOutput = !sandboxTransport && !!args.manifest.outputContract;
+    const thinkingConfig: ThinkingConfig = { thinkingLevel: config.thinkingLevel };
+    const agentTimeoutMs = args.timeoutMs
+        ? (sandboxTransport ? SANDBOX_AGENT_TIMEOUT_MS : args.timeoutMs)
+        : undefined;
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= MAX_API_ATTEMPTS; attempt++) {
         if (args.process.isStopRequested) throw new PipelineStopRequestedError(`Stop requested before API call: ${args.stepDescription}`);
 
-        const agentModel = modelFor(args.stepDescription);
-        const temperature = deps.getSelectedTemperature();
-        const topP = deps.getSelectedTopP();
-        const sandboxToolEnabled = isSandboxToolEnabledFor(args.sandboxAccess);
-        // A tool-enabled structured role uses final_output's role contract,
-        // never the provider's native JSON-response mode.
-        const nativeJsonOutput = sandboxToolEnabled ? false : args.isJson;
-        const thinkingConfig: ThinkingConfig = {
-            thinkingLevel: deps.getSelectedThinkingLevel ? deps.getSelectedThinkingLevel() : 'high',
-        };
-        const agentTimeoutMs = args.timeoutMs
-            ? (sandboxToolEnabled ? SANDBOX_AGENT_TIMEOUT_MS : args.timeoutMs)
-            : undefined;
-
-        args.target[args.retryField] = attempt - 1;
-        render();
-
-        addLiveEvent(args.process, args.stepDescription, `Invoking agent model (Attempt ${attempt}/${MAX_API_ATTEMPTS})`, 'agent_start', {
-            systemInstruction: args.systemInstruction,
-            prompt: promptText,
-            attempt,
-            modelName: agentModel,
-            temperature,
-            topP,
-            codeExecutionEnabled: sandboxToolEnabled,
-        });
+        if (attempt === 1) {
+            addLiveEvent(args.process, args.manifest.agentName, args.stepDescription, 'agent_start', {
+                systemInstruction: args.manifest.systemInstruction,
+                prompt: promptText,
+                attempt,
+                modelName: agentModel,
+                temperature,
+                topP,
+                codeExecutionEnabled: config.codeExecutionEnabled,
+                executionId,
+            });
+        }
 
         try {
-            const call = sandboxToolEnabled
+            const call = sandboxTransport
                 ? callDeepthinkSandboxToolAgent({
                     process: args.process,
-                    promptText,
-                    systemInstruction: args.systemInstruction,
+                    manifest: args.manifest,
                     modelName: agentModel,
                     temperature,
                     topP,
-                    access: args.sandboxAccess!,
-                    finalOutputContract: args.finalOutputContract,
                 })
                 // Tool-calling providers cannot combine native structured output
                 // with this role-specific final_output contract. The contract
                 // validates the tool payload instead.
-                : deps.callGemini(args.parts, temperature, agentModel, args.systemInstruction, nativeJsonOutput, topP, thinkingConfig)
+                : deps.callGemini(
+                    buildProviderParts(promptText, args.manifest.attachments),
+                    temperature,
+                    agentModel,
+                    args.manifest.systemInstruction,
+                    nativeJsonOutput,
+                    topP,
+                    thinkingConfig,
+                )
                     .then(response => {
                         const text = response.text || '';
                         return textAgentOutput(text);
@@ -1495,17 +1834,22 @@ async function callAgent(args: {
             const responseText = responseOutput.contextText;
 
             if (!responseText.trim()) throw new Error('Empty response from API');
+            if (args.manifest.outputContract && !sandboxTransport) {
+                args.manifest.outputContract.validate(parseJson(
+                    responseText,
+                    args.manifest.outputContract.name,
+                ));
+            }
 
-            addLiveEvent(args.process, args.stepDescription, 'Agent completed successfully', 'agent_complete', {
+            addLiveEvent(args.process, args.manifest.agentName, `${args.stepDescription} completed`, 'agent_complete', {
                 response: responseOutput.displayText,
                 interactionTraceText: responseOutput.interactionTraceText,
                 executionTraceText: responseOutput.executionTraceText,
-                systemInstruction: args.systemInstruction,
-                prompt: promptText,
                 modelName: agentModel,
                 temperature,
                 topP,
-                codeExecutionEnabled: sandboxToolEnabled,
+                codeExecutionEnabled: config.codeExecutionEnabled,
+                executionId,
             });
 
             return responseOutput;
@@ -1513,46 +1857,36 @@ async function callAgent(args: {
             lastError = error;
             const errorMessage = describeProviderError(error);
             const shouldRetry = attempt < MAX_API_ATTEMPTS;
-            addLiveEvent(args.process, args.stepDescription, `Agent attempt failed: ${errorMessage}`, shouldRetry ? 'agent_retry' : 'agent_error', {
+            addLiveEvent(args.process, args.manifest.agentName, `${args.stepDescription}: ${errorMessage}`, shouldRetry ? 'agent_retry' : 'agent_error', {
                 error: errorMessage,
                 attempt,
-                systemInstruction: args.systemInstruction,
-                prompt: promptText,
                 modelName: agentModel,
                 temperature,
                 topP,
-                codeExecutionEnabled: sandboxToolEnabled,
+                codeExecutionEnabled: config.codeExecutionEnabled,
+                executionId,
             });
 
             if (!shouldRetry) break;
 
             if (agentTimeoutMs && Date.now() - startedAt >= agentTimeoutMs) break;
 
-            if ('status' in args.target) args.target.status = 'retrying';
-            args.target[args.retryField] = attempt;
-            render();
-
             const delay = RETRY_DELAYS_MS[attempt - 1] ?? 0;
             const deadlineRemaining = agentTimeoutMs ? agentTimeoutMs - (Date.now() - startedAt) : delay;
             await sleep(Math.max(0, Math.min(delay, deadlineRemaining)));
-
-            if ('status' in args.target) args.target.status = 'processing';
-            render();
         }
     }
 
-    const message = describeProviderError(lastError);
-    if (args.critical) throw new Error(message);
-    throw new Error(message);
+    throw new Error(describeProviderError(lastError));
 }
 
-function createPipeline(challengeText: string, imageBase64?: string | null, imageMimeType?: string | null): DeepthinkPipelineState {
+function createPipeline(
+    challengeText: string,
+    runConfig: DeepthinkRunConfig,
+): DeepthinkPipelineState {
     return {
         id: `deepthink-${nanoid(12)}`,
         challenge: challengeText,
-        challengeText,
-        challengeImageBase64: imageBase64,
-        challengeImageMimeType: imageMimeType || undefined,
         strategyGenerationHistory: [],
         initialStrategies: [],
         hypothesisGenerationHistory: [],
@@ -1567,13 +1901,13 @@ function createPipeline(challengeText: string, imageBase64?: string | null, imag
         isStopRequested: false,
         activeTabId: 'live',
         activeStrategyTab: 0,
-        strategicSolverComplete: false,
         hypothesisExplorerComplete: false,
         knowledgePacket: '',
         finalJudgingStatus: 'pending',
         structuredSolutionPoolEnabled: false,
         structuredSolutionPoolStatus: 'pending',
         liveEvents: [],
+        runConfig,
     };
 }
 
@@ -1592,8 +1926,6 @@ function ensureDirectSubStrategy(strategy: DeepthinkMainStrategyData): Deepthink
             id: `${strategy.id}-direct`,
             subStrategyText: strategy.strategyText,
             status: 'pending',
-            isDetailsOpen: false,
-            subStrategyFormat: 'markdown',
         };
         strategy.subStrategies = [sub];
     }
@@ -1602,7 +1934,6 @@ function ensureDirectSubStrategy(strategy: DeepthinkMainStrategyData): Deepthink
 
 function createRuntime(strategy: DeepthinkMainStrategyData): BranchRuntime {
     return {
-        strategyId: strategy.id,
         branchVersion: strategy.branchVersion || 1,
         branchIterationCount: strategy.branchIterationCount || 0,
         globalIteration: 0,
@@ -1614,10 +1945,8 @@ function createRuntime(strategy: DeepthinkMainStrategyData): BranchRuntime {
 }
 
 function runtimeSnapshot(
-    process: DeepthinkPipelineState,
     strategy: DeepthinkMainStrategyData,
     runtime: BranchRuntime,
-    slotIndex: number
 ): StrategySnapshot {
     const directSub = ensureDirectSubStrategy(strategy);
     const latestHistory = runtime.history[runtime.history.length - 1];
@@ -1625,23 +1954,19 @@ function runtimeSnapshot(
     return {
         id: strategy.id,
         strategyText: strategy.strategyText,
-        slotIndex,
         branchVersion: runtime.branchVersion,
-        branchIterationCount: runtime.branchIterationCount,
-        globalIteration: runtime.globalIteration,
         latestSolution: directSub.solutionAttempt,
         latestCorrection: latestHistory?.solution || directSub.refinedSolution,
         latestCritique: latestHistory?.critique || directSub.solutionCritique,
         latestPool: latestPool?.poolResponse,
         memoryBank: runtime.memoryBank,
-        hypothesisPacket: process.strategySpecificKnowledgePackets?.[strategy.id],
     };
 }
 
 function allSnapshots(process: DeepthinkPipelineState, runtimes: Map<string, BranchRuntime>): StrategySnapshot[] {
-    return activeStrategies(process).map((strategy, index) => {
+    return activeStrategies(process).map(strategy => {
         const runtime = runtimes.get(strategy.id) || createRuntime(strategy);
-        return runtimeSnapshot(process, strategy, runtime, index);
+        return runtimeSnapshot(strategy, runtime);
     });
 }
 
@@ -1734,12 +2059,15 @@ function buildDeepthinkResultsContextFiles(process: DeepthinkPipelineState): Dee
         }
 
         const hasCorrection = strategy.subStrategies.some(subStrategy => (
-            !!subStrategy.requestPromptSelfImprovement && !!(subStrategy.refinedSolutionFinal || subStrategy.refinedSolution)
+            subStrategy.selfImprovementStatus === 'completed'
+            && !!(subStrategy.refinedSolutionFinal || subStrategy.refinedSolution)
         ));
         if (hasCorrection) {
             add(`${contextDirectory}/correction_final_output.md`, aggregateSubStrategyContent(
                 strategy,
-                subStrategy => subStrategy.requestPromptSelfImprovement ? (subStrategy.refinedSolutionFinal || subStrategy.refinedSolution) : undefined,
+                subStrategy => subStrategy.selfImprovementStatus === 'completed'
+                    ? (subStrategy.refinedSolutionFinal || subStrategy.refinedSolution)
+                    : undefined,
                 '',
             ));
             const trace = serializeExecutionTraces(strategy.subStrategies.map(subStrategy => subStrategy.refinedSolutionExecutionTraceText));
@@ -1866,79 +2194,45 @@ function buildStructuredSolutionPool(process: DeepthinkPipelineState, runtimes: 
     return JSON.stringify({ schema: 'deepthink-evolving-dfs-solution-pool-v1', strategies }, null, 2);
 }
 
-function parsePoolResponse(raw: string, strategyId: string): SolutionPoolParsedResponse | undefined {
-    try {
-        const parsed = parseJson(raw, `SolutionPool-${strategyId}`);
-        if (!parsed || !Array.isArray(parsed.solutions)) return undefined;
-        return {
-            strategy_id: parsed.strategy_id || strategyId,
-            solutions: parsed.solutions.map((solution: any) => ({
-                title: String(solution.title || 'Untitled Solution'),
-                content: String(solution.content || solution.solution || ''),
-                confidence: typeof solution.confidence === 'number' ? solution.confidence : 0.5,
-                internal_critique: String(solution.internal_critique || solution.critique || ''),
-                key_insights: solution.key_insights ? String(solution.key_insights) : undefined,
-            })),
-        };
-    } catch {
-        return undefined;
-    }
-}
-
 async function generateStrategyCandidates(args: {
     process: DeepthinkPipelineState;
-    parts: Part[];
     challengeText: string;
     taskPrompt: string;
     strategyIds: string[];
     updateIteration?: number;
 }): Promise<StrategyGenerationCandidate[]> {
     const isUpdate = args.updateIteration !== undefined;
+    const config = configFor(args.process);
     const result = await refineWithProximity<StrategyGenerationCandidate>({
-        loops: deps.getStrategyProximityLoops(),
+        loops: config.strategyProximityLoops,
         history: args.process.strategyGenerationHistory,
         generate: async (conversationText, revision, round) => {
-            const prompt = withGeneratorProximityConversation(
-                args.taskPrompt,
-                conversationText,
-                revision
-                    ? (isUpdate
-                        ? 'Revise every proposed replacement against the latest proximity critique. Keep each requested strategy_id and return one genuinely new, orthogonal branch per slot.'
-                        : 'Revise the strategy set against the latest proximity critique. Preserve orthogonal coverage and return the requested number of strategies.')
-                    : undefined,
-            );
             const response = await callAgent({
                 process: args.process,
-                parts: args.parts.concat([{ text: prompt }]),
-                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_initialStrategy,
-                isJson: true,
+                manifest: buildStrategyGenerationAgentContext({
+                    process: args.process,
+                    taskPrompt: args.taskPrompt,
+                    conversationText,
+                    strategyIds: args.strategyIds,
+                    revision,
+                    isUpdate,
+                }),
                 stepDescription: isUpdate
                     ? `Strategy Updates ${revision ? `Revision ${round}` : 'Seed'} after PQF Iteration ${args.updateIteration}`
                     : `Initial Strategy Generation ${revision ? `Revision ${round}` : 'Seed'}`,
-                target: args.process,
-                retryField: 'retryAttempt',
-                critical: true,
-                sandboxAccess: createFullRepositorySandboxAccess({
-                    process: args.process,
-                    kind: 'Main Strategy Generation',
-                    sessionParts: ['generator-proximity', 'generator'],
-                    agentName: 'Strategy Generator Agent',
-                }),
-                finalOutputContract: strategyOutputContract(args.strategyIds.length, isUpdate ? 'update' : 'initial'),
             });
             const parsed = parseJson(response.contextText, isUpdate ? 'Strategy Updates' : 'Initial Strategy Generation');
-            const items = Array.isArray(parsed.strategies) ? parsed.strategies : [];
+            const items = parsed.strategies as Array<string | { strategy_id: string; strategy: string }>;
             const candidates = isUpdate
-                ? args.strategyIds.map((id, index) => {
-                    const item = items.find((value: any) => String(value?.strategy_id || value?.id || '').trim() === id) || items[index];
-                    return { id, text: typeof item === 'string' ? item : String(item?.strategy || item?.strategyText || item?.text || '') };
-                })
-                : asStringArray(parsed.strategies || parsed.features || parsed.suggestions)
-                    .slice(0, args.strategyIds.length)
+                ? (() => {
+                    const replacementsById = new Map((items as Array<{ strategy_id: string; strategy: string }>).map(item => [
+                        item.strategy_id as string,
+                        item.strategy as string,
+                    ]));
+                    return args.strategyIds.map(id => ({ id, text: replacementsById.get(id)! }));
+                })()
+                : (items as string[])
                     .map((text, index) => ({ id: args.strategyIds[index], text }));
-            if (!candidates.length || candidates.some(candidate => !candidate.text.trim())) {
-                throw new Error(`${isUpdate ? 'Strategy update' : 'Initial strategy'} generation returned incomplete strategies.`);
-            }
             return {
                 candidates,
                 output: isUpdate
@@ -1949,19 +2243,13 @@ async function generateStrategyCandidates(args: {
         review: async (_candidates, conversationText, round) => {
             const response = await callAgent({
                 process: args.process,
-                parts: args.parts.concat([{ text: buildProximityReviewPrompt('strategy', args.challengeText, args.taskPrompt, conversationText) }]),
-                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_strategyProximity,
-                isJson: false,
-                stepDescription: `Strategies Proximity Round ${round}${isUpdate ? ` after PQF Iteration ${args.updateIteration}` : ''}`,
-                target: args.process,
-                retryField: 'retryAttempt',
-                critical: true,
-                sandboxAccess: createFullRepositorySandboxAccess({
+                manifest: buildStrategyProximityAgentContext({
                     process: args.process,
-                    kind: 'Main Strategy Generation',
-                    sessionParts: ['generator-proximity', 'proximity'],
-                    agentName: 'Strategies Proximity Agent',
+                    challengeText: args.challengeText,
+                    taskPrompt: args.taskPrompt,
+                    conversationText,
                 }),
+                stepDescription: `Strategies Proximity Round ${round}${isUpdate ? ` after PQF Iteration ${args.updateIteration}` : ''}`,
             });
             return response.contextText;
         },
@@ -1973,19 +2261,15 @@ async function generateStrategyCandidates(args: {
     return result.candidates;
 }
 
-async function generateStrategies(process: DeepthinkPipelineState, parts: Part[], challengeText: string, evolvingDfsMode: boolean): Promise<void> {
-    const requestedCount = evolvingDfsMode
-        ? Math.min(deps.getSelectedStrategiesCount(), 5)
-        : deps.getSelectedStrategiesCount();
+async function generateStrategies(process: DeepthinkPipelineState, challengeText: string): Promise<void> {
+    const requestedCount = configFor(process).strategyCount;
     const taskPrompt = buildInitialStrategyPrompt(challengeText, requestedCount);
 
-    process.requestPromptInitialStrategyGen = taskPrompt;
     process.strategyGenerationHistory = normalizeProximityHistory(process.strategyGenerationHistory);
     render();
 
     const strategies = await generateStrategyCandidates({
         process,
-        parts,
         challengeText,
         taskPrompt,
         strategyIds: Array.from({ length: requestedCount }, (_, index) => `main${index + 1}`),
@@ -1996,25 +2280,23 @@ async function generateStrategies(process: DeepthinkPipelineState, parts: Part[]
         strategyText: candidate.text,
         subStrategies: [],
         status: 'pending',
-        isDetailsOpen: false,
-        strategyFormat: 'markdown',
         branchVersion: 1,
         branchIterationCount: 0,
         replacementHistory: [],
+        awaitingFreshHypotheses: false,
     }));
 
     render();
 }
 
-async function generateSubStrategies(process: DeepthinkPipelineState, parts: Part[], challengeText: string): Promise<void> {
-    if (deps.getSkipSubStrategies() || deps.getEvolvingDfsEnabled()) {
+async function generateSubStrategies(process: DeepthinkPipelineState, challengeText: string): Promise<void> {
+    const config = configFor(process);
+    if (config.skipSubStrategies || config.evolvingDfsEnabled) {
         process.initialStrategies.forEach(strategy => {
             strategy.subStrategies = [{
                 id: `${strategy.id}-direct`,
                 subStrategyText: strategy.strategyText,
                 status: 'pending',
-                isDetailsOpen: false,
-                subStrategyFormat: 'markdown',
             }];
             strategy.status = 'completed';
         });
@@ -2027,47 +2309,24 @@ async function generateSubStrategies(process: DeepthinkPipelineState, parts: Par
         render();
 
         try {
-            const otherStrategies = process.initialStrategies
-                .filter(candidate => candidate.id !== strategy.id)
-                .map((candidate, index) => `Strategy ${index + 1}: ${candidate.strategyText}`)
-                .join('\n\n') || 'No other strategies.';
-
-            const prompt = buildSubStrategyPrompt({
-                challengeText,
-                currentMainStrategy: strategy.strategyText,
-                otherMainStrategies: otherStrategies,
-                subStrategyCount: deps.getSelectedSubStrategiesCount(),
-            });
-
-            strategy.requestPromptSubStrategyGen = prompt;
             const responseOutput = await callAgent({
                 process,
-                parts: parts.concat([{ text: prompt }]),
-                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_subStrategy,
-                isJson: true,
-                stepDescription: `Sub-Strategy Generation for ${strategy.id}`,
-                target: strategy,
-                retryField: 'retryAttempt',
-                critical: false,
-                sandboxAccess: createFullRepositorySandboxAccess({
+                manifest: buildSubStrategyAgentContext({
                     process,
-                    kind: 'Sub-Strategy Generation',
-                    sessionParts: [strategy.id],
+                    challengeText,
+                    strategy,
                 }),
-                finalOutputContract: subStrategyOutputContract(deps.getSelectedSubStrategiesCount()),
+                stepDescription: `Sub-Strategy Generation for ${strategy.id}`,
             });
             const response = responseOutput.contextText;
 
             const parsed = parseJson(response, `Sub-Strategy Generation for ${strategy.id}`);
-            const subStrategies = asStringArray(parsed.sub_strategies || parsed.subStrategies || parsed.strategies);
+            const subStrategies = parsed.sub_strategies as string[];
             strategy.subStrategies = subStrategies.map((subStrategyText, index) => ({
                 id: `${strategy.id}-sub${index + 1}`,
                 subStrategyText,
                 status: 'pending',
-                isDetailsOpen: false,
-                subStrategyFormat: 'markdown',
             }));
-            if (strategy.subStrategies.length === 0) ensureDirectSubStrategy(strategy);
             strategy.status = 'completed';
         } catch (error: any) {
             strategy.status = 'error';
@@ -2096,15 +2355,14 @@ function initialHypothesisPrompt(process: DeepthinkPipelineState, challengeText:
 
 async function runHypothesisRound(args: {
     process: DeepthinkPipelineState;
-    parts: Part[];
     challengeText: string;
     mode: HypothesisInjectionMode;
     roundNumber: number;
     globalIteration: number;
     prompt?: string;
-    activeStrategyIdsToFlush?: string[];
 }): Promise<void> {
-    const count = deps.getSelectedHypothesisCount();
+    const config = configFor(args.process);
+    const count = config.hypothesisCount;
     if (count <= 0) {
         args.process.hypotheses = [];
         args.process.knowledgePacket = '<Full Information Packet>\nHYPOTHESIS EXPLORATION: Disabled.\n</Full Information Packet>';
@@ -2116,67 +2374,43 @@ async function runHypothesisRound(args: {
     }
 
     args.process.hypothesisGenStatus = 'processing';
-    const existing = args.process.hypotheses.length ? [...args.process.hypotheses] : [];
-    if (existing.length) args.process.hypothesisHistory?.push(existing);
-    args.process.hypotheses = [];
+    const previousHypotheses = args.process.hypotheses.length
+        ? [...args.process.hypotheses]
+        : [];
     render();
 
     const taskPrompt = args.prompt || initialHypothesisPrompt(args.process, args.challengeText, args.mode, count);
-    args.process.requestPromptHypothesisGen = taskPrompt;
-    args.process.hypothesisGenerationHistory = normalizeProximityHistory(args.process.hypothesisGenerationHistory);
-
-    let systemInstruction = deps.customPromptsDeepthinkState.sys_deepthink_hypothesisGeneration
-        .replace(/\{\{NUM_HYPOTHESES\}\}/g, String(count));
-
-    if (args.mode === 'selective_injection') {
-        systemInstruction += `\n\nReturn only JSON. Each hypothesis must be an object with "text" and "target_strategies".`;
-    }
+    const previousGenerationHistory = normalizeProximityHistory(args.process.hypothesisGenerationHistory);
 
     try {
         const result = await refineWithProximity<HypothesisGenerationCandidate>({
-            loops: deps.getHypothesisProximityLoops(),
-            history: args.process.hypothesisGenerationHistory,
+            loops: config.hypothesisProximityLoops,
+            history: previousGenerationHistory,
             version: args.roundNumber,
             generate: async (conversationText, revision, round) => {
-                const prompt = withGeneratorProximityConversation(
-                    taskPrompt,
-                    conversationText,
-                    revision
-                        ? 'Revise the most recent hypothesis set in direct response to the latest proximity critique. Keep the same count and preserve only hypotheses that are orthogonal, falsifiable, and useful for the current generation task.'
-                        : undefined,
-                );
                 const responseOutput = await callAgent({
                     process: args.process,
-                    parts: args.parts.concat([{ text: prompt }]),
-                    systemInstruction,
-                    isJson: true,
+                    manifest: buildHypothesisGenerationAgentContext({
+                        process: args.process,
+                        taskPrompt,
+                        conversationText,
+                        mode: args.mode,
+                        revision,
+                    }),
                     stepDescription: !revision
                         ? (args.roundNumber === 1 ? 'Hypothesis Generation Seed' : `Hypothesis Generation Heartbeat ${args.roundNumber} Seed`)
                         : `Hypothesis Generation Revision ${round} for Heartbeat ${args.roundNumber}`,
-                    target: args.process,
-                    retryField: 'hypothesisGenRetryAttempt',
                     timeoutMs: AGENT_TIMEOUT_MS,
-                    critical: false,
-                    sandboxAccess: createFullRepositorySandboxAccess({
-                        process: args.process,
-                        kind: 'Hypothesis Generation',
-                        sessionParts: ['generator-proximity', 'generator'],
-                        agentName: 'Hypothesis Generator Agent',
-                    }),
-                    finalOutputContract: hypothesisOutputContract(count, args.mode),
                 });
                 const parsed = parseJson(responseOutput.contextText, 'Hypothesis Generation');
-                const rawHypotheses = Array.isArray(parsed.hypotheses) ? parsed.hypotheses : [];
-                const hypotheses: HypothesisGenerationCandidate[] = rawHypotheses.slice(0, count).map((raw: any): HypothesisGenerationCandidate => {
-                    const isObject = raw && typeof raw === 'object';
-                    const targetStrategyIds = isObject && Array.isArray(raw.target_strategies)
-                        ? raw.target_strategies.map((value: unknown) => String(value).trim()).filter(Boolean)
-                        : [];
-                    return {
-                        text: isObject ? String(raw.text || '') : String(raw || ''),
-                        targetStrategyIds: args.mode === 'selective_injection' ? targetStrategyIds : [],
-                    };
-                }).filter((candidate: HypothesisGenerationCandidate) => candidate.text.trim());
+                const hypotheses: HypothesisGenerationCandidate[] = args.mode === 'selective_injection'
+                    ? (parsed.hypotheses as Array<{ text: string; target_strategies: string[] }>)
+                        .map(hypothesis => ({
+                            text: hypothesis.text,
+                            targetStrategyIds: hypothesis.target_strategies,
+                        }))
+                    : (parsed.hypotheses as string[])
+                        .map(text => ({ text, targetStrategyIds: [] }));
                 return {
                     candidates: hypotheses,
                     output: args.mode === 'selective_injection'
@@ -2187,60 +2421,41 @@ async function runHypothesisRound(args: {
             review: async (_candidates, conversationText, round) => {
                 const response = await callAgent({
                     process: args.process,
-                    parts: args.parts.concat([{ text: buildProximityReviewPrompt('hypothesis', args.challengeText, taskPrompt, conversationText) }]),
-                    systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_hypothesisProximity,
-                    isJson: false,
-                    stepDescription: `Hypothesis Proximity Round ${round} for Heartbeat ${args.roundNumber}`,
-                    target: args.process,
-                    retryField: 'hypothesisGenRetryAttempt',
-                    timeoutMs: AGENT_TIMEOUT_MS,
-                    critical: false,
-                    sandboxAccess: createFullRepositorySandboxAccess({
+                    manifest: buildHypothesisProximityAgentContext({
                         process: args.process,
-                        kind: 'Hypothesis Generation',
-                        sessionParts: ['generator-proximity', 'proximity'],
-                        agentName: 'Hypothesis Proximity Agent',
+                        challengeText: args.challengeText,
+                        taskPrompt,
+                        conversationText,
                     }),
+                    stepDescription: `Hypothesis Proximity Round ${round} for Heartbeat ${args.roundNumber}`,
+                    timeoutMs: AGENT_TIMEOUT_MS,
                 });
                 return response.contextText;
             },
-            onHistory: history => {
-                args.process.hypothesisGenerationHistory = history;
-                render();
-            },
         });
-        args.process.hypotheses = result.candidates.map((candidate, index) => ({
-                id: `hyp${args.roundNumber}-${index + 1}`,
-                hypothesisText: candidate.text,
-                testerStatus: 'pending',
-                isDetailsOpen: false,
-                targetStrategyIds: args.mode === 'selective_injection' ? candidate.targetStrategyIds : undefined,
-                roundNumber: args.roundNumber,
-                globalIteration: args.globalIteration,
-            }));
 
-        args.process.hypothesisGenStatus = 'completed';
-        render();
+        const nextHypotheses: DeepthinkHypothesisData[] = result.candidates.map((candidate, index) => ({
+            id: `hyp${args.roundNumber}-${index + 1}`,
+            hypothesisText: candidate.text,
+            testerStatus: 'pending',
+            targetStrategyIds: args.mode === 'selective_injection' ? candidate.targetStrategyIds : undefined,
+            roundNumber: args.roundNumber,
+            globalIteration: args.globalIteration,
+        }));
 
-        await Promise.allSettled(args.process.hypotheses.map(async hypothesis => {
+        await Promise.allSettled(nextHypotheses.map(async hypothesis => {
             hypothesis.testerStatus = 'processing';
-            render();
 
             try {
-                const testerPrompt = buildHypothesisTesterPrompt(args.challengeText, hypothesis.hypothesisText);
-                hypothesis.testerRequestPrompt = testerPrompt;
-
                 const testerResponse = await callAgent({
                     process: args.process,
-                    parts: args.parts.concat([{ text: testerPrompt }]),
-                    systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_hypothesisTester,
-                    isJson: false,
+                    manifest: buildHypothesisTesterAgentContext({
+                        process: args.process,
+                        challengeText: args.challengeText,
+                        hypothesis,
+                    }),
                     stepDescription: `Hypothesis Testing for ${hypothesis.id}`,
-                    target: hypothesis,
-                    retryField: 'testerRetryAttempt',
                     timeoutMs: AGENT_TIMEOUT_MS,
-                    critical: false,
-                    sandboxAccess: createHypothesisSandboxAccess(args.process, hypothesis),
                 });
 
                 hypothesis.testerAttempt = testerResponse.contextText;
@@ -2251,115 +2466,60 @@ async function runHypothesisRound(args: {
                 hypothesis.testerStatus = 'completed';
             } catch (error: any) {
                 hypothesis.testerStatus = 'error';
-                hypothesis.testerError = error.message || 'Hypothesis testing failed';
                 hypothesis.testerAttempt = 'No testing output available.';
             }
-            render();
         }));
 
-        const fullPacket = [
-            '<Full Information Packet>',
-            ...args.process.hypotheses.map((hypothesis, index) => [
-                `<Hypothesis ${index + 1}>`,
-                `Hypothesis: ${hypothesis.hypothesisText}`,
-                `Target Strategies: ${hypothesis.targetStrategyIds?.join(', ') || 'All'}`,
-                `Hypothesis Testing: ${hypothesis.testerAttempt || 'No testing output available'}`,
-                `</Hypothesis ${index + 1}>`,
-            ].join('\n')),
-            '</Full Information Packet>',
-        ].join('\n');
+        const fullPacket = renderFullHypothesisPacket(nextHypotheses);
 
         const strategyPackets: Record<string, string> = {};
         activeStrategies(args.process).forEach(strategy => {
             const relevant = args.mode === 'selective_injection'
-                ? args.process.hypotheses.filter(hypothesis => {
-                    if (args.activeStrategyIdsToFlush?.includes(strategy.id)) return false;
-                    if (!hypothesis.targetStrategyIds || hypothesis.targetStrategyIds.length === 0) return true;
-                    return hypothesis.targetStrategyIds.includes(strategy.id);
-                })
-                : args.process.hypotheses;
-
-            strategyPackets[strategy.id] = [
-                `<Strategy-Specific Information Packet for Strategy ${strategy.id}>`,
-                relevant.length
-                    ? relevant.map(hypothesis => [
-                        `<Hypothesis ${hypothesis.id}>`,
-                        `Hypothesis: ${hypothesis.hypothesisText}`,
-                        `Hypothesis Testing: ${hypothesis.testerAttempt || 'No testing output available'}`,
-                        `</Hypothesis ${hypothesis.id}>`,
-                    ].join('\n')).join('\n\n')
-                    : 'No active strategy-specific hypotheses are currently available for this strategy.',
-                `</Strategy-Specific Information Packet for Strategy ${strategy.id}>`,
-            ].join('\n');
+                ? selectRoutedHypotheses(nextHypotheses, strategy.id)
+                : nextHypotheses;
+            strategyPackets[strategy.id] = renderStrategyHypothesisPacket(strategy.id, relevant);
         });
 
+        if (previousHypotheses.length) {
+            args.process.hypothesisHistory = [
+                ...(args.process.hypothesisHistory || []),
+                previousHypotheses,
+            ];
+        }
+        args.process.hypothesisGenerationHistory = result.history;
+        args.process.hypotheses = nextHypotheses;
         args.process.knowledgePacket = fullPacket;
         args.process.strategySpecificKnowledgePackets = strategyPackets;
         args.process.hypothesisRounds?.push({
             roundNumber: args.roundNumber,
-            globalIteration: args.globalIteration,
             packet: fullPacket,
-            strategyPackets,
         });
+        activeStrategies(args.process).forEach(strategy => {
+            strategy.awaitingFreshHypotheses = false;
+        });
+        args.process.hypothesisGenStatus = 'completed';
         args.process.hypothesisExplorerComplete = true;
-    } catch (error: any) {
+    } catch {
         args.process.hypothesisGenStatus = 'error';
-        args.process.hypothesisGenError = error.message || 'Hypothesis exploration failed';
     }
     render();
 }
 
 async function executeSolutionAttempt(args: {
     process: DeepthinkPipelineState;
-    parts: Part[];
     challengeText: string;
     strategy: DeepthinkMainStrategyData;
     subStrategy: DeepthinkSubStrategyData;
-    critical: boolean;
 }): Promise<void> {
     args.subStrategy.status = 'processing';
     render();
 
-    const injectedPacket = args.process.hypothesisInjectionMode === 'selective_injection'
-        ? args.process.strategySpecificKnowledgePackets?.[args.strategy.id] || args.process.knowledgePacket || 'No hypothesis exploration performed.'
-        : args.process.knowledgePacket || 'No hypothesis exploration performed.';
-    const otherStrategyContext = activeStrategies(args.process)
-        .filter(strategy => strategy.id !== args.strategy.id)
-        .map(strategy => `<Strategy-${strategy.id} branchVersion="${strategy.branchVersion || 1}">\n${strategy.strategyText}\n</Strategy-${strategy.id}>`)
-        .join('\n\n');
-    const branchContext = args.strategy.branchVersion
-        ? `<BranchIdentity strategy="${args.strategy.id}" branchVersion="${args.strategy.branchVersion}" branchIterationCount="${args.strategy.branchIterationCount || 0}" />`
-        : undefined;
-
-    const prompt = buildSolutionAttemptPrompt({
-        challengeText: args.challengeText,
-        mainStrategy: args.strategy.strategyText,
-        subStrategy: args.subStrategy.subStrategyText,
-        knowledgePacket: injectedPacket,
-        otherStrategyContext,
-        branchContext,
-    });
-
-    args.subStrategy.requestPromptSolutionAttempt = prompt;
-
     try {
         const response = await callAgent({
             process: args.process,
-            parts: args.parts.concat([{ text: prompt }]),
-            systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_solutionAttempt,
-            isJson: false,
+            manifest: buildSolutionAttemptAgentContext(args),
             stepDescription: `Solution Attempt for ${args.subStrategy.id}`,
-            target: args.subStrategy,
-            retryField: 'retryAttempt',
             timeoutMs: AGENT_TIMEOUT_MS,
-            critical: args.critical,
-            sandboxAccess: createPersistentSandboxAccess({
-                process: args.process,
-                kind: 'Solution Attempt',
-                strategyId: args.strategy.id,
-                subStrategyId: args.subStrategy.id,
-                branchVersion: args.strategy.branchVersion || 1,
-            }),
         });
         args.subStrategy.solutionAttempt = response.contextText;
         args.subStrategy.solutionAttemptDisplay = response.displayText;
@@ -2370,14 +2530,12 @@ async function executeSolutionAttempt(args: {
     } catch (error: any) {
         args.subStrategy.status = 'error';
         args.subStrategy.error = error.message || 'Solution attempt failed';
-        if (args.critical) throw error;
     }
     render();
 }
 
 async function critiqueSolution(args: {
     process: DeepthinkPipelineState;
-    parts: Part[];
     challengeText: string;
     strategy: DeepthinkMainStrategyData;
     subStrategy: DeepthinkSubStrategyData;
@@ -2389,34 +2547,11 @@ async function critiqueSolution(args: {
     args.subStrategy.solutionCritiqueStatus = 'processing';
     render();
 
-    const prompt = args.runtime && args.globalIteration && args.branchIteration
-        ? messageText(buildCritiquePrompt({
-            challenge: args.challengeText,
-            strategy: runtimeSnapshot(args.process, args.strategy, args.runtime, args.process.initialStrategies.indexOf(args.strategy)),
-            solutionToCritique: args.solution,
-            globalIteration: args.globalIteration,
-            branchIteration: args.branchIteration,
-            previousHistory: args.runtime.history,
-        }))
-        : buildNonIterativeCritiquePrompt({
-            challengeText: args.challengeText,
-            mainStrategy: args.strategy.strategyText,
-            subStrategyId: args.subStrategy.id,
-            subStrategyText: args.subStrategy.subStrategyText,
-            solution: args.solution,
-        });
-
-    args.subStrategy.requestPromptSolutionCritique = prompt;
-
     const critiqueData: DeepthinkSolutionCritiqueData = {
         id: `critique-${args.strategy.id}-${args.globalIteration || 'initial'}-${nanoid(4)}`,
-        subStrategyId: args.subStrategy.id,
         mainStrategyId: args.strategy.id,
         branchVersion: args.runtime?.branchVersion || args.strategy.branchVersion || 1,
-        strategyTextSnapshot: args.strategy.strategyText,
-        requestPrompt: prompt,
         status: 'processing',
-        isDetailsOpen: true,
         globalIteration: args.globalIteration,
         branchIteration: args.branchIteration,
     };
@@ -2426,21 +2561,9 @@ async function critiqueSolution(args: {
     try {
         const response = await callAgent({
             process: args.process,
-            parts: args.parts.concat([{ text: prompt }]),
-            systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_solutionCritique,
-            isJson: false,
+            manifest: buildSolutionCritiqueAgentContext(args),
             stepDescription: `Solution Critique for ${args.strategy.id}${args.globalIteration ? ` Iteration ${args.globalIteration}` : ''}`,
-            target: args.subStrategy,
-            retryField: 'solutionCritiqueRetryAttempt',
             timeoutMs: AGENT_TIMEOUT_MS,
-            critical: false,
-            sandboxAccess: createPersistentSandboxAccess({
-                process: args.process,
-                kind: 'Solution Critique',
-                strategyId: args.strategy.id,
-                subStrategyId: args.subStrategy.id,
-                branchVersion: args.runtime?.branchVersion || args.strategy.branchVersion || 1,
-            }),
         });
 
         args.subStrategy.solutionCritique = response.contextText;
@@ -2451,16 +2574,13 @@ async function critiqueSolution(args: {
         args.subStrategy.solutionCritiqueStatus = 'completed';
         critiqueData.critiqueResponse = response.contextText;
         critiqueData.critiqueResponseDisplay = response.displayText;
-        critiqueData.critiqueResponseFinal = response.finalText;
         critiqueData.interactionTraceText = response.interactionTraceText;
-        critiqueData.executionTraceText = response.executionTraceText;
         critiqueData.status = 'completed';
         return response.contextText;
     } catch (error: any) {
         args.subStrategy.solutionCritiqueStatus = 'error';
-        args.subStrategy.solutionCritiqueError = error.message || 'Solution critique failed';
         critiqueData.status = 'error';
-        critiqueData.error = args.subStrategy.solutionCritiqueError;
+        critiqueData.error = error.message || 'Solution critique failed';
         return null;
     } finally {
         render();
@@ -2469,7 +2589,6 @@ async function critiqueSolution(args: {
 
 async function runInitialExecutionsAndCritiques(args: {
     process: DeepthinkPipelineState;
-    parts: Part[];
     challengeText: string;
     runtimes: Map<string, BranchRuntime>;
     evolvingDfsMode: boolean;
@@ -2482,19 +2601,17 @@ async function runInitialExecutionsAndCritiques(args: {
         return subs.map(async subStrategy => {
             await executeSolutionAttempt({
                 process: args.process,
-                parts: args.parts,
                 challengeText: args.challengeText,
                 strategy,
                 subStrategy,
-                critical: false,
             });
 
-            if (!subStrategy.solutionAttempt || !deps.getRefinementEnabled()) {
+            if (!subStrategy.solutionAttempt || !configFor(args.process).refinementEnabled) {
                 subStrategy.refinedSolution = subStrategy.solutionAttempt;
                 subStrategy.refinedSolutionDisplay = subStrategy.solutionAttemptDisplay;
                 subStrategy.refinedSolutionFinal = subStrategy.solutionAttemptFinal;
                 subStrategy.refinedSolutionTraceText = subStrategy.solutionAttemptTraceText;
-                subStrategy.selfImprovementStatus = 'completed';
+                subStrategy.selfImprovementStatus = 'skipped';
                 return;
             }
 
@@ -2502,7 +2619,6 @@ async function runInitialExecutionsAndCritiques(args: {
             const branchIteration = args.evolvingDfsMode ? 1 : undefined;
             const critique = await critiqueSolution({
                 process: args.process,
-                parts: args.parts,
                 challengeText: args.challengeText,
                 strategy,
                 subStrategy,
@@ -2520,10 +2636,8 @@ async function runInitialExecutionsAndCritiques(args: {
                     label: 'Initial Execution',
                     solution: subStrategy.solutionAttempt || '',
                     solutionDisplay: subStrategy.solutionAttemptDisplay,
-                    solutionFinal: subStrategy.solutionAttemptFinal,
                     critique,
                     critiqueDisplay: subStrategy.solutionCritiqueDisplay,
-                    critiqueFinal: subStrategy.solutionCritiqueFinal,
                 });
                 subStrategy.evolvingDfs = {
                     enabled: true,
@@ -2535,10 +2649,8 @@ async function runInitialExecutionsAndCritiques(args: {
                         branchVersion: runtime.branchVersion,
                         critique,
                         critiqueDisplay: subStrategy.solutionCritiqueDisplay,
-                        critiqueFinal: subStrategy.solutionCritiqueFinal,
                         correctedSolution: subStrategy.solutionAttempt || '',
                         correctedSolutionDisplay: subStrategy.solutionAttemptDisplay,
-                        correctedSolutionFinal: subStrategy.solutionAttemptFinal,
                         correctedSolutionTraceText: subStrategy.solutionAttemptTraceText,
                         timestamp: Date.now(),
                         label: 'Initial Execution',
@@ -2548,7 +2660,7 @@ async function runInitialExecutionsAndCritiques(args: {
                 subStrategy.refinedSolutionDisplay = subStrategy.solutionAttemptDisplay;
                 subStrategy.refinedSolutionFinal = subStrategy.solutionAttemptFinal;
                 subStrategy.refinedSolutionTraceText = subStrategy.solutionAttemptTraceText;
-                subStrategy.selfImprovementStatus = 'completed';
+                subStrategy.selfImprovementStatus = 'skipped';
             }
         });
     }));
@@ -2559,7 +2671,6 @@ async function runInitialExecutionsAndCritiques(args: {
 
 async function runSolutionPools(args: {
     process: DeepthinkPipelineState;
-    parts: Part[];
     challengeText: string;
     runtimes: Map<string, BranchRuntime>;
     globalIteration: number;
@@ -2569,22 +2680,19 @@ async function runSolutionPools(args: {
     args.process.structuredSolutionPool = buildStructuredSolutionPool(args.process, args.runtimes);
     render();
 
-    const solutionPoolDisabled = deps.getSolutionPoolDisabled();
-    const snapshots = allSnapshots(args.process, args.runtimes);
+    const config = configFor(args.process);
+    const solutionPoolDisabled = config.solutionPoolDisabled;
 
     await Promise.allSettled(activeStrategies(args.process).map(async strategy => {
         const runtime = args.runtimes.get(strategy.id);
         if (!runtime) return;
 
-        const currentSnapshot = runtimeSnapshot(args.process, strategy, runtime, args.process.initialStrategies.indexOf(strategy));
         const branchIteration = Math.max(1, runtime.branchIterationCount);
         const agent: DeepthinkStructuredSolutionPoolAgentData = {
-            id: `pool-${strategy.id}-v${runtime.branchVersion}-g${args.globalIteration}`,
             mainStrategyId: strategy.id,
             branchVersion: runtime.branchVersion,
             poolResponse: solutionPoolDisabled ? NO_SOLUTION_POOL_AVAILABLE : undefined,
             status: solutionPoolDisabled ? 'skipped' : 'processing',
-            isDetailsOpen: true,
             globalIteration: args.globalIteration,
             branchIteration,
         };
@@ -2605,48 +2713,28 @@ async function runSolutionPools(args: {
 
         render();
 
-        const repository = buildSolutionPoolRepository({
-            current: currentSnapshot,
-            currentHistory: runtime.history,
-            currentPoolHistory: runtime.poolHistory,
-            allStrategies: deps.getIsolateBranchesEnabled() ? [currentSnapshot] : snapshots,
-            maxPoolHistoryEntries: POOL_HISTORY_WINDOW,
-        });
-
-        const prompt = messageText(buildSolutionPoolPrompt({
-            challenge: args.challengeText,
-            current: currentSnapshot,
-            repository,
-            hypothesisPacket: args.process.strategySpecificKnowledgePackets?.[strategy.id],
-            globalIteration: args.globalIteration,
-            branchIteration,
-        }));
-        agent.requestPrompt = prompt;
-
         try {
             const responseOutput = await callAgent({
                 process: args.process,
-                parts: args.parts.concat([{ text: prompt }]),
-                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_structuredSolutionPool,
-                isJson: true,
-                stepDescription: `Structured Solution Pool for ${strategy.id} Iteration ${args.globalIteration}`,
-                target: agent,
-                retryField: 'retryAttempt',
-                timeoutMs: AGENT_TIMEOUT_MS,
-                critical: false,
-                sandboxAccess: createSolutionPoolSandboxAccess({
+                manifest: buildSolutionPoolAgentContext({
                     process: args.process,
-                    strategyId: strategy.id,
-                    branchVersion: runtime.branchVersion,
+                    challengeText: args.challengeText,
+                    strategy,
+                    runtime,
+                    runtimes: args.runtimes,
                     globalIteration: args.globalIteration,
+                    branchIteration,
                 }),
-                finalOutputContract: solutionPoolOutputContract(strategy.id),
+                stepDescription: `Structured Solution Pool for ${strategy.id} Iteration ${args.globalIteration}`,
+                timeoutMs: AGENT_TIMEOUT_MS,
             });
             const response = responseOutput.contextText;
 
             agent.poolResponse = response;
-            agent.parsedPoolResponse = parsePoolResponse(response, strategy.id);
-            agent.interactionTraceText = responseOutput.interactionTraceText;
+            agent.parsedPoolResponse = parseJson(
+                response,
+                `SolutionPool-${strategy.id}`,
+            ) as SolutionPoolParsedResponse;
             agent.executionTraceText = responseOutput.executionTraceText;
             agent.status = 'completed';
             runtime.poolHistory.push({
@@ -2657,9 +2745,8 @@ async function runSolutionPools(args: {
             runtime.branchIterationCount = Math.max(runtime.branchIterationCount, runtime.history.length);
             strategy.branchIterationCount = runtime.branchIterationCount;
             directSubFor(strategy)!.branchIterationCount = runtime.branchIterationCount;
-        } catch (error: any) {
+        } catch {
             agent.status = 'error';
-            agent.error = error.message || 'Solution pool generation failed';
         }
         render();
     }));
@@ -2672,59 +2759,34 @@ async function runSolutionPools(args: {
 
 async function runCorrectionIteration(args: {
     process: DeepthinkPipelineState;
-    parts: Part[];
     challengeText: string;
     runtimes: Map<string, BranchRuntime>;
     globalIteration: number;
 }): Promise<void> {
-    const snapshots = allSnapshots(args.process, args.runtimes);
-
     await Promise.allSettled(activeStrategies(args.process).map(async strategy => {
         const runtime = args.runtimes.get(strategy.id);
         const subStrategy = ensureDirectSubStrategy(strategy);
         if (!runtime) return;
 
         const nextBranchIteration = runtime.history.length + 1;
-        const currentSnapshot = runtimeSnapshot(args.process, strategy, runtime, args.process.initialStrategies.indexOf(strategy));
-        const repository = buildCorrectionRepository({
-            current: currentSnapshot,
-            currentHistory: runtime.history,
-            currentPoolHistory: runtime.poolHistory,
-            allStrategies: deps.getIsolateBranchesEnabled() ? [currentSnapshot] : snapshots,
-            maxHistoryEntries: CORRECTION_HISTORY_WINDOW,
-        });
 
-        const prompt = messageText(buildCorrectionPrompt({
-            challenge: args.challengeText,
-            current: currentSnapshot,
-            repository,
-            hypothesisPacket: args.process.strategySpecificKnowledgePackets?.[strategy.id],
-            globalIteration: args.globalIteration,
-            branchIteration: nextBranchIteration,
-        }));
-
-        subStrategy.requestPromptSelfImprovement = prompt;
         subStrategy.selfImprovementStatus = 'processing';
         render();
 
         try {
             const corrected = await callAgent({
                 process: args.process,
-                parts: args.parts.concat([{ text: prompt }]),
-                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_selfImprovement,
-                isJson: false,
-                stepDescription: `Solution Correction for ${strategy.id} Iteration ${args.globalIteration}`,
-                target: subStrategy,
-                retryField: 'selfImprovementRetryAttempt',
-                timeoutMs: AGENT_TIMEOUT_MS,
-                critical: false,
-                sandboxAccess: createPersistentSandboxAccess({
+                manifest: buildCorrectionAgentContext({
                     process: args.process,
-                    kind: 'Solution Correction',
-                    strategyId: strategy.id,
-                    subStrategyId: subStrategy.id,
-                    branchVersion: runtime.branchVersion,
+                    challengeText: args.challengeText,
+                    strategy,
+                    runtime,
+                    runtimes: args.runtimes,
+                    globalIteration: args.globalIteration,
+                    branchIteration: nextBranchIteration,
                 }),
+                stepDescription: `Solution Correction for ${strategy.id} Iteration ${args.globalIteration}`,
+                timeoutMs: AGENT_TIMEOUT_MS,
             });
 
             subStrategy.refinedSolution = corrected.contextText;
@@ -2736,7 +2798,6 @@ async function runCorrectionIteration(args: {
 
             const critique = await critiqueSolution({
                 process: args.process,
-                parts: args.parts,
                 challengeText: args.challengeText,
                 strategy,
                 subStrategy,
@@ -2753,10 +2814,8 @@ async function runCorrectionIteration(args: {
                 label: `Correction ${nextBranchIteration}`,
                 solution: corrected.contextText,
                 solutionDisplay: corrected.displayText,
-                solutionFinal: corrected.finalText,
                 critique: critique || 'No critique output available.',
                 critiqueDisplay: subStrategy.solutionCritiqueDisplay,
-                critiqueFinal: subStrategy.solutionCritiqueFinal,
             });
             runtime.globalIteration = args.globalIteration;
             runtime.branchIterationCount = runtime.history.length;
@@ -2771,17 +2830,14 @@ async function runCorrectionIteration(args: {
                 branchVersion: runtime.branchVersion,
                 critique: critique || 'No critique output available.',
                 critiqueDisplay: subStrategy.solutionCritiqueDisplay,
-                critiqueFinal: subStrategy.solutionCritiqueFinal,
                 correctedSolution: corrected.contextText,
                 correctedSolutionDisplay: corrected.displayText,
-                correctedSolutionFinal: corrected.finalText,
                 correctedSolutionTraceText: corrected.interactionTraceText,
                 timestamp: Date.now(),
                 label: `Correction ${nextBranchIteration}`,
             });
-        } catch (error: any) {
+        } catch {
             subStrategy.selfImprovementStatus = 'error';
-            subStrategy.selfImprovementError = error.message || 'Correction failed';
         }
         render();
     }));
@@ -2789,7 +2845,6 @@ async function runCorrectionIteration(args: {
 
 async function runMemoryAgents(args: {
     process: DeepthinkPipelineState;
-    parts: Part[];
     challengeText: string;
     runtimes: Map<string, BranchRuntime>;
     strategies: DeepthinkMainStrategyData[];
@@ -2802,55 +2857,32 @@ async function runMemoryAgents(args: {
         if (newHistory.length < MEMORY_INTERVAL) return;
 
         const agent: DeepthinkMemoryBankAgentData = {
-            id: `memory-${strategy.id}-g${args.globalIteration}`,
             mainStrategyId: strategy.id,
             branchVersion: runtime.branchVersion,
-            status: 'processing',
             globalIteration: args.globalIteration,
-            branchIterationStart: newHistory[0].branchIteration,
-            branchIterationEnd: newHistory[newHistory.length - 1].branchIteration,
         };
         args.process.memoryBankAgents?.push(agent);
-        render();
-
-        const prompt = messageText(buildMemoryBankPrompt({
-            challenge: args.challengeText,
-            strategy: runtimeSnapshot(args.process, strategy, runtime, args.process.initialStrategies.indexOf(strategy)),
-            previousMemoryBank: runtime.memoryBank,
-            historyWindow: newHistory,
-            windowStartBranchIteration: newHistory[0].branchIteration,
-            windowEndBranchIteration: newHistory[newHistory.length - 1].branchIteration,
-        }));
-        agent.requestPrompt = prompt;
 
         try {
             const responseOutput = await callAgent({
                 process: args.process,
-                parts: args.parts.concat([{ text: prompt }]),
-                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_memoryBank,
-                isJson: false,
-                stepDescription: `Memory Bank for ${strategy.id} Iteration ${args.globalIteration}`,
-                target: agent,
-                retryField: 'retryAttempt',
-                timeoutMs: AGENT_TIMEOUT_MS,
-                critical: false,
-                sandboxAccess: createMemoryBankSandboxAccess({
+                manifest: buildMemoryBankAgentContext({
                     process: args.process,
-                    strategyId: strategy.id,
-                    branchVersion: runtime.branchVersion,
+                    challengeText: args.challengeText,
+                    strategy,
+                    runtime,
+                    historyWindow: newHistory,
                     globalIteration: args.globalIteration,
                 }),
+                stepDescription: `Memory Bank for ${strategy.id} Iteration ${args.globalIteration}`,
+                timeoutMs: AGENT_TIMEOUT_MS,
             });
             const response = responseOutput.contextText;
             agent.memoryBank = response;
-            agent.status = 'completed';
             runtime.memoryBank = response;
             runtime.lastMemoryHistoryCount += newHistory.length;
             strategy.memoryBank = response;
-        } catch (error: any) {
-            agent.status = 'error';
-            agent.error = error.message || 'Memory bank generation failed';
-        }
+        } catch {}
         render();
     }));
 }
@@ -2870,7 +2902,6 @@ function pqfAggressivenessText(mode: string): string {
 
 async function runPqfAgents(args: {
     process: DeepthinkPipelineState;
-    parts: Part[];
     challengeText: string;
     runtimes: Map<string, BranchRuntime>;
     strategies: DeepthinkMainStrategyData[];
@@ -2878,40 +2909,17 @@ async function runPqfAgents(args: {
 }): Promise<PqfDecision[]> {
     const groups = grouped(args.strategies, PQF_GROUP_SIZE);
     const decisions: PqfDecision[] = [];
-    const allActive = allSnapshots(args.process, args.runtimes);
-    const historyByStrategy = Object.fromEntries(args.strategies.map(strategy => {
-        const runtime = args.runtimes.get(strategy.id);
-        return [strategy.id, runtime?.history.slice(-MEMORY_INTERVAL) || []];
-    }));
 
     args.process.postQualityFilterStatus = 'processing';
-    args.process.postQualityFilterIterationCount = args.globalIteration;
     render();
 
     await Promise.all(groups.map(async (group, groupIndex) => {
-        const groupSnapshots = group.map(strategy => {
-            const runtime = args.runtimes.get(strategy.id) || createRuntime(strategy);
-            return runtimeSnapshot(args.process, strategy, runtime, args.process.initialStrategies.indexOf(strategy));
-        });
-
-        const prompt = messageText(buildPqfPrompt({
-            challenge: args.challengeText,
-            groupIndex,
-            groupCount: groups.length,
-            strategiesInGroup: groupSnapshots,
-            allActiveStrategies: allActive,
-            historyByStrategy,
-            aggressiveness: pqfAggressivenessText(deps.getSelectedPqfAggressiveness()),
-        }));
-
         const agent: DeepthinkPostQualityFilterData = {
             id: `postqf-g${args.globalIteration}-${groupIndex + 1}`,
             iterationNumber: args.globalIteration,
-            requestPrompt: prompt,
             prunedStrategyIds: [],
             continuedStrategyIds: [],
             status: 'processing',
-            isDetailsOpen: true,
             groupIndex,
             groupStrategyIds: group.map(strategy => strategy.id),
         };
@@ -2921,50 +2929,42 @@ async function runPqfAgents(args: {
         try {
             const responseOutput = await callAgent({
                 process: args.process,
-                parts: args.parts.concat([{ text: prompt }]),
-                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_postQualityFilter,
-                isJson: true,
-                stepDescription: `PostQualityFilter Group ${groupIndex + 1} Iteration ${args.globalIteration}`,
-                target: agent,
-                retryField: 'retryAttempt',
-                critical: true,
-                sandboxAccess: createPqfSandboxAccess({
+                manifest: buildPqfAgentContext({
                     process: args.process,
+                    challengeText: args.challengeText,
+                    runtimes: args.runtimes,
+                    maintenanceStrategies: args.strategies,
+                    group,
                     groupIndex,
+                    groupCount: groups.length,
                     globalIteration: args.globalIteration,
-                    strategyIds: group.map(strategy => strategy.id),
                 }),
-                finalOutputContract: pqfOutputContract(group.map(strategy => strategy.id)),
+                stepDescription: `PostQualityFilter Group ${groupIndex + 1} Iteration ${args.globalIteration}`,
             });
             const response = responseOutput.contextText;
 
             const parsed = parseJson(response, `PostQualityFilter Group ${groupIndex + 1}`);
-            const validIds = new Set(group.map(strategy => strategy.id));
-            const parsedDecisions = Array.isArray(parsed.strategies) ? parsed.strategies : [];
-            parsedDecisions.forEach((item: any) => {
-                const strategyId = String(item.strategy_id || item.id || '').trim();
-                const decision = String(item.decision || '').toLowerCase() === 'update' ? 'update' : 'keep';
-                if (!validIds.has(strategyId)) return;
-                decisions.push({
-                    strategyId,
-                    decision,
-                    reasoning: String(item.reasoning || item.reason || 'No reasoning provided.'),
-                });
-            });
+            const groupDecisions = (parsed.strategies as Array<{
+                strategy_id: string;
+                decision: 'keep' | 'update';
+                reasoning: string;
+            }>).map(item => ({
+                strategyId: item.strategy_id,
+                decision: item.decision,
+                reasoning: item.reasoning,
+            }));
+            decisions.push(...groupDecisions);
 
             agent.evaluationResponse = response;
-            agent.evaluationResponseDisplay = responseOutput.displayText;
             agent.evaluationResponseFinal = responseOutput.finalText;
             agent.interactionTraceText = responseOutput.interactionTraceText;
             agent.executionTraceText = responseOutput.executionTraceText;
-            agent.rawResponse = response;
             agent.reasoning = JSON.stringify(parsed, null, 2);
-            agent.prunedStrategyIds = decisions.filter(decision => decision.decision === 'update' && validIds.has(decision.strategyId)).map(decision => decision.strategyId);
-            agent.continuedStrategyIds = decisions.filter(decision => decision.decision === 'keep' && validIds.has(decision.strategyId)).map(decision => decision.strategyId);
+            agent.prunedStrategyIds = groupDecisions.filter(decision => decision.decision === 'update').map(decision => decision.strategyId);
+            agent.continuedStrategyIds = groupDecisions.filter(decision => decision.decision === 'keep').map(decision => decision.strategyId);
             agent.status = 'completed';
         } catch (error: any) {
             agent.status = 'error';
-            agent.error = error.message || 'PostQualityFilter failed';
             throw error;
         } finally {
             render();
@@ -2973,12 +2973,12 @@ async function runPqfAgents(args: {
 
     args.process.postQualityFilterStatus = 'completed';
     render();
-    return decisions;
+    return args.strategies.map(strategy =>
+        decisions.find(candidate => candidate.strategyId === strategy.id)!);
 }
 
 async function updateStrategiesFromPqf(args: {
     process: DeepthinkPipelineState;
-    parts: Part[];
     challengeText: string;
     runtimes: Map<string, BranchRuntime>;
     decisions: PqfDecision[];
@@ -2997,10 +2997,8 @@ async function updateStrategiesFromPqf(args: {
             oldStrategyText: strategy.strategyText,
             latestSolution: latest?.solution || directSub?.solutionAttempt || '',
             latestSolutionDisplay: latest?.solutionDisplay || directSub?.solutionAttemptDisplay,
-            latestSolutionFinal: latest?.solutionFinal || directSub?.solutionAttemptFinal,
             latestCritique: latest?.critique || directSub?.solutionCritique || '',
             latestCritiqueDisplay: latest?.critiqueDisplay || directSub?.solutionCritiqueDisplay,
-            latestCritiqueFinal: latest?.critiqueFinal || directSub?.solutionCritiqueFinal,
             memoryBank: runtime.memoryBank,
             pqfReasoning: decision.reasoning,
         };
@@ -3010,12 +3008,20 @@ async function updateStrategiesFromPqf(args: {
         challenge: args.challengeText,
         decisionVector: args.decisions,
         updateRequests,
+        currentStrategies: activeStrategies(args.process).map(strategy => ({
+            id: strategy.id,
+            strategyText: strategy.strategyText,
+        })),
+        previouslyUsedStrategies: activeStrategies(args.process).flatMap(strategy =>
+            (strategy.replacementHistory || []).map(record => ({
+                id: strategy.id,
+                strategyText: record.previousStrategyText,
+            }))),
     }));
     args.process.strategyGenerationHistory = normalizeProximityHistory(args.process.strategyGenerationHistory);
 
     const replacements = await generateStrategyCandidates({
         process: args.process,
-        parts: args.parts,
         challengeText: args.challengeText,
         taskPrompt,
         strategyIds: updateRequests.map(request => request.strategyId),
@@ -3023,19 +3029,17 @@ async function updateStrategiesFromPqf(args: {
     });
     const updatedIds: string[] = [];
 
-    for (const [index, request] of updateRequests.entries()) {
-        const replacement = replacements.find(candidate => candidate.id === request.strategyId) || replacements[index];
-        const replacementText = replacement?.text || '';
-        if (!replacementText.trim()) continue;
+    for (const request of updateRequests) {
+        const replacementText = replacements.find(candidate => candidate.id === request.strategyId)!.text;
+        const strategy = args.process.initialStrategies.find(candidate => candidate.id === request.strategyId)!;
+        const runtime = args.runtimes.get(strategy.id)!;
 
-        const strategy = args.process.initialStrategies.find(candidate => candidate.id === request.strategyId);
-        const runtime = strategy ? args.runtimes.get(strategy.id) : undefined;
-        if (!strategy || !runtime) continue;
-
-        await archiveSandboxRepositoryStrategy(
-            args.process.id,
-            DEEPTHINK_SANDBOX_DIRECTORY_POLICY.strategyDirectory(strategySlotIndex(args.process, strategy.id)),
-        );
+        if (usesSandboxTransportForRun(args.process)) {
+            await archiveSandboxRepositoryStrategy(
+                args.process.id,
+                DEEPTHINK_SANDBOX_DIRECTORY_POLICY.strategyDirectory(strategySlotIndex(args.process, strategy.id)),
+            );
+        }
 
         const previousVersion = runtime.branchVersion;
         const record: DeepthinkStrategyReplacementRecord = {
@@ -3044,15 +3048,12 @@ async function updateStrategiesFromPqf(args: {
             replacementStrategyText: replacementText,
             replacedAtGlobalIteration: args.globalIteration,
             previousBranchVersion: previousVersion,
-            newBranchVersion: previousVersion + 1,
             pqfReasoning: request.pqfReasoning,
             memoryBank: runtime.memoryBank,
             latestSolution: request.latestSolution,
             latestSolutionDisplay: request.latestSolutionDisplay,
-            latestSolutionFinal: request.latestSolutionFinal,
             latestCritique: request.latestCritique,
             latestCritiqueDisplay: request.latestCritiqueDisplay,
-            latestCritiqueFinal: request.latestCritiqueFinal,
             branchHistory: runtime.history.map(entry => ({ ...entry })),
             poolHistory: runtime.poolHistory.map(entry => ({ ...entry })),
         };
@@ -3064,6 +3065,7 @@ async function updateStrategiesFromPqf(args: {
         strategy.branchVersion = previousVersion + 1;
         strategy.branchIterationCount = 0;
         strategy.memoryBank = undefined;
+        strategy.awaitingFreshHypotheses = configFor(args.process).hypothesisCount > 0;
 
         const sub = ensureDirectSubStrategy(strategy);
         sub.subStrategyText = replacementText;
@@ -3088,17 +3090,20 @@ async function updateStrategiesFromPqf(args: {
         runtime.poolHistory = [];
         runtime.memoryBank = undefined;
         runtime.lastMemoryHistoryCount = 0;
-        runtime.lastHypothesisFlushGlobalIteration = args.globalIteration;
 
-        if (args.process.strategySpecificKnowledgePackets) {
-            args.process.strategySpecificKnowledgePackets[strategy.id] = `<Strategy-Specific Information Packet for Strategy ${strategy.id}>\nThis strategy branch was replaced at global iteration ${args.globalIteration}. Previous selective hypothesis packets for this slot were flushed. Fresh hypotheses will be injected after the next hypothesis heartbeat.\n</Strategy-Specific Information Packet for Strategy ${strategy.id}>`;
-        }
+        args.process.strategySpecificKnowledgePackets = {
+            ...(args.process.strategySpecificKnowledgePackets || {}),
+            [strategy.id]: getStrategyHypothesisRoute(args.process, strategy.id).packetText,
+        };
 
         updatedIds.push(strategy.id);
     }
 
-    if (updatedIds.length > 0) {
-        await snapshotSandboxRepositoryById(args.process.id, `Deepthink iteration ${args.globalIteration} PQF branch replacement archive`);
+    if (updatedIds.length > 0 && usesSandboxTransportForRun(args.process)) {
+        args.process.repositoryRevision = await snapshotSandboxRepositoryById(
+            args.process.id,
+            `Deepthink iteration ${args.globalIteration} PQF branch replacement archive`,
+        );
     }
     render();
     return updatedIds;
@@ -3106,11 +3111,12 @@ async function updateStrategiesFromPqf(args: {
 
 async function runPostFiveIterationMaintenance(args: {
     process: DeepthinkPipelineState;
-    parts: Part[];
     challengeText: string;
     runtimes: Map<string, BranchRuntime>;
     globalIteration: number;
 }): Promise<string[]> {
+    if (!configFor(args.process).postQualityFilterEnabled) return [];
+
     const dueStrategies = activeStrategies(args.process).filter(strategy => {
         const runtime = args.runtimes.get(strategy.id);
         if (!runtime) return false;
@@ -3121,7 +3127,6 @@ async function runPostFiveIterationMaintenance(args: {
 
     const memoryPromise = runMemoryAgents({
         process: args.process,
-        parts: args.parts,
         challengeText: args.challengeText,
         runtimes: args.runtimes,
         strategies: dueStrategies,
@@ -3130,7 +3135,6 @@ async function runPostFiveIterationMaintenance(args: {
 
     const pqfPromise = runPqfAgents({
         process: args.process,
-        parts: args.parts,
         challengeText: args.challengeText,
         runtimes: args.runtimes,
         strategies: dueStrategies,
@@ -3140,7 +3144,6 @@ async function runPostFiveIterationMaintenance(args: {
     const [pqfResult] = await Promise.all([pqfPromise, memoryPromise]);
     const updatedIds = await updateStrategiesFromPqf({
         process: args.process,
-        parts: args.parts,
         challengeText: args.challengeText,
         runtimes: args.runtimes,
         decisions: pqfResult,
@@ -3155,16 +3158,13 @@ async function runPostFiveIterationMaintenance(args: {
 
         await executeSolutionAttempt({
             process: args.process,
-            parts: args.parts,
             challengeText: args.challengeText,
             strategy,
             subStrategy,
-            critical: true,
         });
         if (!subStrategy.solutionAttempt) return;
         const critique = await critiqueSolution({
             process: args.process,
-            parts: args.parts,
             challengeText: args.challengeText,
             strategy,
             subStrategy,
@@ -3179,7 +3179,7 @@ async function runPostFiveIterationMaintenance(args: {
         subStrategy.refinedSolutionDisplay = subStrategy.solutionAttemptDisplay;
         subStrategy.refinedSolutionFinal = subStrategy.solutionAttemptFinal;
         subStrategy.refinedSolutionTraceText = subStrategy.solutionAttemptTraceText;
-        subStrategy.selfImprovementStatus = 'completed';
+        subStrategy.selfImprovementStatus = 'skipped';
 
         runtime.history.push({
             globalIteration: args.globalIteration,
@@ -3188,10 +3188,8 @@ async function runPostFiveIterationMaintenance(args: {
             label: `Branch v${runtime.branchVersion} Initial Execution`,
             solution: subStrategy.solutionAttempt || '',
             solutionDisplay: subStrategy.solutionAttemptDisplay,
-            solutionFinal: subStrategy.solutionAttemptFinal,
             critique: critique || 'No critique output available.',
             critiqueDisplay: subStrategy.solutionCritiqueDisplay,
-            critiqueFinal: subStrategy.solutionCritiqueFinal,
         });
         runtime.globalIteration = args.globalIteration;
         runtime.branchIterationCount = 1;
@@ -3208,10 +3206,8 @@ async function runPostFiveIterationMaintenance(args: {
                 branchVersion: runtime.branchVersion,
                 critique: critique || 'No critique output available.',
                 critiqueDisplay: subStrategy.solutionCritiqueDisplay,
-                critiqueFinal: subStrategy.solutionCritiqueFinal,
                 correctedSolution: subStrategy.solutionAttempt || '',
                 correctedSolutionDisplay: subStrategy.solutionAttemptDisplay,
-                correctedSolutionFinal: subStrategy.solutionAttemptFinal,
                 correctedSolutionTraceText: subStrategy.solutionAttemptTraceText,
                 timestamp: Date.now(),
                 label: `Branch v${runtime.branchVersion} Initial Execution`,
@@ -3229,13 +3225,13 @@ async function runPostFiveIterationMaintenance(args: {
 
 async function runHypothesisHeartbeatIfDue(args: {
     process: DeepthinkPipelineState;
-    parts: Part[];
     challengeText: string;
     runtimes: Map<string, BranchRuntime>;
     globalIteration: number;
     updatedStrategyIds: string[];
 }): Promise<void> {
-    if (deps.getSelectedHypothesisCount() <= 0) return;
+    const config = configFor(args.process);
+    if (config.hypothesisCount <= 0) return;
     if (args.globalIteration % HYPOTHESIS_HEARTBEAT_INTERVAL !== 0) return;
 
     const snapshots = allSnapshots(args.process, args.runtimes);
@@ -3246,16 +3242,27 @@ async function runHypothesisHeartbeatIfDue(args: {
 
     const prompt = messageText(buildHypothesisRefreshPrompt({
         challenge: args.challengeText,
-        hypothesisCount: deps.getSelectedHypothesisCount(),
+        hypothesisCount: config.hypothesisCount,
         completedGlobalIteration: args.globalIteration,
         currentStrategies: snapshots,
         recentHistoryByStrategy,
-        updatedStrategyIds: args.updatedStrategyIds,
+        updatedStrategyIds: Array.from(new Set([
+            ...args.updatedStrategyIds,
+            ...activeStrategies(args.process)
+                .filter(strategy => strategy.awaitingFreshHypotheses)
+                .map(strategy => strategy.id),
+        ])),
+        previousTestingOutputs: args.process.hypotheses.map(hypothesis => ({
+            hypothesisId: hypothesis.id,
+            hypothesisText: hypothesis.hypothesisText,
+            targetStrategyIds: hypothesis.targetStrategyIds || [],
+            testerOutput: hypothesis.testerAttempt || 'No testing output available.',
+            testerStatus: hypothesis.testerStatus,
+        })),
     }));
 
     await runHypothesisRound({
         process: args.process,
-        parts: args.parts,
         challengeText: args.challengeText,
         mode: 'selective_injection',
         roundNumber: (args.process.hypothesisRounds?.length || 0) + 1,
@@ -3264,17 +3271,24 @@ async function runHypothesisHeartbeatIfDue(args: {
     });
 }
 
-/** The global iteration is the only meaningful Deepthink repository boundary.
- * Agent directories remain isolated while running, but one shared commit keeps
- * every branch's completed work together for the explorer and history view. */
+function usesSandboxTransportForRun(process: DeepthinkPipelineState): boolean {
+    return configFor(process).codeExecutionEnabled;
+}
+
+async function captureAgentRepositoryBarrier(
+    process: DeepthinkPipelineState,
+    commitMessage: string,
+): Promise<void> {
+    if (!usesSandboxTransportForRun(process)) return;
+    process.repositoryRevision = await snapshotSandboxRepositoryById(process.id, commitMessage);
+}
+
+/** Persist the completed barrier for the repository explorer and later calls. */
 async function snapshotDeepthinkRepositoryState(process: DeepthinkPipelineState, commitMessage: string): Promise<void> {
-    const sandboxEnabled = deps.getDeepthinkCodeExecutionEnabled()
-        || globalState.directContextFiles.length > 0
-        || globalState.filesystemContextFiles.length > 0;
-    if (!sandboxEnabled) return;
+    if (!usesSandboxTransportForRun(process)) return;
 
     try {
-        await snapshotSandboxRepositoryById(process.id, commitMessage);
+        await captureAgentRepositoryBarrier(process, commitMessage);
         await snapshotDeepthinkResultsRepository(
             process.id,
             commitMessage,
@@ -3291,12 +3305,10 @@ export async function snapshotDeepthinkIteration(process: DeepthinkPipelineState
 
 async function runEvolvingDepthFirstSearch(args: {
     process: DeepthinkPipelineState;
-    parts: Part[];
     challengeText: string;
 }): Promise<void> {
     args.process.structuredSolutionPoolEnabled = true;
     args.process.postQualityFilterStatus = 'pending';
-    args.process.hypothesisInjectionMode = 'selective_injection';
     render();
 
     const runtimes = new Map<string, BranchRuntime>();
@@ -3309,31 +3321,30 @@ async function runEvolvingDepthFirstSearch(args: {
 
     await runHypothesisRound({
         process: args.process,
-        parts: args.parts,
         challengeText: args.challengeText,
         mode: 'selective_injection',
         roundNumber: 1,
         globalIteration: 0,
     });
+    await captureAgentRepositoryBarrier(args.process, 'Deepthink initial hypothesis round');
 
     await runInitialExecutionsAndCritiques({
         process: args.process,
-        parts: args.parts,
         challengeText: args.challengeText,
         runtimes,
         evolvingDfsMode: true,
     });
+    await captureAgentRepositoryBarrier(args.process, 'Deepthink iteration 1 execution and critique barrier');
 
     await runSolutionPools({
         process: args.process,
-        parts: args.parts,
         challengeText: args.challengeText,
         runtimes,
         globalIteration: 1,
     });
     await snapshotDeepthinkIteration(args.process, 1);
 
-    const evolvingDfsDepth = Math.min(Math.max(deps.getEvolvingDfsDepth(), 1), 10);
+    const evolvingDfsDepth = configFor(args.process).evolvingDfsDepth;
     let recentlyUpdatedStrategyIds: string[] = [];
 
     for (let globalIteration = 2; globalIteration <= evolvingDfsDepth; globalIteration++) {
@@ -3341,15 +3352,17 @@ async function runEvolvingDepthFirstSearch(args: {
 
         await runCorrectionIteration({
             process: args.process,
-            parts: args.parts,
             challengeText: args.challengeText,
             runtimes,
             globalIteration,
         });
+        await captureAgentRepositoryBarrier(
+            args.process,
+            `Deepthink iteration ${globalIteration} correction and critique barrier`,
+        );
 
         const poolPromise = runSolutionPools({
             process: args.process,
-            parts: args.parts,
             challengeText: args.challengeText,
             runtimes,
             globalIteration,
@@ -3357,7 +3370,6 @@ async function runEvolvingDepthFirstSearch(args: {
 
         const hypothesisPromise = runHypothesisHeartbeatIfDue({
             process: args.process,
-            parts: args.parts,
             challengeText: args.challengeText,
             runtimes,
             globalIteration,
@@ -3365,9 +3377,12 @@ async function runEvolvingDepthFirstSearch(args: {
         });
 
         await Promise.all([poolPromise, hypothesisPromise]);
+        await captureAgentRepositoryBarrier(
+            args.process,
+            `Deepthink iteration ${globalIteration} pool and hypothesis barrier`,
+        );
         recentlyUpdatedStrategyIds = await runPostFiveIterationMaintenance({
             process: args.process,
-            parts: args.parts,
             challengeText: args.challengeText,
             runtimes,
             globalIteration,
@@ -3388,25 +3403,25 @@ async function runEvolvingDepthFirstSearch(args: {
 
 async function runNonIterativeRefinement(args: {
     process: DeepthinkPipelineState;
-    parts: Part[];
     challengeText: string;
 }): Promise<void> {
     await runInitialExecutionsAndCritiques({
         process: args.process,
-        parts: args.parts,
         challengeText: args.challengeText,
         runtimes: new Map(),
         evolvingDfsMode: false,
     });
+    await captureAgentRepositoryBarrier(args.process, 'Deepthink single-pass execution and critique barrier');
 
-    if (!deps.getRefinementEnabled()) {
+    const config = configFor(args.process);
+    if (!config.refinementEnabled) {
         activeStrategies(args.process).forEach(strategy => {
             strategy.subStrategies.forEach(sub => {
                 if (sub.solutionAttempt) {
                     sub.refinedSolution = sub.solutionAttempt;
                     sub.refinedSolutionDisplay = sub.solutionAttemptDisplay;
                     sub.refinedSolutionFinal = sub.solutionAttemptFinal;
-                    sub.selfImprovementStatus = 'completed';
+                    sub.selfImprovementStatus = 'skipped';
                 }
             });
         });
@@ -3414,59 +3429,17 @@ async function runNonIterativeRefinement(args: {
         return;
     }
 
-    if (deps.getDissectedObservationsEnabled()) {
+    if (config.dissectedObservationsEnabled) {
         args.process.dissectedSynthesisStatus = 'processing';
         render();
 
         try {
-            const solutionsWithCritiques = activeStrategies(args.process).map(strategy => {
-                const subs = strategy.subStrategies.filter(sub => sub.solutionAttempt);
-                if (subs.length === 0) return '';
-                return [
-                    `<Strategy id="${strategy.id}">`,
-                    strategy.strategyText,
-                    ...subs.map(sub => [
-                        `<SubStrategy id="${sub.id}">`,
-                        sub.subStrategyText,
-                        '<SolutionAttempt>',
-                        sub.solutionAttempt || '',
-                        '</SolutionAttempt>',
-                        '<Critique>',
-                        sub.solutionCritique || 'No critique available.',
-                        '</Critique>',
-                        '</SubStrategy>',
-                    ].join('\n')),
-                    `</Strategy>`,
-                ].join('\n');
-            }).filter(Boolean).join('\n\n');
-
-            const packet = deps.getShareHypothesesToDissected()
-                ? args.process.knowledgePacket || 'No hypothesis exploration performed.'
-                : 'Hypothesis exploration sharing is disabled for dissected observations.';
-            const prompt = buildDissectedSynthesisPrompt({
-                challengeText: args.challengeText,
-                knowledgePacket: packet,
-                solutionsWithCritiques,
-            });
-            args.process.dissectedSynthesisRequestPrompt = prompt;
-
             const synthesisResponse = await callAgent({
                 process: args.process,
-                parts: args.parts.concat([{ text: prompt }]),
-                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_dissectedSynthesis,
-                isJson: false,
+                manifest: buildDissectedSynthesisAgentContext(args.process, args.challengeText),
                 stepDescription: 'Dissected Observations Synthesis',
-                target: args.process,
-                retryField: 'dissectedSynthesisRetryAttempt',
-                critical: false,
-                sandboxAccess: createFullRepositorySandboxAccess({
-                    process: args.process,
-                    kind: 'Dissected Observations Synthesis',
-                    sessionParts: ['non-iterative'],
-                }),
             });
             args.process.dissectedObservationsSynthesis = synthesisResponse.contextText;
-            args.process.dissectedSynthesisTraceText = synthesisResponse.interactionTraceText;
             args.process.dissectedSynthesisExecutionTraceText = synthesisResponse.executionTraceText;
             args.process.dissectedSynthesisStatus = 'completed';
         } catch (error: any) {
@@ -3482,51 +3455,17 @@ async function runNonIterativeRefinement(args: {
         subStrategy.selfImprovementStatus = 'processing';
         render();
 
-        const allSolutions = deps.getProvideAllSolutionsToCorrectors()
-            ? activeStrategies(args.process).flatMap(strategyItem => strategyItem.subStrategies.map(sub => [
-                `<Candidate strategy="${strategyItem.id}" subStrategy="${sub.id}" assigned="${sub.id === subStrategy.id}">`,
-                strategyItem.strategyText,
-                sub.subStrategyText,
-                sub.solutionAttempt || '',
-                sub.solutionCritique || '',
-                '</Candidate>',
-            ].join('\n'))).join('\n\n')
-            : '';
-
-        const solutionSection = [
-            subStrategy.solutionCritique || 'No critique available.',
-            args.process.dissectedObservationsSynthesis ? `\n\n<Dissected Observations Synthesis>\n${args.process.dissectedObservationsSynthesis}\n</Dissected Observations Synthesis>` : '',
-            allSolutions ? `\n\n<All Solutions Context>\n${allSolutions}\n</All Solutions Context>` : '',
-        ].join('');
-
-        const prompt = buildSelfImprovementPrompt({
-            challengeText: args.challengeText,
-            mainStrategy: strategy.strategyText,
-            subStrategy: subStrategy.subStrategyText,
-            solutionAttempt: subStrategy.solutionAttempt || '',
-            solutionSection,
-        });
-        subStrategy.requestPromptSelfImprovement = prompt;
-
         try {
             const response = await callAgent({
                 process: args.process,
-                parts: args.parts.concat([{ text: prompt }]),
-                systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_selfImprovement,
-                isJson: false,
-                stepDescription: `Self-Improvement for ${subStrategy.id}`,
-                target: subStrategy,
-                retryField: 'selfImprovementRetryAttempt',
-                timeoutMs: AGENT_TIMEOUT_MS,
-                critical: false,
-                sandboxAccess: createPersistentSandboxAccess({
+                manifest: buildSelfImprovementAgentContext({
                     process: args.process,
-                    kind: 'Self-Improvement',
-                    strategyId: strategy.id,
-                    subStrategyId: subStrategy.id,
-                    branchVersion: strategy.branchVersion || 1,
-                    includeAllSolutionContextDirectories: deps.getProvideAllSolutionsToCorrectors(),
+                    challengeText: args.challengeText,
+                    strategy,
+                    subStrategy,
                 }),
+                stepDescription: `Self-Improvement for ${subStrategy.id}`,
+                timeoutMs: AGENT_TIMEOUT_MS,
             });
             subStrategy.refinedSolution = response.contextText;
             subStrategy.refinedSolutionDisplay = response.displayText;
@@ -3534,15 +3473,14 @@ async function runNonIterativeRefinement(args: {
             subStrategy.refinedSolutionTraceText = response.interactionTraceText;
             subStrategy.refinedSolutionExecutionTraceText = response.executionTraceText;
             subStrategy.selfImprovementStatus = 'completed';
-        } catch (error: any) {
+        } catch {
             subStrategy.selfImprovementStatus = 'error';
-            subStrategy.selfImprovementError = error.message || 'Self-improvement failed';
         }
         render();
     })));
 }
 
-async function finalJudge(process: DeepthinkPipelineState, parts: Part[], challengeText: string): Promise<void> {
+async function finalJudge(process: DeepthinkPipelineState, challengeText: string): Promise<void> {
     process.finalJudgingStatus = 'processing';
     render();
 
@@ -3560,60 +3498,21 @@ async function finalJudge(process: DeepthinkPipelineState, parts: Part[], challe
         return;
     }
 
-    const finalSolutionsText = allSolutions.map((solution, index) => [
-        `<SOLUTION_${index + 1}>`,
-        `ID: ${solution.id}`,
-        `Main Strategy: ${solution.mainStrategyId}`,
-        `Sub-Strategy: ${solution.subStrategyText}`,
-        'Solution Text:',
-        solution.solution,
-        `</SOLUTION_${index + 1}>`,
-    ].join('\n')).join('\n\n');
-
-    const prompt = `Original Challenge:
-${challengeText}
-
-Below are ${allSolutions.length} candidate solutions from different strategic approaches. Select the single overall best solution.
-
-Return JSON:
-{"best_solution_id":"ID of the winning solution","final_reasoning":"Detailed comparison based only on provided texts"}
-
-${finalSolutionsText}`;
-
-    process.finalJudgingRequestPrompt = prompt;
-
     try {
         const responseOutput = await callAgent({
             process,
-            parts: parts.concat([{ text: prompt }]),
-            systemInstruction: deps.customPromptsDeepthinkState.sys_deepthink_finalJudge,
-            isJson: true,
+            manifest: buildFinalJudgeAgentContext(process, challengeText, allSolutions),
             stepDescription: 'Final Judging',
-            target: process,
-            retryField: 'finalJudgingRetryAttempt',
             timeoutMs: AGENT_TIMEOUT_MS,
-            critical: false,
-            sandboxAccess: createFullRepositorySandboxAccess({
-                process,
-                kind: 'Final Judge',
-                sessionParts: ['final'],
-            }),
-            finalOutputContract: finalJudgeOutputContract(),
         });
         const response = responseOutput.contextText;
         process.finalJudgingResponseText = response;
-        process.finalJudgingTraceText = responseOutput.interactionTraceText;
         process.finalJudgingExecutionTraceText = responseOutput.executionTraceText;
         const parsed = parseJson(response, 'Final Judge');
-        if (!parsed.best_solution_id || !parsed.final_reasoning) {
-            throw new Error('Final Judge response is missing best_solution_id or final_reasoning.');
-        }
-
-        const winningSolution = allSolutions.find(solution => solution.id === parsed.best_solution_id);
-        process.finalJudgedBestStrategyId = winningSolution?.id || parsed.best_solution_id;
+        const winningSolution = allSolutions.find(solution => solution.id === parsed.best_solution_id)!;
         process.finalJudgedBestSolution = `**Solution ID:** <span class="sub-strategy-purple-id">${parsed.best_solution_id}</span>
 
-**Origin:** ${winningSolution ? `${winningSolution.subStrategyText} from ${winningSolution.mainStrategyId}` : `Solution ${parsed.best_solution_id}`}
+**Origin:** ${winningSolution.subStrategyText} from ${winningSolution.mainStrategyId}
 
 **Final Reasoning:**
 ${parsed.final_reasoning}
@@ -3621,7 +3520,7 @@ ${parsed.final_reasoning}
 ---
 
 **Definitive Solution:**
-${winningSolution?.solution || parsed.final_solution_text || 'Solution not found'}`;
+${winningSolution.solution}`;
         process.finalJudgingStatus = 'completed';
     } catch (error: any) {
         process.finalJudgingStatus = 'error';
@@ -3630,29 +3529,33 @@ ${winningSolution?.solution || parsed.final_solution_text || 'Solution not found
     render();
 }
 
-export async function startDeepthinkAnalysisProcess(challengeText: string, imageBase64?: string | null, imageMimeType?: string | null) {
+export async function startDeepthinkAnalysisProcess(challengeText: string) {
     const currentAIProvider = deps.getAIProvider();
     if (!currentAIProvider) {
         alert('AI provider not initialized. Please check your API key configuration.');
         return;
     }
 
-    activeDeepthinkPipeline = createPipeline(challengeText, imageBase64, imageMimeType);
+    const runConfig = captureRunConfig();
+    activeDeepthinkPipeline = createPipeline(challengeText, runConfig);
+    runAttachments.set(activeDeepthinkPipeline.id, buildDeepthinkAttachments({
+        directFiles: globalState.directContextFiles,
+        filesystemFiles: runConfig.codeExecutionEnabled
+            ? globalState.filesystemContextFiles
+            : [],
+    }));
     if (setActiveDeepthinkPipeline) setActiveDeepthinkPipeline(activeDeepthinkPipeline);
     deps.updateControlsState({ isGenerating: true });
     addLiveEvent(activeDeepthinkPipeline, 'Orchestrator', 'Initializing Deepthink pipeline', 'info');
     render();
 
     const process = activeDeepthinkPipeline;
-    const parts = buildImageParts(imageBase64, imageMimeType);
-    const modelChallengeText = `${challengeText}${getDirectTextContext()}`;
-    const evolvingDfsMode = deps.getRefinementEnabled() && deps.getEvolvingDfsEnabled();
-    process.hypothesisInjectionMode = evolvingDfsMode ? 'selective_injection' : deps.getHypothesisInjectionMode();
+    const modelChallengeText = runConfig.codeExecutionEnabled
+        ? challengeText
+        : `${challengeText}${buildTextAttachmentContext(attachmentsFor(process))}`;
+    const evolvingDfsMode = runConfig.evolvingDfsEnabled;
 
-    const sandboxEnabled = deps.getDeepthinkCodeExecutionEnabled()
-        || globalState.directContextFiles.length > 0
-        || globalState.filesystemContextFiles.length > 0;
-    if (sandboxEnabled) {
+    if (usesSandboxTransportForRun(process)) {
         try {
             await ensureDeepthinkResultsRepository(process.id);
         } catch (error) {
@@ -3662,27 +3565,27 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
     }
 
     try {
-        await generateStrategies(process, parts, modelChallengeText, evolvingDfsMode);
-        await generateSubStrategies(process, parts, modelChallengeText);
+        await generateStrategies(process, modelChallengeText);
+        await generateSubStrategies(process, modelChallengeText);
 
         if (!evolvingDfsMode) {
             await runHypothesisRound({
                 process,
-                parts,
                 challengeText: modelChallengeText,
-                mode: process.hypothesisInjectionMode || 'selective_injection',
+                mode: runConfig.hypothesisInjectionMode,
                 roundNumber: 1,
                 globalIteration: 0,
             });
-            await runNonIterativeRefinement({ process, parts, challengeText: modelChallengeText });
+            await captureAgentRepositoryBarrier(process, 'Deepthink initial hypothesis round');
+            await runNonIterativeRefinement({ process, challengeText: modelChallengeText });
         } else {
-            await runEvolvingDepthFirstSearch({ process, parts, challengeText: modelChallengeText });
+            await runEvolvingDepthFirstSearch({ process, challengeText: modelChallengeText });
         }
 
         if (process.isStopRequested) throw new PipelineStopRequestedError('Stopped before final judging.');
 
-        process.strategicSolverComplete = true;
-        await finalJudge(process, parts, modelChallengeText);
+        await captureAgentRepositoryBarrier(process, 'Deepthink final candidate barrier');
+        await finalJudge(process, modelChallengeText);
         await snapshotDeepthinkRepositoryState(process, 'Deepthink final judge');
         process.status = 'completed';
     } catch (error: any) {
@@ -3693,6 +3596,7 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, image
             process.error = error.message || String(error);
         }
     } finally {
+        runAttachments.delete(process.id);
         deps.updateControlsState({ isGenerating: false });
         render();
     }

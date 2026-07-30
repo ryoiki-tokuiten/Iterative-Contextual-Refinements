@@ -16,6 +16,8 @@ import {
     SolutionPoolParsedSolution,
     SolutionPoolParsedResponse,
     computeIterationCount,
+    downloadSolutionPoolAsJSON,
+    openSolutionPoolEvolution,
 } from './SolutionPool';
 import RenderMathMarkdown from '../Styles/Components/RenderMathMarkdown';
 import { Icon } from '../UI/Icons';
@@ -500,9 +502,7 @@ export const SolutionPoolTabContent: React.FC<{ process: DeepthinkPipelineState 
                                                         {solutionCount && <span className="sp-count-badge">{solutionCount} solutions</span>}
                                                         <button
                                                             className="view-argument-button view-pool-button"
-                                                            data-strategy-id={branch.strategyId}
-                                                            data-branch-version={branch.branchVersion}
-                                                            data-iteration={iteration}
+                                                            onClick={() => openSolutionPoolModal(branch.strategyId, iteration, branch.branchVersion)}
                                                         >
                                                             <Icon name="visibility" /> View Solution Pool
                                                         </button>
@@ -536,13 +536,13 @@ const SolutionPoolHeader: React.FC<{ processId: string }> = ({ processId }) => (
             </div>
         </div>
         <div className="solution-pool-header-buttons">
-            <button className="solution-pool-current-button" data-pipeline-id={processId}>
+            <button className="solution-pool-current-button" onClick={() => openCurrentSolutionPool(processId)}>
                 <Icon name="database" /> Current Pool
             </button>
-            <button className="solution-pool-download-button" data-pipeline-id={processId}>
+            <button className="solution-pool-download-button" onClick={() => downloadSolutionPoolAsJSON(processId)}>
                 <Icon name="download" /> Download Pool (JSON)
             </button>
-            <button className="solution-pool-evolution-button" data-pipeline-id={processId}>
+            <button className="solution-pool-evolution-button" onClick={() => openSolutionPoolEvolution(processId)}>
                 <Icon name="timeline" /> View Evolution
             </button>
         </div>
@@ -550,7 +550,7 @@ const SolutionPoolHeader: React.FC<{ processId: string }> = ({ processId }) => (
 );
 
 // ═══════════════════════════════════════════════════════════════════════
-// Imperative Mount Functions (called from Deepthink.ts event handlers)
+// Imperative Mount Functions
 // ═══════════════════════════════════════════════════════════════════════
 
 let panelRoot: Root | null = null;
@@ -566,7 +566,7 @@ function unmountPanel(): void {
     }
 }
 
-export function openSolutionPoolModal(strategyId: string, iteration: number, branchVersion?: number): void {
+function openSolutionPoolModal(strategyId: string, iteration: number, branchVersion?: number): void {
     const pipeline = getActiveDeepthinkPipeline();
     if (!pipeline) return;
 
@@ -600,7 +600,7 @@ export function openSolutionPoolModal(strategyId: string, iteration: number, bra
     );
 }
 
-export function openCurrentSolutionPool(pipelineId: string): void {
+function openCurrentSolutionPool(pipelineId: string): void {
     const pipeline = getActiveDeepthinkPipeline();
     if (!pipeline || pipeline.id !== pipelineId) {
         alert('Pipeline not found.');

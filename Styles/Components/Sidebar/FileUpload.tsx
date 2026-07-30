@@ -160,7 +160,7 @@ export const FileUpload: React.FC = () => {
 
     const [currentMode, setCurrentMode] = useState<ApplicationMode>(globalState.currentMode as ApplicationMode);
     const [deepthinkSandboxEnabled, setDeepthinkSandboxEnabled] = useState(false);
-    const [adaptiveSandboxEnabled, setAdaptiveSandboxEnabled] = useState(globalState.geminiCodeExecutionEnabled);
+    const [adaptiveSandboxEnabled, setAdaptiveSandboxEnabled] = useState(globalState.virtualEnvironmentEnabled);
 
     React.useEffect(() => {
         try {
@@ -180,7 +180,7 @@ export const FileUpload: React.FC = () => {
             setCurrentMode(globalState.currentMode as ApplicationMode);
         };
         const handleSandboxToggle = () => {
-            setAdaptiveSandboxEnabled(globalState.geminiCodeExecutionEnabled);
+            setAdaptiveSandboxEnabled(globalState.virtualEnvironmentEnabled);
             try {
                 setDeepthinkSandboxEnabled(getRoutingManager().getDeepthinkConfigController().isCodeExecutionEnabled());
             } catch (e) {

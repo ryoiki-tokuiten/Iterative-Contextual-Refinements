@@ -247,7 +247,6 @@ export const DefaultSolutionUI: React.FC<{
 export const SubStrategyComparisonUI: React.FC<{
     subStrategy: DeepthinkSubStrategyData;
     refinementEnabled: boolean;
-    escapeHtml: (s: string) => string;
 }> = ({ subStrategy, refinementEnabled }) => {
     const refinementWasPerformed = subStrategy.refinedSolution !== subStrategy.solutionAttempt;
     const refinedIcon = refinementEnabled ? 'verified' : 'auto_fix_off';
@@ -395,8 +394,6 @@ interface StructuredReasoningEvaluation {
 interface StructuredReasoningViewModel {
     challenge?: string;
     analysisSummary?: string;
-    strategyInfo?: string;
-    verdict?: string;
     narrative?: string;
     evaluations: StructuredReasoningEvaluation[];
 }
@@ -428,18 +425,6 @@ function parseStructuredReasoning(reasoning: unknown): StructuredReasoningViewMo
     return {
         challenge: typeof parsed?.challenge === 'string' ? parsed.challenge : undefined,
         analysisSummary: typeof parsed?.analysis_summary === 'string' ? parsed.analysis_summary : undefined,
-        strategyInfo: typeof parsed?.strategy_id === 'string'
-            ? parsed.strategy_id
-            : typeof parsed?.strategy === 'string'
-                ? parsed.strategy
-                : undefined,
-        verdict: typeof parsed?.verdict === 'string'
-            ? parsed.verdict
-            : typeof parsed?.decision === 'string'
-                ? parsed.decision
-                : typeof parsed?.action === 'string'
-                    ? parsed.action
-                    : undefined,
         narrative: typeof parsed?.reasoning === 'string'
             ? parsed.reasoning
             : typeof parsed?.explanation === 'string'
@@ -457,7 +442,7 @@ function parseStructuredReasoning(reasoning: unknown): StructuredReasoningViewMo
     };
 }
 
-export const StructuredReasoningContent: React.FC<{
+const StructuredReasoningContent: React.FC<{
     reasoning: unknown;
     wrapperClassName?: string;
     resultsClassName?: string;
@@ -573,7 +558,7 @@ export const StrategicSolverTab: React.FC<{
             <div className="sub-tabs-container">
                 <div className="sub-tabs-content">
                     {process.initialStrategies.map((strategy, index) => (
-                        <div key={strategy.id} className={`sub-tab-content${index === activeIndex ? ' active' : ''}`} data-strategy-index={index}>
+                        <div key={strategy.id} className={`sub-tab-content${index === activeIndex ? ' active' : ''}`}>
                             <div className="strategy-card">
                                 {/* Nav buttons */}
                                 <div className="sub-tabs-nav">
@@ -595,7 +580,6 @@ export const StrategicSolverTab: React.FC<{
                                                 key={s.id}
                                                 className={`sub-tab-button${idx === activeIndex ? ' active' : ''}`}
                                                 title={`Strategy ${idx + 1}`}
-                                                data-strategy-index={idx}
                                                 onClick={() => onStrategyTabClick(idx)}
                                             >
                                                 {idx + 1}
@@ -734,8 +718,6 @@ const StrategyContent: React.FC<{
                 {isSkipMode && directSub && (
                     <button
                         className="view-solution-button"
-                        data-sub-strategy-id={directSub!.id}
-                        data-branch-version={selectedBranch.version}
                         onClick={() => onViewSolution(directSub!.id, selectedBranch.version)}
                     >
                         <MIcon name="visibility" /> {selectedBranch.isCurrent ? 'View Solution' : 'View Branch History'}
@@ -778,7 +760,6 @@ const SubStrategiesGrid: React.FC<{
                                     {sub.id && (
                                         <button
                                             className="view-solution-button"
-                                            data-sub-strategy-id={sub.id}
                                             onClick={() => onViewSolution(sub.id)}
                                         >
                                             <MIcon name="visibility" /> View Solution
@@ -862,9 +843,8 @@ function buildHypothesisRoundViews(process: DeepthinkPipelineState): HypothesisR
 // Hypothesis Explorer Tab
 export const HypothesisExplorerTab: React.FC<{
     process: DeepthinkPipelineState;
-    escapeHtml: (s: string) => string;
     onViewArgument: (hypothesisId: string) => void;
-}> = ({ process, escapeHtml, onViewArgument }) => {
+}> = ({ process, onViewArgument }) => {
     const roundViews = buildHypothesisRoundViews(process);
     const [activeRoundIndex, setActiveRoundIndex] = useState(Math.max(0, roundViews.length - 1));
     const [proximityVersion, setProximityVersion] = useState<number | null>(null);
@@ -920,7 +900,7 @@ export const HypothesisExplorerTab: React.FC<{
                                 <div className="agent-results">
                                     <div className="hypothesis-targets">
                                         <span>Targeting:</span>
-                                        {process.hypothesisInjectionMode === 'selective_injection' ? (
+                                        {process.runConfig?.hypothesisInjectionMode === 'selective_injection' ? (
                                             h.targetStrategyIds && h.targetStrategyIds.length > 0 ? (
                                                 h.targetStrategyIds.map(id => (
                                                     <span key={id} className="strategy-target-badge">
@@ -943,7 +923,6 @@ export const HypothesisExplorerTab: React.FC<{
                                     {hypothesisTesterDisplay(h) && (
                                         <button
                                             className="view-argument-button"
-                                            data-hypothesis-id={h.id}
                                             onClick={() => onViewArgument(h.id)}
                                         >
                                             <MIcon name="article" /> View The Argument
@@ -968,7 +947,6 @@ export const HypothesisExplorerTab: React.FC<{
             {activeRound?.packet && (
                 <KnowledgePacketSection
                     content={activeRound.packet}
-                    escapeHtml={escapeHtml}
                     process={process}
                     hypotheses={activeHypotheses}
                 />
@@ -979,7 +957,6 @@ export const HypothesisExplorerTab: React.FC<{
 
 const KnowledgePacketSection: React.FC<{
     content: string;
-    escapeHtml: (s: string) => string;
     process: DeepthinkPipelineState;
     hypotheses?: DeepthinkHypothesisData[];
 }> = ({ content, process, hypotheses }) => {
@@ -1047,7 +1024,7 @@ const KnowledgePacketSection: React.FC<{
             mappedSource.forEach((h, index) => {
                 const hypNum = index + 1; // 1-based index corresponding to Hypothesis 1, 2...
                 
-                if (process.hypothesisInjectionMode !== 'selective_injection') {
+                if (process.runConfig?.hypothesisInjectionMode !== 'selective_injection') {
                     mappedHypotheses.push(hypNum);
                 } else {
                     const isMapped = h.targetStrategyIds?.includes(strategy.id);
@@ -1064,7 +1041,7 @@ const KnowledgePacketSection: React.FC<{
                 hypotheses: mappedHypotheses
             };
         });
-    }, [hypotheses, process.hypotheses, process.initialStrategies, process.hypothesisInjectionMode]);
+    }, [hypotheses, process.hypotheses, process.initialStrategies, process.runConfig?.hypothesisInjectionMode]);
 
     return (
         <div className="knowledge-packet-section">
@@ -1211,7 +1188,6 @@ export const DissectedObservationsTab: React.FC<{
                                         {critique.critiqueResponse ? (
                                             <button
                                                 className="view-critique-button"
-                                                data-critique-id={critique.id}
                                                 onClick={() => onViewCritique(critique.id)}
                                             >
                                                 <MIcon name="rate_review" /> View Full Critique
@@ -1246,7 +1222,6 @@ export const DissectedObservationsTab: React.FC<{
                                     <div className="agent-reasoning-section">
                                         <button
                                             className="view-critique-button"
-                                            data-critique-substrategy-id={directSub.id}
                                             onClick={() => onViewSubStrategyCritique(directSub.id)}
                                         >
                                             <MIcon name="rate_review" /> View Full Critique
@@ -1322,7 +1297,6 @@ export const EvolutionFilterTab: React.FC<{
                                         <button
                                             type="button"
                                             className="reasoning-fullscreen-btn reasoning-pill"
-                                            data-agent-id={agent.id}
                                             onClick={() => onViewReasoning(agent.id)}
                                         >
                                             <div className="pill-content">

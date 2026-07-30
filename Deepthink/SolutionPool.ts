@@ -46,11 +46,6 @@ export function addSolutionPoolVersion(pipelineId: string, poolContent: string, 
     versions.push({ content: poolContent, title: `Iteration ${iterationNumber}`, timestamp: Date.now() });
 }
 
-/** Clears stored versions for a pipeline. */
-export function clearSolutionPoolVersions(pipelineId: string): void {
-    solutionPoolVersions.delete(sessionKey(pipelineId));
-}
-
 /** Returns a defensive copy of the version history, or null if empty. */
 export function getSolutionPoolVersionsForExport(pipelineId: string): SolutionPoolVersion[] | null {
     const versions = solutionPoolVersions.get(sessionKey(pipelineId));
@@ -61,11 +56,6 @@ export function getSolutionPoolVersionsForExport(pipelineId: string): SolutionPo
 export function restoreSolutionPoolVersions(pipelineId: string, versions: SolutionPoolVersion[]): void {
     if (!pipelineId || !versions?.length) return;
     solutionPoolVersions.set(sessionKey(pipelineId), [...versions]);
-}
-
-/** Returns the raw version array reference for read-only consumption by the UI layer. */
-export function getSolutionPoolVersions(pipelineId: string): SolutionPoolVersion[] | undefined {
-    return solutionPoolVersions.get(sessionKey(pipelineId));
 }
 
 // ═══════════════════════════════════════════════════════════════════════

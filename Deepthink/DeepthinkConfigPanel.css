@@ -19,9 +19,7 @@
     --dt-purple-rgb: 139, 92, 246;
     --dt-pink-rgb: 236, 72, 153;
     --dt-green-rgb: 34, 197, 94;
-    --dt-teal-rgb: 45, 212, 191;
     --dt-yellow-rgb: 245, 158, 11;
-    --dt-orange-rgb: 249, 115, 22;
     --accent-silent-blue-rgb: 79, 110, 138;
     --accent-silent-green-rgb: 16, 185, 129;
 
@@ -220,16 +218,16 @@
         }
     }
 
-    :is(& .strategy-execution-container .slider, .adaptive-strategy-proximity-slider) {
+    & .strategy-execution-container .slider {
         &::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
             width: 20px;
             height: 20px;
-            border: 3px solid var(--dt-red);
+            border: 3px solid var(--dt-red, #e86b6b);
             border-radius: 50%;
             background: var(--card-bg-color, #1e1e24);
-            box-shadow: 0 2px 8px rgba(var(--dt-red-rgb), 0.4);
+            box-shadow: 0 2px 8px rgba(var(--dt-red-rgb, 232, 107, 107), 0.4);
             cursor: pointer;
             transition: transform var(--transition-speed-fast) var(--easing-curve);
 
@@ -241,10 +239,10 @@
         &::-moz-range-thumb {
             width: 20px;
             height: 20px;
-            border: 3px solid var(--dt-red);
+            border: 3px solid var(--dt-red, #e86b6b);
             border-radius: 50%;
             background: var(--card-bg-color, #1e1e24);
-            box-shadow: 0 2px 8px rgba(var(--dt-red-rgb), 0.4);
+            box-shadow: 0 2px 8px rgba(var(--dt-red-rgb, 232, 107, 107), 0.4);
             cursor: pointer;
             transition: transform var(--transition-speed-fast) var(--easing-curve);
 
@@ -344,20 +342,15 @@
         opacity: 0.7;
     }
 
-    & :is(.refinement-method-card, .post-quality-filter-card) {
+    & .refinement-method-card {
         &.disabled {
             opacity: 0.38;
             cursor: not-allowed;
 
-            & .method-card-description,
             & input[disabled] {
                 pointer-events: none;
             }
         }
-    }
-
-    & .post-quality-filter-card.disabled .refinement-card-vis {
-        opacity: 0.25;
     }
 }
 
@@ -424,17 +417,6 @@
    ========================================================================== */
 
 .deepthink-config-scroll-container {
-    & .post-quality-filter-card-wrapper {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        margin-top: 12px;
-
-        & .refinement-method-card {
-            flex: 1;
-        }
-    }
-
     & .refinement-methods {
         flex: 1;
         display: flex;
@@ -626,7 +608,7 @@
         border-radius: var(--border-radius-md);
         background-color: rgba(var(--dt-blue-rgb), 0.015);
 
-        :is(& .slider, .adaptive-hypothesis-proximity-slider) {
+        & .slider {
             border-color: rgba(var(--dt-blue-rgb), 0.15);
 
             &::-webkit-slider-thumb {
@@ -768,13 +750,6 @@
         justify-content: center;
         margin: 0;
     }
-}
-
-.token-summary-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
-    margin-bottom: 8px;
 }
 
 .token-summary-item {
@@ -1157,13 +1132,6 @@ button.token-summary-item {
 
     &.disabled .refinement-card-vis {
         opacity: 0.4;
-    }
-}
-
-.post-quality-filter-card {
-    &:has(:is(.method-checkbox:checked, .method-checkbox-custom.checked)) .refinement-card-vis {
-        border-color: rgba(var(--dt-pink-rgb), 0.35);
-        background: rgba(var(--dt-pink-rgb), 0.04);
     }
 }
 
@@ -1653,7 +1621,6 @@ body.light-mode {
 
         & :is(
             .refinement-method-card,
-            .post-quality-filter-card,
             .strategy-execution-card,
             .hypothesis-controls,
             .information-packet-window,
@@ -1665,7 +1632,7 @@ body.light-mode {
             box-shadow: 0 1px 6px rgba(0, 0, 0, 0.02);
         }
 
-        & :is(.refinement-method-card, .post-quality-filter-card) {
+        & .refinement-method-card {
             background: rgba(255, 255, 255, 0.85);
         }
     }
@@ -1674,8 +1641,7 @@ body.light-mode {
         .input-label,
         .method-name,
         .window-title,
-        .evolution-filter-options-header,
-        .refinement-master-title
+        .evolution-filter-options-header
     ) {
         color: #1a1a24;
     }
@@ -1714,11 +1680,6 @@ body.light-mode {
     & .refinement-method-card:has(.method-checkbox:checked) .refinement-card-vis {
         border-color: rgba(var(--dt-purple-rgb), 0.45);
         background: rgba(var(--dt-purple-rgb), 0.06);
-    }
-
-    & .post-quality-filter-card:has(:is(.method-checkbox:checked, .method-checkbox-custom.checked)) .refinement-card-vis {
-        border-color: rgba(var(--dt-pink-rgb), 0.45);
-        background: rgba(var(--dt-pink-rgb), 0.06);
     }
 
     & .critique-node {
@@ -1887,7 +1848,7 @@ body.light-mode {
     }
 }
 
-:is(#temperature-slider, #top-p-slider, #refinement-stages-slider) {
+:is(#temperature-slider, #top-p-slider) {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;

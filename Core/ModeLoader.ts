@@ -125,8 +125,9 @@ export async function ensureDeepthinkInitialized(): Promise<DeepthinkModule> {
             getDeepthinkCodeExecutionEnabled: () => routingManager.getDeepthinkConfigController().isCodeExecutionEnabled(),
             getHypothesisInjectionMode,
             getSelectedThinkingLevel,
-            cleanTextOutput: (text: string) => text.trim(),
-            customPromptsDeepthinkState: globalState.customPromptsDeepthinkState,
+            getCustomPromptsDeepthinkState: () =>
+                routingManager.getPromptsManager()?.getDeepthinkPrompts()
+                || globalState.customPromptsDeepthinkState,
             tabsNavContainer: document.getElementById('tabs-nav-container'),
             pipelinesContentContainer: document.getElementById('pipelines-content-container'),
             setActiveDeepthinkPipeline: (pipeline: any) => {

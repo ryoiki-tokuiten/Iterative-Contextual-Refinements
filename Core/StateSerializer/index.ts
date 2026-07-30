@@ -20,10 +20,8 @@ export {
 export {
     CURRENT_STATE_VERSION,
     type VersionedState,
-    type ExportedConfigV1,
+    type ExportedConfig,
     isVersionedState,
-    migrateToLatest,
-    convertLegacyToVersioned,
 } from './StateVersion';
 
 // Serialization engine

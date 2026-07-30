@@ -14,20 +14,16 @@ export interface ProximityTurn {
 export function normalizeProximityHistory(value: unknown): ProximityTurn[] {
     if (!Array.isArray(value)) return [];
     return value.flatMap(entry => {
-        if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
-            const turn = entry as Partial<ProximityTurn>;
-            if ((turn.role === 'generator' || turn.role === 'proximity') && typeof turn.content === 'string') {
-                return [{
-                    role: turn.role,
-                    content: turn.content,
-                    version: Number.isFinite(turn.version) ? Number(turn.version) : 1,
-                }];
-            }
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+        const turn = entry as Partial<ProximityTurn>;
+        if ((turn.role !== 'generator' && turn.role !== 'proximity') || typeof turn.content !== 'string') {
             return [];
         }
-        if (typeof entry !== 'string') return [];
-        const role = /proximity review/i.test(entry) ? 'proximity' as const : 'generator' as const;
-        return [{ role, content: entry, version: 1 }];
+        return [{
+            role: turn.role,
+            content: turn.content,
+            version: Number.isFinite(turn.version) ? Number(turn.version) : 1,
+        }];
     });
 }
 

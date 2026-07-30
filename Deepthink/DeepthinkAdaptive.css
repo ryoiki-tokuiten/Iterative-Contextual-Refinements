@@ -175,38 +175,6 @@
     -webkit-backdrop-filter: var(--card-blur-effect) !important;
 }
 
-/* Simulated cursor animation */
-.simulated-cursor {
-    position: fixed;
-    width: 24px;
-    height: 24px;
-    background: radial-gradient(circle, rgba(var(--accent-blue-rgb), 0.8) 0%, rgba(var(--accent-blue-rgb), 0.3) 70%, transparent 100%);
-    border: 2px solid var(--accent-blue);
-    border-radius: 50%;
-    pointer-events: none;
-    z-index: 10000;
-    transform: translate(-50%, -50%);
-    animation: cursorPulse 0.6s ease-in-out;
-    box-shadow: 0 0 20px rgba(var(--accent-blue-rgb), 0.6);
-}
-
-@keyframes cursorPulse {
-    0% {
-        transform: translate(-50%, -50%) scale(0.5);
-        opacity: 0;
-    }
-
-    50% {
-        transform: translate(-50%, -50%) scale(1.2);
-        opacity: 1;
-    }
-
-    100% {
-        transform: translate(-50%, -50%) scale(1);
-        opacity: 0.9;
-    }
-}
-
 /* Tabs for embedded Deepthink - SMALLER VERSIONS only for embedded panel */
 .adaptive-deepthink-embedded-panel .tabs-nav-container {
     background: rgba(var(--bg-color-rgb), 0.5);
@@ -231,14 +199,6 @@
     font-size: 1.05rem !important;
 }
 
-.adaptive-deepthink-embedded-panel .tab-button.deepthink-mode-tab.simulated-hover {
-    background: rgba(var(--card-bg-base-rgb), 0.9) !important;
-    border-color: var(--accent-blue) !important;
-    color: var(--accent-blue) !important;
-    transform: translateY(-2px) !important;
-    box-shadow: 0 4px 12px rgba(var(--accent-blue-rgb), 0.3) !important;
-}
-
 /* Content wrapper for embedded Deepthink - MUST DELEGATE SCROLLING TO TABS */
 .adaptive-deepthink-embedded-panel .pipelines-content-container {
     flex: 1;
@@ -250,26 +210,6 @@
     min-height: 0;
     height: 100%;
     position: relative;
-}
-
-/* Simulated hover effects for automated interactions */
-.simulated-hover {
-    background: rgba(var(--accent-blue-rgb), 0.2) !important;
-    border-color: var(--accent-blue) !important;
-    transform: translateY(-2px) !important;
-    box-shadow: 0 4px 12px rgba(var(--accent-blue-rgb), 0.4) !important;
-    transition: all 0.3s ease !important;
-}
-
-.view-solution-button.simulated-hover,
-.sub-tab-button.simulated-hover {
-    background: rgba(var(--accent-green-rgb), 0.25) !important;
-    border-color: var(--accent-green) !important;
-}
-
-.agent-card.simulated-hover {
-    border-color: var(--accent-purple) !important;
-    box-shadow: 0 4px 16px rgba(var(--accent-purple-rgb), 0.3) !important;
 }
 
 /* Responsive adjustments */
@@ -293,17 +233,6 @@
         flex: none;
         height: 50%;
     }
-}
-
-/* Embedded modal container within left panel */
-.adaptive-deepthink-modal-container {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 1000;
-    pointer-events: none;
 }
 
 /* ========================================
@@ -395,10 +324,6 @@
     border-bottom: 1px solid rgba(var(--border-color-rgb), 0.3);
 }
 
-.message-icon {
-    font-size: 1.2rem;
-}
-
 .message-role {
     font-weight: 600;
     text-transform: capitalize;
@@ -438,37 +363,6 @@
     margin-bottom: 0;
 }
 
-/* Command and Tool displays */
-.message-commands,
-.message-tools {
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid rgba(var(--border-color-rgb), 0.3);
-}
-
-.commands-header,
-.tools-header {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-secondary-color);
-    margin-bottom: 0.5rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.command-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    background: rgba(var(--bg-color-rgb), 0.5);
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius-sm);
-    padding: 0.25rem 0.5rem;
-    margin: 0.25rem 0.5rem 0.25rem 0;
-    font-family: var(--font-family-mono);
-    font-size: 0.85rem;
-}
-
 /* Enhanced tool call indicator with icons */
 .tool-call-indicator {
     display: inline-flex;
@@ -501,30 +395,6 @@
     font-size: 0.85rem;
 }
 
-.command-item.diff-command {
-    background: rgba(var(--accent-yellow-rgb), 0.1);
-    border-color: rgba(var(--accent-yellow-rgb), 0.3);
-    color: var(--accent-yellow);
-}
-
-.command-item.tool-call {
-    background: rgba(var(--accent-blue-rgb), 0.1);
-    border-color: rgba(var(--accent-blue-rgb), 0.3);
-    color: var(--accent-blue);
-}
-
-.command-type {
-    font-weight: 600;
-}
-
-.command-params {
-    color: var(--text-secondary-color);
-    max-width: 300px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
 /* Tool result display */
 .tool-result {
     background: rgba(var(--bg-color-rgb), 0.5);
@@ -551,29 +421,6 @@
     max-height: 200px;
     overflow-y: auto;
     word-break: break-word;
-}
-
-/* Verifier result special styling */
-.verifier-result {
-    background: rgba(var(--accent-purple-rgb), 0.04);
-    border: 1px solid rgba(var(--accent-purple-rgb), 0.25);
-}
-
-.verifier-header {
-    background: rgba(var(--accent-purple-rgb), 0.08);
-    color: var(--accent-purple);
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 1rem 1.25rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-    border-bottom: 1px solid rgba(var(--accent-purple-rgb), 0.2);
-}
-
-.verifier-icon {
-    font-size: 1.1rem;
-    color: var(--accent-purple);
 }
 
 /* Deepthink agent result special styling */
@@ -679,16 +526,6 @@
     letter-spacing: 0.02em;
 }
 
-.tool-args-value-badge {
-    background: rgba(var(--accent-purple-rgb), 0.1);
-    color: var(--accent-purple);
-    border: 1px solid rgba(var(--accent-purple-rgb), 0.2);
-    border-radius: 4px;
-    padding: 2px 6px;
-    font-weight: 600;
-    font-size: 0.75rem;
-}
-
 .tool-args-badge {
     border-radius: 4px;
     padding: 2px 6px;
@@ -704,10 +541,6 @@
 
 .text-accent-blue {
     color: var(--accent-blue) !important;
-}
-
-.text-accent-green {
-    color: var(--accent-green) !important;
 }
 
 .text-accent-orange {
@@ -761,5 +594,3 @@
     border-bottom: none;
     padding-bottom: 0;
 }
-
-

@@ -7,37 +7,24 @@ import { globalState } from '../Core/State';
 import { getProviderForCurrentModel } from '../Routing';
 
 export function getCodeExecutionToggle(): HTMLInputElement | null {
-    return document.getElementById('gemini-code-execution-toggle') as HTMLInputElement | null;
+    return document.getElementById('sandbox-code-execution-toggle') as HTMLInputElement | null;
 }
 
 export function getContextualModeControls(): HTMLElement | null {
     return document.getElementById('contextual-mode-controls');
 }
 
-export function getGeminiCodeExecutionEnabled(): boolean {
-    return globalState.geminiCodeExecutionEnabled;
-}
-
 export function getSandboxToolExecutionEnabled(): boolean {
-    return globalState.geminiCodeExecutionEnabled;
-}
-
-export function setGeminiCodeExecutionEnabled(enabled: boolean): void {
-    globalState.geminiCodeExecutionEnabled = enabled;
-    window.dispatchEvent(new CustomEvent('sandboxToggled', { detail: { enabled } }));
+    return globalState.virtualEnvironmentEnabled;
 }
 
 export function setSandboxToolExecutionEnabled(enabled: boolean): void {
-    globalState.geminiCodeExecutionEnabled = enabled;
+    globalState.virtualEnvironmentEnabled = enabled;
     window.dispatchEvent(new CustomEvent('sandboxToggled', { detail: { enabled } }));
 }
 
 export function getCurrentProvider(): string {
     return getProviderForCurrentModel();
-}
-
-export function isGeminiProvider(): boolean {
-    return getCurrentProvider() === 'gemini';
 }
 
 export function shouldShowCodeExecutionToggle(currentMode: string): boolean {
@@ -62,10 +49,10 @@ export function setupCodeExecutionToggle(): void {
     const toggle = getCodeExecutionToggle();
     if (!toggle) return;
 
-    setToggleChecked(getGeminiCodeExecutionEnabled());
+    setToggleChecked(getSandboxToolExecutionEnabled());
 
     toggle.addEventListener('change', () => {
-        setGeminiCodeExecutionEnabled(toggle.checked);
+        setSandboxToolExecutionEnabled(toggle.checked);
         console.log('[Code Execution] Toggle changed:', toggle.checked);
     });
 }
@@ -85,11 +72,4 @@ export function updateCodeExecutionToggleVisibility(currentMode: string): void {
         provider: getCurrentProvider(),
         shouldShow
     });
-}
-
-export function initializeCodeExecutionToggle(): void {
-    const toggle = getCodeExecutionToggle();
-    if (!toggle) return;
-
-    setToggleChecked(getGeminiCodeExecutionEnabled());
 }

@@ -18,19 +18,16 @@ import {
 import { MAX_HYPOTHESIS_COUNT } from '../Routing/ModelConfig';
 import { Icon } from '../UI/Icons';
 import { disableSidebarCollapseButton } from '../UI/LayoutController';
+import type { HypothesisInjectionMode } from './DeepthinkContext';
 
-export type HypothesisInjectionMode = 'parallel' | 'strategy_aware' | 'selective_injection';
-
-export interface DeepthinkConfigPanelProps {
+interface DeepthinkConfigPanelProps {
     strategiesCount: number;
     strategyProximityLoops: number;
     subStrategiesCount: number;
     hypothesisCount: number;
     hypothesisProximityLoops: number;
-    skipSubStrategies: boolean;
     hypothesisEnabled: boolean;
     pqfMode: string;
-    postQualityFilterEnabled: boolean;
     refinementEnabled: boolean;
     dissectedObservationsEnabled: boolean;
     evolvingDfsEnabled: boolean;
@@ -50,7 +47,6 @@ export interface DeepthinkConfigPanelProps {
     onSkipSubStrategiesToggle: (skip: boolean) => void;
     onHypothesisToggle: (enabled: boolean) => void;
     onPqfModeChange: (mode: string) => void;
-    onPostQualityFilterToggle: (enabled: boolean) => void;
     onRefinementToggle: (enabled: boolean) => void;
     onDissectedObservationsToggle: (enabled: boolean) => void;
     onEvolvingDfsToggle: (enabled: boolean) => void;
@@ -206,7 +202,6 @@ interface TokenVolumeGraphProps {
 }
 
 interface RefinementMethodCardProps {
-    method: string;
     disabled?: boolean;
     children: React.ReactNode;
 }
@@ -223,10 +218,6 @@ interface EvolvingDfsCardProps {
     onDepthChange: (value: number) => void;
     onIsolateBranchesToggle: (enabled: boolean) => void;
     onSolutionPoolDisabledToggle: (disabled: boolean) => void;
-}
-
-interface DeepthinkConfigContainer extends HTMLElement {
-    __deepthinkConfigCleanup?: () => void;
 }
 
 // Static configuration
@@ -533,7 +524,6 @@ const StrategyExecutionSection: React.FC<StrategyExecutionSectionProps> = ({
                                     <span
                                         key={value}
                                         className={classNames('slider-dot', value <= subStrategiesCount && 'active')}
-                                        data-value={value}
                                     >
                                         {value}
                                     </span>
@@ -608,7 +598,6 @@ const EvolutionFilterSection: React.FC<EvolutionFilterSectionProps> = ({ pqfMode
                             pqfMode === mode.value && evolvingDfsEnabled && 'active',
                             !evolvingDfsEnabled && 'disabled',
                         )}
-                        data-value={mode.value}
                         aria-pressed={pqfMode === mode.value && evolvingDfsEnabled}
                         disabled={!evolvingDfsEnabled}
                         onClick={() => onPqfModeChange(mode.value)}
@@ -1213,8 +1202,8 @@ const TokenVolumeGraph: React.FC<TokenVolumeGraphProps> = ({
 
 // Refinement
 
-const RefinementMethodCard: React.FC<RefinementMethodCardProps> = ({ method, disabled, children }) => (
-    <div className={classNames('refinement-method-card', disabled && 'disabled')} data-method={method}>
+const RefinementMethodCard: React.FC<RefinementMethodCardProps> = ({ disabled, children }) => (
+    <div className={classNames('refinement-method-card', disabled && 'disabled')}>
         {children}
     </div>
 );
@@ -1227,7 +1216,7 @@ const SynthesisCard: React.FC<{
     onToggle: (enabled: boolean) => void;
     onShareHypothesesToDissectedChange: (share: boolean) => void;
 }> = ({ disabled, enabled, hypothesisCount, shareHypothesesToDissected, onToggle, onShareHypothesesToDissectedChange }) => (
-    <RefinementMethodCard method="synthesis" disabled={disabled}>
+    <RefinementMethodCard disabled={disabled}>
         <div className="method-card-header">
             <MethodCheckbox id="dt-dissected-observations-toggle" checked={enabled} disabled={disabled} onChange={onToggle} />
             <div className="method-card-title">
@@ -1273,7 +1262,7 @@ const FullContextCard: React.FC<{
     enabled: boolean;
     onToggle: (enabled: boolean) => void;
 }> = ({ disabled, enabled, onToggle }) => (
-    <RefinementMethodCard method="fullcontext" disabled={disabled}>
+    <RefinementMethodCard disabled={disabled}>
         <div className="method-card-header">
             <MethodCheckbox id="dt-provide-all-solutions-toggle" checked={enabled} disabled={disabled} onChange={onToggle} />
             <div className="method-card-title">
@@ -1313,7 +1302,7 @@ const EvolvingDfsCard: React.FC<EvolvingDfsCardProps> = ({
     onIsolateBranchesToggle,
     onSolutionPoolDisabledToggle,
 }) => (
-    <RefinementMethodCard method="iterative" disabled={disabled}>
+    <RefinementMethodCard disabled={disabled}>
         <div className="method-card-header">
             <MethodCheckbox id="dt-evolving-dfs-toggle" checked={enabled} disabled={disabled} onChange={onToggle} />
             <div className="method-card-title">
@@ -1497,7 +1486,7 @@ const RefinementSection: React.FC<RefinementSectionProps> = ({
 
 // Main Config Panel Component
 
-export const DeepthinkConfigPanelComponent: React.FC<DeepthinkConfigPanelProps> = props => (
+const DeepthinkConfigPanelComponent: React.FC<DeepthinkConfigPanelProps> = props => (
     <div className="deepthink-config-panel">
         <div className="deepthink-config-scroll-container">
             <div className="config-row-container">
@@ -1581,7 +1570,6 @@ function deriveProps(controller: DeepthinkController): DeepthinkConfigPanelProps
         onSkipSubStrategiesToggle: value => controller.setSkipSubStrategies(value),
         onHypothesisToggle: value => controller.setHypothesisEnabled(value),
         onPqfModeChange: value => controller.setPqfMode(value),
-        onPostQualityFilterToggle: value => controller.setPostQualityFilterEnabled(value),
         onRefinementToggle: value => controller.setRefinementEnabled(value),
         onDissectedObservationsToggle: value => controller.setDissectedObservationsEnabled(value),
         onEvolvingDfsToggle: value => controller.setEvolvingDfsEnabled(value),
@@ -1647,7 +1635,7 @@ function ensureRoot(container: HTMLElement): void {
     configPanelRoot = createRoot(configPanelContainerNode);
 }
 
-function subscribeToController(controller: DeepthinkController): () => void {
+function subscribeToController(controller: DeepthinkController): void {
     unsubscribeControllerEvents?.();
 
     const render = () => renderPanel(controller);
@@ -1663,8 +1651,6 @@ function subscribeToController(controller: DeepthinkController): () => void {
     controller.addEventListener('configchange', render);
     window.addEventListener('selectedModelChanged', render);
     unsubscribeControllerEvents = unsubscribe;
-
-    return unsubscribe;
 }
 
 /**
@@ -1674,22 +1660,13 @@ function subscribeToController(controller: DeepthinkController): () => void {
 export function renderDeepthinkConfigPanelInContainer(pipelinesContentContainer: HTMLElement): void {
     if (!pipelinesContentContainer) return;
 
-    const container = pipelinesContentContainer as DeepthinkConfigContainer;
     const controller = getDeepthinkConfigController();
 
     hideMainHeader();
     disableSidebarCollapseButton('Sidebar collapse disabled in config view');
-    ensureRoot(container);
+    ensureRoot(pipelinesContentContainer);
     renderPanel(controller);
-
-    const unsubscribe = subscribeToController(controller);
-
-    // The router invokes this opaque cleanup hook.
-    container.__deepthinkConfigCleanup = () => {
-        unsubscribe();
-        disposeRoot();
-    };
+    subscribeToController(controller);
 }
 
 export { renderDeepthinkConfigPanelInContainer as renderDeepthinkConfigPanel };
-export default DeepthinkConfigPanelComponent;

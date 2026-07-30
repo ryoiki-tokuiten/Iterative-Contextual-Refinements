@@ -49,6 +49,8 @@ export interface SandboxRepositoryAccess {
      */
     agentDirectory?: string;
     readableDirectories?: string[];
+    /** Readable directories that intentionally follow the live writable branch. */
+    liveReadableDirectories?: string[];
     /**
      * Descendant repository directories removed from otherwise readable parent
      * mounts. This preserves branch-local permissions when a child directory
@@ -59,6 +61,8 @@ export interface SandboxRepositoryAccess {
     fullRepositoryRead?: boolean;
     /** Reserved for the Adaptive Deepthink orchestrator's global workspace. */
     fullRepositoryWrite?: boolean;
+    /** Git commit used as the immutable baseline for read-only mounts. */
+    revision?: string;
 }
 
 export interface SandboxFinalOutputContract {
@@ -84,7 +88,7 @@ export async function snapshotSandboxRepository(sessionId: string, commitMessage
     if (!response.ok) throw new Error(`Sandbox snapshot failed (${response.status}).`);
 }
 
-export async function snapshotSandboxRepositoryById(repositoryId: string, commitMessage: string): Promise<string | undefined> {
+export async function snapshotSandboxRepositoryById(repositoryId: string, commitMessage: string): Promise<string> {
     const response = await fetch(`${getSandboxApiBasePath()}/snapshot`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -92,7 +96,10 @@ export async function snapshotSandboxRepositoryById(repositoryId: string, commit
     });
     if (!response.ok) throw new Error(`Sandbox snapshot failed (${response.status}).`);
     const payload = await response.json().catch(() => ({}));
-    return payload?.commit as string | undefined;
+    if (typeof payload?.commit !== 'string' || !payload.commit) {
+        throw new Error('Sandbox snapshot did not return a repository revision.');
+    }
+    return payload.commit;
 }
 
 /** Restore only one strategy branch to a pre-correction repository checkpoint. */
@@ -297,7 +304,7 @@ const finalOutputToolSchema = z.object({
 
 const SANDBOX_TOOL_NAME = 'sandbox_exec';
 const FINAL_OUTPUT_TOOL_NAME = 'final_output';
-const MAX_TOOL_TURNS = 32;
+const MAX_TOOL_TURNS = 64;
 const OMIT_TRACE_VALUE = Symbol('omitTraceValue');
 const REDACTED_THOUGHT_TRACE = '[thought content omitted from shared execution trace]';
 let sandboxEnvironmentProfilePromise: Promise<SandboxEnvironmentProfile | null> | null = null;
@@ -516,14 +523,14 @@ function createImageMessage(
 function buildUploadedFileMessage(providerName: ResolvedProvider['providerName'], files: SeedFile[]): HumanMessage | null {
     const images = files.filter(isImageUpload);
     const textFiles = files.filter(file => file.mimeType.startsWith('text/') || file.mimeType === 'application/json');
-    const nativeFiles = providerName === 'gemini' ? files : images;
+    const nativeFiles = images;
     if (nativeFiles.length === 0 && textFiles.length === 0) return null;
 
     const decodeTextFile = (file: SeedFile) => {
         try {
             const binary = atob(file.base64);
             const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
-            return new TextDecoder().decode(bytes);
+            return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
         } catch {
             return '[Unable to decode uploaded text file]';
         }
@@ -756,12 +763,13 @@ async function invokeAgentTurn(
     options: SandboxToolAgentOptions
 ): Promise<AIMessage> {
     const finalOutputToolDefinition = createFinalOutputToolDefinition(options.finalOutputContract);
+    const tools = [sandboxToolDefinition, finalOutputToolDefinition];
     if (provider.providerName === 'gemini') {
         return invokeGeminiToolAgentTurn(
             provider.providerConfig,
             messages,
             systemPrompt,
-            [sandboxToolDefinition, finalOutputToolDefinition],
+            tools,
             {
                 modelName: options.modelName,
                 temperature: options.temperature,
@@ -778,7 +786,7 @@ async function invokeAgentTurn(
             temperature: options.temperature,
             topP: options.topP
         }
-    ).bindTools([sandboxToolDefinition, finalOutputToolDefinition]);
+    ).bindTools(tools);
 
     return model.invoke([
         new SystemMessage(systemPrompt),
@@ -1301,7 +1309,7 @@ function buildExecutionTrace(args: {
 export function isContextualSandboxToolEnabled(): boolean {
     // Uploaded files are meaningful only when agents have a sandbox in which
     // to inspect them, so either upload bucket activates the runtime per run.
-    return globalState.geminiCodeExecutionEnabled
+    return globalState.virtualEnvironmentEnabled
         || globalState.directContextFiles.length > 0
         || globalState.filesystemContextFiles.length > 0;
 }

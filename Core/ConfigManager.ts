@@ -8,8 +8,7 @@
  * - MessagePack binary serialization (faster, smaller)
  * - Gzip compression (70-90% size reduction)
  * - Automatic state sanitization (resets processing states)
- * - State versioning with migrations
- * - Backward compatible with legacy JSON exports
+ * - Strict versioned state imports
  */
 
 import { globalState } from './State';
@@ -24,10 +23,8 @@ import {
     estimateSerializedSize,
     CURRENT_STATE_VERSION,
     type VersionedState,
-    type ExportedConfigV1,
+    type ExportedConfig,
     isVersionedState,
-    convertLegacyToVersioned,
-    migrateToLatest,
     type SerializationOptions,
 } from './StateSerializer';
 
@@ -175,18 +172,15 @@ export async function handleImportConfiguration(event: Event): Promise<void> {
 
     try {
         // Deserialize the file (auto-detects format and compression)
-        let rawConfig = await deserialize<unknown>(file);
+        const rawConfig = await deserialize<unknown>(file);
 
-        // Handle versioning
-        let versionedConfig: VersionedState;
-
-        if (isVersionedState(rawConfig)) {
-            // New format with version metadata
-            versionedConfig = migrateToLatest(rawConfig);
-        } else {
-            // Legacy format without version metadata
-            versionedConfig = convertLegacyToVersioned(rawConfig as Record<string, unknown>);
+        if (!isVersionedState(rawConfig)) {
+            throw new Error('Unsupported configuration file. Import a versioned Iterative Studio export.');
         }
+        if (rawConfig._version !== CURRENT_STATE_VERSION) {
+            throw new Error(`Unsupported configuration version ${rawConfig._version}. Expected version ${CURRENT_STATE_VERSION}.`);
+        }
+        const versionedConfig = rawConfig;
 
         // Apply the configuration
         await applyConfiguration(versionedConfig);
@@ -224,7 +218,7 @@ async function applyConfiguration(config: VersionedState): Promise<void> {
 
     // 4. Clear problem images for non-deepthink modes
     if (globalState.currentMode !== 'deepthink') {
-        globalState.currentProblemImages = [];
+        globalState.directContextFiles = [];
     }
 
     // 5. Update UI for mode change
@@ -240,11 +234,9 @@ async function applyConfiguration(config: VersionedState): Promise<void> {
     updateCustomPromptTextareasFromState();
 
     // 8. Restore model parameters (with delay for UI readiness)
-    if (data.modelParameters) {
-        setTimeout(() => {
-            restoreModelParameters(data.modelParameters!);
-        }, 150);
-    }
+    setTimeout(() => {
+        restoreModelParameters(data.modelParameters);
+    }, 150);
 
     // 9. Restore mode-specific state via handler
     const handler = getModeHandler(data.currentMode);
@@ -271,7 +263,7 @@ async function applyConfiguration(config: VersionedState): Promise<void> {
 /**
  * Restore custom prompts from imported configuration.
  */
-function restoreCustomPrompts(prompts: ExportedConfigV1['customPrompts']): void {
+function restoreCustomPrompts(prompts: ExportedConfig['customPrompts']): void {
     // Configuration map for restoring prompts
     // Maps the prompt key from export -> global state property -> default value generator
     const promptConfigs = [
@@ -304,16 +296,8 @@ function restoreCustomPrompts(prompts: ExportedConfigV1['customPrompts']): void 
 /**
  * Restore model parameters from imported configuration.
  */
-function restoreModelParameters(params: NonNullable<ExportedConfigV1['modelParameters']>): void {
+function restoreModelParameters(params: ExportedConfig['modelParameters']): void {
     const modelConfig = routingManager.getModelConfigManager();
-
-    // Older exports predate branch isolation, so importing one must restore the default-off behavior.
-    modelConfig.updateParameter('isolateBranches', params.isolateBranches === true);
-    // Older exports predate optional pool skipping, so they keep the normal pool behavior.
-    modelConfig.updateParameter('disableSolutionPool', params.disableSolutionPool === true);
-    // Older exports predate generator/proximity controls.
-    modelConfig.updateParameter('strategyProximityLoops', params.strategyProximityLoops ?? 2);
-    modelConfig.updateParameter('hypothesisProximityLoops', params.hypothesisProximityLoops ?? 2);
 
     // Iterate over all keys in the params object and update if strictly defined
     // This automatically handles any new parameters added to the interface
@@ -321,7 +305,7 @@ function restoreModelParameters(params: NonNullable<ExportedConfigV1['modelParam
         const paramKey = key as keyof typeof params;
         if (params[paramKey] !== undefined) {
             // Safe to cast as any because the updated internal logic handles validation if needed
-            // and the keys come from the strongly typed ExportedConfigV1['modelParameters']
+            // and the keys come from the strongly typed ExportedConfig['modelParameters']
             modelConfig.updateParameter(paramKey as any, params[paramKey]);
         }
     });
@@ -332,19 +316,4 @@ function restoreModelParameters(params: NonNullable<ExportedConfigV1['modelParam
         modelSelectionUI.syncUIWithParameters();
     }
     routingManager.getDeepthinkConfigController().emitFullStateUpdate();
-}
-
-// ============================================================================
-// LEGACY EXPORT FUNCTION - For backward compatibility
-// ============================================================================
-
-/**
- * @deprecated Use exportConfiguration('json') for human-readable exports
- * 
- * Legacy export function that produces the old JSON format.
- * Kept for backward compatibility with external tools.
- */
-export async function exportConfigurationLegacy(): Promise<void> {
-    // For backward compatibility, we'll just call the new function with JSON format
-    return exportConfiguration('json');
 }

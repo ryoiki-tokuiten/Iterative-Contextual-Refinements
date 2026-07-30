@@ -27,24 +27,6 @@
     box-sizing: border-box;
 }
 
-.panel-header-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.panel-title-left {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.8rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
 .compact-status {
     padding: 0.15rem 0.4rem !important;
     font-size: 0.6rem !important;
@@ -214,24 +196,6 @@
     height: 100%;
 }
 
-/* Panels Common */
-.panel-title {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.85rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.panel-title-icon {
-    font-size: 1.1rem;
-    color: var(--accent-blue, #00d2ff);
-}
-
 /* Right Sidebar (Timeline) */
 .live-sidebar {
     width: 320px;
@@ -373,25 +337,6 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-}
-
-.panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-right: 1rem;
-    border-bottom: 1px solid var(--border-color);
-}
-
-.panel-title-left {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.85rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 0.75rem 1rem;
 }
 
 .selected-agent-config {

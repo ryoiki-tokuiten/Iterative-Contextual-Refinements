@@ -4,7 +4,7 @@
  */
 
 import { ModelConfigManager } from './ModelConfig';
-import { DeepthinkConfigController, type DeepthinkConfigChangeEvent } from './DeepthinkConfigController';
+import { DeepthinkConfigController } from './DeepthinkConfigController';
 import { ApiCallEstimator } from './ApiCallEstimator';
 import { globalState } from '../Core/State';
 import { updateCodeExecutionToggleVisibility } from '../UI/setupCodeExecutionToggle';
@@ -24,20 +24,8 @@ export class ModelSelectionUI {
         modelSelect: HTMLSelectElement | null;
         temperatureSlider: HTMLInputElement | null;
         topPSlider: HTMLInputElement | null;
-        strategiesSlider: HTMLInputElement | null;
-        subStrategiesSlider: HTMLInputElement | null;
-        hypothesisSlider: HTMLInputElement | null;
-        refinementToggle: HTMLInputElement | null;
-        skipSubStrategiesToggle: HTMLInputElement | null;
-        dissectedObservationsToggle: HTMLInputElement | null;
-        evolvingDfsToggle: HTMLInputElement | null;
-        provideAllSolutionsToggle: HTMLInputElement | null;
-        postQualityFilterToggle: HTMLInputElement | null;
         temperatureValue: HTMLSpanElement | null;
         topPValue: HTMLSpanElement | null;
-        strategiesValue: HTMLSpanElement | null;
-        subStrategiesValue: HTMLSpanElement | null;
-        hypothesisValue: HTMLSpanElement | null;
         thinkingLevelSelect: HTMLSelectElement | null;
         thinkingLevelContainer: HTMLDivElement | null;
     };
@@ -50,20 +38,8 @@ export class ModelSelectionUI {
             modelSelect: null,
             temperatureSlider: null,
             topPSlider: null,
-            strategiesSlider: null,
-            subStrategiesSlider: null,
-            hypothesisSlider: null,
-            refinementToggle: null,
-            skipSubStrategiesToggle: null,
-            dissectedObservationsToggle: null,
-            evolvingDfsToggle: null,
-            provideAllSolutionsToggle: null,
-            postQualityFilterToggle: null,
             temperatureValue: null,
             topPValue: null,
-            strategiesValue: null,
-            subStrategiesValue: null,
-            hypothesisValue: null,
             thinkingLevelSelect: null,
             thinkingLevelContainer: null
         };
@@ -74,20 +50,8 @@ export class ModelSelectionUI {
             modelSelect: document.getElementById('model-select') as HTMLSelectElement,
             temperatureSlider: document.getElementById('temperature-slider') as HTMLInputElement,
             topPSlider: document.getElementById('top-p-slider') as HTMLInputElement,
-            strategiesSlider: document.getElementById('strategies-slider') as HTMLInputElement,
-            subStrategiesSlider: document.getElementById('sub-strategies-slider') as HTMLInputElement,
-            hypothesisSlider: document.getElementById('hypothesis-slider') as HTMLInputElement,
-            refinementToggle: document.getElementById('refinement-toggle') as HTMLInputElement,
-            skipSubStrategiesToggle: document.getElementById('skip-sub-strategies-toggle') as HTMLInputElement,
-            dissectedObservationsToggle: document.getElementById('dissected-observations-toggle') as HTMLInputElement,
-            evolvingDfsToggle: document.getElementById('evolving-dfs-toggle') as HTMLInputElement,
-            provideAllSolutionsToggle: document.getElementById('provide-all-solutions-toggle') as HTMLInputElement,
-            postQualityFilterToggle: document.getElementById('post-quality-filter-toggle') as HTMLInputElement,
             temperatureValue: document.getElementById('temperature-value') as HTMLSpanElement,
             topPValue: document.getElementById('top-p-value') as HTMLSpanElement,
-            strategiesValue: document.getElementById('strategies-value') as HTMLSpanElement,
-            subStrategiesValue: document.getElementById('sub-strategies-value') as HTMLSpanElement,
-            hypothesisValue: document.getElementById('hypothesis-value') as HTMLSpanElement,
             thinkingLevelSelect: document.getElementById('thinking-level-select') as HTMLSelectElement,
             thinkingLevelContainer: document.getElementById('thinking-level-container') as HTMLDivElement
         };
@@ -96,7 +60,6 @@ export class ModelSelectionUI {
         this.initializeModelOptions();
         this.initializeEventListeners();
         this.updateUI();
-        this.initializeRefinementState();
         this.initializeApiCallEstimator();
     }
 
@@ -108,7 +71,10 @@ export class ModelSelectionUI {
 
     private initializeApiCallEstimator(): void {
         this.apiCallEstimator = new ApiCallEstimator(this.modelConfig);
-        this.apiCallEstimator.attachListeners();
+        this.deepthinkConfig?.addEventListener('configchange', () => {
+            this.apiCallEstimator?.updateApiCallDisplay();
+        });
+        this.apiCallEstimator.updateApiCallDisplay();
     }
 
     private initializeModelOptions(): void {
@@ -552,199 +518,11 @@ export class ModelSelectionUI {
                 this.elements.topPValue!.textContent = value.toString();
             });
         }
-
-        // Strategies slider - delegate to controller
-        if (this.elements.strategiesSlider && this.elements.strategiesValue) {
-            this.elements.strategiesSlider.addEventListener('input', () => {
-                const value = parseInt(this.elements.strategiesSlider!.value);
-                if (this.deepthinkConfig) {
-                    this.deepthinkConfig.setStrategiesCount(value);
-                } else {
-                    this.modelConfig.updateParameter('strategiesCount', value);
-                }
-                this.elements.strategiesValue!.textContent = value.toString();
-            });
-        }
-
-        // Sub-strategies slider - delegate to controller
-        if (this.elements.subStrategiesSlider && this.elements.subStrategiesValue) {
-            this.elements.subStrategiesSlider.addEventListener('input', () => {
-                const value = parseInt(this.elements.subStrategiesSlider!.value);
-                if (this.deepthinkConfig) {
-                    this.deepthinkConfig.setSubStrategiesCount(value);
-                } else {
-                    this.modelConfig.updateParameter('subStrategiesCount', value);
-                }
-                this.elements.subStrategiesValue!.textContent = value.toString();
-            });
-        }
-
-        // Hypothesis slider - delegate to controller
-        if (this.elements.hypothesisSlider && this.elements.hypothesisValue) {
-            this.elements.hypothesisSlider.addEventListener('input', () => {
-                const value = parseInt(this.elements.hypothesisSlider!.value);
-                if (this.deepthinkConfig) {
-                    this.deepthinkConfig.setHypothesisCount(value);
-                } else {
-                    this.modelConfig.updateParameter('hypothesisCount', value);
-                }
-                this.elements.hypothesisValue!.textContent = value.toString();
-            });
-        }
-
-        // Refinement toggle - delegate to controller
-        if (this.elements.refinementToggle) {
-            this.elements.refinementToggle.addEventListener('change', () => {
-                const isEnabled = this.elements.refinementToggle!.checked;
-                if (this.deepthinkConfig) {
-                    this.deepthinkConfig.setRefinementEnabled(isEnabled);
-                } else {
-                    this.modelConfig.updateParameter('refinementEnabled', isEnabled);
-                }
-            });
-        }
-
-        // Sub-strategies toggle - delegate to controller
-        if (this.elements.skipSubStrategiesToggle) {
-            this.elements.skipSubStrategiesToggle.addEventListener('change', () => {
-                // Note: UI shows "Enable Sub-strategies", so checked=true means skip=false
-                const skipSubStrategies = !this.elements.skipSubStrategiesToggle!.checked;
-                if (this.deepthinkConfig) {
-                    this.deepthinkConfig.setSkipSubStrategies(skipSubStrategies);
-                } else {
-                    this.modelConfig.updateParameter('skipSubStrategies', skipSubStrategies);
-                }
-            });
-        }
-
-        // Dissected observations toggle - delegate to controller
-        if (this.elements.dissectedObservationsToggle) {
-            this.elements.dissectedObservationsToggle.addEventListener('change', () => {
-                const isEnabled = this.elements.dissectedObservationsToggle!.checked;
-                if (this.deepthinkConfig) {
-                    this.deepthinkConfig.setDissectedObservationsEnabled(isEnabled);
-                } else {
-                    this.modelConfig.updateParameter('dissectedObservationsEnabled', isEnabled);
-                }
-            });
-        }
-
-        // Evolving DFS toggle - delegate to controller
-        if (this.elements.evolvingDfsToggle) {
-            this.elements.evolvingDfsToggle.addEventListener('change', () => {
-                const isEnabled = this.elements.evolvingDfsToggle!.checked;
-                if (this.deepthinkConfig) {
-                    this.deepthinkConfig.setEvolvingDfsEnabled(isEnabled);
-                } else {
-                    this.modelConfig.updateParameter('evolvingDfsEnabled', isEnabled);
-                }
-            });
-        }
-
-        // Provide all solutions toggle - delegate to controller
-        if (this.elements.provideAllSolutionsToggle) {
-            this.elements.provideAllSolutionsToggle.addEventListener('change', () => {
-                const isEnabled = this.elements.provideAllSolutionsToggle!.checked;
-                if (this.deepthinkConfig) {
-                    this.deepthinkConfig.setProvideAllSolutionsEnabled(isEnabled);
-                } else {
-                    this.modelConfig.updateParameter('provideAllSolutionsToCorrectors', isEnabled);
-                }
-            });
-        }
-
-        // Post Quality Filter toggle - delegate to controller
-        if (this.elements.postQualityFilterToggle) {
-            this.elements.postQualityFilterToggle.addEventListener('change', () => {
-                const isEnabled = this.elements.postQualityFilterToggle!.checked;
-                if (this.deepthinkConfig) {
-                    this.deepthinkConfig.setPostQualityFilterEnabled(isEnabled);
-                } else {
-                    this.modelConfig.updateParameter('postQualityFilterEnabled', isEnabled);
-                }
-            });
-        }
-
-        // PQF buttons
-        this.initializePqfButtons();
-
-        // Hypothesis toggle
-        this.initializeHypothesisToggle();
-
-        // Subscribe to controller events for UI synchronization
-        this.subscribeToControllerEvents();
-    }
-    private initializePqfButtons(): void {
-        const pqfButtons = document.querySelectorAll('.pqf-button');
-        pqfButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                // Remove active class from all buttons
-                pqfButtons.forEach(btn => btn.classList.remove('active'));
-                // Add active class to clicked button
-                button.classList.add('active');
-                // Update model config
-                const value = (button as HTMLElement).dataset.value || 'balanced';
-                this.modelConfig.updateParameter('pqfAggressiveness', value);
-            });
-        });
-    }
-
-    private initializeHypothesisToggle(): void {
-        const hypothesisToggle = document.getElementById('hypothesis-toggle') as HTMLInputElement;
-        const hypothesisSliderContainer = document.getElementById('hypothesis-slider-container');
-        const windowHeader = document.querySelector('.information-packet-window .window-header');
-
-        const togglePacket = () => {
-            const informationPacketContent = document.getElementById('information-packet-content');
-            const executionAgentsVisualization = document.getElementById('execution-agents-visualization');
-            const hypothesisSlider = document.getElementById('hypothesis-slider') as HTMLInputElement;
-
-            if (hypothesisToggle.checked) {
-                if (hypothesisSliderContainer) hypothesisSliderContainer.classList.remove('hidden');
-                if (informationPacketContent) informationPacketContent.classList.remove('hidden');
-                if (executionAgentsVisualization) executionAgentsVisualization.classList.remove('hidden');
-
-                // Restore the slider value to the parameter
-                if (hypothesisSlider) {
-                    const sliderValue = parseInt(hypothesisSlider.value, 10);
-                    this.modelConfig.updateParameter('hypothesisCount', sliderValue);
-                }
-            } else {
-                if (hypothesisSliderContainer) hypothesisSliderContainer.classList.add('hidden');
-                if (informationPacketContent) informationPacketContent.classList.add('hidden');
-                if (executionAgentsVisualization) executionAgentsVisualization.classList.add('hidden');
-                this.modelConfig.updateParameter('hypothesisCount', 0);
-            }
-
-            // Trigger API call estimator update
-            if (this.apiCallEstimator) {
-                this.apiCallEstimator.updateApiCallDisplay();
-            }
-        };
-
-        if (hypothesisToggle && hypothesisSliderContainer) {
-            hypothesisToggle.addEventListener('change', togglePacket);
-
-            // Make the entire window header clickable to toggle the packet
-            if (windowHeader) {
-                windowHeader.addEventListener('click', (e) => {
-                    // Don't toggle if clicking directly on the toggle input itself
-                    if (e.target !== hypothesisToggle) {
-                        hypothesisToggle.checked = !hypothesisToggle.checked;
-                        togglePacket();
-                    }
-                });
-
-                // Add cursor pointer to indicate clickability
-                (windowHeader as HTMLElement).style.cursor = 'pointer';
-            }
-        }
     }
 
     private updateUI(): void {
         const params = this.modelConfig.getParameters();
 
-        // Update slider values
         if (this.elements.temperatureSlider) {
             this.elements.temperatureSlider.value = params.temperature.toString();
         }
@@ -759,49 +537,6 @@ export class ModelSelectionUI {
             this.elements.topPValue.textContent = params.topP.toString();
         }
 
-        if (this.elements.strategiesSlider) {
-            this.elements.strategiesSlider.value = params.strategiesCount.toString();
-        }
-        if (this.elements.strategiesValue) {
-            this.elements.strategiesValue.textContent = params.strategiesCount.toString();
-        }
-
-        if (this.elements.subStrategiesSlider) {
-            this.elements.subStrategiesSlider.value = params.subStrategiesCount.toString();
-        }
-        if (this.elements.subStrategiesValue) {
-            this.elements.subStrategiesValue.textContent = params.subStrategiesCount.toString();
-        }
-
-        if (this.elements.hypothesisSlider) {
-            this.elements.hypothesisSlider.value = params.hypothesisCount.toString();
-        }
-        if (this.elements.hypothesisValue) {
-            this.elements.hypothesisValue.textContent = params.hypothesisCount.toString();
-        }
-
-        if (this.elements.refinementToggle) {
-            this.elements.refinementToggle.checked = params.refinementEnabled;
-        }
-
-        if (this.elements.skipSubStrategiesToggle) {
-            this.elements.skipSubStrategiesToggle.checked = !params.skipSubStrategies;
-
-            if (this.elements.subStrategiesSlider) {
-                this.elements.subStrategiesSlider.disabled = params.skipSubStrategies;
-            }
-        }
-
-        // Update PQF aggressiveness buttons
-        const pqfButtons = document.querySelectorAll('.pqf-button');
-        pqfButtons.forEach(button => {
-            const buttonValue = (button as HTMLElement).dataset.value;
-            if (buttonValue === params.pqfAggressiveness && this.modelConfig.isEvolvingDfsEnabled()) {
-                button.classList.add('active');
-            } else {
-                button.classList.remove('active');
-            }
-        });
         this.updateThinkingLevelVisibility();
     }
 
@@ -815,161 +550,7 @@ export class ModelSelectionUI {
      */
     public syncUIWithParameters(): void {
         this.updateUI();
-        this.initializeRefinementState();
-        // Update API call estimator to reflect imported parameters
-        if (this.apiCallEstimator) {
-            this.apiCallEstimator.updateApiCallDisplay();
-        }
-    }
-
-    /**
-     * Subscribe to controller events for UI synchronization.
-     * When the controller state changes, update the UI elements to reflect the new state.
-     */
-    private subscribeToControllerEvents(): void {
-        if (!this.deepthinkConfig) return;
-
-        this.deepthinkConfig.addEventListener('configchange', (e: Event) => {
-            const event = e as DeepthinkConfigChangeEvent;
-            const state = event.detail.state;
-
-            // Update UI elements based on new state
-            this.syncUIFromControllerState(state);
-        });
-    }
-
-    /**
-     * Sync the UI elements with the controller state.
-     * This ensures the UI reflects the actual state after controller side-effects.
-     */
-    private syncUIFromControllerState(state: {
-        strategiesCount: number;
-        subStrategiesCount: number;
-        hypothesisCount: number;
-        skipSubStrategies: boolean;
-        hypothesisEnabled: boolean;
-        pqfMode: string;
-        postQualityFilterEnabled: boolean;
-        refinementEnabled: boolean;
-        dissectedObservationsEnabled: boolean;
-        evolvingDfsEnabled: boolean;
-        provideAllSolutionsEnabled: boolean;
-    }): void {
-        // Update strategies slider
-        if (this.elements.strategiesSlider && this.elements.strategiesValue) {
-            this.elements.strategiesSlider.value = state.strategiesCount.toString();
-            this.elements.strategiesValue.textContent = state.strategiesCount.toString();
-            // Update max based on Evolving Depth First Search state
-            if (this.deepthinkConfig) {
-                this.elements.strategiesSlider.max = this.deepthinkConfig.getMaxStrategies().toString();
-            }
-        }
-
-        // Update sub-strategies slider
-        if (this.elements.subStrategiesSlider && this.elements.subStrategiesValue) {
-            this.elements.subStrategiesSlider.value = state.subStrategiesCount.toString();
-            this.elements.subStrategiesValue.textContent = state.subStrategiesCount.toString();
-            this.elements.subStrategiesSlider.disabled = state.evolvingDfsEnabled || state.skipSubStrategies;
-            // Note: Don't toggle 'disabled' class on parent container - it affects unrelated sliders
-        }
-
-        // Update hypothesis slider
-        if (this.elements.hypothesisSlider && this.elements.hypothesisValue) {
-            this.elements.hypothesisSlider.value = (state.hypothesisCount > 0 ? state.hypothesisCount : 1).toString();
-            this.elements.hypothesisValue.textContent = state.hypothesisCount.toString();
-            this.elements.hypothesisSlider.disabled = !state.hypothesisEnabled;
-        }
-
-        // Update refinement toggle
-        if (this.elements.refinementToggle) {
-            this.elements.refinementToggle.checked = state.refinementEnabled;
-        }
-
-        // Update skip sub-strategies toggle
-        if (this.elements.skipSubStrategiesToggle) {
-            // UI shows "Enable Sub-strategies", so checked=true means skip=false
-            this.elements.skipSubStrategiesToggle.checked = !state.skipSubStrategies;
-            this.elements.skipSubStrategiesToggle.disabled = state.evolvingDfsEnabled;
-        }
-
-        // Update dissected observations toggle
-        if (this.elements.dissectedObservationsToggle) {
-            this.elements.dissectedObservationsToggle.checked = state.dissectedObservationsEnabled;
-            this.elements.dissectedObservationsToggle.disabled = !state.refinementEnabled || state.evolvingDfsEnabled;
-        }
-
-        // Update Evolving Depth First Search toggle
-        if (this.elements.evolvingDfsToggle) {
-            this.elements.evolvingDfsToggle.checked = state.evolvingDfsEnabled;
-            this.elements.evolvingDfsToggle.disabled = !state.refinementEnabled;
-        }
-
-        // Update provide all solutions toggle
-        if (this.elements.provideAllSolutionsToggle) {
-            this.elements.provideAllSolutionsToggle.checked = state.provideAllSolutionsEnabled;
-            this.elements.provideAllSolutionsToggle.disabled = !state.refinementEnabled || state.evolvingDfsEnabled;
-        }
-
-        // Update post quality filter toggle
-        if (this.elements.postQualityFilterToggle) {
-            this.elements.postQualityFilterToggle.checked = state.postQualityFilterEnabled;
-            this.elements.postQualityFilterToggle.disabled = !state.evolvingDfsEnabled;
-        }
-
-        // Update PQF aggressiveness buttons
-        const pqfButtons = document.querySelectorAll('.pqf-button');
-        pqfButtons.forEach(button => {
-            const value = (button as HTMLElement).dataset.value;
-            if (value === state.pqfMode && state.evolvingDfsEnabled && state.refinementEnabled) {
-                button.classList.add('active');
-            } else {
-                button.classList.remove('active');
-            }
-        });
-
-        // Update API call estimator
-        if (this.apiCallEstimator) {
-            this.apiCallEstimator.updateApiCallDisplay();
-        }
-    }
-
-    /**
-     * Initialize the state of refinement-related toggles based on master refinement toggle
-     */
-    private initializeRefinementState(): void {
-        // Use controller state if available, otherwise fall back to modelConfig
-        if (this.deepthinkConfig) {
-            const state = this.deepthinkConfig.getState();
-            this.syncUIFromControllerState(state);
-        } else {
-            const params = this.modelConfig.getParameters();
-            const isRefinementEnabled = params.refinementEnabled;
-
-            // Set initial state of dissected observations and Evolving Depth First Search toggles
-            if (this.elements.dissectedObservationsToggle) {
-                this.elements.dissectedObservationsToggle.checked = params.dissectedObservationsEnabled;
-                // Disable if refinement is off OR if Evolving Depth First Search is on
-                this.elements.dissectedObservationsToggle.disabled = !isRefinementEnabled || params.evolvingDfsEnabled;
-            }
-
-            if (this.elements.evolvingDfsToggle) {
-                this.elements.evolvingDfsToggle.checked = params.evolvingDfsEnabled;
-                // Disable if refinement is off
-                this.elements.evolvingDfsToggle.disabled = !isRefinementEnabled;
-            }
-
-            if (this.elements.provideAllSolutionsToggle) {
-                this.elements.provideAllSolutionsToggle.checked = params.provideAllSolutionsToCorrectors;
-                // Disable if refinement is off
-                this.elements.provideAllSolutionsToggle.disabled = !isRefinementEnabled;
-            }
-
-            // If Evolving Depth First Search is enabled, ensure sub-strategies is forced off and disabled
-            if (params.evolvingDfsEnabled && this.elements.skipSubStrategiesToggle) {
-                this.elements.skipSubStrategiesToggle.checked = false;
-                this.elements.skipSubStrategiesToggle.disabled = true;
-            }
-        }
+        this.apiCallEstimator?.updateApiCallDisplay();
     }
 
     private updateThinkingLevelVisibility(): void {

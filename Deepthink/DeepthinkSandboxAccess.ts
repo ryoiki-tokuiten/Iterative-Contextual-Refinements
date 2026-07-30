@@ -4,26 +4,14 @@
  *
  * Repository visibility and write ownership for Deepthink tool agents.
  *
- * The prompt context remains the authoritative coordination channel. These
- * mounts merely give agents a scoped way to inspect or produce artifacts.
+ * The prompt carries role instructions and curated coordination context.
+ * These explicit mounts may intentionally expose richer work artifacts.
  */
 
 import type { SandboxRepositoryAccess } from '../Core/SandboxToolRuntime';
+import type { DeepthinkSandboxRole } from './DeepthinkAgentRegistry';
 
-export type DeepthinkSandboxRole =
-    | 'Main Strategy Generation'
-    | 'Sub-Strategy Generation'
-    | 'Hypothesis Generation'
-    | 'Hypothesis Testing'
-    | 'Solution Attempt'
-    | 'Solution Critique'
-    | 'Dissected Observations Synthesis'
-    | 'Self-Improvement'
-    | 'Solution Correction'
-    | 'Post Quality Filter'
-    | 'Memory Bank'
-    | 'Structured Solution Pool'
-    | 'Final Judge';
+export type { DeepthinkSandboxRole } from './DeepthinkAgentRegistry';
 
 export interface DeepthinkSandboxAccessInput {
     repositoryId: string;
@@ -33,12 +21,10 @@ export interface DeepthinkSandboxAccessInput {
     hypothesisRoundNumber?: number;
     selectedHypothesisLabels?: string[];
     selectedHypothesisRoundNumber?: number;
-    previousHypothesisRoundNumbers?: number[];
     /** Used by each paired PQF call. */
     assignedStrategySlotIndexes?: number[];
     peerStrategySlotIndexes?: number[];
-    includeCritiqueForCurrentStrategy?: boolean;
-    includeAllCritiqueDirectories?: boolean;
+    repositoryRevision?: string;
 }
 
 export const DEEPTHINK_SANDBOX_DIRECTORY_POLICY = {
@@ -92,15 +78,16 @@ function fullRepositoryRead(repositoryId: string, hidePrunedStrategies = false):
  * the repository read-only and gives only /tmp as private scratch space.
  */
 export function buildDeepthinkSandboxRepositoryAccess(input: DeepthinkSandboxAccessInput): SandboxRepositoryAccess {
+    const revision = input.repositoryRevision;
     switch (input.role) {
         case 'Main Strategy Generation':
-            return fullRepositoryRead(input.repositoryId);
+            return { ...fullRepositoryRead(input.repositoryId), revision };
 
         case 'Sub-Strategy Generation':
         case 'Hypothesis Generation':
         case 'Dissected Observations Synthesis':
         case 'Final Judge':
-            return fullRepositoryRead(input.repositoryId, true);
+            return { ...fullRepositoryRead(input.repositoryId, true), revision };
 
         case 'Hypothesis Testing':
             if (!input.hypothesisLabel || !input.hypothesisRoundNumber) {
@@ -109,9 +96,8 @@ export function buildDeepthinkSandboxRepositoryAccess(input: DeepthinkSandboxAcc
             return {
                 repositoryId: input.repositoryId,
                 agentDirectory: DEEPTHINK_SANDBOX_DIRECTORY_POLICY.hypothesisDirectory(input.hypothesisRoundNumber, input.hypothesisLabel),
-                readableDirectories: unique((input.previousHypothesisRoundNumbers || [])
-                    .filter(roundNumber => roundNumber > 0 && roundNumber !== input.hypothesisRoundNumber)
-                    .map(DEEPTHINK_SANDBOX_DIRECTORY_POLICY.hypothesisRoundDirectory)),
+                readableDirectories: [],
+                revision,
             };
 
         case 'Post Quality Filter': {
@@ -120,6 +106,7 @@ export function buildDeepthinkSandboxRepositoryAccess(input: DeepthinkSandboxAcc
             return {
                 repositoryId: input.repositoryId,
                 readableDirectories: unique(assignedDirectories),
+                revision,
             };
         }
     }
@@ -138,6 +125,7 @@ export function buildDeepthinkSandboxRepositoryAccess(input: DeepthinkSandboxAcc
         return {
             repositoryId: input.repositoryId,
             readableDirectories: [currentStrategyDirectory],
+            revision,
         };
     }
 
@@ -146,6 +134,7 @@ export function buildDeepthinkSandboxRepositoryAccess(input: DeepthinkSandboxAcc
             repositoryId: input.repositoryId,
             agentDirectory: currentSolutionPoolDirectory,
             readableDirectories: unique([currentStrategyDirectory, ...peerStrategyDirectories, ...selectedHypothesisDirectories]),
+            revision,
         };
     }
 
@@ -154,7 +143,9 @@ export function buildDeepthinkSandboxRepositoryAccess(input: DeepthinkSandboxAcc
             repositoryId: input.repositoryId,
             agentDirectory: currentCritiqueDirectory,
             readableDirectories: [currentStrategyDirectory],
+            liveReadableDirectories: [currentStrategyDirectory],
             hiddenDirectories: [currentSolutionPoolDirectory],
+            revision,
         };
     }
 
@@ -176,5 +167,6 @@ export function buildDeepthinkSandboxRepositoryAccess(input: DeepthinkSandboxAcc
         agentDirectory: currentStrategyDirectory,
         readableDirectories: unique(readableDirectories),
         ...(hiddenDirectories.length ? { hiddenDirectories } : {}),
+        revision,
     };
 }

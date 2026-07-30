@@ -30,11 +30,14 @@ interface SandboxRepositoryAccessRequest {
     /** Omitted for a read-only repository view. */
     agentDirectory?: string;
     readableDirectories?: string[];
+    liveReadableDirectories?: string[];
     hiddenDirectories?: string[];
     /** Exposes the complete repository read-only. */
     fullRepositoryRead?: boolean;
     /** Exposes the complete repository read/write for the Adaptive orchestrator. */
     fullRepositoryWrite?: boolean;
+    /** Immutable Git baseline used by read-only mounts. */
+    revision?: string;
 }
 
 interface SandboxSessionMetadata {
@@ -449,12 +452,22 @@ function sanitizeRepositoryAccess(accessRequest: SandboxRepositoryAccessRequest 
     if (accessRequest.agentDirectory !== undefined && !isSafeRepositoryDirectory(accessRequest.agentDirectory)) {
         throw new Error('Invalid sandbox agent directory.');
     }
+    if (accessRequest.revision !== undefined && !/^[0-9a-f]{7,64}$/i.test(accessRequest.revision)) {
+        throw new Error('Invalid sandbox repository revision.');
+    }
 
     const readableDirectories = Array.from(new Set(accessRequest.readableDirectories || []))
         .filter(directory => directory !== accessRequest.agentDirectory)
         .map(directory => {
             if (!isSafeRepositoryDirectory(directory)) {
                 throw new Error(`Invalid readable sandbox directory: ${directory}`);
+            }
+            return directory;
+        });
+    const liveReadableDirectories = Array.from(new Set(accessRequest.liveReadableDirectories || []))
+        .map(directory => {
+            if (!isSafeRepositoryDirectory(directory) || !readableDirectories.includes(directory)) {
+                throw new Error(`Invalid live-readable sandbox directory: ${directory}`);
             }
             return directory;
         });
@@ -470,9 +483,11 @@ function sanitizeRepositoryAccess(accessRequest: SandboxRepositoryAccessRequest 
         repositoryId: accessRequest.repositoryId,
         ...(accessRequest.agentDirectory ? { agentDirectory: accessRequest.agentDirectory } : {}),
         readableDirectories,
+        liveReadableDirectories,
         hiddenDirectories,
         fullRepositoryRead: accessRequest.fullRepositoryRead === true,
         fullRepositoryWrite: accessRequest.fullRepositoryWrite === true,
+        ...(accessRequest.revision ? { revision: accessRequest.revision } : {}),
     };
 }
 
@@ -1396,6 +1411,36 @@ async function copyReadOnlyDirectory(
     }
 }
 
+async function ensureRepositoryRevisionView(
+    repoRoot: string,
+    revision: string,
+    privateScratchRoot: string,
+): Promise<string> {
+    const revisionRoot = path.join(privateScratchRoot, 'repository-revision');
+    const markerPath = path.join(privateScratchRoot, '.repository-revision');
+    const existingRevision = await readFile(markerPath, 'utf8').catch(() => '');
+    if (existingRevision.trim() === revision && await fileExists(revisionRoot)) {
+        return revisionRoot;
+    }
+
+    await rm(revisionRoot, { recursive: true, force: true });
+    await mkdir(revisionRoot, { recursive: true });
+    const tree = await runGitCommandBuffer(repoRoot, ['ls-tree', '-r', '-z', '--name-only', revision]);
+    const files = tree.toString('utf8').split('\0').filter(Boolean);
+    for (const relativePath of files) {
+        if (path.isAbsolute(relativePath) || relativePath.split('/').includes('..')) {
+            throw new Error(`Unsafe path in sandbox repository revision: ${relativePath}`);
+        }
+        const content = await runGitCommandBuffer(repoRoot, ['show', `${revision}:${relativePath}`]);
+        const destination = safeJoin(revisionRoot, relativePath);
+        await mkdir(path.dirname(destination), { recursive: true });
+        await writeFile(destination, content);
+        await chmod(destination, 0o400).catch(() => undefined);
+    }
+    await writeFile(markerPath, revision);
+    return revisionRoot;
+}
+
 async function prepareSandboxWorkspace(
     sessionId: string,
     accessRequest: SandboxRepositoryAccessRequest | undefined,
@@ -1449,15 +1494,19 @@ async function prepareSandboxWorkspace(
     if (!(await fileExists(path.join(repoRoot, '.git')))) {
         await initAndCommitWorkspace(repoRoot, 'Initial shared workspace seed');
     }
+    const readRoot = repositoryAccess.revision
+        ? await ensureRepositoryRevisionView(repoRoot, repositoryAccess.revision, privateScratchRoot)
+        : repoRoot;
 
     const directContextDirectory = 'direct_context';
     const uploadedDirectory = 'user_uploaded';
-    const sourceDirectContext = safeJoin(repoRoot, directContextDirectory);
-    const sourceUploads = safeJoin(repoRoot, uploadedDirectory);
+    const sourceDirectContext = safeJoin(readRoot, directContextDirectory);
+    const sourceUploads = safeJoin(readRoot, uploadedDirectory);
     const readableDirectories = Array.from(new Set(repositoryAccess.readableDirectories || []));
+    const liveReadableDirectories = new Set(repositoryAccess.liveReadableDirectories || []);
     const readableExistingDirectories = (await Promise.all(readableDirectories.map(async directory => ({
         directory,
-        exists: await fileExists(safeJoin(repoRoot, directory)),
+        exists: await fileExists(safeJoin(liveReadableDirectories.has(directory) ? repoRoot : readRoot, directory)),
     })))).filter(item => item.exists).map(item => item.directory);
     const hiddenDirectories = repositoryAccess.hiddenDirectories || [];
     const fullRepositoryRead = repositoryAccess.fullRepositoryRead === true || repositoryAccess.fullRepositoryWrite === true;
@@ -1468,9 +1517,9 @@ async function prepareSandboxWorkspace(
         await rm(viewRoot, { recursive: true, force: true });
         await mkdir(viewRoot, { recursive: true });
         if (usesFilteredFullRepository) {
-            await copyReadOnlyDirectory(repoRoot, viewRoot, hiddenDirectories);
+            await copyReadOnlyDirectory(readRoot, viewRoot, hiddenDirectories);
         } else {
-            await copyRepositoryRootFiles(repoRoot, viewRoot);
+            await copyRepositoryRootFiles(readRoot, viewRoot);
             if (await fileExists(sourceDirectContext)) {
                 await copyReadOnlyDirectory(sourceDirectContext, path.join(viewRoot, directContextDirectory));
             }
@@ -1495,11 +1544,13 @@ async function prepareSandboxWorkspace(
             .filter(hiddenDirectory => hiddenDirectory.startsWith(`${directory}/`))
             .map(hiddenDirectory => hiddenDirectory.slice(directory.length + 1));
         if (excludedRelativePaths.length === 0) {
-            return { directory, source: safeJoin(repoRoot, directory) };
+            const sourceRoot = liveReadableDirectories.has(directory) ? repoRoot : readRoot;
+            return { directory, source: safeJoin(sourceRoot, directory) };
         }
 
         const filteredSource = safeJoin(readonlyMountRoot, directory);
-        await copyReadOnlyDirectory(safeJoin(repoRoot, directory), filteredSource, excludedRelativePaths);
+        const sourceRoot = liveReadableDirectories.has(directory) ? repoRoot : readRoot;
+        await copyReadOnlyDirectory(safeJoin(sourceRoot, directory), filteredSource, excludedRelativePaths);
         return { directory, source: filteredSource };
     }));
     const isDescendantOfAgentDirectory = (directory: string) => !!repositoryAccess.agentDirectory
@@ -1521,7 +1572,7 @@ async function prepareSandboxWorkspace(
 
     return {
         sessionId,
-        rootHostPath: fullRepositoryRead && !usesFilteredFullRepository ? repoRoot : viewRoot,
+        rootHostPath: fullRepositoryRead && !usesFilteredFullRepository ? readRoot : viewRoot,
         repositoryRootPath: repoRoot,
         rootReadonly: !fullRepositoryWrite,
         tmpDir: ownDirectory ? path.join(ownDirectory, '.tmp') : path.join(privateScratchRoot, '.tmp'),
@@ -1558,7 +1609,7 @@ async function prepareSandboxWorkspace(
                 readonly: true,
             })),
         ],
-        visibleRootPath: usesFilteredFullRepository ? viewRoot : repoRoot,
+        visibleRootPath: usesFilteredFullRepository ? viewRoot : readRoot,
         writablePath: fullRepositoryWrite ? repoRoot : (ownDirectory || privateScratchRoot),
         repositoryAccess,
     };
@@ -1588,6 +1639,9 @@ async function getWorkspaceContextForSession(sessionId: string): Promise<Sandbox
     }
 
     const repoRoot = getRepositoryPath(repositoryAccess.repositoryId);
+    const readRoot = repositoryAccess.revision
+        ? path.join(getWorkspacePath(sessionId), 'repository-revision')
+        : repoRoot;
     const ownDirectory = repositoryAccess.agentDirectory
         ? safeJoin(repoRoot, repositoryAccess.agentDirectory)
         : undefined;
@@ -1595,7 +1649,7 @@ async function getWorkspaceContextForSession(sessionId: string): Promise<Sandbox
     return {
         sessionId,
         rootHostPath: repositoryAccess.fullRepositoryRead && !(repositoryAccess.hiddenDirectories || []).length
-            ? repoRoot
+            ? readRoot
             : getRepositoryViewPath(sessionId),
         repositoryRootPath: repoRoot,
         rootReadonly: repositoryAccess.fullRepositoryWrite !== true,
@@ -1604,7 +1658,7 @@ async function getWorkspaceContextForSession(sessionId: string): Promise<Sandbox
         nestedMounts: [],
         visibleRootPath: repositoryAccess.fullRepositoryRead && (repositoryAccess.hiddenDirectories || []).length
             ? getRepositoryViewPath(sessionId)
-            : repoRoot,
+            : readRoot,
         writablePath: repositoryAccess.fullRepositoryWrite ? repoRoot : (ownDirectory || getWorkspacePath(sessionId)),
         repositoryAccess,
     };
@@ -1720,7 +1774,17 @@ function resolveVisiblePath(context: SandboxCommandWorkspace, relativePath: stri
         throw new Error('Path is not visible in this sandbox session.');
     }
 
-    return safeJoin(context.visibleRootPath, normalized);
+    const liveDirectories = [
+        context.repositoryAccess.agentDirectory,
+        ...(context.repositoryAccess.liveReadableDirectories || []),
+    ].filter((directory): directory is string => !!directory);
+    const resolvesFromLiveRepository = context.repositoryAccess.fullRepositoryWrite
+        || liveDirectories.some(directory => normalized === directory || normalized.startsWith(`${directory}/`));
+    const visibleRoot = resolvesFromLiveRepository && context.repositoryRootPath
+        ? context.repositoryRootPath
+        : context.visibleRootPath;
+
+    return safeJoin(visibleRoot, normalized);
 }
 
 async function listRepositoryRootFiles(repoRoot: string): Promise<Array<{ path: string; size: number; mtime: number }>> {
@@ -2043,7 +2107,7 @@ function buildDockerArgs(args: {
         getSandboxImage(),
         'bash',
         '-c',
-        `umask 077; view() { for f in "$@"; do touch -c "$f" 2>/dev/null || cp "$f" ./ 2>/dev/null; done; }; open() { view "$@"; }; ${args.command}`,
+        `umask 077; view() { mkdir -p /tmp/.sandbox-view; i=0; for f in "$@"; do i=$((i + 1)); touch -c "$f" 2>/dev/null || cp -- "$f" "/tmp/.sandbox-view/$i-$(basename "$f")" 2>/dev/null; done; }; open() { view "$@"; }; ${args.command}`,
     ];
 }
 
@@ -2117,7 +2181,7 @@ function buildBubblewrapArgs(args: {
         '--setenv', 'PATH', getSandboxPath(args.hostRustSysroot, workspaceHome),
         'bash',
         '-c',
-        `umask 077; view() { for f in "$@"; do touch -c "$f" 2>/dev/null || cp "$f" ./ 2>/dev/null; done; }; open() { view "$@"; }; ${args.command}`,
+        `umask 077; view() { mkdir -p /tmp/.sandbox-view; i=0; for f in "$@"; do i=$((i + 1)); touch -c "$f" 2>/dev/null || cp -- "$f" "/tmp/.sandbox-view/$i-$(basename "$f")" 2>/dev/null; done; }; open() { view "$@"; }; ${args.command}`,
     ];
 }
 
@@ -2378,6 +2442,8 @@ async function handleExecute(req: IncomingMessage, res: ServerResponse) {
 
     await getSandboxEnvironmentProfile();
     const workspace = await prepareSandboxWorkspace(payload.sessionId, payload.repositoryAccess, payload.files);
+    const viewedImagesRoot = path.join(workspace.tmpDir, '.sandbox-view');
+    await rm(viewedImagesRoot, { recursive: true, force: true });
 
     // Legacy sessions retain their own workspace history. Repository sessions
     // are initialized once at the shared root above.
@@ -2395,11 +2461,15 @@ async function handleExecute(req: IncomingMessage, res: ServerResponse) {
     const visibleFiles = await listVisibleImageFiles(workspace, false);
     const changedImages = getChangedImages(beforeImages, imagesAfterExecution);
     const generatedTranscriptImages = await snapshotVisibleImagesForTranscript(workspace, changedImages);
+    const viewedImages = await fileExists(viewedImagesRoot)
+        ? await listImageFiles(viewedImagesRoot, payload.sessionId, true)
+        : [];
+    const viewedTranscriptImages = await snapshotImagesForTranscript(viewedImagesRoot, viewedImages);
 
     sendJson(res, 200, {
         ...execution,
         sessionId: payload.sessionId,
-        images: generatedTranscriptImages,
+        images: [...generatedTranscriptImages, ...viewedTranscriptImages],
         visibleFiles,
     });
 }

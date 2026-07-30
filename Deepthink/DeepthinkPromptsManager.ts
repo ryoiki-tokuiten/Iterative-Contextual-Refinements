@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CustomizablePromptsDeepthink, createDefaultCustomPromptsDeepthink } from './DeepthinkPrompts';
+import { CustomizablePromptsDeepthink } from './DeepthinkPrompts';
 
 export class DeepthinkPromptsManager {
     private promptsRef: { current: CustomizablePromptsDeepthink };
@@ -28,7 +28,7 @@ export class DeepthinkPromptsManager {
     }
 
     public updatePrompt(key: keyof CustomizablePromptsDeepthink, value: string): void {
-        (this.promptsRef.current as any)[key] = value;
+        this.promptsRef.current[key] = value;
         this.notifyListeners();
     }
 
@@ -36,7 +36,7 @@ export class DeepthinkPromptsManager {
         if (value === '') {
             delete this.promptsRef.current[key];
         } else {
-            (this.promptsRef.current as any)[key] = value;
+            this.promptsRef.current[key] = value;
         }
         this.notifyListeners();
     }
@@ -47,11 +47,6 @@ export class DeepthinkPromptsManager {
 
     public setPrompts(prompts: CustomizablePromptsDeepthink): void {
         this.promptsRef.current = prompts;
-        this.notifyListeners();
-    }
-
-    public resetToDefaults(): void {
-        this.promptsRef.current = createDefaultCustomPromptsDeepthink();
         this.notifyListeners();
     }
 }

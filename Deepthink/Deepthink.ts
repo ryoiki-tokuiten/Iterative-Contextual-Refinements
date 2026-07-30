@@ -13,14 +13,6 @@ import { callGemini } from "@/Routing/AIService.js";
 import { CustomizablePromptsDeepthink } from './DeepthinkPrompts';
 import { cleanupEvolvingDfsRoot } from '../Contextual/ContextualUI';
 import { onHighlighterReady } from '../Styles/Shiki';
-import {
-    openSolutionPoolEvolution,
-    downloadSolutionPoolAsJSON
-} from './SolutionPool';
-import {
-    openSolutionPoolModal,
-    openCurrentSolutionPool,
-} from './SolutionPool.tsx';
 import { parseJsonSafe } from "../Core/JsonParser";
 import { renderIconMarkup } from '../UI/Icons';
 
@@ -77,7 +69,7 @@ export {
     setActiveDeepthinkPipelineForImport
 };
 
-export interface DeepthinkTabDefinition {
+interface DeepthinkTabDefinition {
     id: string;
     label: string;
     icon: string;
@@ -93,33 +85,30 @@ interface DeepthinkModuleState {
     tabsNavContainer: HTMLElement | null;
     pipelinesContentContainer: HTMLElement | null;
     escapeHtml: (unsafe: string) => string;
-    cleanTextOutput: (text: string) => string;
-    getSelectedStrategiesCount: () => number;
-    getSelectedSubStrategiesCount: () => number;
-    getStrategyProximityLoops: () => number;
-    getSelectedHypothesisCount: () => number;
-    getHypothesisProximityLoops: () => number;
-    getSelectedPqfAggressiveness: () => string;
-    getRefinementEnabled: () => boolean;
-    getEvolvingDfsEnabled: () => boolean;
-    getDissectedObservationsEnabled: () => boolean;
 }
 
 const moduleState: DeepthinkModuleState = {
     tabsNavContainer: null,
     pipelinesContentContainer: null,
     escapeHtml: (s) => s,
-    cleanTextOutput: (s) => s,
-    getSelectedStrategiesCount: () => 0,
-    getSelectedSubStrategiesCount: () => 0,
-    getStrategyProximityLoops: () => 2,
-    getSelectedHypothesisCount: () => 0,
-    getHypothesisProximityLoops: () => 2,
-    getSelectedPqfAggressiveness: () => 'off',
-    getRefinementEnabled: () => false,
-    getEvolvingDfsEnabled: () => false,
-    getDissectedObservationsEnabled: () => false,
 };
+
+function isEvolvingRun(process: DeepthinkPipelineState): boolean {
+    return process.runConfig?.evolvingDfsEnabled
+        ?? process.initialStrategies.some(strategy =>
+            strategy.subStrategies.some(subStrategy => subStrategy.evolvingDfs?.enabled));
+}
+
+function isRefinementRun(process: DeepthinkPipelineState): boolean {
+    return process.runConfig?.refinementEnabled
+        ?? process.solutionCritiques.length > 0;
+}
+
+function hasDissectedSurface(process: DeepthinkPipelineState): boolean {
+    return isRefinementRun(process)
+        || isEvolvingRun(process)
+        || !!process.dissectedObservationsSynthesis;
+}
 
 let activeSolutionModalSubStrategyId: string | null = null;
 let activeSolutionModalBranchVersion: number | undefined;
@@ -129,7 +118,6 @@ let pipelineContentRoot: Root | null = null;
 let pipelineContentContainerNode: HTMLElement | null = null;
 let modalRoot: Root | null = null;
 let modalContainer: HTMLElement | null = null;
-let deepthinkEventHandlerContainer: HTMLElement | null = null;
 let filesystemRedirectListenerRegistered = false;
 
 // ============================================================================ 
@@ -164,8 +152,7 @@ export function initializeDeepthinkModule(dependencies: {
     getDeepthinkCodeExecutionEnabled: () => boolean;
     getHypothesisInjectionMode: () => 'parallel' | 'strategy_aware' | 'selective_injection';
     getSelectedThinkingLevel?: () => 'low' | 'medium' | 'high' | 'minimal';
-    cleanTextOutput: (text: string) => string;
-    customPromptsDeepthinkState: CustomizablePromptsDeepthink;
+    getCustomPromptsDeepthinkState: () => CustomizablePromptsDeepthink;
     tabsNavContainer: HTMLElement | null;
     pipelinesContentContainer: HTMLElement | null;
     setActiveDeepthinkPipeline: (pipeline: DeepthinkPipelineState | null) => void;
@@ -174,16 +161,6 @@ export function initializeDeepthinkModule(dependencies: {
         tabsNavContainer: dependencies.tabsNavContainer,
         pipelinesContentContainer: dependencies.pipelinesContentContainer,
         escapeHtml: dependencies.escapeHtml,
-        cleanTextOutput: dependencies.cleanTextOutput,
-        getSelectedStrategiesCount: dependencies.getSelectedStrategiesCount,
-        getSelectedSubStrategiesCount: dependencies.getSelectedSubStrategiesCount,
-        getStrategyProximityLoops: dependencies.getStrategyProximityLoops,
-        getSelectedHypothesisCount: dependencies.getSelectedHypothesisCount,
-        getHypothesisProximityLoops: dependencies.getHypothesisProximityLoops,
-        getSelectedPqfAggressiveness: dependencies.getSelectedPqfAggressiveness,
-        getRefinementEnabled: dependencies.getRefinementEnabled,
-        getEvolvingDfsEnabled: dependencies.getEvolvingDfsEnabled,
-        getDissectedObservationsEnabled: dependencies.getDissectedObservationsEnabled,
     });
 
     onHighlighterReady(() => {
@@ -279,7 +256,7 @@ export async function openDeepthinkSolutionModal(subStrategyId: string, branchVe
     const subStrategy = pipeline?.initialStrategies.flatMap(ms => ms.subStrategies).find(ss => ss.id === subStrategyId);
     if (!subStrategy) return;
 
-    const evolvingDfsEnabled = moduleState.getEvolvingDfsEnabled();
+    const evolvingDfsEnabled = pipeline ? isEvolvingRun(pipeline) : false;
 
     if (evolvingDfsEnabled) {
         removeEvolvingDfsSolutionOverlay(true);
@@ -289,7 +266,7 @@ export async function openDeepthinkSolutionModal(subStrategyId: string, branchVe
 
         // For Evolving DFS corrections, we keep the imperative approach because it uses
         // the external ContextualUI component which has its own rendering lifecycle
-        const overlay = document.createElement('div');
+        const overlay = document.createElement('div') as HTMLElement & { cleanup?: () => void };
         overlay.className = 'modal-overlay';
         overlay.id = 'solution-modal-overlay';
         overlay.style.display = 'flex';
@@ -331,7 +308,7 @@ export async function openDeepthinkSolutionModal(subStrategyId: string, branchVe
         closeBtn.addEventListener('click', close);
         overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
         document.addEventListener('keydown', onKey);
-        (overlay as any).cleanup = () => document.removeEventListener('keydown', onKey);
+        overlay.cleanup = () => document.removeEventListener('keydown', onKey);
         setTimeout(() => overlay.classList.add('is-visible'), 10);
 
         await updateSolutionModalContent(body, subStrategyId, branchVersion);
@@ -344,7 +321,7 @@ export async function openDeepthinkSolutionModal(subStrategyId: string, branchVe
                 onClose: close,
                 children: React.createElement(DefaultSolutionUI, {
                     subStrategy,
-                    refinementEnabled: moduleState.getRefinementEnabled(),
+                    refinementEnabled: pipeline ? isRefinementRun(pipeline) : false,
                 })
             })
         );
@@ -356,11 +333,11 @@ export function closeSolutionModal() {
     unmountModal();
 }
 
-export async function openSubStrategySolutionModal(subStrategyId: string, branchVersion?: number) {
+async function openSubStrategySolutionModal(subStrategyId: string, branchVersion?: number) {
     const pipeline = getActiveDeepthinkPipeline();
     if (!pipeline) return;
 
-    if (moduleState.getEvolvingDfsEnabled()) {
+    if (isEvolvingRun(pipeline)) {
         await openDeepthinkSolutionModal(subStrategyId, branchVersion);
         return;
     }
@@ -376,14 +353,13 @@ export async function openSubStrategySolutionModal(subStrategyId: string, branch
             onClose: close,
             children: React.createElement(SubStrategyComparisonUI, {
                 subStrategy,
-                refinementEnabled: moduleState.getRefinementEnabled(),
-                escapeHtml: moduleState.escapeHtml,
+                refinementEnabled: isRefinementRun(pipeline),
             })
         })
     );
 }
 
-export function openCritiqueModal(critiqueId: string) {
+function openCritiqueModal(critiqueId: string) {
     const pipeline = getActiveDeepthinkPipeline();
     const critique = pipeline?.solutionCritiques.find(c => c.id === critiqueId);
     if (!critique || document.querySelector('.embedded-modal-overlay')) return;
@@ -402,7 +378,7 @@ export function openCritiqueModal(critiqueId: string) {
     );
 }
 
-export function openSubStrategyCritiqueModal(subStrategyId: string) {
+function openSubStrategyCritiqueModal(subStrategyId: string) {
     const pipeline = getActiveDeepthinkPipeline();
     if (document.querySelector('.embedded-modal-overlay')) return;
 
@@ -428,7 +404,7 @@ export function openSubStrategyCritiqueModal(subStrategyId: string) {
     );
 }
 
-export function openHypothesisArgumentModal(hypothesisId: string) {
+function openHypothesisArgumentModal(hypothesisId: string) {
     const pipeline = getActiveDeepthinkPipeline();
     const allHypotheses = [
         ...((pipeline?.hypothesisHistory || []).flat()),
@@ -452,7 +428,7 @@ export function openHypothesisArgumentModal(hypothesisId: string) {
     );
 }
 
-export function openPostQualityFilterModal(agent: any) {
+function openPostQualityFilterModal(agent: DeepthinkPostQualityFilterData) {
     if (document.querySelector('.embedded-modal-overlay')) return;
 
     const close = () => unmountModal();
@@ -516,7 +492,7 @@ async function updateSolutionModalContent(modalBody: HTMLElement, subStrategyId:
         ? undefined
         : (strategy.replacementHistory || []).find(record => record.previousBranchVersion === targetBranchVersion);
 
-    const evolvingDfsData = (subStrategy as any).evolvingDfs;
+    const evolvingDfsData = subStrategy.evolvingDfs;
     const activeIterations = isCurrentBranch
         ? (evolvingDfsData?.iterations || []).filter((iteration: any) =>
             isCurrentBranchIteration(strategy, iteration, targetBranchVersion)
@@ -568,7 +544,7 @@ async function updateSolutionModalContent(modalBody: HTMLElement, subStrategyId:
     );
 }
 
-export async function updateActiveSolutionModal() {
+async function updateActiveSolutionModal() {
     if (activeSolutionModalSubStrategyId && document.getElementById('solution-modal-overlay')) {
         const modalBody = document.querySelector('#solution-modal-overlay .modal-body') as HTMLElement;
         if (modalBody) {
@@ -577,10 +553,6 @@ export async function updateActiveSolutionModal() {
     }
 }
 
-// ============================================================================ 
-// Event Handling
-// ============================================================================ 
-
 export function activateDeepthinkStrategyTab(strategyIndex: number) {
     const pipeline = getActiveDeepthinkPipeline();
     if (!pipeline) return;
@@ -588,73 +560,9 @@ export function activateDeepthinkStrategyTab(strategyIndex: number) {
     renderActiveDeepthinkPipeline();
 }
 
-function addDeepthinkEventHandlers() {
-    const container = moduleState.pipelinesContentContainer;
-    if (!container) return;
-
-    if (deepthinkEventHandlerContainer === container) {
-        return;
-    }
-
-    if (deepthinkEventHandlerContainer) {
-        deepthinkEventHandlerContainer.removeEventListener('click', deepthinkClickHandler);
-    }
-
-    container.addEventListener('click', deepthinkClickHandler);
-    deepthinkEventHandlerContainer = container;
-}
-
-function deepthinkClickHandler(event: Event) {
-    const target = event.target as HTMLElement;
-    if (!target || !getActiveDeepthinkPipeline()) return;
-
-    const closest = (cls: string) => target.closest('.' + cls) as HTMLElement;
-
-    if (closest('view-pool-button')) {
-        event.preventDefault(); event.stopPropagation();
-        if (document.querySelector('.embedded-modal-overlay')) return;
-        const btn = closest('view-pool-button');
-        const sid = btn.getAttribute('data-strategy-id');
-        const iter = btn.getAttribute('data-iteration');
-        const branchVersion = btn.getAttribute('data-branch-version');
-        if (sid && iter) openSolutionPoolModal(
-            sid,
-            parseInt(iter, 10),
-            branchVersion ? parseInt(branchVersion, 10) : undefined
-        );
-        return;
-    }
-
-    if (closest('solution-pool-current-button')) {
-        event.preventDefault(); event.stopPropagation();
-        const pid = closest('solution-pool-current-button').getAttribute('data-pipeline-id');
-        if (pid) openCurrentSolutionPool(pid);
-        return;
-    }
-
-    if (closest('solution-pool-evolution-button')) {
-        event.preventDefault(); event.stopPropagation();
-        const pid = closest('solution-pool-evolution-button').getAttribute('data-pipeline-id');
-        if (pid) openSolutionPoolEvolution(pid);
-        return;
-    }
-
-    if (closest('solution-pool-download-button')) {
-        event.preventDefault(); event.stopPropagation();
-        const pid = closest('solution-pool-download-button').getAttribute('data-pipeline-id');
-        if (pid) downloadSolutionPoolAsJSON(pid);
-        return;
-    }
-}
-
 function syncDeepthinkDomReferences() {
     const nextTabsNavContainer = document.getElementById('tabs-nav-container');
     const nextPipelinesContentContainer = document.getElementById('pipelines-content-container');
-
-    if (deepthinkEventHandlerContainer && deepthinkEventHandlerContainer !== nextPipelinesContentContainer) {
-        deepthinkEventHandlerContainer.removeEventListener('click', deepthinkClickHandler);
-        deepthinkEventHandlerContainer = null;
-    }
 
     moduleState.tabsNavContainer = nextTabsNavContainer;
     moduleState.pipelinesContentContainer = nextPipelinesContentContainer;
@@ -735,7 +643,6 @@ export function renderActiveDeepthinkPipeline() {
     const tabContent = createDeepthinkTabContent(deepthinkProcess);
     pipelineContentRoot.render(tabContent);
 
-    addDeepthinkEventHandlers();
 }
 
 type DeepthinkTabContentCallbacks = {
@@ -750,8 +657,10 @@ type DeepthinkTabContentCallbacks = {
 
 export function getVisibleDeepthinkTabs(process: DeepthinkPipelineState): DeepthinkTabDefinition[] {
     const hasPostQualityFilter = process.postQualityFilterAgents?.length > 0;
-    const isHypothesisEnabled = moduleState.getSelectedHypothesisCount() > 0;
-    const isDissectedEnabled = moduleState.getRefinementEnabled() || moduleState.getEvolvingDfsEnabled() || moduleState.getDissectedObservationsEnabled();
+    const isHypothesisEnabled = process.runConfig
+        ? process.runConfig.hypothesisCount > 0
+        : process.hypotheses.length > 0 || (process.hypothesisHistory?.length || 0) > 0;
+    const isDissectedEnabled = hasDissectedSurface(process);
 
     return [
         { id: 'live', label: 'Live', icon: 'terminal', visible: true },
@@ -793,7 +702,10 @@ export function createDeepthinkTabContent(
         case 'live':
             return React.createElement(DeepthinkLiveTab, { process, hideStopButton: callbacks.hideStopButton });
         case 'filesystem':
-            return React.createElement(DeepthinkFilesystemTab, { key: process.id });
+            return React.createElement(DeepthinkFilesystemTab, {
+                key: process.id,
+                repositoryId: process.id,
+            });
         case 'strategic-solver':
             return React.createElement(StrategicSolverTab, {
                 process,
@@ -804,7 +716,6 @@ export function createDeepthinkTabContent(
         case 'hypothesis-explorer':
             return React.createElement(HypothesisExplorerTab, {
                 process,
-                escapeHtml: moduleState.escapeHtml,
                 onViewArgument,
             });
         case 'solution-pool':
@@ -812,8 +723,8 @@ export function createDeepthinkTabContent(
         case 'dissected-observations':
             return React.createElement(DissectedObservationsTab, {
                 process,
-                refinementEnabled: moduleState.getRefinementEnabled(),
-                evolvingDfsEnabled: moduleState.getEvolvingDfsEnabled(),
+                refinementEnabled: isRefinementRun(process),
+                evolvingDfsEnabled: isEvolvingRun(process),
                 onViewCritique,
                 onViewSubStrategyCritique,
             });

@@ -217,7 +217,7 @@ export function detectFormat(file: File): { format: SerializationFormat; compres
         return { format: 'json', compressed: false };
     }
 
-    // Default: assume JSON for legacy files
+    // Unknown extensions use the human-readable JSON decoder.
     return { format: 'json', compressed: false };
 }
 

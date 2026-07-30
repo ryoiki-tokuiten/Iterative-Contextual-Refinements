@@ -1255,11 +1255,6 @@ body.light-mode .sp-strategy-section-header h3 {
     font-size: 1rem;
 }
 
-.sp-timeline-label {
-    color: var(--accent-blue);
-    margin-top: 0.5rem;
-}
-
 .sp-original-label {
     color: var(--accent-green, #22c55e);
 }
@@ -1273,46 +1268,6 @@ body.light-mode .sp-strategy-section-header h3 {
     padding: 1rem 1.25rem;
 }
 
-/* ==========================================================================
-   ITERATION TIMELINE (Full Repository View)
-   ========================================================================== */
-
-.sp-iteration-timeline {
-    padding: 1rem 1.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-}
-
-.sp-timeline-item {
-    border: 1px solid rgba(var(--border-color-rgb, 128, 128, 128), 0.3);
-    border-radius: 8px;
-    overflow: hidden;
-    background: var(--bg-primary);
-}
-
-body.light-mode .sp-timeline-item {
-    border-color: rgba(0, 0, 0, 0.1);
-    background: #ffffff;
-}
-
-.sp-timeline-item-header {
-    padding: 0.625rem 1rem;
-    font-size: 0.8125rem;
-    font-weight: 700;
-    color: var(--text-secondary);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    background: rgba(var(--accent-blue-rgb), 0.04);
-    border-bottom: 1px solid rgba(var(--border-color-rgb, 128, 128, 128), 0.2);
-}
-
-body.light-mode .sp-timeline-item-header {
-    color: #374151;
-    background: rgba(99, 102, 241, 0.04);
-    border-bottom-color: rgba(0, 0, 0, 0.06);
-}
-
 .sp-timeline-section {
     padding: 0.75rem 1rem;
     border-bottom: 1px solid rgba(var(--border-color-rgb, 128, 128, 128), 0.15);
@@ -1320,29 +1275,6 @@ body.light-mode .sp-timeline-item-header {
 
 .sp-timeline-section:last-child {
     border-bottom: none;
-}
-
-.sp-timeline-section-label {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 0.5rem;
-}
-
-.sp-timeline-section-label .icon-slot {
-    font-size: 0.875rem;
-}
-
-.sp-timeline-critique .sp-timeline-section-label {
-    color: var(--accent-orange, #f59e0b);
-}
-
-.sp-timeline-corrected .sp-timeline-section-label {
-    color: var(--accent-blue);
 }
 
 .sp-timeline-section-content {

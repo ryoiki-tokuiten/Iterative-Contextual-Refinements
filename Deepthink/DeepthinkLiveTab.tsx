@@ -136,23 +136,6 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
         return 'general';
     };
 
-    // Find currently running agents to determine parallel execution
-    const activeAgents: string[] = [];
-    events.forEach(ev => {
-        const key = ev.executionId || ev.agentName;
-        if (ev.eventType === 'agent_start') {
-            if (!activeAgents.includes(key)) {
-                activeAgents.push(key);
-            }
-        } else if (ev.eventType === 'agent_complete' || ev.eventType === 'agent_error') {
-            const idx = activeAgents.indexOf(key);
-            if (idx !== -1) {
-                activeAgents.splice(idx, 1);
-            }
-        }
-    });
-
-
     // Filtered events for the terminal log console
     const filteredEvents = events.filter(ev => {
         if (filterType === 'agents' && !['agent_start', 'agent_complete', 'agent_error', 'agent_retry'].includes(ev.eventType)) return false;
@@ -208,6 +191,12 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
     if (!selectedEvent) {
         selectedEvent = events[events.length - 1];
     }
+    const selectedInvocationStart = selectedEvent?.executionId
+        ? events.find(event =>
+            event.executionId === selectedEvent?.executionId
+            && event.eventType === 'agent_start')
+        : undefined;
+    const selectedPromptEvent = selectedInvocationStart || selectedEvent;
 
     const selectEvent = (event: DeepthinkLiveEvent) => {
         setSelectedEventId(event.id);
@@ -280,7 +269,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                 <span className="stat-label">INVOKED:</span>
                                 <span className="stat-value font-mono">{allTimelineAgents.length}</span>
                             </div>
-                            {!hideStopButton && (process.status === 'processing' || process.status === 'retrying') && (
+                            {!hideStopButton && process.status === 'processing' && (
                                 <button
                                     className="stop-button"
                                     onClick={() => {
@@ -435,7 +424,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                     {/* Left Column: System & User Prompts */}
                                     <div className="inspector-column left-column" style={{ paddingRight: '0.75rem' }}>
                                         <div className="unified-prompt-panel">
-                                            {selectedEvent.systemInstruction && (
+                                            {selectedPromptEvent?.systemInstruction && (
                                                 <div className={`system-instruction-section ${isSystemInstructionExpanded ? 'expanded' : 'collapsed'}`}>
                                                     <div 
                                                         className="system-instruction-pill"
@@ -447,7 +436,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                                     {isSystemInstructionExpanded && (
                                                         <div className="system-prompt-wrapper custom-scrollbar">
                                                             <PromptStylingEditor 
-                                                                value={selectedEvent.systemInstruction} 
+                                                                value={selectedPromptEvent.systemInstruction}
                                                                 readOnly={true} 
                                                                 className="inspector-prompt-display"
                                                             />
@@ -456,7 +445,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                                 </div>
                                             )}
 
-                                            {selectedEvent.prompt && (
+                                            {selectedPromptEvent?.prompt && (
                                                 <div className="user-prompt-section">
                                                     <div className="section-header" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '0.5rem' }}>
                                                         <span className="card-title">
@@ -465,7 +454,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                                     </div>
                                                     <div className="prompt-editor-wrapper custom-scrollbar user-prompt-wrapper">
                                                         <PromptStylingEditor 
-                                                            value={selectedEvent.prompt} 
+                                                            value={selectedPromptEvent.prompt}
                                                             readOnly={true} 
                                                             className="inspector-prompt-display"
                                                         />
@@ -473,7 +462,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                                     <div className="full-prompt-action" style={{ paddingTop: '0.5rem', marginTop: '0.5rem', borderTop: '1px solid var(--border-color)', display: 'flex' }}>
                                                         <ActionButton
                                                             type="copy"
-                                                            content={(selectedEvent.systemInstruction ? selectedEvent.systemInstruction + '\n\n' : '') + selectedEvent.prompt}
+                                                            content={(selectedPromptEvent.systemInstruction ? selectedPromptEvent.systemInstruction + '\n\n' : '') + selectedPromptEvent.prompt}
                                                             icon="content_copy"
                                                             text="Copy Full Prompt (System + User)"
                                                             className="full-width-copy-btn"
@@ -546,6 +535,11 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                                             {selectedEvent.topP !== undefined && (
                                                                 <span className="config-badge topp" title="Top-P">
                                                                     Top-P: {selectedEvent.topP}
+                                                                </span>
+                                                            )}
+                                                            {selectedEvent.codeExecutionEnabled !== undefined && (
+                                                                <span className="config-badge" title="Terminal permission">
+                                                                    Terminal: {selectedEvent.codeExecutionEnabled ? 'On' : 'Off'}
                                                                 </span>
                                                             )}
                                                         </div>

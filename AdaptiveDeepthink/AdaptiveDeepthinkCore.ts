@@ -290,7 +290,6 @@ function repositoryAccess(
             role: sandboxAgentRole,
             hypothesisLabel: hypothesisLabel(hypothesisId || '1'),
             hypothesisRoundNumber: state.passNumber,
-            previousHypothesisRoundNumbers: Array.from(state.passes.keys()).filter(pass => pass < state.passNumber),
         });
     }
 
@@ -370,8 +369,6 @@ function syncAgentContext(
                     }, null, 2));
                     addAdaptiveLiveEvent(context, agentName, `${agentName} agent completed`, 'agent_complete', {
                         response: output,
-                        systemInstruction: systemPrompt,
-                        prompt: promptText,
                         modelName,
                         temperature: context.getSelectedTemperature(),
                         topP: context.getSelectedTopP(),
@@ -412,8 +409,6 @@ function syncAgentContext(
                     response: result.text,
                     interactionTraceText: result.interactionTraceText,
                     executionTraceText: result.executionTraceText,
-                    systemInstruction: systemPrompt,
-                    prompt: promptText,
                     modelName,
                     temperature: context.getSelectedTemperature(),
                     topP: context.getSelectedTopP(),
@@ -427,8 +422,6 @@ function syncAgentContext(
                 const message = describeProviderError(error);
                 addAdaptiveLiveEvent(context, agentName, `${agentName} agent failed: ${message}`, 'agent_error', {
                     error: message,
-                    systemInstruction: systemPrompt,
-                    prompt: promptText,
                     modelName,
                     temperature: context.getSelectedTemperature(),
                     topP: context.getSelectedTopP(),
@@ -1073,13 +1066,11 @@ export function syncAdaptiveDeepthinkPipeline(state: AdaptiveDeepthinkState, pip
             id: `${strategy.id}-adaptive`,
             subStrategyText: strategy.text,
             status: latest ? 'completed' : 'pending',
-            isDetailsOpen: false,
-            subStrategyFormat: 'markdown',
             solutionAttempt: latest?.execution,
             solutionAttemptDisplay: latest?.execution,
             refinedSolution: latest?.correction,
             refinedSolutionDisplay: latest?.correction,
-            selfImprovementStatus: latest ? 'completed' : undefined,
+            selfImprovementStatus: latest?.correction ? 'completed' : latest ? 'skipped' : undefined,
             solutionCritique: latest?.critique,
             solutionCritiqueDisplay: latest?.critique,
         } as DeepthinkSubStrategyData;
@@ -1088,8 +1079,6 @@ export function syncAdaptiveDeepthinkPipeline(state: AdaptiveDeepthinkState, pip
             strategyText: `${strategy.text}${strategy.saved ? '\n\n> Permanently saved.' : ''}`,
             subStrategies: [subStrategy],
             status: latest || strategy.saved ? 'completed' : 'pending',
-            isDetailsOpen: false,
-            strategyFormat: 'markdown',
             branchVersion: 1,
             branchIterationCount: Math.max(0, ...Array.from(state.executions.values()).filter(record => record.strategyId === strategy.id).map(record => record.passNumber)),
         } as DeepthinkMainStrategyData;
@@ -1102,14 +1091,12 @@ export function syncAdaptiveDeepthinkPipeline(state: AdaptiveDeepthinkState, pip
             testerAttempt: testing?.testing,
             testerAttemptDisplay: testing?.testing,
             testerStatus: testing ? 'completed' : 'pending',
-            isDetailsOpen: false,
             roundNumber: hypothesis.passNumber,
             globalIteration: hypothesis.passNumber,
         } as DeepthinkHypothesisData;
     });
     pipeline.solutionCritiques = Array.from(state.executions.values()).map(record => ({
         id: `critique-${record.id}`,
-        subStrategyId: `${record.strategyId}-adaptive`,
         mainStrategyId: record.strategyId,
         critiqueResponse: record.critique,
         critiqueResponseDisplay: record.critique,

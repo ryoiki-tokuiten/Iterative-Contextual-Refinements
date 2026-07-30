@@ -9,7 +9,7 @@ import { MAX_HYPOTHESIS_COUNT, ModelConfigManager, type ModelParameters } from '
  * Pure function: calculates the estimated API call range for Deepthink mode.
  * Returns { min, max } to account for variable retry loops.
  */
-export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): { min: number; max: number } {
+function calculateDeepthinkApiCallsFromParams(params: ModelParameters): { min: number; max: number } {
     const evolvingDfsEnabled = params.refinementEnabled && params.evolvingDfsEnabled;
     const strategiesCount = evolvingDfsEnabled ? Math.min(params.strategiesCount, 5) : params.strategiesCount;
     const strategyGenerationCalls = 1 + (2 * Math.max(1, Math.min(5, params.strategyProximityLoops || 2)));
@@ -103,15 +103,7 @@ export class ApiCallEstimator {
         this.pqfWarningElement = document.getElementById('api-call-pqf-warning');
     }
 
-    /**
-     * Calculate estimated API calls for Deepthink mode
-     * Returns a range { min, max } to account for variable retry loops
-     */
-    /**
-     * Calculate estimated API calls for Deepthink mode.
-     * Delegates to the pure standalone function.
-     */
-    public calculateDeepthinkApiCalls(): { min: number; max: number } {
+    private calculateDeepthinkApiCalls(): { min: number; max: number } {
         return calculateDeepthinkApiCallsFromParams(this.modelConfig.getParameters());
     }
 
@@ -147,52 +139,4 @@ export class ApiCallEstimator {
         }
     }
 
-    /**
-     * Attach event listeners to update on parameter changes
-     */
-    public attachListeners(): void {
-        // Listen to all parameter changes
-        const sliders = [
-            'strategies-slider',
-            'dt-strategy-proximity-slider',
-            'sub-strategies-slider',
-            'hypothesis-slider',
-            'dt-hypothesis-proximity-slider',
-            'dt-evolving-dfs-depth-slider'
-        ];
-
-        sliders.forEach(id => {
-            const element = document.getElementById(id);
-            if (element) {
-                element.addEventListener('input', () => this.updateApiCallDisplay());
-            }
-        });
-
-        // Listen to toggle changes
-        const toggles = [
-            'refinement-toggle',
-            'skip-sub-strategies-toggle',
-            'dissected-observations-toggle',
-            'evolving-dfs-toggle',
-            'hypothesis-toggle'
-        ];
-
-        toggles.forEach(id => {
-            const element = document.getElementById(id);
-            if (element) {
-                element.addEventListener('change', () => this.updateApiCallDisplay());
-            }
-        });
-
-        // Listen to PQF aggressiveness button clicks
-        const pqfButtons = document.querySelectorAll('.pqf-button');
-        pqfButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                setTimeout(() => this.updateApiCallDisplay(), 50);
-            });
-        });
-
-        // Initial update
-        this.updateApiCallDisplay();
-    }
 }

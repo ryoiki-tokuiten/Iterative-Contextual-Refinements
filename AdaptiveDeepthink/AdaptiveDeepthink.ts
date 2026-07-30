@@ -155,14 +155,12 @@ function createInitialDeepthinkPipelineState(id: string, question: string): Deep
         challenge: question,
         status: 'processing',
         activeTabId: 'live',
-        challengeText: '',
         activeStrategyTab: 0,
         initialStrategies: [],
         hypotheses: [],
         solutionCritiques: [],
         postQualityFilterAgents: [],
         structuredSolutionPoolAgents: [],
-        strategicSolverComplete: false,
         hypothesisExplorerComplete: false,
         knowledgePacket: '',
         finalJudgingStatus: 'pending',
@@ -188,7 +186,7 @@ function createDeepthinkPrompts(prompts: CustomizablePromptsAdaptiveDeepthink): 
 }
 
 function sandboxEnabled(): boolean {
-    return globalState.geminiCodeExecutionEnabled
+    return globalState.virtualEnvironmentEnabled
         || globalState.directContextFiles.length > 0
         || globalState.filesystemContextFiles.length > 0;
 }

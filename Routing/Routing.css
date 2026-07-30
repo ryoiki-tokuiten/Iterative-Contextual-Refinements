@@ -460,72 +460,6 @@ nt Options Container */
         inset 0 1px 0 rgba(139, 92, 246, 0.08);
 }
 
-.refinement-options-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text-primary-color);
-    letter-spacing: 0.3px;
-    margin-bottom: 8px;
-}
-
-.refinement-options-header .icon-slot {
-    font-size: 20px;
-    color: var(--accent-purple);
-}
-
-/* Master Control */
-.refinement-master-control {
-    display: flex;
-    align-items: flex-start;
-    gap: 16px;
-    padding: 18px;
-    background: linear-gradient(135deg,
-            rgba(139, 92, 246, 0.12),
-            rgba(139, 92, 246, 0.06));
-    border: 1px solid rgba(139, 92, 246, 0.25);
-    border-radius: var(--border-radius-md);
-    transition: all 0.3s cubic-bezier(0.23, 1, 0.320, 1);
-}
-
-.refinement-master-control .toggle-switch {
-    margin-top: 2px;
-}
-
-.refinement-master-control:has(.toggle-input:checked) {
-    background: linear-gradient(135deg,
-            rgba(139, 92, 246, 0.18),
-            rgba(139, 92, 246, 0.10));
-    border-color: rgba(139, 92, 246, 0.4);
-    box-shadow: 0 4px 16px rgba(139, 92, 246, 0.15);
-}
-
-.refinement-master-info {
-    flex: 1;
-}
-
-.refinement-master-title {
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text-color);
-    margin-bottom: 4px;
-    letter-spacing: -0.01em;
-}
-
-.refinement-master-control:has(.toggle-input:checked) .refinement-master-title {
-    color: var(--accent-purple);
-}
-
-.refinement-master-description {
-    font-size: 12px;
-    color: var(--text-secondary-color);
-    line-height: 1.5;
-    opacity: 0.85;
-}
-
-
 /* Refinement Methods */
 .refinement-methods {
     display: flex;
@@ -655,23 +589,6 @@ nt Options Container */
     color: var(--accent-purple);
 }
 
-.method-type {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-secondary-color);
-    opacity: 0.7;
-}
-
-.method-card-description {
-    font-size: 12px;
-    color: var(--text-secondary-color);
-    line-height: 1.6;
-    opacity: 0.85;
-    padding-left: 36px;
-}
-
 /* Responsive Design */
 @media (max-width: 768px) {
     .refinement-options-container {
@@ -679,17 +596,8 @@ nt Options Container */
         gap: 16px;
     }
 
-    .refinement-master-control {
-        padding: 16px;
-    }
-
     .refinement-method-card {
         padding: 14px;
-    }
-
-    .method-card-description {
-        padding-left: 0;
-        margin-top: 8px;
     }
 }
 
@@ -717,82 +625,6 @@ nt Options Container */
 .evolution-filter-options-header .icon-slot {
     font-size: 20px;
     color: var(--accent-pink);
-}
-
-/* Post Quality Filter Card in Evolution Filter Section */
-.post-quality-filter-card-wrapper {
-    margin-top: 14px;
-}
-
-.post-quality-filter-card {
-    background: rgba(var(--card-bg-base-rgb), 0.25);
-    border: 1px solid rgba(var(--accent-pink-rgb), 0.15) !important;
-}
-
-.post-quality-filter-card:hover {
-    background: rgba(var(--card-bg-base-rgb), 0.35);
-    border-color: rgba(var(--accent-pink-rgb), 0.3) !important;
-    box-shadow: 0 4px 16px rgba(var(--accent-pink-rgb), 0.08);
-}
-
-.post-quality-filter-card:has(.method-checkbox:checked) {
-    background: rgba(var(--accent-pink-rgb), 0.12);
-    border-color: rgba(var(--accent-pink-rgb), 0.4) !important;
-    box-shadow: 0 4px 16px rgba(var(--accent-pink-rgb), 0.15),
-        inset 0 1px 0 rgba(var(--accent-pink-rgb), 0.2);
-}
-
-.post-quality-filter-card:has(.method-checkbox:checked) .method-name {
-    color: var(--accent-pink);
-}
-
-.post-quality-filter-card .method-type {
-    color: var(--accent-pink);
-    opacity: 0.8;
-}
-
-/* Pink checkbox for Post Quality Filter */
-.post-quality-filter-card .method-checkbox-custom {
-    border-color: rgba(var(--accent-pink-rgb), 0.3);
-}
-
-.post-quality-filter-card .method-checkbox:checked+.method-checkbox-label .method-checkbox-custom {
-    background: var(--accent-pink);
-    border-color: var(--accent-pink);
-}
-
-.post-quality-filter-card .method-checkbox-custom.checked {
-    background: var(--accent-pink);
-    border-color: var(--accent-pink);
-}
-
-.post-quality-filter-card .method-checkbox-custom::after {
-    display: none;
-}
-
-.post-quality-filter-card .method-checkbox-custom .checkbox-icon {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) scale(0.6);
-    opacity: 0;
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.95);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.2s ease;
-    pointer-events: none;
-}
-
-.post-quality-filter-card .method-checkbox:checked+.method-checkbox-label .method-checkbox-custom .checkbox-icon {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-}
-
-.post-quality-filter-card .method-checkbox-custom.checked .checkbox-icon {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
 }
 
 .pqf-toggle-wrapper {
@@ -838,11 +670,6 @@ nt Options Container */
     font-weight: 600;
     opacity: 1;
     box-shadow: 0 2px 8px rgba(236, 72, 153, 0.2);
-}
-
-/* Information Packet Styles */
-.information-packet-container {
-    margin-top: 1rem;
 }
 
 .information-packet-window {
@@ -981,10 +808,6 @@ nt Options Container */
 
 .hypothesis-slider-container {
     margin-top: 12px;
-}
-
-.hypothesis-slider-container.hidden {
-    display: none;
 }
 
 /* API Key Form Container Specific Styles */

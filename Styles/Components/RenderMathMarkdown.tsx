@@ -8,70 +8,74 @@ import { isHTMLContent } from '../ContentDetection';
 import { getLanguageDisplayName, highlightCodeSync, isHighlighterReady, onHighlighterReady, resolveLanguage } from '../Shiki';
 import { Icon } from '../../UI/Icons';
 
-const MAX_CODE_HIGHLIGHT_SIZE = 50000;
+const MAX_CODE_HIGHLIGHT_SIZE = 50_000;
 const LATEX_COMMAND_PATTERN = /\\[a-zA-Z]+/;
-const MATH_NOTATION_PATTERNS = [
-    /[_^]\{[^}]+\}/,
-    /\\[{}]/,
-];
-const EXECUTION_SEGMENT_PATTERN = /<!-- CODE_EXECUTION_START -->[\s\S]*?<!-- CODE_EXECUTION_END -->|<!-- EXECUTION_OUTPUT_START -->[\s\S]*?<!-- EXECUTION_OUTPUT_END -->|<!-- EXECUTION_IMAGE_START -->[\s\S]*?<!-- EXECUTION_IMAGE_END -->/g;
+const MATH_NOTATION_PATTERNS = [/[_^]\{[^}]+\}/, /\\[{}]/];
+const CODE_START = '<!-- CODE_EXECUTION_START -->';
+const CODE_END = '<!-- CODE_EXECUTION_END -->';
+const OUTPUT_START = '<!-- EXECUTION_OUTPUT_START -->';
+const OUTPUT_END = '<!-- EXECUTION_OUTPUT_END -->';
+const IMAGE_START = '<!-- EXECUTION_IMAGE_START -->';
+const IMAGE_END = '<!-- EXECUTION_IMAGE_END -->';
 const CODE_EXECUTION_PATTERN = /^<!-- CODE_EXECUTION_START -->\s*\n?<!-- LANGUAGE: ([^\n]+?) -->\s*\n?```[^\n]*\n([\s\S]*?)\n```\s*\n?<!-- CODE_EXECUTION_END -->$/;
 const EXECUTION_OUTPUT_PATTERN = /^<!-- EXECUTION_OUTPUT_START -->\s*\n?```\n?([\s\S]*?)\n?```\s*\n?<!-- EXECUTION_OUTPUT_END -->$/;
 const EXECUTION_IMAGE_PATTERN = /^<!-- EXECUTION_IMAGE_START -->\s*\n?<!-- MIME_TYPE: ([^\s]+) -->\s*\n?([\s\S]*?)\n?<!-- EXECUTION_IMAGE_END -->$/;
 const EXECUTION_COMMENT_MARKERS = new Set([
-    'CODE_EXECUTION_START',
-    'CODE_EXECUTION_END',
-    'EXECUTION_OUTPUT_START',
-    'EXECUTION_OUTPUT_END',
-    'EXECUTION_IMAGE_START',
-    'EXECUTION_IMAGE_END',
+    'CODE_EXECUTION_START', 'CODE_EXECUTION_END',
+    'EXECUTION_OUTPUT_START', 'EXECUTION_OUTPUT_END',
+    'EXECUTION_IMAGE_START', 'EXECUTION_IMAGE_END',
 ]);
-const EXECUTION_COMMENT_PREFIXES = [
-    'LANGUAGE:',
-    'MIME_TYPE:',
-];
+const EXECUTION_COMMENT_PREFIXES = ['LANGUAGE:', 'MIME_TYPE:'];
+const IMAGE_EXTENSION_PATTERN = /\.(?:png|jpe?g|gif|webp|bmp|tiff?|svg)$/i;
+const BASE64_PATTERN = /^[A-Za-z0-9+/=]+$/;
+
+const REMARK_PLUGINS = [remarkGfm, remarkMath];
+const REHYPE_PLUGINS = [[rehypeKatex, { throwOnError: false, strict: false, trust: true }]] as any;
+const REFERENCED_LABEL_STYLE: React.CSSProperties = { color: 'var(--accent-blue, #3b82f6)' };
+const ACTION_GROUP_STYLE: React.CSSProperties = { display: 'flex', gap: 8, marginLeft: 'auto' };
+const ACTION_BUTTON_STYLE: React.CSSProperties = { marginLeft: 0 };
+const PREVIEW_ICON_STYLE: React.CSSProperties = { color: '#10b981' };
+const PREVIEW_BADGE_STYLE: React.CSSProperties = { backgroundColor: 'rgba(16, 185, 129, 0.13)', color: '#10b981' };
 
 type ExecutionImageItem =
-    | {
-        kind: 'image';
-        src: string;
-        mimeType: string;
-        format: string;
-        alt: string;
-      }
-    | {
-        kind: 'error';
-        message: string;
-      };
+    | { kind: 'image'; src: string; mimeType: string; format: string; alt: string }
+    | { kind: 'error'; message: string };
 
 type RenderSegment =
-    | {
-        kind: 'markdown';
-        content: string;
-      }
-    | {
-        kind: 'execution_code';
-        code: string;
-        language: string;
-      }
-    | {
-        kind: 'execution_output';
-        output: string;
-      }
-    | {
-        kind: 'execution_images';
-        images: ExecutionImageItem[];
-      };
+    | { kind: 'markdown'; content: string }
+    | { kind: 'execution_code'; code: string; language: string }
+    | { kind: 'execution_output'; output: string }
+    | { kind: 'execution_images'; images: ExecutionImageItem[] };
+
+type ExecutionKind = 'code' | 'output' | 'image';
+interface ExecutionBlock { kind: ExecutionKind; start: number; end: number }
 
 export interface RenderMathMarkdownProps {
     content: string;
     className?: string;
 }
 
-interface ImagePreviewData {
+interface ImagePreviewData { src: string; alt: string; format: string }
+interface CodeBlockProps {
+    code: string;
+    language: string;
+    label?: string;
+    highlightingVersion: number;
+    isFilePreview?: boolean;
+    downloadUrl?: string;
+}
+interface PreviewableImageProps {
     src: string;
     alt: string;
     format: string;
+    wrapperTag?: 'div' | 'span';
+    extraClassName?: string;
+    imageClassName?: string;
+    onPreview: (data: ImagePreviewData) => void;
+}
+
+function classes(...values: Array<string | false | null | undefined>): string {
+    return values.filter(Boolean).join(' ');
 }
 
 function escapeHtml(value: string): string {
@@ -84,19 +88,14 @@ function escapeHtml(value: string): string {
 }
 
 function containsLatexMath(content: string): boolean {
-    if (LATEX_COMMAND_PATTERN.test(content)) {
-        return true;
-    }
-    return MATH_NOTATION_PATTERNS.some((pattern) => pattern.test(content));
+    return LATEX_COMMAND_PATTERN.test(content) || MATH_NOTATION_PATTERNS.some((pattern) => pattern.test(content));
 }
 
 function convertBacktickedLatexToMath(content: string): string {
-    return content.replace(/(?<!`)`([^`]+)`(?!`)/g, (match, codeContent) => {
-        if (containsLatexMath(codeContent)) {
-            return `$$${codeContent}$$`;
-        }
-        return match;
-    });
+    if (!content.includes('`')) return content;
+    return content.replace(/(?<!`)`([^`]+)`(?!`)/g, (match, codeContent: string) =>
+        containsLatexMath(codeContent) ? `$$${codeContent}$$` : match
+    );
 }
 
 function createFallbackHighlightedMarkup(code: string): string {
@@ -105,11 +104,7 @@ function createFallbackHighlightedMarkup(code: string): string {
 
 function highlightMarkup(code: string, language: string): string {
     const resolvedLanguage = resolveLanguage(language || 'plaintext');
-
-    if (code.length > MAX_CODE_HIGHLIGHT_SIZE) {
-        return createFallbackHighlightedMarkup(code);
-    }
-
+    if (code.length > MAX_CODE_HIGHLIGHT_SIZE) return createFallbackHighlightedMarkup(code);
     try {
         return highlightCodeSync(code, resolvedLanguage);
     } catch {
@@ -118,199 +113,170 @@ function highlightMarkup(code: string, language: string): string {
 }
 
 function getMarkdownFenceLanguage(className?: string): string {
-    if (!className) {
-        return 'plaintext';
-    }
-
-    const token = className
-        .split(/\s+/)
-        .find((value) => value.startsWith('language-'));
-
-    return token ? token.slice('language-'.length) : 'plaintext';
+    const token = className?.split(/\s+/).find((value) => value.startsWith('language-'));
+    return token?.slice('language-'.length) || 'plaintext';
 }
 
 function isSandboxArtifactHref(href?: string): boolean {
-    if (!href) return false;
-    return href.includes('/api/sandbox/files/') ||
+    return !!href && (
+        href.includes('/api/sandbox/files/') ||
         href.includes('/api/sandbox/artifacts/') ||
-        href.includes('/api/sandbox/workspace/file');
+        href.includes('/api/sandbox/workspace/file')
+    );
+}
+
+function pathWithoutQueryOrHash(href: string): string {
+    const delimiter = href.search(/[?#]/);
+    return delimiter === -1 ? href : href.slice(0, delimiter);
 }
 
 function isImageArtifactHref(href: string): boolean {
-    const pathname = href.split(/[?#]/, 1)[0];
-    return /\.(png|jpe?g|gif|webp|bmp|tiff?|svg)$/i.test(pathname);
+    return IMAGE_EXTENSION_PATTERN.test(pathWithoutQueryOrHash(href));
+}
+
+function getNodeText(node: React.ReactNode): string {
+    if (typeof node === 'string' || typeof node === 'number') return String(node);
+    if (Array.isArray(node)) return node.map(getNodeText).join('');
+    if (React.isValidElement(node)) return getNodeText((node.props as { children?: React.ReactNode }).children);
+    return '';
 }
 
 function extractCodeBlockChild(children: React.ReactNode): { code: string; language: string } | null {
     for (const child of React.Children.toArray(children)) {
-        if (!React.isValidElement(child)) {
-            continue;
-        }
-
-        const childProps = child.props as { className?: string; children?: React.ReactNode };
+        if (!React.isValidElement(child)) continue;
+        const props = child.props as { className?: string; children?: React.ReactNode };
         return {
-            code: getNodeText(childProps.children ?? '').replace(/\n$/, ''),
-            language: getMarkdownFenceLanguage(childProps.className),
+            code: getNodeText(props.children ?? '').replace(/\n$/, ''),
+            language: getMarkdownFenceLanguage(props.className),
         };
     }
-
     return null;
 }
 
 function parseExecutionCode(match: string): RenderSegment | null {
     const parsed = match.match(CODE_EXECUTION_PATTERN);
-    if (!parsed) return null;
-
-    return {
+    return parsed ? {
         kind: 'execution_code',
         language: parsed[1].trim().toLowerCase(),
         code: parsed[2].trim(),
-    };
+    } : null;
 }
 
 function parseExecutionOutput(match: string): RenderSegment | null {
     const parsed = match.match(EXECUTION_OUTPUT_PATTERN);
-    if (!parsed) return null;
-
-    return {
-        kind: 'execution_output',
-        output: parsed[1].trim(),
-    };
+    return parsed ? { kind: 'execution_output', output: parsed[1].trim() } : null;
 }
 
 function parseExecutionImage(match: string): RenderSegment | null {
     const parsed = match.match(EXECUTION_IMAGE_PATTERN);
     if (!parsed) return null;
 
-    const mimeType = parsed[1].trim() || 'image/png';
+    const declaredMimeType = parsed[1].trim() || 'image/png';
+    const mimeType = declaredMimeType.startsWith('image/') ? declaredMimeType : 'image/png';
     const base64Data = parsed[2].trim();
-
     if (!base64Data) {
-        return {
-            kind: 'execution_images',
-            images: [{ kind: 'error', message: 'Empty image data received' }],
-        };
+        return { kind: 'execution_images', images: [{ kind: 'error', message: 'Empty image data received' }] };
     }
 
     let src = base64Data;
     if (!base64Data.startsWith('data:')) {
         const cleanedBase64 = base64Data.replace(/\s/g, '');
-        if (!/^[A-Za-z0-9+/=]+$/.test(cleanedBase64)) {
-            return {
-                kind: 'execution_images',
-                images: [{ kind: 'error', message: 'Invalid base64 encoding' }],
-            };
+        if (!BASE64_PATTERN.test(cleanedBase64)) {
+            return { kind: 'execution_images', images: [{ kind: 'error', message: 'Invalid base64 encoding' }] };
         }
-        src = `data:${mimeType.startsWith('image/') ? mimeType : 'image/png'};base64,${cleanedBase64}`;
+        src = `data:${mimeType};base64,${cleanedBase64}`;
     }
-
-    const normalizedMimeType = mimeType.startsWith('image/') ? mimeType : 'image/png';
 
     return {
         kind: 'execution_images',
         images: [{
-            kind: 'image',
-            src,
-            mimeType: normalizedMimeType,
-            format: normalizedMimeType.replace('image/', '').toUpperCase(),
+            kind: 'image', src, mimeType,
+            format: mimeType.replace('image/', '').toUpperCase(),
             alt: 'Generated visualization',
         }],
     };
 }
 
-function parseExecutionSegment(match: string): RenderSegment | null {
-    if (match.startsWith('<!-- CODE_EXECUTION_START -->')) {
-        return parseExecutionCode(match);
-    }
-    if (match.startsWith('<!-- EXECUTION_OUTPUT_START -->')) {
-        return parseExecutionOutput(match);
-    }
-    if (match.startsWith('<!-- EXECUTION_IMAGE_START -->')) {
-        return parseExecutionImage(match);
+function parseExecutionBlock(content: string, block: ExecutionBlock): RenderSegment | null {
+    const source = content.slice(block.start, block.end);
+    if (block.kind === 'code') return parseExecutionCode(source);
+    if (block.kind === 'output') return parseExecutionOutput(source);
+    return parseExecutionImage(source);
+}
+
+function findNextExecutionBlock(content: string, from: number): ExecutionBlock | null {
+    let cursor = from;
+    while ((cursor = content.indexOf('<!--', cursor)) !== -1) {
+        let kind: ExecutionKind | undefined;
+        let startMarker = '';
+        let endMarker = '';
+        if (content.startsWith(CODE_START, cursor)) {
+            kind = 'code'; startMarker = CODE_START; endMarker = CODE_END;
+        } else if (content.startsWith(OUTPUT_START, cursor)) {
+            kind = 'output'; startMarker = OUTPUT_START; endMarker = OUTPUT_END;
+        } else if (content.startsWith(IMAGE_START, cursor)) {
+            kind = 'image'; startMarker = IMAGE_START; endMarker = IMAGE_END;
+        }
+
+        if (kind) {
+            const endStart = content.indexOf(endMarker, cursor + startMarker.length);
+            if (endStart !== -1) return { kind, start: cursor, end: endStart + endMarker.length };
+        }
+        cursor += 4;
     }
     return null;
 }
 
-function pushMarkdownSegment(segments: RenderSegment[], content: string) {
-    const cleanedContent = stripExecutionMarkerComments(content);
-    if (!cleanedContent) return;
-
-    const previousSegment = segments[segments.length - 1];
-    if (previousSegment?.kind === 'markdown') {
-        previousSegment.content += cleanedContent;
-        return;
-    }
-
-    segments.push({ kind: 'markdown', content: cleanedContent });
-}
-
 function isExecutionMarkerComment(commentBody: string): boolean {
-    const trimmedComment = commentBody.trim();
-    if (EXECUTION_COMMENT_MARKERS.has(trimmedComment)) {
-        return true;
-    }
-
-    return EXECUTION_COMMENT_PREFIXES.some((prefix) => trimmedComment.startsWith(prefix));
+    const value = commentBody.trim();
+    return EXECUTION_COMMENT_MARKERS.has(value) || EXECUTION_COMMENT_PREFIXES.some((prefix) => value.startsWith(prefix));
 }
 
 function stripExecutionMarkerComments(content: string): string {
-    if (!content.includes('<!--')) {
-        return content;
+    if (!content.includes('<!--')) return content;
+
+    let cleaned = '';
+    let cursor = 0;
+    while (cursor < content.length) {
+        const start = content.indexOf('<!--', cursor);
+        if (start === -1) return cleaned + content.slice(cursor);
+        const end = content.indexOf('-->', start + 4);
+        if (end === -1) return cleaned + content.slice(cursor);
+
+        cleaned += content.slice(cursor, start);
+        if (!isExecutionMarkerComment(content.slice(start + 4, end))) cleaned += content.slice(start, end + 3);
+        cursor = end + 3;
     }
+    return cleaned;
+}
 
-    let cleanedContent = '';
-    let currentIndex = 0;
-
-    while (currentIndex < content.length) {
-        const commentStart = content.indexOf('<!--', currentIndex);
-        if (commentStart === -1) {
-            cleanedContent += content.slice(currentIndex);
-            break;
-        }
-
-        const commentEnd = content.indexOf('-->', commentStart + 4);
-        if (commentEnd === -1) {
-            cleanedContent += content.slice(currentIndex);
-            break;
-        }
-
-        cleanedContent += content.slice(currentIndex, commentStart);
-
-        const commentBody = content.slice(commentStart + 4, commentEnd);
-        if (!isExecutionMarkerComment(commentBody)) {
-            cleanedContent += content.slice(commentStart, commentEnd + 3);
-        }
-
-        currentIndex = commentEnd + 3;
-    }
-
-    return cleanedContent;
+function pushMarkdownSegment(segments: RenderSegment[], content: string): void {
+    const cleaned = stripExecutionMarkerComments(content);
+    if (!cleaned) return;
+    const previous = segments[segments.length - 1];
+    if (previous?.kind === 'markdown') previous.content += cleaned;
+    else segments.push({ kind: 'markdown', content: cleaned });
 }
 
 function isStandaloneHtmlDocument(content: string): boolean {
-    return !EXECUTION_SEGMENT_PATTERN.test(content) && isHTMLContent(content);
+    return findNextExecutionBlock(content, 0) === null && isHTMLContent(content);
 }
 
 function isRelaxedJson(content: string): boolean {
     const trimmed = content.trim();
-    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-        try {
-            JSON.parse(trimmed);
-            return true;
-        } catch {
-            return (trimmed.includes('"') && trimmed.includes(':')) || trimmed.endsWith('}') || trimmed.endsWith(']');
-        }
+    if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return false;
+    try {
+        JSON.parse(trimmed);
+        return true;
+    } catch {
+        return (trimmed.includes('"') && trimmed.includes(':')) || trimmed.endsWith('}') || trimmed.endsWith(']');
     }
-    return false;
 }
 
 function tokenizeContent(content: string): RenderSegment[] {
+    if (!content) return [];
     if (isStandaloneHtmlDocument(content)) {
-        return [{
-            kind: 'execution_code',
-            language: 'html',
-            code: content.trim(),
-        }];
+        return [{ kind: 'execution_code', language: 'html', code: content.trim() }];
     }
 
     if (isRelaxedJson(content)) {
@@ -318,126 +284,124 @@ function tokenizeContent(content: string): RenderSegment[] {
         try {
             code = JSON.stringify(JSON.parse(code), null, 2);
         } catch {
-            // Keep original if not strictly parseable
+            // Relaxed JSON remains readable even when strict parsing fails.
         }
-        return [{
-            kind: 'execution_code',
-            language: 'json',
-            code,
-        }];
+        return [{ kind: 'execution_code', language: 'json', code }];
     }
 
-    const normalizedContent = convertBacktickedLatexToMath(content);
+    const normalized = convertBacktickedLatexToMath(content);
+    let block = findNextExecutionBlock(normalized, 0);
+    if (!block) {
+        const markdown = stripExecutionMarkerComments(normalized);
+        return markdown ? [{ kind: 'markdown', content: markdown }] : [];
+    }
+
     const segments: RenderSegment[] = [];
-    let lastIndex = 0;
+    let markdownStart = 0;
+    while (block) {
+        const between = normalized.slice(markdownStart, block.start);
+        const parsed = parseExecutionBlock(normalized, block);
+        const previous = segments[segments.length - 1];
+        const mergeImages = parsed?.kind === 'execution_images' &&
+            previous?.kind === 'execution_images' && between.trim() === '';
 
-    for (const match of normalizedContent.matchAll(EXECUTION_SEGMENT_PATTERN)) {
-        const matchedContent = match[0];
-        const matchIndex = match.index ?? 0;
-        const parsedSegment = parseExecutionSegment(matchedContent);
-        const between = normalizedContent.slice(lastIndex, matchIndex);
-        const previousSegment = segments[segments.length - 1];
-        const canMergeImages = !!parsedSegment &&
-            parsedSegment.kind === 'execution_images' &&
-            previousSegment?.kind === 'execution_images' &&
-            between.trim() === '';
+        if (!mergeImages) pushMarkdownSegment(segments, between);
+        if (!parsed) pushMarkdownSegment(segments, normalized.slice(block.start, block.end));
+        else if (mergeImages && previous?.kind === 'execution_images') previous.images.push(...parsed.images);
+        else segments.push(parsed);
 
-        if (!canMergeImages) {
-            pushMarkdownSegment(segments, between);
-        }
-
-        if (!parsedSegment) {
-            pushMarkdownSegment(segments, matchedContent);
-        } else if (parsedSegment.kind === 'execution_images' && previousSegment?.kind === 'execution_images' && between.trim() === '') {
-            previousSegment.images.push(...parsedSegment.images);
-        } else {
-            segments.push(parsedSegment);
-        }
-
-        lastIndex = matchIndex + matchedContent.length;
+        markdownStart = block.end;
+        block = findNextExecutionBlock(normalized, markdownStart);
     }
 
-    pushMarkdownSegment(segments, normalizedContent.slice(lastIndex));
-
-    return segments.filter((segment) => segment.kind !== 'markdown' || segment.content.length > 0);
+    pushMarkdownSegment(segments, normalized.slice(markdownStart));
+    return segments;
 }
 
-function getNodeText(node: React.ReactNode): string {
-    if (typeof node === 'string' || typeof node === 'number') {
-        return String(node);
+function downloadHref(href: string): void {
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = '';
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+}
+
+function safeDecodeURIComponent(value: string): string {
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        return value;
     }
-    if (Array.isArray(node)) {
-        return node.map(getNodeText).join('');
-    }
-    if (React.isValidElement(node)) {
-        return getNodeText((node.props as { children?: React.ReactNode }).children);
-    }
-    return '';
+}
+
+function artifactFileInfo(href: string): { filename: string; language: string } {
+    const pathname = pathWithoutQueryOrHash(href);
+    const slash = pathname.lastIndexOf('/');
+    const filename = safeDecodeURIComponent(pathname.slice(slash + 1)) || 'file';
+    const dot = filename.lastIndexOf('.');
+    return { filename, language: dot === -1 ? 'plaintext' : filename.slice(dot + 1) || 'plaintext' };
+}
+
+function headingClass(level: number, className?: string): string {
+    return classes('token-heading', level <= 3 && `token-heading${level}`, className);
 }
 
 const headingComponents = {
-    h1: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h1 {...props} className={['token-heading', 'token-heading1', props.className].filter(Boolean).join(' ')} />,
-    h2: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h2 {...props} className={['token-heading', 'token-heading2', props.className].filter(Boolean).join(' ')} />,
-    h3: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h3 {...props} className={['token-heading', 'token-heading3', props.className].filter(Boolean).join(' ')} />,
-    h4: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h4 {...props} className={['token-heading', props.className].filter(Boolean).join(' ')} />,
-    h5: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h5 {...props} className={['token-heading', props.className].filter(Boolean).join(' ')} />,
-    h6: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h6 {...props} className={['token-heading', props.className].filter(Boolean).join(' ')} />,
+    h1: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h1 {...props} className={headingClass(1, props.className)} />,
+    h2: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h2 {...props} className={headingClass(2, props.className)} />,
+    h3: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h3 {...props} className={headingClass(3, props.className)} />,
+    h4: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h4 {...props} className={headingClass(4, props.className)} />,
+    h5: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h5 {...props} className={headingClass(5, props.className)} />,
+    h6: (props: React.HTMLAttributes<HTMLHeadingElement>) => <h6 {...props} className={headingClass(6, props.className)} />,
 };
 
-const ImagePreviewModal: React.FC<{
-    data: ImagePreviewData | null;
-    onClose: () => void;
-}> = ({ data, onClose }) => {
+const ImagePreviewModal: React.FC<{ data: ImagePreviewData | null; onClose: () => void }> = ({ data, onClose }) => {
     const [isClosing, setIsClosing] = useState(false);
+    const closeTimer = React.useRef<number | undefined>(undefined);
 
     const handleClose = React.useCallback(() => {
+        if (isClosing) return;
         setIsClosing(true);
-        setTimeout(() => {
+        closeTimer.current = window.setTimeout(() => {
+            closeTimer.current = undefined;
             setIsClosing(false);
             onClose();
         }, 180);
-    }, [onClose]);
+    }, [isClosing, onClose]);
 
     useEffect(() => {
+        if (!data) return;
+        const previousOverflow = document.body.style.overflow;
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape') {
-                handleClose();
-            }
+            if (event.key === 'Escape') handleClose();
         };
 
-        if (data) {
-            document.body.style.overflow = 'hidden';
-            document.addEventListener('keydown', handleKeyDown);
-        }
-
+        document.body.style.overflow = 'hidden';
+        document.addEventListener('keydown', handleKeyDown);
         return () => {
-            document.body.style.overflow = '';
+            document.body.style.overflow = previousOverflow;
             document.removeEventListener('keydown', handleKeyDown);
         };
     }, [data, handleClose]);
 
+    useEffect(() => () => {
+        if (closeTimer.current !== undefined) window.clearTimeout(closeTimer.current);
+    }, []);
+
     if (!data) return null;
 
     return createPortal(
-        <div
-            className="file-preview-modal-overlay"
-            onClick={handleClose}
-            style={isClosing ? { animation: 'fadeIn 0.2s ease reverse' } : undefined}
-        >
-            <div
-                className="file-preview-modal"
-                onClick={(event) => event.stopPropagation()}
-                style={isClosing ? { animation: 'scaleIn 0.2s ease reverse' } : undefined}
-            >
+        <div className="file-preview-modal-overlay" onClick={handleClose} style={isClosing ? { animation: 'fadeIn 0.2s ease reverse' } : undefined}>
+            <div className="file-preview-modal" onClick={(event) => event.stopPropagation()} style={isClosing ? { animation: 'scaleIn 0.2s ease reverse' } : undefined}>
                 <div className="preview-modal-header">
                     <div className="preview-file-info">
-                        <Icon name="image" style={{ color: '#10b981' }} />
+                        <Icon name="image" style={PREVIEW_ICON_STYLE} />
                         <span className="preview-file-name">Generated Figure</span>
-                        <span className="preview-file-badge" style={{ backgroundColor: 'rgba(16, 185, 129, 0.13)', color: '#10b981' }}>
-                            {data.format}
-                        </span>
+                        <span className="preview-file-badge" style={PREVIEW_BADGE_STYLE}>{data.format}</span>
                     </div>
-                    <button className="preview-close-btn" title="Close (Esc)" onClick={handleClose}>
+                    <button className="preview-close-btn" type="button" title="Close (Esc)" aria-label="Close preview" onClick={handleClose}>
                         <Icon name="close" />
                     </button>
                 </div>
@@ -452,57 +416,38 @@ const ImagePreviewModal: React.FC<{
     );
 };
 
-const CodeBlock: React.FC<{
-    code: string;
-    language: string;
-    label?: string;
-    highlightingVersion: number;
-    isFilePreview?: boolean;
-    downloadUrl?: string;
-}> = ({ code, language, label, highlightingVersion, isFilePreview, downloadUrl }) => {
+const CodeBlock: React.FC<CodeBlockProps> = function CodeBlock({ code, language, label, highlightingVersion, isFilePreview, downloadUrl }) {
     const [copied, setCopied] = useState(false);
     const resolvedLanguage = resolveLanguage(language || 'plaintext');
     const displayLabel = label || getLanguageDisplayName(resolvedLanguage);
-
     const highlightedMarkup = useMemo(
         () => highlightMarkup(code, resolvedLanguage),
         [code, resolvedLanguage, highlightingVersion]
     );
 
-    const handleCopy = async () => {
+    const handleCopy = React.useCallback(async () => {
         try {
             await navigator.clipboard.writeText(code);
             setCopied(true);
-            window.setTimeout(() => setCopied(false), 1500);
+            window.setTimeout(() => setCopied(false), 1_500);
         } catch (error) {
             console.error('Copy failed:', error);
         }
-    };
-
-    const handleDownload = () => {
-        if (!downloadUrl) return;
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = '';
-        link.target = '_blank';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
+    }, [code]);
 
     return (
         <div className="code-block-container">
             <div className="code-block-header">
                 <span className="code-block-title">
                     {displayLabel}
-                    {isFilePreview && <span style={{ color: 'var(--accent-blue, #3b82f6)' }}> (Referenced File)</span>}
+                    {isFilePreview && <span style={REFERENCED_LABEL_STYLE}> (Referenced File)</span>}
                 </span>
                 {downloadUrl ? (
-                    <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
-                        <button className="code-copy-icon" type="button" title="Download file" aria-label="Download file" onClick={handleDownload} style={{ marginLeft: 0 }}>
+                    <div style={ACTION_GROUP_STYLE}>
+                        <button className="code-copy-icon" type="button" title="Download file" aria-label="Download file" onClick={() => downloadHref(downloadUrl)} style={ACTION_BUTTON_STYLE}>
                             <Icon name="download" />
                         </button>
-                        <button className="code-copy-icon" type="button" title="Copy code" aria-label="Copy code" onClick={handleCopy} style={{ marginLeft: 0 }}>
+                        <button className="code-copy-icon" type="button" title="Copy code" aria-label="Copy code" onClick={handleCopy} style={ACTION_BUTTON_STYLE}>
                             <Icon name={copied ? 'check' : 'content_copy'} />
                         </button>
                     </div>
@@ -517,49 +462,38 @@ const CodeBlock: React.FC<{
     );
 };
 
-const OutputBlock: React.FC<{ output: string }> = ({ output }) => {
+const OutputBlock: React.FC<{ output: string }> = function OutputBlock({ output }) {
     const lowerOutput = output.toLowerCase();
     const hasError = lowerOutput.includes('error') || lowerOutput.includes('traceback') || lowerOutput.includes('exception');
-
     return (
-        <div className={['code-block-container', 'exec-output-block', hasError ? 'exec-output-error' : ''].filter(Boolean).join(' ')}>
-            <div className="code-block-header">
-                <span className="code-block-title">{hasError ? 'ERROR' : 'OUTPUT'}</span>
-            </div>
-            <div className="code-block-content exec-output-content">
-                <pre><code className="exec-output-text">{output}</code></pre>
-            </div>
+        <div className={classes('code-block-container', 'exec-output-block', hasError && 'exec-output-error')}>
+            <div className="code-block-header"><span className="code-block-title">{hasError ? 'ERROR' : 'OUTPUT'}</span></div>
+            <div className="code-block-content exec-output-content"><pre><code className="exec-output-text">{output}</code></pre></div>
         </div>
     );
 };
 
-const PreviewableImage: React.FC<{
-    src: string;
-    alt: string;
-    format: string;
-    wrapperTag?: 'div' | 'span';
-    extraClassName?: string;
-    imageClassName?: string;
-    onPreview: (data: ImagePreviewData) => void;
-}> = ({ src, alt, format, wrapperTag = 'div', extraClassName = '', imageClassName = '', onPreview }) => {
+const PreviewableImage: React.FC<PreviewableImageProps> = function PreviewableImage({
+    src,
+    alt,
+    format,
+    wrapperTag = 'div',
+    extraClassName = '',
+    imageClassName = '',
+    onPreview,
+}) {
     const [failedSrc, setFailedSrc] = useState<string | null>(null);
     const hasError = failedSrc === src;
     const Wrapper = wrapperTag;
 
-    useEffect(() => {
-        setFailedSrc(null);
-    }, [src]);
-
-    const handleOpen = () => {
-        if (hasError) return;
-        onPreview({ src, alt, format });
-    };
+    const handleOpen = React.useCallback(() => {
+        if (!hasError) onPreview({ src, alt, format });
+    }, [alt, format, hasError, onPreview, src]);
 
     if (hasError) {
         const ErrorMessageTag = wrapperTag === 'span' ? 'span' : 'div';
-
         return (
-            <Wrapper className={['exec-image-item', 'exec-image-error-item', extraClassName].filter(Boolean).join(' ')}>
+            <Wrapper className={classes('exec-image-item', 'exec-image-error-item', extraClassName)}>
                 <ErrorMessageTag className="exec-image-error" title={src}>Failed to render image</ErrorMessageTag>
             </Wrapper>
         );
@@ -567,7 +501,7 @@ const PreviewableImage: React.FC<{
 
     return (
         <Wrapper
-            className={['exec-image-item', extraClassName].filter(Boolean).join(' ')}
+            className={classes('exec-image-item', extraClassName)}
             onClick={handleOpen}
             onKeyDown={(event) => {
                 if (event.key === 'Enter' || event.key === ' ') {
@@ -581,104 +515,67 @@ const PreviewableImage: React.FC<{
             <img
                 src={src}
                 alt={alt}
-                className={['exec-rendered-image', imageClassName].filter(Boolean).join(' ')}
+                className={classes('exec-rendered-image', imageClassName)}
                 loading="lazy"
-                onError={() => {
-                    setFailedSrc(src);
-                }}
+                onError={() => setFailedSrc(src)}
             />
         </Wrapper>
     );
 };
 
-const ExecutionImagesBlock: React.FC<{
-    images: ExecutionImageItem[];
-    onPreview: (data: ImagePreviewData) => void;
-}> = ({ images, onPreview }) => (
-    <div className="code-block-container exec-image-block">
-        <div className="code-block-header">
-            <span className="code-block-title">FIGURE</span>
-        </div>
-        <div className="exec-image-grid">
-            {images.map((image, index) => (
-                image.kind === 'error'
-                    ? (
+const ExecutionImagesBlock: React.FC<{ images: ExecutionImageItem[]; onPreview: (data: ImagePreviewData) => void }> = function ExecutionImagesBlock({ images, onPreview }) {
+        return (
+            <div className="code-block-container exec-image-block">
+                <div className="code-block-header"><span className="code-block-title">FIGURE</span></div>
+                <div className="exec-image-grid">
+                    {images.map((image, index) => image.kind === 'error' ? (
                         <div key={`execution-image-${index}`} className="exec-image-item exec-image-error-item">
                             <div className="exec-image-error">{image.message}</div>
                         </div>
-                    )
-                    : (
-                        <PreviewableImage
-                            key={`execution-image-${index}`}
-                            src={image.src}
-                            alt={image.alt}
-                            format={image.format}
-                            onPreview={onPreview}
-                        />
-                    )
-            ))}
-        </div>
-    </div>
-);
+                    ) : (
+                        <PreviewableImage key={`execution-image-${index}`} src={image.src} alt={image.alt} format={image.format} onPreview={onPreview} />
+                    ))}
+                </div>
+            </div>
+        );
+};
 
-const SandboxFileViewer: React.FC<{ href: string }> = ({ href }) => {
+const SandboxFileViewer: React.FC<{ href: string }> = function SandboxFileViewer({ href }) {
     const [content, setContent] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [isImage, setIsImage] = useState(() => isImageArtifactHref(href));
     const [preview, setPreview] = useState<ImagePreviewData | null>(null);
-
-    const decodedHref = decodeURIComponent(href);
-    const filename = decodedHref.split('/').pop() || 'file';
-    const ext = href.split('.').pop() || '';
-    const language = ext.split('?')[0] || 'plaintext';
+    const { filename, language } = useMemo(() => artifactFileInfo(href), [href]);
 
     useEffect(() => {
         const imageFromPath = isImageArtifactHref(href);
-        let cancelled = false;
-
+        const controller = new AbortController();
         setContent(null);
         setIsImage(imageFromPath);
-        setLoading(true);
+        setLoading(!imageFromPath);
+        if (imageFromPath) return () => controller.abort();
 
-        // Image extensions are known before a request is made. Never fetch
-        // their binary payload merely to turn it into text for a code block.
-        if (imageFromPath) {
-            setLoading(false);
-            return () => {
-                cancelled = true;
-            };
-        }
-
-        fetch(href)
-            .then(res => {
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                if (res.headers.get('content-type')?.toLowerCase().startsWith('image/')) {
-                    // This also protects older or mislabelled artifact URLs
-                    // whose filename does not retain its image extension.
-                    void res.body?.cancel();
+        void fetch(href, { signal: controller.signal })
+            .then(async (response) => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                if (response.headers.get('content-type')?.toLowerCase().startsWith('image/')) {
+                    await response.body?.cancel();
                     return null;
                 }
-                return res.text();
+                return response.text();
             })
-            .then(text => {
-                if (cancelled) return;
-                if (text === null) {
-                    setIsImage(true);
-                    setLoading(false);
-                    return;
-                }
-                setContent(text);
+            .then((text) => {
+                if (text === null) setIsImage(true);
+                else setContent(text);
                 setLoading(false);
             })
-            .catch(err => {
-                if (cancelled) return;
-                setContent(`Error loading file content: ${err.message}`);
+            .catch((error: Error) => {
+                if (error.name === 'AbortError') return;
+                setContent(`Error loading file content: ${error.message}`);
                 setLoading(false);
             });
 
-        return () => {
-            cancelled = true;
-        };
+        return () => controller.abort();
     }, [href]);
 
     if (isImage) {
@@ -686,35 +583,13 @@ const SandboxFileViewer: React.FC<{ href: string }> = ({ href }) => {
             <>
                 <div className="code-block-container sandbox-file-image-preview">
                     <div className="code-block-header">
-                        <span className="code-block-title">
-                            {filename}
-                            <span style={{ color: 'var(--accent-blue, #3b82f6)' }}> (Referenced Image)</span>
-                        </span>
-                        <button
-                            className="code-copy-icon"
-                            type="button"
-                            title="Download image"
-                            aria-label="Download image"
-                            onClick={() => {
-                                const link = document.createElement('a');
-                                link.href = href;
-                                link.download = '';
-                                link.target = '_blank';
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                            }}
-                        >
+                        <span className="code-block-title">{filename}<span style={REFERENCED_LABEL_STYLE}> (Referenced Image)</span></span>
+                        <button className="code-copy-icon" type="button" title="Download image" aria-label="Download image" onClick={() => downloadHref(href)}>
                             <Icon name="download" />
                         </button>
                     </div>
                     <div className="exec-image-grid">
-                        <PreviewableImage
-                            src={href}
-                            alt={filename}
-                            format={language.toUpperCase() || 'IMAGE'}
-                            onPreview={setPreview}
-                        />
+                        <PreviewableImage src={href} alt={filename} format={language.toUpperCase() || 'IMAGE'} onPreview={setPreview} />
                     </div>
                 </div>
                 <ImagePreviewModal data={preview} onClose={() => setPreview(null)} />
@@ -723,12 +598,12 @@ const SandboxFileViewer: React.FC<{ href: string }> = ({ href }) => {
     }
 
     return (
-        <CodeBlock 
-            code={loading ? 'Loading file content...' : (content || '')} 
-            language={loading ? 'plaintext' : language} 
-            highlightingVersion={1} 
+        <CodeBlock
+            code={loading ? 'Loading file content...' : (content || '')}
+            language={loading ? 'plaintext' : language}
+            highlightingVersion={1}
             label={filename}
-            isFilePreview={true}
+            isFilePreview
             downloadUrl={href}
         />
     );
@@ -738,120 +613,72 @@ const MarkdownSegmentContent: React.FC<{
     content: string;
     highlightingVersion: number;
     onPreview: (data: ImagePreviewData) => void;
-}> = ({ content, highlightingVersion, onPreview }) => {
+}> = function MarkdownSegmentContent({ content, highlightingVersion, onPreview }) {
     const components = useMemo(() => ({
         ...headingComponents,
-        strong: (props: React.HTMLAttributes<HTMLElement>) => <strong {...props} className={['token-critical', props.className].filter(Boolean).join(' ')} />,
+        strong: (props: React.HTMLAttributes<HTMLElement>) => <strong {...props} className={classes('token-critical', props.className)} />,
         pre: ({ children }: { children?: React.ReactNode }) => {
-            const codeBlockChild = extractCodeBlockChild(children);
-            if (!codeBlockChild) {
-                return <pre>{children}</pre>;
-            }
-
-            return (
-                <CodeBlock
-                    code={codeBlockChild.code}
-                    language={codeBlockChild.language}
-                    highlightingVersion={highlightingVersion}
-                />
-            );
+            const codeBlock = extractCodeBlockChild(children);
+            return codeBlock ? (
+                <CodeBlock code={codeBlock.code} language={codeBlock.language} highlightingVersion={highlightingVersion} />
+            ) : <pre>{children}</pre>;
         },
-        img: ({ src, alt }: { src?: string; alt?: string }) => {
-            if (!src) return null;
-            return (
-                <PreviewableImage
-                    src={src}
-                    alt={alt || 'Image'}
-                    format="IMAGE"
-                    wrapperTag="span"
-                    imageClassName="markdown-image"
-                    onPreview={onPreview}
-                />
-            );
-        },
-        a: ({ href, children }: { href?: string; children?: React.ReactNode }) => {
-            const sandboxArtifact = isSandboxArtifactHref(href);
-            if (sandboxArtifact) {
-                return <SandboxFileViewer key={href} href={href!} />;
-            }
-            return (
-                <a
-                    href={href}
-                    target="_blank"
-                    rel="noreferrer"
-                >
-                    {children}
-                </a>
-            );
-        },
-        code: ({ className, children }: { className?: string; children?: React.ReactNode }) => {
-            return <code className={className}>{children}</code>;
-        },
+        img: ({ src, alt }: { src?: string; alt?: string }) => src ? (
+            <PreviewableImage src={src} alt={alt || 'Image'} format="IMAGE" wrapperTag="span" imageClassName="markdown-image" onPreview={onPreview} />
+        ) : null,
+        a: ({ href, children }: { href?: string; children?: React.ReactNode }) => isSandboxArtifactHref(href) ? (
+            <SandboxFileViewer key={href} href={href!} />
+        ) : (
+            <a href={href} target="_blank" rel="noreferrer">{children}</a>
+        ),
+        code: ({ className, children }: { className?: string; children?: React.ReactNode }) => <code className={className}>{children}</code>,
     }), [highlightingVersion, onPreview]);
 
     return (
-        <ReactMarkdown
-            remarkPlugins={[remarkGfm, remarkMath]}
-            rehypePlugins={[[rehypeKatex, { throwOnError: false, strict: false, trust: true }]] as any}
-            components={components as any}
-        >
+        <ReactMarkdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={REHYPE_PLUGINS} components={components as any}>
             {content}
         </ReactMarkdown>
     );
 };
 
-export const RenderMathMarkdown: React.FC<RenderMathMarkdownProps> = ({ content, className = '' }) => {
+const RenderedContent = React.memo<{
+    segments: RenderSegment[];
+    highlightingVersion: number;
+    onPreview: (data: ImagePreviewData) => void;
+}>(function RenderedContent({ segments, highlightingVersion, onPreview }) {
+    return (
+        <div className="rich-content-display">
+            <div className="latex-content-wrapper">
+                {segments.map((segment, index) => {
+                    switch (segment.kind) {
+                        case 'markdown':
+                            return <MarkdownSegmentContent key={`segment-${index}`} content={segment.content} highlightingVersion={highlightingVersion} onPreview={onPreview} />;
+                        case 'execution_code':
+                            return <CodeBlock key={`segment-${index}`} code={segment.code} language={segment.language || 'python'} highlightingVersion={highlightingVersion} />;
+                        case 'execution_output':
+                            return <OutputBlock key={`segment-${index}`} output={segment.output} />;
+                        case 'execution_images':
+                            return <ExecutionImagesBlock key={`segment-${index}`} images={segment.images} onPreview={onPreview} />;
+                    }
+                })}
+            </div>
+        </div>
+    );
+});
+
+export const RenderMathMarkdown: React.FC<RenderMathMarkdownProps> = React.memo(function RenderMathMarkdown({ content, className = '' }) {
     const [highlightingVersion, setHighlightingVersion] = useState(isHighlighterReady() ? 1 : 0);
     const [previewData, setPreviewData] = useState<ImagePreviewData | null>(null);
 
     useEffect(() => onHighlighterReady(() => setHighlightingVersion((value) => value + 1)), []);
-
     const segments = useMemo(() => tokenizeContent(content || ''), [content]);
 
     return (
-        <div className={`render-math-markdown ${className}`.trim()}>
-            <div className="rich-content-display">
-                <div className="latex-content-wrapper">
-                    {segments.map((segment, index) => {
-                        if (segment.kind === 'markdown') {
-                            return (
-                                <MarkdownSegmentContent
-                                    key={`segment-${index}`}
-                                    content={segment.content}
-                                    highlightingVersion={highlightingVersion}
-                                    onPreview={setPreviewData}
-                                />
-                            );
-                        }
-
-                        if (segment.kind === 'execution_code') {
-                            return (
-                                <CodeBlock
-                                    key={`segment-${index}`}
-                                    code={segment.code}
-                                    language={segment.language || 'python'}
-                                    highlightingVersion={highlightingVersion}
-                                />
-                            );
-                        }
-
-                        if (segment.kind === 'execution_output') {
-                            return <OutputBlock key={`segment-${index}`} output={segment.output} />;
-                        }
-
-                        return (
-                            <ExecutionImagesBlock
-                                key={`segment-${index}`}
-                                images={segment.images}
-                                onPreview={setPreviewData}
-                            />
-                        );
-                    })}
-                </div>
-            </div>
+        <div className={classes('render-math-markdown', className)}>
+            <RenderedContent segments={segments} highlightingVersion={highlightingVersion} onPreview={setPreviewData} />
             <ImagePreviewModal data={previewData} onClose={() => setPreviewData(null)} />
         </div>
     );
-};
+});
 
 export default RenderMathMarkdown;

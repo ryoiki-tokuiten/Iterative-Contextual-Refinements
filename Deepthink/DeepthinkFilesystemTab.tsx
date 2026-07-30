@@ -14,7 +14,6 @@ import { sql } from '@codemirror/lang-sql';
 import { StreamLanguage } from '@codemirror/language';
 import { shell } from '@codemirror/legacy-modes/mode/shell';
 import { Icon } from '../UI/Icons';
-import { globalState } from '../Core/State';
 import { GitDiffView } from '../Styles/Components/DiffModal/GitDiffView';
 import './DeepthinkFilesystemTab.css';
 
@@ -104,12 +103,11 @@ function getLanguageExtension(filename: string) {
     }
 }
 
-function activeDeepthinkRepositoryId(): string {
-    return globalState.activeDeepthinkPipeline?.id || '';
+interface DeepthinkFilesystemTabProps {
+    repositoryId: string;
 }
 
-export const DeepthinkFilesystemTab: React.FC = () => {
-    const [repositoryId, setRepositoryId] = useState('');
+export const DeepthinkFilesystemTab: React.FC<DeepthinkFilesystemTabProps> = ({ repositoryId }) => {
     const [history, setHistory] = useState<CommitItem[]>([]);
     const [selectedCommit, setSelectedCommit] = useState('current');
     const [compareBase, setCompareBase] = useState('current');
@@ -218,34 +216,15 @@ export const DeepthinkFilesystemTab: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        const id = activeDeepthinkRepositoryId();
-        setRepositoryId(id);
         setSelectedCommit('current');
         setCompareBase('current');
         setCompareHead('current');
+        setSelectedFile('');
+        setFileContent('');
+        setDiffContent('');
         setView('file');
-        if (id) void refreshRepository(id, 'current');
-    }, []);
-
-    // Switching between Deepthink runs must switch the explorer's repository
-    // immediately; it is not a timed refresh and never reuses another run's tree.
-    useEffect(() => {
-        const syncActiveRepository = () => {
-            const id = activeDeepthinkRepositoryId();
-            if (id === repositoryId) return;
-            setRepositoryId(id);
-            setSelectedCommit('current');
-            setCompareBase('current');
-            setCompareHead('current');
-            setSelectedFile('');
-            setFileContent('');
-            setDiffContent('');
-            setView('file');
-            setFiles([]);
-            if (id) void refreshRepository(id, 'current');
-        };
-        window.addEventListener('deepthinkPipelineUpdated', syncActiveRepository);
-        return () => window.removeEventListener('deepthinkPipelineUpdated', syncActiveRepository);
+        setFiles([]);
+        if (repositoryId) void fetchHistory(repositoryId);
     }, [repositoryId]);
 
     useEffect(() => {
@@ -400,5 +379,3 @@ export const DeepthinkFilesystemTab: React.FC = () => {
             </div>
     );
 };
-
-export default DeepthinkFilesystemTab;

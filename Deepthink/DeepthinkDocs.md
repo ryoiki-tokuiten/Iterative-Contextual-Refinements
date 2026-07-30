@@ -15,7 +15,7 @@ This document describes the behavior implemented by `DeepthinkCore.ts`, `Deepthi
 
 `SystemArchitecture.png` is the current diagram used by the README. `OldSystemArchitecture.png` is intentionally retained as the archived diagram for the previous system.
 
-The diagram is a conceptual overview. The exact context contracts, synchronization points, and replacement behavior are defined below. In particular, the current hypothesis heartbeat reads previous hypothesis rounds and recent correction/critique history; it does not receive the concurrently generated solution-pool outputs.
+The diagram is a conceptual overview. The exact context contracts, synchronization points, and replacement behavior are defined below. In particular, the hypothesis heartbeat reads the persistent generator/proximity conversation, the immediately preceding tester outputs, and recent correction/critique history; it does not receive concurrently generated solution-pool outputs.
 
 ## Architectural Principles
 
@@ -29,9 +29,11 @@ A main strategy is a branch identity, not a step in a shared plan. Downstream ag
 
 Outside Evolving DFS, a main strategy may be expanded into several sub-strategies. Inside Evolving DFS, sub-strategies are disabled and every main strategy owns one direct branch.
 
-### Curated Prompt Context And Scoped Repository Views
+### One Context Manifest, Two Deliberate Context Surfaces
 
-No Deepthink prompt is expanded into an unfiltered global history. The orchestrator constructs role-specific textual context for every call:
+Every invocation is built from one typed context manifest. The manifest fixes the agent kind, system instruction, prompt text, attachment routes, repository scope, and output contract for that call. The immutable run configuration decides whether the invocation is a direct provider call or uses the virtual sandbox. Textual context and filesystem policy therefore use the same role and feature decisions.
+
+No Deepthink prompt is expanded into an unfiltered global history. The orchestrator constructs role-specific textual context:
 
 - Correctors receive deep local history and shallow cross-branch status.
 - Solution-pool agents receive local pool history and only the latest pools from other branches.
@@ -40,7 +42,13 @@ No Deepthink prompt is expanded into an unfiltered global history. The orchestra
 - Hypothesis testers receive one hypothesis and no strategy history.
 - The final judge receives candidate solutions, not the internal search process.
 
-This remains the coordination boundary even when the sandbox is enabled. Sandbox access augments an agent's ability to inspect or verify files; it does not add hidden artifacts to its direct prompt context or make repository contents authoritative over the supplied task context. Read-only repository permissions are described below.
+The prompt is the canonical role instruction and coordination summary. The filesystem may intentionally expose richer work artifacts according to the explicit role policy below. Those artifacts are evidence available to the role; they do not override the Core Challenge or silently become prompt text.
+
+Branch isolation and Full Solution Context are applied to both surfaces. Branch isolation removes peer prompt sections and peer mounts for evolving correction and solution-pool roles. Full Solution Context controls both serialized peer solution context and peer mounts for single-pass correction.
+
+### Immutable Run Identity
+
+At run start, Deepthink freezes every execution-affecting setting and every customizable prompt into one `DeepthinkRunConfig`. Models, sampling values, counts, feature flags, prompt strings, and the Code Execution setting do not change during the run or between retries. UI settings changed while a run is active affect only the next run.
 
 ### Depth And Breadth Are Separate Responsibilities
 
@@ -89,7 +97,7 @@ The configuration controller applies the following constraints:
 | Hypothesis injection | Blind Trust, Strategy-Aware, or Selective; forced to Selective in Evolving DFS |
 | Critique Synthesis | Requires refinement; unavailable in Evolving DFS |
 | Full Solution Context | Requires refinement; unavailable in Evolving DFS |
-| Sandbox execution | Optional; available only to selected work and verification agents |
+| Virtual sandbox | Explicit Code Execution enables the sandbox, `sandbox_exec`, `final_output`, and filesystem context. With Code Execution off, Deepthink makes tool-less provider calls. |
 
 Turning refinement off also disables Evolving DFS, Critique Synthesis, Full Solution Context, and PQF. Enabling Evolving DFS forces sub-strategies to zero, disables Critique Synthesis and Full Solution Context, enables PQF, and forces Selective hypothesis routing. Disabling Evolving DFS does not automatically restore the previous sub-strategy or refinement-option selections.
 
@@ -101,16 +109,25 @@ The Evolving DFS depth includes the original execution as iteration 1. Therefore
 
 ## Common Request Envelope
 
-Every Deepthink call is assembled from two layers:
+Every Deepthink call is assembled from one manifest containing two prompt layers:
 
 1. A customizable system instruction defining the durable role and behavior of the agent.
 2. A runtime-generated user prompt containing the exact challenge, assigned artifacts, branch identity, and permitted repository view.
 
-The prompt editor exposes system instructions and per-agent model selection. Runtime user prompts are generated by the core and are not user-editable because they encode live branch state and context boundaries.
+The prompt editor exposes system instructions and per-agent model selection. Runtime user prompts are generated by the core and are not user-editable because they encode live branch state and context boundaries. A typed agent registry is the single mapping from agent kind to label, system-prompt key, model key, and sandbox role; display text is never used to infer execution behavior.
 
-All calls receive the original challenge text. If the challenge includes an image, the image is attached to every Deepthink model call. When the Sandbox Terminal Environment is enabled, that image is also seeded as a read-only root file in the run repository view.
+All calls receive the original challenge text. Attachments are classified once and then rendered into the applicable transports:
 
-Model selection may be overridden per agent. Otherwise the currently selected model is used. Temperature, top-p, and thinking level are applied at invocation time.
+- Direct images are supplied once as an array of native multimodal inputs.
+- Direct text, JSON, and source files are supplied once as text input.
+- When Code Execution is enabled, all direct files are also stable, read-only filesystem artifacts under `/workspace/direct_context`.
+- Filesystem-context uploads are available only when Code Execution is enabled. They are then mounted read-only under `/workspace/user_uploaded`; they do not become prompt text or native provider parts.
+- When Code Execution is disabled, direct files still use their direct provider/text transports, while filesystem-context uploads are intentionally unavailable to agents.
+- Arbitrary binary files are never decoded into prompt text.
+
+Model selection may be overridden per agent. Otherwise the model captured in the run snapshot is used. The frozen temperature, top-p, and thinking level are applied to every invocation and retry.
+
+Dynamic IDs are validated at the structured-output boundary. Selective hypothesis targets must be unique active strategy IDs (with an empty array reserved for global routing), strategy replacements must contain exactly the requested stable slot IDs, and the Final Judge must select an actual candidate ID. Internal slot lookup fails loudly for an unknown strategy instead of silently falling back to `Strategy-1`.
 
 ## Agent Context Contracts
 
@@ -240,7 +257,7 @@ Each corrector in the non-Evolving path receives:
 - The static Full Solution Context, if enabled.
 - The original image, if present.
 
-The Full Solution Context contains every candidate's main strategy text, sub-strategy text, original solution, and critique. It marks which candidate is assigned to the current corrector.
+The Full Solution Context contains every candidate's main strategy text, sub-strategy text, original solution, and critique. It marks which candidate is assigned to the current corrector. When disabled, peer prompt context and peer strategy-directory mounts are both absent.
 
 All correctors run in parallel. Consequently, Full Solution Context is static: it contains original solutions and critiques, not corrections being generated by peer correctors in the same pass.
 
@@ -258,13 +275,13 @@ For its own branch, it receives:
 - The latest solution-pool output for its own branch, if available.
 - Its current selective hypothesis packet.
 
-For every other active strategy, it receives only:
+When branch isolation is disabled, it receives the following text for every other active strategy:
 
 - Strategy text and branch version.
 - Latest execution or correction.
 - Latest critique.
 
-It does not receive other branches' memory banks, histories, or solution pools.
+It does not receive other branches' memory banks, histories, or solution pools in prompt text. When branch isolation is enabled, it receives no peer prompt sections and no peer strategy-directory mounts. When isolation is disabled, its filesystem view intentionally includes the complete active peer strategy directories even though the peer prompt summary remains shallow.
 
 Conceptually, the repository has this shape:
 
@@ -306,12 +323,12 @@ For its assigned branch, it receives:
 - Up to the last five solution-pool outputs from the same branch.
 - Current selective hypothesis packet.
 
-For other active strategies, it receives:
+When branch isolation is disabled, it receives this prompt context for other active strategies:
 
 - Their strategy text and branch version.
 - Their latest completed solution-pool output only.
 
-It does not receive other branches' corrections, critiques, histories, or memory banks.
+It does not receive other branches' corrections, critiques, histories, or memory banks in prompt text. When branch isolation is enabled, peer prompt sections and peer mounts are absent. When isolation is disabled, complete active peer strategy directories are intentionally readable as richer artifacts.
 
 The repository is conceptually:
 
@@ -574,16 +591,19 @@ When hypotheses are enabled, Evolving DFS refreshes them after every even global
 The heartbeat Hypothesis Generator receives:
 
 - The Core Challenge.
-- All previous hypothesis rounds, including testing outputs and resolved mappings.
+- The complete persistent Hypothesis Generator / Hypothesis Proximity conversation.
+- Full, unsummarized tester outputs from only the immediately preceding active hypothesis round, including tester-error placeholders and resolved mappings.
 - Every current active strategy and branch version.
 - The last two correction/critique entries from every current branch.
 - A note identifying strategies replaced since the previous heartbeat.
 
 It does not receive the current solution-pool outputs.
 
-The new hypotheses are tested in parallel and replace the active strategy-specific packets. Previous rounds remain archived and visible in the Hypothesis Explorer.
+The new hypotheses are tested in parallel and replace the active strategy-specific packets. Previous rounds remain archived and visible in the Hypothesis Explorer. The immediately preceding tester-output block belongs only to the new heartbeat task; it is not appended to the persistent generator/proximity conversation.
 
-When PQF replaces a branch, the old selective packet for that slot is immediately replaced with an explicit flushed placeholder. The replacement branch receives no old strategy-specific hypothesis knowledge. Fresh targeted knowledge becomes available at the next even heartbeat.
+When PQF replaces a branch, the slot is marked `awaitingFreshHypotheses` and its old selective packet is immediately replaced with an explicit pending placeholder. While that flag is set, both prompt routing and filesystem routing return no hypotheses for the branch, including formerly global hypotheses. The flag clears only after a new generation-and-testing round commits successfully; a failed heartbeat preserves the old active round for other branches and leaves the replacement blocked from it.
+
+Hypothesis refresh is atomic. Generation, proximity review, testing, packet assembly, and persistent conversation updates are staged locally. A successful round commits hypotheses, packets, history, round archive, and freshness flags together. If generation or proximity fails, the preceding active hypotheses, packets, and persistent successful conversation remain unchanged.
 
 ## Five-Entry Maintenance
 
@@ -679,24 +699,29 @@ It is not passed wholesale to agents. Corrector and pool prompts are rebuilt fro
 
 ## Sandbox Virtual Environment & Tool Isolation
 
-When the Sandbox Terminal Environment is enabled, every Deepthink role operates within a secure tool-capable sandbox. This environment provides isolated terminal access, file-system inspection, and formal verification capabilities.
+Deepthink has two execution paths selected solely by the Code Execution setting frozen at run start:
 
-The repository root is always read-only. Read-only roles have no repository-owned working directory and use `/tmp` as a private scratch area; branch-producing roles have exactly one writable directory. The permission policy below controls only filesystem visibility—it does not replace the role's direct prompt context or alter the orchestration's curated information flow.
+- With Code Execution disabled, the agent is called directly through the provider with no tools. It returns its response directly; neither `sandbox_exec` nor `final_output` exists. Direct-context files remain direct model inputs and textual prompt context according to their attachment type. Filesystem-context uploads are not supplied.
+- With Code Execution enabled, the agent receives the virtual sandbox, the role-scoped repository, and the two sandbox tools described below. Direct-context files remain direct model inputs and are additionally mounted for optional sandbox inspection. Filesystem-context uploads are mounted only on this path.
 
-Sandbox-enabled agents interact with their environment using a strict two-tool system to ensure downstream context remains clean:
+In the sandbox path, the repository root is always read-only. Read-only roles have no repository-owned working directory and use `/tmp` as a private scratch area; branch-producing roles have exactly one writable directory. The permission policy below controls only filesystem visibility—it does not replace the role's direct prompt context or alter the orchestration's curated information flow.
+
+Sandbox-enabled agents interact with a strict two-tool system:
 
 1. `sandbox_exec`: This tool allows the agent to run private terminal commands, explore the file system, execute tests, run formal proofs, and generate files or artifacts. The transcripts of these commands, intermediate failures, and iterative debugging steps are considered private scratchpad work.
 2. `final_output` (Submit Final Artifact): This tool submits the finalized role-specific answer or work product to the multi-agent system. A successful submission concludes the turn. If the environment rejects a malformed structured payload, it returns a tool error and the same agent corrects only that payload in a subsequent `final_output` call; its research is not restarted.
 
-Downstream agent prompts and iterative histories consume **only** the submitted `final_output` text and its artifact references. They do not replay the raw tool calls, the intermediate command transcripts, or the full sandbox trajectories. 
+For sandbox-enabled calls, downstream agent prompts and iterative histories consume **only** the submitted `final_output` text and its artifact references. They do not replay the raw tool calls, the intermediate command transcripts, or the full sandbox trajectories. Tool-less calls consume the provider's direct response.
 
-The UI displays this submitted final artifact. Agents can embed references to useful files or images in their final output using inline markers (e.g., `[[image:plot.png|Plot]]` or `[[file:analysis.py|Analysis script]]`) or via the `final_output.references` array. The runtime expands these markers into renderable links and injects the corresponding `/workspace/...` path, ensuring downstream agents know exactly which visible file in the read-only mounts they should read.
+For sandbox-enabled calls, the UI displays the submitted final artifact. Agents can embed references to useful files or images in their final output using inline markers (e.g., `[[image:plot.png|Plot]]` or `[[file:analysis.py|Analysis script]]`) or via the `final_output.references` array. The runtime expands these markers into renderable links and injects the corresponding `/workspace/...` path, ensuring downstream agents know exactly which visible file in the read-only mounts they should read. Tool-less calls display the provider's direct response.
 
-Every repository-mode Deepthink agent—without exception—can read the read-only `/workspace` root (including all root-level files) and the complete `/workspace/direct_context` and `/workspace/user_uploaded` directory trees. Direct-context and user-uploaded files are always mounted read-only, regardless of the role's repository scope. Repository subdirectories outside a role's approved view are not merely unwritable: they are not mounted or visible to that role.
+Every sandbox-enabled Deepthink agent can read the read-only `/workspace` root (including all root-level files) and the complete `/workspace/direct_context` and `/workspace/user_uploaded` directory trees. Direct-context and filesystem-context files are mounted read-only regardless of the role's repository scope. Repository subdirectories outside a role's approved view are not merely unwritable: they are not mounted or visible to that role.
+
+Read-only repository content is revision-pinned at orchestration barriers. Agents launched from the same barrier receive the same committed baseline. A writable role gets an overlay only for its assigned directory; a critique may additionally read its just-completed live parent branch. Peer writes cannot become visible until the orchestrator commits the next barrier. The same rule applies when a hypothesis heartbeat and solution-pool agents run concurrently.
 
 When PQF replaces `Strategy-N`, the backend atomically moves the complete old branch to `Pruned_Strategies/Strategy-N_First_PQF` (then `_Second_PQF`, and so on) before recreating a fresh active `Strategy-N/{Critique,SolutionPool}` tree. Archived branches are never mounted for active agents; Main Strategy Generation, including the strategy-update call, is the sole exception. The active slot name remains stable, so every surviving branch sees only the new `Strategy-N` directory thereafter.
 
-Hypothesis tests use a separate versioned topology: `Hypothesis-v1`, `Hypothesis-v2`, and so on. Each round contains its own tester directories. Generators can inspect all rounds, a new tester can inspect prior rounds read-only, and execution/correction/pool agents receive only selectively routed directories from the current round.
+Hypothesis tests use a separate versioned topology: `Hypothesis-v1`, `Hypothesis-v2`, and so on. Each round contains its own tester directories. Generators can inspect all rounds, each tester sees only its own current writable directory, and execution/correction/pool agents receive only selectively routed directories from the current round.
 
 
 ## Agent Context & Sandbox Permissions Matrix
@@ -705,14 +730,14 @@ Hypothesis tests use a separate versioned topology: `Hypothesis-v1`, `Hypothesis
 |---|---|---|---|---|
 | **Initial Strategy Generator** | `Main Strategy Generation` | - Core Challenge<br>- Original image (if any)<br>- Strategy count requested<br>- System instructions for high-level independent strategies | **Read-Only** (No assigned agent directory)<br>- Private scratch directory: `/tmp` | **Full Read** (`fullRepositoryRead: true`)<br>- All active files, every `Hypothesis-vN`, and `Pruned_Strategies` are visible. This same role is used by the strategy-update generator. |
 | **Sub-Strategy Generator** | `Sub-Strategy Generation` | - Core Challenge<br>- Assigned main strategy<br>- Text of all other main strategies<br>- Sub-strategy count requested<br>- Original image (if any) | **Read-Only** (No assigned agent directory)<br>- Private scratch directory: `/tmp` | **Full active-repository read** (`fullRepositoryRead: true` with `Pruned_Strategies` hidden)<br>- All active files and every `Hypothesis-vN` are visible; pruned branches are not. |
-| **Hypothesis Generator** | `Hypothesis Generation` | - Core Challenge<br>- Hypothesis count requested<br>- Strategy context per injection mode:<br>&nbsp;&nbsp;• *Blind Trust*: None<br>&nbsp;&nbsp;• *Strategy-Aware/Selective*: All main/sub strategies<br>&nbsp;&nbsp;• *Evolving DFS Heartbeat*: Previous hypotheses & test results, current active strategies/versions, last 2 corr/crit entries of all active branches, replaced strategy notes | **Read-Only** (No assigned agent directory)<br>- Private scratch directory: `/tmp` | **Full active-repository read** (`fullRepositoryRead: true` with `Pruned_Strategies` hidden)<br>- Every current and historical `Hypothesis-vN/Hypothesis-{label}` testing directory is visible. |
-| **Hypothesis Tester** | `Hypothesis Testing` | - Core Challenge<br>- Exactly 1 hypothesis to test<br>- Original image (if any) | **Writable Directory**:<br>`Hypothesis-v{round}/Hypothesis-{label}` | **Scoped Read**:<br>- All earlier `Hypothesis-vN` directories, read-only.<br>- No strategy, critique, or pool directories visible. |
+| **Hypothesis Generator** | `Hypothesis Generation` | - Core Challenge<br>- Hypothesis count requested<br>- Strategy context per injection mode:<br>&nbsp;&nbsp;• *Blind Trust*: None<br>&nbsp;&nbsp;• *Strategy-Aware/Selective*: All main/sub strategies<br>&nbsp;&nbsp;• *Evolving DFS Heartbeat*: Persistent generator/proximity conversation, immediately preceding tester outputs, current active strategies/versions, last 2 corr/crit entries of all active branches, replaced strategy notes | **Read-Only** (No assigned agent directory)<br>- Private scratch directory: `/tmp` | **Full active-repository read** (`fullRepositoryRead: true` with `Pruned_Strategies` hidden)<br>- Every current and historical `Hypothesis-vN/Hypothesis-{label}` testing directory is visible. |
+| **Hypothesis Tester** | `Hypothesis Testing` | - Core Challenge<br>- Exactly 1 hypothesis to test<br>- Original image (if any) | **Writable Directory**:<br>`Hypothesis-v{round}/Hypothesis-{label}` | **Scoped Read**:<br>- No earlier hypothesis-round directories.<br>- No strategy, critique, or pool directories visible. |
 | **Execution Agent** (Solution Attempt) | `Solution Attempt` | - Core Challenge<br>- Assigned main strategy<br>- Assigned sub-strategy (or direct strategy)<br>- Other main strategies (awareness)<br>- Routed hypothesis packet<br>- Branch identity metadata (if versioned)<br>- Original image (if any) | **Writable Directory**:<br>Direct files in `Strategy-{N}` | **Scoped Read**:<br>- Current mapped `Hypothesis-vN/Hypothesis-{label}` directories.<br>- `Critique` and `SolutionPool` are protected child mounts; no peer strategy directories visible. |
 | **Critique Agent** | `Solution Critique` | - Core Challenge<br>- Assigned main/sub-strategy<br>- One solution attempt<br>- *Evolving DFS*: Strategy slot, branch version, global/local iteration count, last 5 corr/crit entries of branch<br>- Original image (if any) | **Writable Directory**:<br>`Strategy-{N}/Critique` | **Scoped Read**:<br>- `Strategy-{N}` direct execution/correction files.<br>- *Hidden*: `Strategy-{N}/SolutionPool`.<br>- No peer strategy or hypothesis directories visible. |
 | **Critique Synthesis Agent** | `Dissected Observations Synthesis` | - Core Challenge<br>- Every main & sub-strategy<br>- Every original solution attempt & critique<br>- Optional hypothesis packet<br>- Original image (if any) | **Read-Only** (No assigned agent directory)<br>- Private scratch directory: `/tmp` | **Full active-repository read** (`fullRepositoryRead: true` with `Pruned_Strategies` hidden). |
-| **Single-Pass Corrector** | `Self-Improvement` | - Core Challenge<br>- Assigned main/sub-strategy<br>- Own original solution attempt & critique<br>- Critique Synthesis (if enabled)<br>- Full Solution Context (if enabled)<br>- Original image (if any) | **Writable Directory**:<br>Direct files in `Strategy-{N}` | **Scoped Read**:<br>- Own `Strategy-{N}/Critique` child, read-only.<br>- Peer `Strategy-{P}` directories, read-only. |
-| **Evolving DFS Corrector** | `Solution Correction` | - *Own branch*: strategy, branch version, latest execution/correction, latest critique, up to 5 branch history entries, recursive memory, latest solution-pool output, selective hypotheses<br>- *Other branches*: strategy, branch version, latest execution/correction, latest critique | **Writable Directory**:<br>Direct files in `Strategy-{N}` | **Scoped Read**:<br>- Own `Critique` and `SolutionPool` children, read-only.<br>- Current mapped `Hypothesis-vN/Hypothesis-{label}` directories.<br>- Peer `Strategy-{P}` directories, read-only. |
-| **Structured Solution Pool Agent** | `Structured Solution Pool` | - *Own branch*: strategy, branch version, latest execution/correction, latest critique, memory bank, up to 5 pool outputs, selective hypotheses<br>- *Other branches*: strategy, branch version, latest pool output only | **Writable Directory**:<br>`Strategy-{N}/SolutionPool` | **Scoped Read**:<br>- Own branch `Strategy-{N}` (read-only except `SolutionPool`).<br>- Peer `Strategy-{P}` directories, read-only.<br>- Current mapped `Hypothesis-vN/Hypothesis-{label}` directories. |
+| **Single-Pass Corrector** | `Self-Improvement` | - Core Challenge<br>- Assigned main/sub-strategy<br>- Own original solution attempt & critique<br>- Critique Synthesis (if enabled)<br>- Full Solution Context (if enabled)<br>- Original image (if any) | **Writable Directory**:<br>Direct files in `Strategy-{N}` | **Scoped Read**:<br>- Own `Strategy-{N}/Critique` child, read-only.<br>- Peer `Strategy-{P}` directories only when Full Solution Context is enabled. |
+| **Evolving DFS Corrector** | `Solution Correction` | - *Own branch*: strategy, branch version, latest execution/correction, latest critique, one dedicated latest pair plus up to four preceding branch entries, recursive memory, latest solution-pool output, selective hypotheses<br>- *Other branches when isolation is off*: strategy, branch version, latest execution/correction, latest critique | **Writable Directory**:<br>Direct files in `Strategy-{N}` | **Scoped Read**:<br>- Own `Critique` and `SolutionPool` children, read-only.<br>- Current mapped `Hypothesis-vN/Hypothesis-{label}` directories.<br>- Complete peer `Strategy-{P}` directories only when branch isolation is disabled. |
+| **Structured Solution Pool Agent** | `Structured Solution Pool` | - *Own branch*: strategy, branch version, latest execution/correction, latest critique, memory bank, up to 5 pool outputs, selective hypotheses<br>- *Other branches when isolation is off*: strategy, branch version, latest pool output only | **Writable Directory**:<br>`Strategy-{N}/SolutionPool` | **Scoped Read**:<br>- Own branch `Strategy-{N}` (read-only except `SolutionPool`).<br>- Complete peer `Strategy-{P}` directories only when branch isolation is disabled.<br>- Current mapped `Hypothesis-vN/Hypothesis-{label}` directories. |
 | **Memory Bank Agent** | `Memory Bank` | - Core Challenge<br>- Active strategy & branch version<br>- Previous memory bank<br>- Next 5 uncompressed history entries of branch<br>- Original image (if any) | **Read-Only** (No assigned agent directory)<br>- Private scratch directory: `/tmp` | **Scoped Read**:<br>- Its complete own `Strategy-{N}` tree, including `Critique` and `SolutionPool`.<br>- No peer strategy or hypothesis directories visible. |
 | **Post Quality Filter (PQF) Agent** | `Post Quality Filter` | - Core Challenge<br>- Aggressiveness instruction<br>- All active strategy texts (awareness)<br>- History of assigned 1 or 2 strategies<br>- Original image (if any) | **Read-Only** (No assigned agent directory)<br>- Private scratch directory: `/tmp` | **Scoped Read**:<br>- Assigned complete `Strategy-{N}` trees, including `Critique` and `SolutionPool`.<br>- Unassigned strategy and hypothesis directories are not visible. |
 | **Strategy Update Generator** | `Main Strategy Generation` | - Core Challenge<br>- Consolidated PQF decisions<br>- All active strategies/versions<br>- Replaced branches' strategy texts<br>- Updated branch details (old strategy, PQF reasoning, latest corr/crit, memory)<br>- Original image (if any) | **Read-Only** (No assigned agent directory)<br>- Private scratch directory: `/tmp` | **Full Read** (`fullRepositoryRead: true`)<br>- All active files, every `Hypothesis-vN`, and `Pruned_Strategies` are visible. |
@@ -727,6 +752,7 @@ Hypothesis tests use a separate versioned topology: `Hypothesis-v1`, `Hypothesis
 - **Direct Context Files:** Original files supplied with the Core Challenge are mounted read-only at `/workspace/direct_context`.
 - **User Uploaded Files:** Additional files uploaded by the user are mounted read-only at `/workspace/user_uploaded`.
 - **Hidden Directories:** Role-owned children are filtered from parent mounts where necessary (for example `Strategy-N/SolutionPool` is absent for the Critique Agent). `Pruned_Strategies` is hidden from every agent except Main Strategy Generation / Strategy Updates.
+- **Pinned Read Baseline:** Read-only root files and peer directories come from the Git revision committed at the current orchestration barrier. Only the assigned writable directory and a critique's just-completed parent branch use the active worktree.
 
 #### Sandbox Directory Layout
 
@@ -743,7 +769,7 @@ Inside an active sandbox container instance, `/workspace` exposes a selectively 
 │   ├── SolutionPool/           [Read-Write only for Structured Solution Pool; read-only for Evolving Corrector; hidden from Critique]
 │   └── <direct work files>     Source files, tests, scripts, logs generated by execution/correction
 ├── Hypothesis-v{round}/
-│   └── Hypothesis-{label}/     [Read-Write for its tester; prior versions are read-only to later testers]
+│   └── Hypothesis-{label}/     [Read-Write only for its current tester; hidden from every other tester]
 └── Pruned_Strategies/          [Hidden except Main Strategy Generation / Strategy Updates]
 ```
 
@@ -792,6 +818,8 @@ On the backend host, folders are divided by purpose. The repository tracks the e
 ### Retries and Backoff
 Every Deepthink model invocation can make up to **four total attempts** (the initial invocation attempt plus up to three retries) if it fails due to network, model API, or validation/schema errors.
 
+Every attempt uses the same agent kind, model, prompts, sampling values, attachments, output contract, and Code Execution mode from the invocation manifest and immutable run snapshot. Sandbox-enabled retries also retain the same repository revision.
+
 The orchestrator waits for the following durations between successive retry attempts:
 
 - **First Retry (Attempt 2):** 30 seconds
@@ -835,6 +863,8 @@ The Final Judge is intentionally separated from the internal search machinery.
 
 It compares only active candidate solution texts. This prevents internal critique volume, pool confidence, branch age, PQF decisions, or the existence of a large memory bank from becoming an accidental voting signal.
 
+The judge's structured winner ID is validated against the exact candidate IDs supplied in that call. Unknown IDs reject the payload and enter the normal retry/correction path; they are never accepted as a missing solution.
+
 The final result includes:
 
 - Winning candidate ID.
@@ -848,13 +878,16 @@ Deepthink exposes tabs conditionally:
 
 | Tab | Purpose |
 |---|---|
-| Live | Real-time agent calls, prompts, responses, retries, and status |
+| Live | Real-time agent calls, linked prompts/responses, retries, status, and effective per-call model, sampling, and terminal settings |
+| Filesystem | The committed Deepthink Results repository and role-produced artifacts |
 | Strategic Solver | Active strategies, sub-strategies, branch versions, archived replacements, and solutions |
 | Hypothesis Explorer | Current and historical hypothesis rounds, routing targets, tests, and packets |
 | Solution Pool | Per-iteration BFS pools, memory banks, and structured repository |
 | Dissected Observations | Individual critiques and, outside Evolving DFS, optional critique synthesis |
 | Evolution Filter | PQF group decisions and reasoning |
 | Final Result | Final judge output and selected solution |
+
+Each invocation stores its system instruction and prompt once on `agent_start`, and its response and traces once on the linked `agent_complete`. Retry and error events keep only attempt/error metadata; role state retains downstream outputs, not duplicate prompt copies.
 
 The Solution Pool tab appears only when Evolving DFS enables structured pools. The Evolution Filter tab appears after PQF agents exist. The Hypothesis Explorer appears only when hypothesis count is greater than zero.
 
@@ -866,6 +899,8 @@ The main architectural responsibilities are separated as follows:
 |---|---|
 | `DeepthinkCore.ts` | Pipeline orchestration, parallelism, retries, state transitions, hypothesis rounds, execution, refinement, maintenance, and judging |
 | `DeepthinkIterativeHistory.ts` | Deterministic Evolving DFS prompt and curated repository construction |
+| `DeepthinkAgentRegistry.ts` | Canonical typed agent kinds, labels, prompt keys, model keys, and sandbox roles |
+| `DeepthinkContext.ts` | Per-run configuration type, per-call context manifest, unified attachment routes, hypothesis routing selector, and ID validation |
 | `DeepthinkPrompts.ts` | Customizable system instructions and agent role definitions |
 | `DeepthinkPromptsContent.tsx` | System-prompt and per-agent model customization UI |
 | `DeepthinkConfigController.ts` | Configuration constraints and mode side effects |
@@ -873,7 +908,7 @@ The main architectural responsibilities are separated as follows:
 | `SolutionPool.tsx` | Solution-pool, memory-bank, and repository presentation |
 | `Deepthink.tsx` / `Deepthink.ts` | Strategic, hypothesis, critique, PQF, and final-result UI |
 
-The compatibility history-manager classes in `DeepthinkIterativeHistory.ts` are thin adapters. The active Evolving DFS pipeline uses explicit branch runtime state and deterministic repository builders rather than an external conversation-history manager.
+Evolving DFS uses explicit branch runtime state and deterministic typed context builders. The former no-op compatibility history-manager classes and marker-based repository splitting have been removed.
 
 
 -------------
@@ -912,65 +947,39 @@ flowchart TB
     E3 --> C3["Critique Agent 3"]:::critique
     E4 --> C4["Critique Agent 4"]:::critique
 
-    C1 & C2 & C3 & C4 --> PINIT["Initialize Structured Solution Pool Repo<br>(Original Executions + Critiques)"]:::pool
+    C1 & C2 & C3 & C4 --> PINIT["Initial Structured Solution Pool Agents<br>(Original Executions + Critiques)"]:::pool
 
     %% ================= PHASE 2: EVOLVING DEPTH FIRST SEARCH (EDFS) LOOP =================
-    PINIT --> LOOP["Start EDFS Iteration Loop<br>(Global Iterations 1 to 10)"]:::info
+    PINIT -- "Depth greater than 1" --> LOOP["Next EDFS Iteration<br>(Global Iterations 2 through configured depth)"]:::info
+    PINIT -- "Depth 1" --> FJ
 
-    %% --- Track A: Solution Pool Generation ---
-    LOOP --> PA1["Solution Pool Agent 1"]:::pool & PA2["Solution Pool Agent 2"]:::pool & PA3["Solution Pool Agent 3"]:::pool & PA4["Solution Pool Agent 4"]:::pool
+    LOOP --> CO1["Corrector Agent 1"]:::refinement & CO2["Corrector Agent 2"]:::refinement & CO3["Corrector Agent 3"]:::refinement & CO4["Corrector Agent 4"]:::refinement
+    CO1 --> CR1["Critique Agent 1"]:::critique
+    CO2 --> CR2["Critique Agent 2"]:::critique
+    CO3 --> CR3["Critique Agent 3"]:::critique
+    CO4 --> CR4["Critique Agent 4"]:::critique
+    CR1 & CR2 & CR3 & CR4 --> BARRIER1["Committed Correction + Critique Barrier"]:::info
 
-    PA1 -. "Context: Last 5 Pools (S1)<br>Latest Pool (S2,S3,S4)<br>Latest Corr+Crit (S1)" .-> P_REPO["Structured Solution Pool<br>Real-Time Curated Updates"]:::pool
-    PA2 -. "Context: Last 5 Pools (S2)<br>Latest Pool (S1,S3,S4)<br>Latest Corr+Crit (S2)" .-> P_REPO
-    PA3 -. "Context: Last 5 Pools (S3)<br>Latest Pool (S1,S2,S4)<br>Latest Corr+Crit (S3)" .-> P_REPO
-    PA4 -. "Context: Last 5 Pools (S4)<br>Latest Pool (S1,S2,S3)<br>Latest Corr+Crit (S4)" .-> P_REPO
+    BARRIER1 --> PA1["Solution Pool Agent 1"]:::pool & PA2["Solution Pool Agent 2"]:::pool & PA3["Solution Pool Agent 3"]:::pool & PA4["Solution Pool Agent 4"]:::pool
+    BARRIER1 -- "Even iterations only" --> HEVO["Hypothesis Heartbeat<br>(Persistent Generator History + Previous Tester Outputs)"]:::hypothesis
+    HEVO --> HTE1["Hypothesis Testing Agent 1"]:::hypothesis & HTE2["Hypothesis Testing Agent 2"]:::hypothesis
+    HTE1 & HTE2 --> P_UPD["Fresh Selective Packets"]:::info
+    PA1 & PA2 & PA3 & PA4 --> P_REPO["Updated Structured Solution Pools"]:::pool
+    P_REPO & P_UPD --> BARRIER2["Committed Pool + Hypothesis Barrier"]:::info
 
-    %% --- Track B: 2N Cycle (Hypothesis Evolution) ---
-    LOOP -- "Every 2 Iterations (Even)" --> HEVO["Hypothesis Evolution Generator<br>(Reads Pools & Corrections)"]:::hypothesis
-    HEVO --> HTE1["Hypo-Evo Testing Agent 1"]:::hypothesis & HTE2["Hypo-Evo Testing Agent 2"]:::hypothesis
-    HTE1 & HTE2 --> P_UPD["Updated Selective Packets<br>(Dynamic Axiom Ledgers)"]:::info
+    %% ================= PHASE 3: FIVE LOCAL ENTRIES, MEMORY, AND PQF =================
+    BARRIER2 --> DUE{"Any branch accumulated five new entries?"}
+    DUE -- "No" --> CHECK{"Configured depth reached?"}
+    DUE -- "Yes" --> MB["Memory Banks<br>(Recursive Distillation)"]:::filter & PQF["Grouped PQF Agents"]:::filter
+    MB & PQF --> DEC["Consolidated PQF Decision Vector"]:::filter
+    DEC -- "Keep" --> CHECK
+    DEC -- "Update stable slot" --> GEN_UPD["Strategy Update Generator<br>(Full Persistent Strategy History)"]:::strategyGen
+    GEN_UPD --> REPLACE["Archive Old Branch + Reset Local State<br>Keep Strategy ID + Increment Branch Version<br>Block Old Hypotheses Until Fresh Heartbeat"]:::strategyGen
+    REPLACE --> EREPL["Replacement Execution + Critique"]:::execution
+    EREPL --> CHECK
 
-    %% --- Iteration Synchronization Barrier ---
-    P_REPO --> SYNC{"ITERATION COMPLETION SYNC<br><br>ODD ITERS: Awaits only Solution Pools<br>EVEN ITERS: Awaits Pools + Hypothesis Packets"}:::info
-    P_UPD --> SYNC
-
-    %% --- Track C: Correction & Critique ---
-    SYNC --> CO1["Corrector Agent 1"]:::refinement & CO2["Corrector Agent 2"]:::refinement & CO3["Corrector Agent 3"]:::refinement & CO4["Corrector Agent 4"]:::refinement
-
-    CO1 -. "Context: 5-Iter History (S1)<br>Pool (S1)<br>Latest Corr+Crit (S2,S3,S4)<br>Updated Axioms" .-> CR1["Critique Agent 1"]:::critique
-    CO2 -. "Context: 5-Iter History (S2)<br>Pool (S2)<br>Latest Corr+Crit (S1,S3,S4)<br>Updated Axioms" .-> CR2["Critique Agent 2"]:::critique
-    CO3 -. "Context: 5-Iter History (S3)<br>Pool (S3)<br>Latest Corr+Crit (S1,S2,S4)<br>Updated Axioms" .-> CR3["Critique Agent 3"]:::critique
-    CO4 -. "Context: 5-Iter History (S4)<br>Pool (S4)<br>Latest Corr+Crit (S1,S2,S3)<br>Updated Axioms" .-> CR4["Critique Agent 4"]:::critique
-
-    CR1 & CR2 & CR3 & CR4 --> CHECK{"Iteration Cycle Check"}
-    CHECK -- "Iter % 5 != 0" --> LOOP
-
-    %% ================= PHASE 3: 5-ITERATION CYCLE (EVOLUTION & PQF) =================
-    CHECK -- "Iter % 5 == 0" --> HB5["5-Iteration Heartbeat<br>(Evolution Sync Phase)"]:::info
-
-    %% Memory Distillation
-    HB5 --> MB1["Memory Bank 1<br>(Recursive Distillation)"]:::filter & MB2["Memory Bank 2<br>(Recursive Distillation)"]:::filter & MB3["Memory Bank 3<br>(Recursive Distillation)"]:::filter & MB4["Memory Bank 4<br>(Recursive Distillation)"]:::filter
-
-    %% N/2 PQF Evaluation
-    HB5 --> PQF1["PQF Agent 1<br>(Evaluates S1, S2)"]:::filter & PQF2["PQF Agent 2<br>(Evaluates S3, S4)"]:::filter
-
-    MB1 & MB2 & MB3 & MB4 --> GY["Strategy Graveyard<br>(Stores Post-Mortems)"]:::filter
-    PQF1 & PQF2 --> DEC["Consolidated PQF Decision Vector"]:::filter
-
-    GY & DEC --> EVOLVE_CHECK{"PQF Outcome"}
-    EVOLVE_CHECK -- "Decision: Keep All" --> LOOP
-
-    %% Strategy Evolution Path
-    EVOLVE_CHECK -- "Decision: Update (e.g., S3 Failed)" --> GEN_UPD["Master Strategy Generator<br>(Receives Full Graveyard + Active Strategies)"]:::strategyGen
-
-    GEN_UPD -- "Spawns Replacement Branch" --> S3V2["Strategy 3-v2<br>(New ID, Resets Age)"]:::strategyGen
-    S3V2 --> E3V2["Execution Agent 3-v2"]:::execution
-    E3V2 --> C3V2["Critique Agent 3-v2"]:::critique
-    C3V2 --> FLUSH["Flush S3 Hypotheses<br>Overwrite Pool Slot 3<br>Set Local Age = 1"]:::filter
-    FLUSH --> LOOP
-
-    %% ================= PHASE 4: FINAL JUDGING =================
-    CHECK -- "Iter == 10" --> FJ["Final Judge Agent<br>Analyticus Ultima"]:::final
+    CHECK -- "No" --> LOOP
+    CHECK -- "Yes" --> FJ["Final Judge Agent<br>Analyticus Ultima"]:::final
     FJ --> BEST["Best Solution Selected"]:::final
 
     %% ================= STYLING DEFINITIONS =================
@@ -983,4 +992,3 @@ flowchart TB
     classDef final fill:#F1F8E9,stroke:#66BB6A,stroke-width:2px,color:#000
     classDef pool fill:#E0F2F1,stroke:#00897B,stroke-width:2px,color:#000
     classDef info fill:#E1F5FE,stroke:#0277BD,stroke-width:1px,color:#000
-

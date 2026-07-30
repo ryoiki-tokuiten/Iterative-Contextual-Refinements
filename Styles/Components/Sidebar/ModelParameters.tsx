@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { globalState } from '../../../Core/State';
 import { ApplicationMode } from '../../../Core/Types';
 import { Icon } from '../../../UI/Icons';
-import { setGeminiCodeExecutionEnabled } from '../../../UI/setupCodeExecutionToggle';
-import { MAX_HYPOTHESIS_COUNT } from '../../../Routing/ModelConfig';
+import { setSandboxToolExecutionEnabled } from '../../../UI/setupCodeExecutionToggle';
 import { getDeepthinkConfigController } from '../../../Routing';
 
 export const ModelParameters: React.FC = () => {
@@ -89,23 +88,6 @@ export const ModelParameters: React.FC = () => {
                         />
                     </div>
 
-                    <div style={{ display: 'none' }}>
-                        <span id="strategies-value">3</span>
-                        <input type="range" id="strategies-slider" min="1" max="10" step="1" defaultValue="3" />
-                        <span id="sub-strategies-value">3</span>
-                        <input type="range" id="sub-strategies-slider" min="0" max="10" step="1" defaultValue="3" />
-                        <input type="checkbox" id="skip-sub-strategies-toggle" />
-                        <input type="checkbox" id="hypothesis-toggle" defaultChecked />
-                        <span id="hypothesis-value">4</span>
-                        <input type="range" id="hypothesis-slider" min="1" max={MAX_HYPOTHESIS_COUNT} step="1" defaultValue="4" />
-                        <button type="button" className="pqf-button active" data-value="balanced"></button>
-                        <button type="button" className="pqf-button" data-value="very_aggressive"></button>
-                        <input type="checkbox" id="refinement-toggle" />
-                        <input type="checkbox" id="dissected-observations-toggle" />
-                        <input type="checkbox" id="iterative-corrections-toggle" />
-                        <input type="checkbox" id="provide-all-solutions-toggle" />
-                    </div>
-
                     <div id="contextual-mode-controls" style={{ display: (currentMode === 'contextual' || currentMode === 'adaptive-deepthink') ? '' : 'none' }}>
                         {currentMode === 'adaptive-deepthink' && (
                             <div className="adaptive-proximity-loop-controls">
@@ -139,10 +121,10 @@ export const ModelParameters: React.FC = () => {
                                 <label className="toggle-switch">
                                     <input
                                         type="checkbox"
-                                        id="gemini-code-execution-toggle"
+                                        id="sandbox-code-execution-toggle"
                                         aria-label="Enable Sandbox Terminal Environment"
-                                        defaultChecked={globalState.geminiCodeExecutionEnabled}
-                                        onChange={(event) => setGeminiCodeExecutionEnabled(event.target.checked)}
+                                        defaultChecked={globalState.virtualEnvironmentEnabled}
+                                        onChange={(event) => setSandboxToolExecutionEnabled(event.target.checked)}
                                     />
                                     <span className="toggle-slider"></span>
                                 </label>

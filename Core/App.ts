@@ -98,15 +98,14 @@ export class App {
 
         if (globalState.currentMode === 'deepthink') {
             console.log('Starting Deepthink process');
-            const firstImage = globalState.currentProblemImages.length > 0 ? globalState.currentProblemImages[0] : null;
             const deepthink = await ensureDeepthinkInitialized();
-            await deepthink.startDeepthinkAnalysisProcess(initialIdea, firstImage?.base64, firstImage?.mimeType);
+            await deepthink.startDeepthinkAnalysisProcess(initialIdea);
         } else if (globalState.currentMode === 'contextual') {
             const contextual = await ensureContextualInitialized();
             await contextual.startContextualProcess(initialIdea, globalState.customPromptsContextualState);
         } else if (globalState.currentMode === 'adaptive-deepthink') {
             const adaptive = await ensureAdaptiveDeepthinkInitialized();
-            await adaptive.startAdaptiveDeepthinkProcess(initialIdea, globalState.customPromptsAdaptiveDeepthinkState, globalState.currentProblemImages);
+            await adaptive.startAdaptiveDeepthinkProcess(initialIdea, globalState.customPromptsAdaptiveDeepthinkState, globalState.directContextFiles);
         } else {
             console.warn('Unknown or unsupported application mode:', globalState.currentMode);
         }

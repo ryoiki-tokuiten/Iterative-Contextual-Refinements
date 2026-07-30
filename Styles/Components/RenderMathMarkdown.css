@@ -840,11 +840,6 @@ body.light-mode .latex-content-wrapper a::after {
     overflow: hidden;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-
-.exec-image-item:hover {
-    /* Hover effects removed by request */
-}
-
 .exec-rendered-image {
     display: block;
     max-width: 100%;
@@ -958,9 +953,6 @@ body.light-mode .markdown-image {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
-body.light-mode .markdown-image:hover {
-    /* Hover effects removed by request */
-}
 
 body.light-mode .markdown-image.image-error,
 body.light-mode .image-error {
