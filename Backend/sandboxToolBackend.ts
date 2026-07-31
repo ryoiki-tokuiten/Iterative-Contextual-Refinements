@@ -2814,10 +2814,16 @@ async function resolveExplorerRepositoryTarget(args: {
     repositoryScope?: boolean;
 }): Promise<ExplorerRepositoryTarget | null> {
     if (args.repositoryId) {
-        if (!isSafeRepositoryId(args.repositoryId) || !isDeepthinkRepository(args.repositoryId)) return null;
-        const resultsRepository = await getDeepthinkResultsRepositoryPath(args.repositoryId);
-        if (!resultsRepository || !(await fileExists(resultsRepository))) return null;
-        return { root: resultsRepository, isRepositoryView: true };
+        if (!isSafeRepositoryId(args.repositoryId)) return null;
+        if (isDeepthinkRepository(args.repositoryId)) {
+            const resultsRepository = await getDeepthinkResultsRepositoryPath(args.repositoryId);
+            if (!resultsRepository || !(await fileExists(resultsRepository))) return null;
+            return { root: resultsRepository, isRepositoryView: true };
+        }
+        if (!args.repositoryId.startsWith('contextual-')) return null;
+        const repository = getRepositoryPath(args.repositoryId);
+        if (!(await fileExists(repository))) return null;
+        return { root: repository, isRepositoryView: true };
     }
 
     if (!args.sessionId || !isSafeSessionId(args.sessionId)) return null;

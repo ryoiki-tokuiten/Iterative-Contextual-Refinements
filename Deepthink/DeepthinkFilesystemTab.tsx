@@ -60,10 +60,13 @@ function getMediaFileType(filename: string): 'image' | 'video' | 'audio' | 'pdf'
     return ext === 'pdf' ? 'pdf' : null;
 }
 
-function buildFileTree(files: FileItem[]): TreeFolder {
+function buildFileTree(files: FileItem[], stripPrefix = ''): TreeFolder {
     const root: TreeFolder = { name: '', type: 'folder', children: {} };
     for (const file of files) {
-        const parts = file.path.split('/');
+        const displayPath = stripPrefix && file.path.startsWith(`${stripPrefix}/`)
+            ? file.path.slice(stripPrefix.length + 1)
+            : file.path;
+        const parts = displayPath.split('/');
         if (parts.some(part => part.startsWith('.') || IGNORED_NAMES.has(part.toLowerCase()))) continue;
 
         let current = root;
@@ -107,7 +110,15 @@ interface DeepthinkFilesystemTabProps {
     repositoryId: string;
 }
 
+const CONTEXTUAL_AGENT_DIRECTORIES = [
+    { value: 'Correction', label: 'Execution / Correction' },
+    { value: 'Critique', label: 'Critique' },
+    { value: 'SolutionPool', label: 'Solution Pool' },
+    { value: 'MemoryBank', label: 'Memory Bank' },
+] as const;
+
 export const DeepthinkFilesystemTab: React.FC<DeepthinkFilesystemTabProps> = ({ repositoryId }) => {
+    const isContextualRepository = repositoryId.startsWith('contextual-');
     const [history, setHistory] = useState<CommitItem[]>([]);
     const [selectedCommit, setSelectedCommit] = useState('current');
     const [compareBase, setCompareBase] = useState('current');
@@ -123,6 +134,7 @@ export const DeepthinkFilesystemTab: React.FC<DeepthinkFilesystemTabProps> = ({ 
     const [isContentLoading, setIsContentLoading] = useState(false);
     const [isDiffLoading, setIsDiffLoading] = useState(false);
     const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
+    const [selectedDirectory, setSelectedDirectory] = useState('Correction');
     const [theme, setTheme] = useState<'light' | 'dark'>(() => document.body.classList.contains('light-mode') ? 'light' : 'dark');
     const treeRequest = useRef(0);
 
@@ -142,7 +154,7 @@ export const DeepthinkFilesystemTab: React.FC<DeepthinkFilesystemTabProps> = ({ 
                 return '';
             });
         } catch (error) {
-            console.error('Failed to load Results repository tree:', error);
+            console.error('Failed to load repository tree:', error);
         } finally {
             if (requestId === treeRequest.current) setIsTreeLoading(false);
         }
@@ -164,7 +176,10 @@ export const DeepthinkFilesystemTab: React.FC<DeepthinkFilesystemTabProps> = ({ 
         if (!id) return;
         setIsRefreshing(true);
         try {
-            await Promise.all([fetchHistory(id), fetchFileTree(id, commit)]);
+            await Promise.all([
+                isContextualRepository ? Promise.resolve() : fetchHistory(id),
+                fetchFileTree(id, commit),
+            ]);
         } finally {
             setIsRefreshing(false);
         }
@@ -224,7 +239,8 @@ export const DeepthinkFilesystemTab: React.FC<DeepthinkFilesystemTabProps> = ({ 
         setDiffContent('');
         setView('file');
         setFiles([]);
-        if (repositoryId) void fetchHistory(repositoryId);
+        setSelectedDirectory('Correction');
+        if (repositoryId && !isContextualRepository) void fetchHistory(repositoryId);
     }, [repositoryId]);
 
     useEffect(() => {
@@ -304,7 +320,13 @@ export const DeepthinkFilesystemTab: React.FC<DeepthinkFilesystemTabProps> = ({ 
             {history.map(commit => <option key={commit.hash} value={commit.hash}>{commit.message} · {commit.hash.slice(0, 7)}</option>)}
         </>
     );
-    const fileTree = buildFileTree(files);
+    const browseOptions = isContextualRepository
+        ? CONTEXTUAL_AGENT_DIRECTORIES.map(directory => <option key={directory.value} value={directory.value}>{directory.label}</option>)
+        : revisionOptions;
+    const scopedFiles = isContextualRepository
+        ? files.filter(file => file.path === selectedDirectory || file.path.startsWith(`${selectedDirectory}/`))
+        : files;
+    const fileTree = buildFileTree(scopedFiles, isContextualRepository ? selectedDirectory : '');
     const mediaType = selectedFile ? getMediaFileType(selectedFile) : null;
     const fileUrl = selectedFile
         ? `/api/sandbox/workspace/file?repositoryId=${encodeURIComponent(repositoryId)}&path=${encodeURIComponent(selectedFile)}&commit=${encodeURIComponent(selectedCommit)}&scope=repository`
@@ -320,21 +342,38 @@ export const DeepthinkFilesystemTab: React.FC<DeepthinkFilesystemTabProps> = ({ 
                             <aside className="vfs-sidebar">
                                 <div className="vfs-sidebar-title">Files</div>
                                 <div className="vfs-tree-container custom-scrollbar">
-                                    {isTreeLoading ? <div className="vfs-tree-empty">Loading…</div> : files.length ? renderTreeNodes(fileTree) : <div className="vfs-tree-empty">No files in this snapshot</div>}
+                                    {isTreeLoading ? <div className="vfs-tree-empty">Loading…</div> : scopedFiles.length ? renderTreeNodes(fileTree) : <div className="vfs-tree-empty">No files in this directory</div>}
                                 </div>
                                 <div className="vfs-sidebar-footer">
                                     <div className="vfs-sidebar-footer-row">
                                         <div className="vfs-agent-select-wrapper" style={{ width: '100%' }}>
-                                            <select aria-label="Browse repository snapshot" title="Browse repository snapshot" value={selectedCommit} onChange={event => { setSelectedCommit(event.target.value); setView('file'); }} className="vfs-agent-select">
-                                                {revisionOptions}
+                                            <select
+                                                aria-label={isContextualRepository ? 'Browse agent directory' : 'Browse repository snapshot'}
+                                                title={isContextualRepository ? 'Browse agent directory' : 'Browse repository snapshot'}
+                                                value={isContextualRepository ? selectedDirectory : selectedCommit}
+                                                onChange={event => {
+                                                    if (isContextualRepository) {
+                                                        setSelectedDirectory(event.target.value);
+                                                        setCollapsedFolders({});
+                                                        setSelectedFile('');
+                                                        setFileContent('');
+                                                        setView('file');
+                                                    } else {
+                                                        setSelectedCommit(event.target.value);
+                                                        setView('file');
+                                                    }
+                                                }}
+                                                className="vfs-agent-select"
+                                            >
+                                                {browseOptions}
                                             </select>
                                             <span className="vfs-select-arrow"><Icon name="chevron_down" /></span>
                                         </div>
                                     </div>
                                     <div className="vfs-sidebar-footer-row">
-                                        <button className="vfs-compare-trigger-footer" type="button" onClick={() => setIsCompareOpen(true)} disabled={!history.length}>
+                                        {!isContextualRepository && <button className="vfs-compare-trigger-footer" type="button" onClick={() => setIsCompareOpen(true)} disabled={!history.length}>
                                             <Icon name="compare" /> <span>Compare</span>
-                                        </button>
+                                        </button>}
                                         <button className="vfs-refresh-btn-footer" type="button" title="Refresh repository" onClick={() => void refreshRepository()} disabled={isRefreshing}>
                                             <Icon name="refresh" className={isRefreshing ? 'spinning' : ''} />
                                         </button>

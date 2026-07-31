@@ -189,16 +189,18 @@ const CurrentBestGenerationPanel: React.FC<{ content: string; originalContent: s
                                 <Icon name="manage_search" />
                                 Critique
                             </button>
-                            <button
-                                className="action-btn"
-                                onClick={() => window.dispatchEvent(new CustomEvent('openVirtualEnvironment'))}
-                                title="Open Sandbox Virtual Environment Explorer"
-                            >
-                                <Icon name="terminal" />
-                                Virtual Env
-                            </button>
                         </>
                     )}
+                    <button
+                        className="action-btn"
+                        onClick={() => window.dispatchEvent(new CustomEvent('openVirtualEnvironment', {
+                            detail: state.id === 'evolving-dfs' ? undefined : { repositoryId: state.id },
+                        }))}
+                        title="Open Sandbox Virtual Environment Explorer"
+                    >
+                        <Icon name="terminal" />
+                        Virtual Env
+                    </button>
                     <button
                         className="action-btn"
                         onClick={async (e) => {
