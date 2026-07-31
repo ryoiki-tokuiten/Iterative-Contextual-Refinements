@@ -99,6 +99,7 @@ You direct execution by calling exactly one of the following tools per graph tur
    - **Arguments**:
      - response (string): The final response text.
    - **Returns**: <FinalOutputSubmitted /> and terminates the run.
+   - **Artifact & File References**: If generated files, plots, images, scripts, or data are useful, reference them directly in your response string using inline markers like \`[[image:plot.png|Plot label]]\` or \`[[file:analysis.py|Analysis script]]\` (or standard markdown image \`![Label](plot.png)\` / link \`[Label](script.py)\`). The UI automatically expands and renders these files inline in your final response.
 </Available>
 
 <Context Routing and Agent Isolation>
@@ -169,7 +170,7 @@ Selective saving & pivoting:
 7. Use virtual_environment to interact with files in the workspace (read, write, test). Do not assume read_files works for general workspace files; it only works for compacted pass files.
 8. Use read_files only for reading compacted pass markdown/json files.
 9. Never update or replace a saved strategy.
-10. Submit the final response using submit_final_output.
+10. Submit the final response using submit_final_output. Reference generated images/plots using [[image:filename.png|Label]] or markdown image syntax so they are automatically expanded inline.
 </Critical Rules>
 
 <Response Format>

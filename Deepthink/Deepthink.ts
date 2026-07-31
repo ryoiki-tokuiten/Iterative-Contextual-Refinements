@@ -174,6 +174,9 @@ export function initializeDeepthinkModule(dependencies: {
         window.addEventListener('openDeepthinkFilesystem', () => {
             const process = getActiveDeepthinkPipeline();
             if (!process) return;
+            if (document.getElementById('solution-modal-overlay')) {
+                removeEvolvingDfsSolutionOverlay(true);
+            }
             process.activeTabId = 'filesystem';
             renderActiveDeepthinkPipeline();
         });
@@ -372,7 +375,6 @@ function openCritiqueModal(critiqueId: string) {
             onClose: close,
             children: React.createElement(EmbeddedModalContent, {
                 content: critique.critiqueResponseDisplay || critique.critiqueResponse || 'No critique available',
-                interactionTraceText: critique.interactionTraceText,
             })
         })
     );
@@ -398,7 +400,6 @@ function openSubStrategyCritiqueModal(subStrategyId: string) {
             onClose: close,
             children: React.createElement(EmbeddedModalContent, {
                 content: subStrategy.solutionCritiqueDisplay || subStrategy.solutionCritique,
-                interactionTraceText: subStrategy.solutionCritiqueTraceText,
             })
         })
     );
@@ -422,7 +423,6 @@ function openHypothesisArgumentModal(hypothesisId: string) {
             children: React.createElement(EmbeddedModalContent, {
                 content: hypothesis.testerAttemptDisplay || hypothesis.testerAttempt || 'No argument available',
                 contentClass: 'hypothesis-argument-content',
-                interactionTraceText: hypothesis.testerAttemptTraceText,
             })
         })
     );
@@ -439,7 +439,6 @@ function openPostQualityFilterModal(agent: DeepthinkPostQualityFilterData) {
             onClose: close,
             children: React.createElement(StructuredResponseModalContent, {
                 reasoning: agent.reasoning,
-                interactionTraceText: agent.interactionTraceText,
                 resultsClassName: 'post-quality-filter-results',
                 emptyMessage: 'No analysis available',
             })
@@ -505,7 +504,9 @@ async function updateSolutionModalContent(modalBody: HTMLElement, subStrategyId:
         branchIteration: entry.branchIteration,
         branchVersion: entry.branchVersion || targetBranchVersion,
         critique: entry.critiqueDisplay || entry.critique,
+        critiqueExecutionTraceText: entry.critiqueExecutionTraceText,
         correctedSolution: entry.solutionDisplay || entry.solution,
+        correctedSolutionExecutionTraceText: entry.solutionExecutionTraceText,
         timestamp: Date.now() - Math.max(1, retiredHistoryLength - entry.branchIteration) * 1000,
         label: entry.label,
     }));
@@ -521,10 +522,6 @@ async function updateSolutionModalContent(modalBody: HTMLElement, subStrategyId:
     const currentBestSolution = latestCorrection || (isCurrentBranch
         ? subStrategy.refinedSolutionDisplay || subStrategy.refinedSolution || subStrategy.solutionAttemptDisplay || subStrategy.solutionAttempt
         : replacementRecord?.latestSolutionDisplay || replacementRecord?.latestSolution) || 'Processing...';
-    const latestIteration = iterations.length > 0 ? iterations[iterations.length - 1] : undefined;
-    const currentArtifactTraceText = latestIteration?.correctedSolutionTraceText
-        || (isCurrentBranch ? subStrategy.refinedSolutionTraceText || subStrategy.solutionAttemptTraceText : undefined);
-
     const isProcessing = subStrategy.status === 'processing' ||
         subStrategy.status === 'pending' ||
         subStrategy.solutionCritiqueStatus === 'processing' ||
@@ -539,8 +536,7 @@ async function updateSolutionModalContent(modalBody: HTMLElement, subStrategyId:
         originalSolution,
         currentBestSolution,
         iterations,
-        isCurrentBranch ? isProcessing : false,
-        currentArtifactTraceText
+        isCurrentBranch ? isProcessing : false
     );
 }
 

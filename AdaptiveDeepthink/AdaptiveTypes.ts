@@ -20,6 +20,7 @@ export type SystemBlock =
 export interface AdaptiveMessage {
     id: string;
     role: 'agent' | 'system' | 'user';
+    sender?: string;
     content: string;
     timestamp: number;
     status?: 'success' | 'error' | 'processing';

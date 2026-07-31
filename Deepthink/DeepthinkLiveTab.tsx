@@ -5,6 +5,7 @@ import { ActionButton } from '../Styles/Components/ActionButton';
 import RenderMathMarkdown from '../Styles/Components/RenderMathMarkdown';
 import { PromptStylingEditor } from '../Styles/Components/PromptStyling';
 import { updateControlsState } from '../UI/Controls';
+import { SandboxAgentActivity } from './SandboxAgentActivity';
 import './DeepthinkLiveTab.css';
 
 interface DeepthinkLiveTabProps {
@@ -19,7 +20,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
     const [searchQuery, setSearchQuery] = useState('');
     const [timeElapsed, setTimeElapsed] = useState('00:00');
     const [isSystemInstructionExpanded, setIsSystemInstructionExpanded] = useState(false);
-    const [responseViewMode, setResponseViewMode] = useState<'submitted' | 'trace'>('submitted');
+    const [responseViewMode, setResponseViewMode] = useState<'submitted' | 'activity'>('submitted');
     const [, setForceUpdate] = useState(0);
 
     const terminalEndRef = useRef<HTMLDivElement>(null);
@@ -206,6 +207,23 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
     useEffect(() => {
         setResponseViewMode('submitted');
     }, [selectedEvent?.id]);
+
+    const responseViewToggle = selectedEvent?.executionTraceText && (
+        <div className="response-view-toggle" aria-label="Response view">
+            <button
+                className={`response-toggle-option ${responseViewMode === 'submitted' ? 'active' : ''}`}
+                onClick={() => setResponseViewMode('submitted')}
+            >
+                Artifact
+            </button>
+            <button
+                className={`response-toggle-option ${responseViewMode === 'activity' ? 'active' : ''}`}
+                onClick={() => setResponseViewMode('activity')}
+            >
+                Agent Activity
+            </button>
+        </div>
+    );
 
     const renderTimelineNode = (agent: DeepthinkLiveEvent) => {
         const isActive = selectedEvent ? (
@@ -477,33 +495,25 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
 
                                     {/* Right Column: Model Response / Errors */}
                                     <div className="inspector-column right-column" style={{ paddingLeft: '0.75rem' }}>
-                                        {selectedEvent.response && (
+                                        {selectedEvent.response && responseViewMode === 'activity' && selectedEvent.executionTraceText && (
+                                            <SandboxAgentActivity
+                                                executionTraceText={selectedEvent.executionTraceText}
+                                                headerExtra={responseViewToggle}
+                                            />
+                                        )}
+
+                                        {selectedEvent.response && (responseViewMode === 'submitted' || !selectedEvent.executionTraceText) && (
                                             <div className="borderless-card">
                                                 <div className="section-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.75rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border-color)', marginBottom: '0.5rem' }}>
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                         <span className="card-title">
-                                                            <MIcon name="smart_toy" /> {responseViewMode === 'trace' ? 'Multi-turn Interaction' : 'Submitted Artifact'}
+                                                            <MIcon name="smart_toy" /> Submitted Artifact
                                                         </span>
                                                         <div className="code-actions response-actions">
-                                                            {selectedEvent.interactionTraceText && (
-                                                                <div className="response-view-toggle" aria-label="Response view">
-                                                                    <button
-                                                                        className={`response-toggle-option ${responseViewMode === 'submitted' ? 'active' : ''}`}
-                                                                        onClick={() => setResponseViewMode('submitted')}
-                                                                    >
-                                                                        Artifact
-                                                                    </button>
-                                                                    <button
-                                                                        className={`response-toggle-option ${responseViewMode === 'trace' ? 'active' : ''}`}
-                                                                        onClick={() => setResponseViewMode('trace')}
-                                                                    >
-                                                                        Trace
-                                                                    </button>
-                                                                </div>
-                                                            )}
+                                                            {responseViewToggle}
                                                             <ActionButton
                                                                 type="copy"
-                                                                content={responseViewMode === 'trace' ? (selectedEvent.interactionTraceText || selectedEvent.response) : selectedEvent.response}
+                                                                content={selectedEvent.response}
                                                                 icon="content_copy"
                                                                 text="Copy"
                                                                 title="Copy"
@@ -511,8 +521,8 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                                             />
                                                             <ActionButton
                                                                 type="download"
-                                                                content={responseViewMode === 'trace' ? (selectedEvent.interactionTraceText || selectedEvent.response) : selectedEvent.response}
-                                                                filename={responseViewMode === 'trace' ? 'multi-turn-interaction.md' : 'submitted-artifact.md'}
+                                                                content={selectedEvent.response}
+                                                                filename="submitted-artifact.md"
                                                                 icon="download"
                                                                 text="Download"
                                                                 title="Download"
@@ -545,8 +555,8 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                                         </div>
                                                     )}
                                                 </div>
-                                                <div className={`response-math-wrapper custom-scrollbar ${responseViewMode === 'submitted' ? 'submitted-artifact-surface' : 'interaction-trace-surface'}`}>
-                                                    <RenderMathMarkdown content={responseViewMode === 'trace' ? (selectedEvent.interactionTraceText || 'No multi-turn interaction trace is available for this response.') : selectedEvent.response} />
+                                                <div className="response-math-wrapper custom-scrollbar submitted-artifact-surface">
+                                                    <RenderMathMarkdown content={selectedEvent.response} />
                                                 </div>
                                             </div>
                                         )}

@@ -26,8 +26,10 @@ export interface BranchHistoryEntry {
     label: string;
     solution: string;
     solutionDisplay?: string;
+    solutionExecutionTraceText?: string;
     critique: string;
     critiqueDisplay?: string;
+    critiqueExecutionTraceText?: string;
 }
 
 export interface PoolHistoryEntry {

@@ -29,7 +29,6 @@ export interface ContextualState {
     initialUserRequest: string;
     initialMainGeneration: string;
     currentBestGeneration: string;
-    currentBestGenerationTraceText?: string;
     currentBestSuggestions: string;
     allIterativeSuggestions: string[];
     mainGeneratorHistory: HistoryMessage[];
@@ -66,7 +65,7 @@ export interface ContextualMessage {
     status?: 'success' | 'error' | 'processing';
     blocks?: ContextualSystemBlock[];
     codeExecution?: CodeExecutionPart[];
-    interactionTraceText?: string;
+    executionTraceText?: string;
 }
 
 export interface IterationData {
@@ -80,7 +79,7 @@ interface ContextualAgentCallResult {
     promptText?: string;
     finalText: string;
     geminiContent?: any;
-    interactionTraceText?: string;
+    executionTraceText?: string;
 }
 
 export interface MemorySnapshot {
@@ -334,7 +333,7 @@ async function runContextualLoop() {
                 timestamp: Date.now(),
                 iterationNumber: activeContextualState.iterationCount,
                 codeExecution: mainGenerationResult.geminiContent?.parts,
-                interactionTraceText: mainGenerationResult.interactionTraceText
+                executionTraceText: mainGenerationResult.executionTraceText
             };
             activeContextualState.messages.push(mainMsg);
             
@@ -370,7 +369,7 @@ async function runContextualLoop() {
                 content: suggestions,
                 timestamp: Date.now(),
                 iterationNumber: activeContextualState.iterationCount,
-                interactionTraceText: suggestionsResult.interactionTraceText
+                executionTraceText: suggestionsResult.executionTraceText
             };
             activeContextualState.messages.push(iterMsg);
             
@@ -443,7 +442,7 @@ async function runContextualLoop() {
                 content: strategicPool,
                 timestamp: Date.now(),
                 iterationNumber: activeContextualState.iterationCount,
-                interactionTraceText: strategicPoolResult.interactionTraceText
+                executionTraceText: strategicPoolResult.executionTraceText
             };
             activeContextualState.messages.push(stratMsg);
 
@@ -502,7 +501,7 @@ async function runContextualLoop() {
                         content: memoryText,
                         timestamp: Date.now(),
                         iterationNumber: activeContextualState.iterationCount,
-                        interactionTraceText: memoryResult.interactionTraceText
+                        executionTraceText: memoryResult.executionTraceText
                     };
                     activeContextualState.messages.push(memMsg);
                     

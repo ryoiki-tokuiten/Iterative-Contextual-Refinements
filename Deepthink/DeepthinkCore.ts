@@ -72,7 +72,6 @@ export interface DeepthinkSolutionCritiqueData {
     branchVersion?: number;
     critiqueResponse?: string;
     critiqueResponseDisplay?: string;
-    interactionTraceText?: string;
     status: AgentStatus;
     error?: string;
     globalIteration?: number;
@@ -109,18 +108,15 @@ export interface DeepthinkSubStrategyData {
     solutionAttempt?: string;
     solutionAttemptDisplay?: string;
     solutionAttemptFinal?: string;
-    solutionAttemptTraceText?: string;
     solutionAttemptExecutionTraceText?: string;
     solutionCritique?: string;
     solutionCritiqueDisplay?: string;
     solutionCritiqueFinal?: string;
-    solutionCritiqueTraceText?: string;
     solutionCritiqueExecutionTraceText?: string;
     solutionCritiqueStatus?: AgentStatus;
     refinedSolution?: string;
     refinedSolutionDisplay?: string;
     refinedSolutionFinal?: string;
-    refinedSolutionTraceText?: string;
     refinedSolutionExecutionTraceText?: string;
     selfImprovementStatus?: AgentStatus | 'skipped';
     status: AgentStatus;
@@ -137,7 +133,8 @@ export interface DeepthinkSubStrategyData {
             critiqueDisplay?: string;
             correctedSolution: string;
             correctedSolutionDisplay?: string;
-            correctedSolutionTraceText?: string;
+            correctedSolutionExecutionTraceText?: string;
+            critiqueExecutionTraceText?: string;
             timestamp: number;
             label?: string;
         }>;
@@ -151,7 +148,6 @@ export interface DeepthinkHypothesisData {
     testerAttempt?: string;
     testerAttemptDisplay?: string;
     testerAttemptFinal?: string;
-    testerAttemptTraceText?: string;
     testerAttemptExecutionTraceText?: string;
     testerStatus: AgentStatus;
     targetStrategyIds?: string[];
@@ -164,7 +160,6 @@ export interface DeepthinkPostQualityFilterData {
     iterationNumber: number;
     evaluationResponse?: string;
     evaluationResponseFinal?: string;
-    interactionTraceText?: string;
     executionTraceText?: string;
     prunedStrategyIds: string[];
     continuedStrategyIds: string[];
@@ -264,7 +259,6 @@ export interface DeepthinkLiveEvent {
     systemInstruction?: string;
     prompt?: string;
     response?: string;
-    interactionTraceText?: string;
     executionTraceText?: string;
     error?: string;
     attempt?: number;
@@ -382,7 +376,6 @@ interface DeepthinkAgentCallOutput {
     contextText: string;
     displayText: string;
     finalText: string;
-    interactionTraceText?: string;
     executionTraceText?: string;
 }
 
@@ -1762,7 +1755,6 @@ async function callDeepthinkSandboxToolAgent(args: {
         contextText: args.manifest.outputContract ? result.finalText : (result.promptText || result.finalText || result.text),
         displayText: result.text,
         finalText: args.manifest.outputContract ? result.finalText : (result.promptText || result.finalText || result.text),
-        interactionTraceText: result.interactionTraceText,
         executionTraceText: result.executionTraceText,
     };
 }
@@ -1843,7 +1835,6 @@ async function callAgent(args: {
 
             addLiveEvent(args.process, args.manifest.agentName, `${args.stepDescription} completed`, 'agent_complete', {
                 response: responseOutput.displayText,
-                interactionTraceText: responseOutput.interactionTraceText,
                 executionTraceText: responseOutput.executionTraceText,
                 modelName: agentModel,
                 temperature,
@@ -2461,7 +2452,6 @@ async function runHypothesisRound(args: {
                 hypothesis.testerAttempt = testerResponse.contextText;
                 hypothesis.testerAttemptDisplay = testerResponse.displayText;
                 hypothesis.testerAttemptFinal = testerResponse.finalText;
-                hypothesis.testerAttemptTraceText = testerResponse.interactionTraceText;
                 hypothesis.testerAttemptExecutionTraceText = testerResponse.executionTraceText;
                 hypothesis.testerStatus = 'completed';
             } catch (error: any) {
@@ -2524,7 +2514,6 @@ async function executeSolutionAttempt(args: {
         args.subStrategy.solutionAttempt = response.contextText;
         args.subStrategy.solutionAttemptDisplay = response.displayText;
         args.subStrategy.solutionAttemptFinal = response.finalText;
-        args.subStrategy.solutionAttemptTraceText = response.interactionTraceText;
         args.subStrategy.solutionAttemptExecutionTraceText = response.executionTraceText;
         args.subStrategy.status = 'completed';
     } catch (error: any) {
@@ -2569,12 +2558,10 @@ async function critiqueSolution(args: {
         args.subStrategy.solutionCritique = response.contextText;
         args.subStrategy.solutionCritiqueDisplay = response.displayText;
         args.subStrategy.solutionCritiqueFinal = response.finalText;
-        args.subStrategy.solutionCritiqueTraceText = response.interactionTraceText;
         args.subStrategy.solutionCritiqueExecutionTraceText = response.executionTraceText;
         args.subStrategy.solutionCritiqueStatus = 'completed';
         critiqueData.critiqueResponse = response.contextText;
         critiqueData.critiqueResponseDisplay = response.displayText;
-        critiqueData.interactionTraceText = response.interactionTraceText;
         critiqueData.status = 'completed';
         return response.contextText;
     } catch (error: any) {
@@ -2610,7 +2597,6 @@ async function runInitialExecutionsAndCritiques(args: {
                 subStrategy.refinedSolution = subStrategy.solutionAttempt;
                 subStrategy.refinedSolutionDisplay = subStrategy.solutionAttemptDisplay;
                 subStrategy.refinedSolutionFinal = subStrategy.solutionAttemptFinal;
-                subStrategy.refinedSolutionTraceText = subStrategy.solutionAttemptTraceText;
                 subStrategy.selfImprovementStatus = 'skipped';
                 return;
             }
@@ -2636,8 +2622,10 @@ async function runInitialExecutionsAndCritiques(args: {
                     label: 'Initial Execution',
                     solution: subStrategy.solutionAttempt || '',
                     solutionDisplay: subStrategy.solutionAttemptDisplay,
+                    solutionExecutionTraceText: subStrategy.solutionAttemptExecutionTraceText,
                     critique,
                     critiqueDisplay: subStrategy.solutionCritiqueDisplay,
+                    critiqueExecutionTraceText: subStrategy.solutionCritiqueExecutionTraceText,
                 });
                 subStrategy.evolvingDfs = {
                     enabled: true,
@@ -2651,7 +2639,8 @@ async function runInitialExecutionsAndCritiques(args: {
                         critiqueDisplay: subStrategy.solutionCritiqueDisplay,
                         correctedSolution: subStrategy.solutionAttempt || '',
                         correctedSolutionDisplay: subStrategy.solutionAttemptDisplay,
-                        correctedSolutionTraceText: subStrategy.solutionAttemptTraceText,
+                        correctedSolutionExecutionTraceText: subStrategy.solutionAttemptExecutionTraceText,
+                        critiqueExecutionTraceText: subStrategy.solutionCritiqueExecutionTraceText,
                         timestamp: Date.now(),
                         label: 'Initial Execution',
                     }],
@@ -2659,7 +2648,6 @@ async function runInitialExecutionsAndCritiques(args: {
                 subStrategy.refinedSolution = subStrategy.solutionAttempt;
                 subStrategy.refinedSolutionDisplay = subStrategy.solutionAttemptDisplay;
                 subStrategy.refinedSolutionFinal = subStrategy.solutionAttemptFinal;
-                subStrategy.refinedSolutionTraceText = subStrategy.solutionAttemptTraceText;
                 subStrategy.selfImprovementStatus = 'skipped';
             }
         });
@@ -2792,7 +2780,6 @@ async function runCorrectionIteration(args: {
             subStrategy.refinedSolution = corrected.contextText;
             subStrategy.refinedSolutionDisplay = corrected.displayText;
             subStrategy.refinedSolutionFinal = corrected.finalText;
-            subStrategy.refinedSolutionTraceText = corrected.interactionTraceText;
             subStrategy.refinedSolutionExecutionTraceText = corrected.executionTraceText;
             subStrategy.selfImprovementStatus = 'completed';
 
@@ -2814,8 +2801,10 @@ async function runCorrectionIteration(args: {
                 label: `Correction ${nextBranchIteration}`,
                 solution: corrected.contextText,
                 solutionDisplay: corrected.displayText,
+                solutionExecutionTraceText: corrected.executionTraceText,
                 critique: critique || 'No critique output available.',
                 critiqueDisplay: subStrategy.solutionCritiqueDisplay,
+                critiqueExecutionTraceText: subStrategy.solutionCritiqueExecutionTraceText,
             });
             runtime.globalIteration = args.globalIteration;
             runtime.branchIterationCount = runtime.history.length;
@@ -2832,7 +2821,8 @@ async function runCorrectionIteration(args: {
                 critiqueDisplay: subStrategy.solutionCritiqueDisplay,
                 correctedSolution: corrected.contextText,
                 correctedSolutionDisplay: corrected.displayText,
-                correctedSolutionTraceText: corrected.interactionTraceText,
+                correctedSolutionExecutionTraceText: corrected.executionTraceText,
+                critiqueExecutionTraceText: subStrategy.solutionCritiqueExecutionTraceText,
                 timestamp: Date.now(),
                 label: `Correction ${nextBranchIteration}`,
             });
@@ -2957,7 +2947,6 @@ async function runPqfAgents(args: {
 
             agent.evaluationResponse = response;
             agent.evaluationResponseFinal = responseOutput.finalText;
-            agent.interactionTraceText = responseOutput.interactionTraceText;
             agent.executionTraceText = responseOutput.executionTraceText;
             agent.reasoning = JSON.stringify(parsed, null, 2);
             agent.prunedStrategyIds = groupDecisions.filter(decision => decision.decision === 'update').map(decision => decision.strategyId);
@@ -3178,7 +3167,6 @@ async function runPostFiveIterationMaintenance(args: {
         subStrategy.refinedSolution = subStrategy.solutionAttempt;
         subStrategy.refinedSolutionDisplay = subStrategy.solutionAttemptDisplay;
         subStrategy.refinedSolutionFinal = subStrategy.solutionAttemptFinal;
-        subStrategy.refinedSolutionTraceText = subStrategy.solutionAttemptTraceText;
         subStrategy.selfImprovementStatus = 'skipped';
 
         runtime.history.push({
@@ -3188,8 +3176,10 @@ async function runPostFiveIterationMaintenance(args: {
             label: `Branch v${runtime.branchVersion} Initial Execution`,
             solution: subStrategy.solutionAttempt || '',
             solutionDisplay: subStrategy.solutionAttemptDisplay,
+            solutionExecutionTraceText: subStrategy.solutionAttemptExecutionTraceText,
             critique: critique || 'No critique output available.',
             critiqueDisplay: subStrategy.solutionCritiqueDisplay,
+            critiqueExecutionTraceText: subStrategy.solutionCritiqueExecutionTraceText,
         });
         runtime.globalIteration = args.globalIteration;
         runtime.branchIterationCount = 1;
@@ -3208,7 +3198,8 @@ async function runPostFiveIterationMaintenance(args: {
                 critiqueDisplay: subStrategy.solutionCritiqueDisplay,
                 correctedSolution: subStrategy.solutionAttempt || '',
                 correctedSolutionDisplay: subStrategy.solutionAttemptDisplay,
-                correctedSolutionTraceText: subStrategy.solutionAttemptTraceText,
+                correctedSolutionExecutionTraceText: subStrategy.solutionAttemptExecutionTraceText,
+                critiqueExecutionTraceText: subStrategy.solutionCritiqueExecutionTraceText,
                 timestamp: Date.now(),
                 label: `Branch v${runtime.branchVersion} Initial Execution`,
             }],
@@ -3470,7 +3461,6 @@ async function runNonIterativeRefinement(args: {
             subStrategy.refinedSolution = response.contextText;
             subStrategy.refinedSolutionDisplay = response.displayText;
             subStrategy.refinedSolutionFinal = response.finalText;
-            subStrategy.refinedSolutionTraceText = response.interactionTraceText;
             subStrategy.refinedSolutionExecutionTraceText = response.executionTraceText;
             subStrategy.selfImprovementStatus = 'completed';
         } catch {

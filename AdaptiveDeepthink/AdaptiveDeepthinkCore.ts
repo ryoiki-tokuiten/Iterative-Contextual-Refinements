@@ -40,6 +40,7 @@ import {
 } from '../Deepthink/DeepthinkSandboxAccess';
 import {
     ensureDeepthinkResultsRepository,
+    expandInlineReferenceMarkers,
     restoreSandboxRepositoryStrategy,
     runSandboxToolAgent,
     runVirtualEnvironmentCommand,
@@ -407,7 +408,6 @@ function syncAgentContext(
                 }, null, 2));
                 addAdaptiveLiveEvent(context, agentName, `${agentName} agent completed`, 'agent_complete', {
                     response: result.text,
-                    interactionTraceText: result.interactionTraceText,
                     executionTraceText: result.executionTraceText,
                     modelName,
                     temperature: context.getSelectedTemperature(),
@@ -1021,11 +1021,17 @@ export async function executeAdaptiveDeepthinkTool(
                 output = `<VirtualEnvironment exitCode="${result.exitCode}" durationMs="${result.durationMs}">\n${result.stdout}${result.stderr ? `\nSTDERR:\n${result.stderr}` : ''}${result.error ? `\nERROR:\n${result.error}` : ''}\n</VirtualEnvironment>`;
                 break;
             }
-            case 'submit_final_output':
-                state.selectedSolution = toolCall.response;
+            case 'submit_final_output': {
+                const sessionId = `adaptive-${safeSegment(state.id)}-orchestrator`;
+                state.selectedSolution = expandInlineReferenceMarkers(
+                    toolCall.response,
+                    sessionId,
+                    { repositoryId: state.id, fullRepositoryRead: true, fullRepositoryWrite: true }
+                );
                 state.status = 'completed';
                 output = '<FinalOutputSubmitted />';
                 break;
+            }
         }
         await persistResults(state, context, `Adaptive Deepthink pass ${state.passNumber} update`);
         syncAdaptiveDeepthinkPipeline(state, context.pipeline);

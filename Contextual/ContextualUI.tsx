@@ -89,11 +89,6 @@ function useSidebar() {
 // Left Panel - Current Best Generation
 const CurrentBestGenerationPanel: React.FC<{ content: string; originalContent: string; state: ContextualState }> = ({ content, state }) => {
     const { isCollapsed: sidebarCollapsed, expandSidebar } = useSidebar();
-    const [viewMode, setViewMode] = useState<'submitted' | 'trace'>('submitted');
-
-    useEffect(() => {
-        setViewMode('submitted');
-    }, [content, state.currentBestGenerationTraceText]);
 
     const renderContent = () => {
         if (!content) {
@@ -105,10 +100,7 @@ const CurrentBestGenerationPanel: React.FC<{ content: string; originalContent: s
             );
         }
 
-        const displayedContent = viewMode === 'trace'
-            ? state.currentBestGenerationTraceText || 'No multi-turn interaction trace is available for this response.'
-            : content;
-        return <RenderMathMarkdown content={displayedContent} />;
+        return <RenderMathMarkdown content={content} />;
     };
 
     return (
@@ -157,24 +149,6 @@ const CurrentBestGenerationPanel: React.FC<{ content: string; originalContent: s
                     <h3 style={{ margin: 0, lineHeight: 1, display: 'flex', alignItems: 'center' }}>Current Artifact</h3>
                 </div>
                 <div className="text-panel-actions">
-                    {state.currentBestGenerationTraceText && (
-                        <div className="response-view-toggle" aria-label="Artifact view">
-                            <button
-                                type="button"
-                                className={`response-toggle-option ${viewMode === 'submitted' ? 'active' : ''}`}
-                                onClick={() => setViewMode('submitted')}
-                            >
-                                Artifact
-                            </button>
-                            <button
-                                type="button"
-                                className={`response-toggle-option ${viewMode === 'trace' ? 'active' : ''}`}
-                                onClick={() => setViewMode('trace')}
-                            >
-                                Trace
-                            </button>
-                        </div>
-                    )}
                     <button
                         className="action-btn"
                         onClick={async () => {
@@ -388,9 +362,15 @@ export function renderEvolvingDfsUI(
     container: HTMLElement,
     originalSolution: string,
     finalSolution: string,
-    iterations: Array<{ iterationNumber: number, critique: string, correctedSolution: string, timestamp?: number }>,
-    isProcessing?: boolean,
-    currentArtifactTraceText?: string
+    iterations: Array<{
+        iterationNumber: number;
+        critique: string;
+        critiqueExecutionTraceText?: string;
+        correctedSolution: string;
+        correctedSolutionExecutionTraceText?: string;
+        timestamp?: number;
+    }>,
+    isProcessing?: boolean
 ): any {
     // Transform iterations into ContextualState format
     const messages: ContextualMessage[] = [];
@@ -407,7 +387,8 @@ export function renderEvolvingDfsUI(
             role: 'iterative_agent',
             content: iter.critique,
             timestamp: baseTimestamp,
-            iterationNumber: iter.iterationNumber
+            iterationNumber: iter.iterationNumber,
+            executionTraceText: iter.critiqueExecutionTraceText,
         });
 
         // Add correction message
@@ -416,7 +397,8 @@ export function renderEvolvingDfsUI(
             role: 'main_generator',
             content: iter.correctedSolution,
             timestamp: baseTimestamp + 500, // 500ms after critique
-            iterationNumber: iter.iterationNumber
+            iterationNumber: iter.iterationNumber,
+            executionTraceText: iter.correctedSolutionExecutionTraceText,
         });
     });
 
@@ -454,7 +436,6 @@ export function renderEvolvingDfsUI(
         initialUserRequest: '',
         initialMainGeneration: originalSolution || 'Processing...',
         currentBestGeneration: finalSolution || 'Processing Evolving DFS corrections...',
-        currentBestGenerationTraceText: currentArtifactTraceText,
         currentBestSuggestions: '',
         allIterativeSuggestions: [],
         mainGeneratorHistory: [],

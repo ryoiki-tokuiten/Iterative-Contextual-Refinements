@@ -167,7 +167,7 @@ Agent-scoped workspace rules:
 - The runtime enforces a shared repository view with one writable agent directory and role-specific read-only peer directories.
 - Root and peer directories are read-only when visible; unavailable peer directories are not mounted.
 - If you need to modify a readable peer file, copy it into your own writable directory first.
-- Use final_output.references or inline markers such as [[image:plot.png|Plot]] and [[file:script.py|Script]] for artifacts that should be rendered or reused.
+- Reference artifacts exactly where they belong in final_output.response with inline markers such as [[image:plot.png|Plot]] and [[file:script.py|Script]].
 
 Output visibility rules:
 - Print concise text results, progress notes, important numbers, command results, and saved filenames so both you and the user can see what happened in Command Output.
@@ -329,7 +329,7 @@ Agent-scoped workspace rules:
 - The runtime enforces a shared repository view with one writable agent directory and role-specific read-only peer directories.
 - Root and peer directories are read-only when visible; unavailable peer directories are not mounted.
 - If you need to modify a readable peer file, copy it into your own writable directory first.
-- Use final_output.references or inline markers such as [[image:plot.png|Plot]] and [[file:script.py|Script]] for artifacts that should be rendered or reused.
+- Reference artifacts exactly where they belong in final_output.response with inline markers such as [[image:plot.png|Plot]] and [[file:script.py|Script]].
 
 Output visibility rules:
 - Print concise text results, progress notes, important numbers, command results, and saved filenames so both you and the user can see what happened in Command Output.

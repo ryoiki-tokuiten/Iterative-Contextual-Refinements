@@ -18,9 +18,9 @@ list or read directories outside their access policy. Python variables and
 process memory do not persist between commands, so durable state should be
 written to files.
 
-When an agent submits `final_output.references` or inline markers such as
-`[[image:plot.png|Plot]]`, the runtime renders the referenced artifact for the
-UI and includes the exact `/workspace/...` path in the submitted output. The
+When an agent includes inline markers such as `[[image:plot.png|Plot]]` directly
+in `final_output.response`, the runtime renders the artifact at that exact
+position and includes the exact `/workspace/...` path in the submitted output. The
 virtual environment explorer also uses sandbox session metadata to label the
 writable directory and read-only repository paths.
 

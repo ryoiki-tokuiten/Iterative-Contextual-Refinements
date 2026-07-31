@@ -6,7 +6,7 @@
  * All pure logic, state management, and event coordination lives in Deepthink.ts.
  */
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
     DeepthinkPipelineState,
@@ -86,42 +86,14 @@ const ProximityHistoryModal: React.FC<{
     document.body,
 );
 
-const ArtifactTracePane: React.FC<{
+const ArtifactPane: React.FC<{
     artifact: string;
-    trace?: string;
     emptyMessage: string;
-}> = ({ artifact, trace, emptyMessage }) => {
-    const [viewMode, setViewMode] = useState<'submitted' | 'trace'>('submitted');
-    const content = viewMode === 'trace'
-        ? (trace || 'No multi-turn interaction trace is available for this response.')
-        : (artifact || emptyMessage);
-
-    return (
-        <div className="artifact-trace-pane">
-            {trace && (
-                <div className="response-view-toggle artifact-pane-toggle" aria-label="Response view">
-                    <button
-                        type="button"
-                        className={`response-toggle-option ${viewMode === 'submitted' ? 'active' : ''}`}
-                        onClick={() => setViewMode('submitted')}
-                    >
-                        Artifact
-                    </button>
-                    <button
-                        type="button"
-                        className={`response-toggle-option ${viewMode === 'trace' ? 'active' : ''}`}
-                        onClick={() => setViewMode('trace')}
-                    >
-                        Trace
-                    </button>
-                </div>
-            )}
-            <div>
-                <MathHTML content={content} />
-            </div>
-        </div>
-    );
-};
+}> = ({ artifact, emptyMessage }) => (
+    <div>
+        <MathHTML content={artifact || emptyMessage} />
+    </div>
+);
 
 // ═══════════════════════════════════════════════════════════════════════
 // Show More / Show Less Toggle
@@ -213,9 +185,8 @@ export const DefaultSolutionUI: React.FC<{
                     <h4 style={{ margin: 0 }}><MIcon name="psychology" />{refinementEnabled ? 'Attempted Solution' : 'Solution'}</h4>
                 </div>
                 <div className="solution-panel-body">
-                    <ArtifactTracePane
+                    <ArtifactPane
                         artifact={attemptContent}
-                        trace={subStrategy.solutionAttemptTraceText}
                         emptyMessage="Solution not available"
                     />
                 </div>
@@ -229,11 +200,10 @@ export const DefaultSolutionUI: React.FC<{
                     </h4>
                 </div>
                 <div className="solution-panel-body" style={!refinementWasPerformed ? { position: 'relative' } : undefined}>
-                    <ArtifactTracePane
+                    <ArtifactPane
                         artifact={refinementEnabled
                             ? (refinedContent || 'Refined solution not available')
                             : (refinedContent || attemptContent || 'Solution refinement is disabled')}
-                        trace={subStrategy.refinedSolutionTraceText}
                         emptyMessage="Refined solution not available"
                     />
                     {!refinementWasPerformed && <div className="disabled-overlay">Refinement Disabled</div>}
@@ -253,14 +223,8 @@ export const SubStrategyComparisonUI: React.FC<{
     const refinedTitle = refinementEnabled ? 'Refined Solution' : 'Refined Solution (Disabled)';
     const attemptContent = solutionAttemptDisplay(subStrategy);
     const refinedContent = refinedSolutionDisplay(subStrategy);
-    const [attemptViewMode, setAttemptViewMode] = useState<'submitted' | 'trace'>('submitted');
-    const [refinedViewMode, setRefinedViewMode] = useState<'submitted' | 'trace'>('submitted');
-    const attemptDisplay = attemptViewMode === 'trace'
-        ? subStrategy.solutionAttemptTraceText || 'No multi-turn interaction trace is available for this response.'
-        : attemptContent || 'No solution attempt available';
-    const refinedDisplay = refinedViewMode === 'trace'
-        ? subStrategy.refinedSolutionTraceText || 'No multi-turn interaction trace is available for this response.'
-        : refinedContent || 'No refined solution available';
+    const attemptDisplay = attemptContent || 'No solution attempt available';
+    const refinedDisplay = refinedContent || 'No refined solution available';
 
     return (
         <div className="solution-comparison-grid">
@@ -270,12 +234,6 @@ export const SubStrategyComparisonUI: React.FC<{
                         <MIcon name="psychology" /><span>Solution Attempt</span>
                     </h4>
                     <div className="code-actions">
-                        {subStrategy.solutionAttemptTraceText && (
-                            <div className="response-view-toggle" aria-label="Solution attempt view">
-                                <button type="button" className={`response-toggle-option ${attemptViewMode === 'submitted' ? 'active' : ''}`} onClick={() => setAttemptViewMode('submitted')}>Artifact</button>
-                                <button type="button" className={`response-toggle-option ${attemptViewMode === 'trace' ? 'active' : ''}`} onClick={() => setAttemptViewMode('trace')}>Trace</button>
-                            </div>
-                        )}
                         <ActionButton
                             type="copy"
                             content={attemptContent}
@@ -304,12 +262,6 @@ export const SubStrategyComparisonUI: React.FC<{
                         <MIcon name={refinedIcon} /><span>{refinedTitle}</span>
                     </h4>
                     <div className="code-actions">
-                        {subStrategy.refinedSolutionTraceText && (
-                            <div className="response-view-toggle" aria-label="Refined solution view">
-                                <button type="button" className={`response-toggle-option ${refinedViewMode === 'submitted' ? 'active' : ''}`} onClick={() => setRefinedViewMode('submitted')}>Artifact</button>
-                                <button type="button" className={`response-toggle-option ${refinedViewMode === 'trace' ? 'active' : ''}`} onClick={() => setRefinedViewMode('trace')}>Trace</button>
-                            </div>
-                        )}
                         <ActionButton
                             type="copy"
                             disabled={!refinementWasPerformed}
@@ -343,47 +295,13 @@ export const SubStrategyComparisonUI: React.FC<{
 export const EmbeddedModalContent: React.FC<{
     content: string;
     contentClass?: string;
-    interactionTraceText?: string;
-}> = ({ content, contentClass = 'critique-content', interactionTraceText }) => {
-    const [viewMode, setViewMode] = useState<'submitted' | 'trace'>('submitted');
-    const rootRef = useRef<HTMLDivElement>(null);
-    const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
-    const displayContent = viewMode === 'trace'
-        ? (interactionTraceText || 'No multi-turn interaction trace is available for this response.')
-        : content;
-
-    useLayoutEffect(() => {
-        setHeaderTarget(rootRef.current?.closest('.embedded-modal-content')?.querySelector<HTMLElement>('.embedded-modal-header-actions') || null);
-    }, []);
-
-    const toggle = interactionTraceText && (
-        <div className="response-view-toggle embedded-response-toggle" aria-label="Response view">
-                    <button
-                        type="button"
-                        className={`response-toggle-option ${viewMode === 'submitted' ? 'active' : ''}`}
-                        onClick={() => setViewMode('submitted')}
-                    >
-                        Artifact
-                    </button>
-                    <button
-                        type="button"
-                        className={`response-toggle-option ${viewMode === 'trace' ? 'active' : ''}`}
-                        onClick={() => setViewMode('trace')}
-                    >
-                        Trace
-                    </button>
+}> = ({ content, contentClass = 'critique-content' }) => (
+    <div className="deepthink-embedded-response">
+        <div>
+            <MathHTML content={content} className={contentClass} />
         </div>
-    );
-
-    return (
-        <div ref={rootRef} className="deepthink-embedded-response">
-            {headerTarget && toggle && createPortal(toggle, headerTarget)}
-            <div>
-                <MathHTML content={displayContent} className={contentClass} />
-            </div>
-        </div>
-    );
-};
+    </div>
+);
 
 interface StructuredReasoningEvaluation {
     id: string;
@@ -491,44 +409,19 @@ const StructuredReasoningContent: React.FC<{
 
 export const StructuredResponseModalContent: React.FC<{
     reasoning: unknown;
-    interactionTraceText?: string;
     resultsClassName?: string;
     emptyMessage?: string;
-}> = ({ reasoning, interactionTraceText, resultsClassName, emptyMessage }) => {
-    const [viewMode, setViewMode] = useState<'submitted' | 'trace'>('submitted');
-    const rootRef = useRef<HTMLDivElement>(null);
-    const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
-
-    useLayoutEffect(() => {
-        setHeaderTarget(rootRef.current?.closest('.embedded-modal-content')?.querySelector<HTMLElement>('.embedded-modal-header-actions') || null);
-    }, []);
-
-    const toggle = interactionTraceText && (
-        <div className="response-view-toggle embedded-response-toggle" aria-label="Response view">
-            <button type="button" className={`response-toggle-option ${viewMode === 'submitted' ? 'active' : ''}`} onClick={() => setViewMode('submitted')}>Artifact</button>
-            <button type="button" className={`response-toggle-option ${viewMode === 'trace' ? 'active' : ''}`} onClick={() => setViewMode('trace')}>Trace</button>
+}> = ({ reasoning, resultsClassName, emptyMessage }) => (
+    <div className="deepthink-embedded-response">
+        <div>
+            <StructuredReasoningContent
+                reasoning={reasoning}
+                resultsClassName={resultsClassName}
+                emptyMessage={emptyMessage}
+            />
         </div>
-    );
-
-    return (
-        <div ref={rootRef} className="deepthink-embedded-response">
-            {headerTarget && toggle && createPortal(toggle, headerTarget)}
-            {viewMode === 'trace' ? (
-                <div>
-                    <MathHTML content={interactionTraceText || 'No multi-turn interaction trace is available for this response.'} />
-                </div>
-            ) : (
-                <div>
-                    <StructuredReasoningContent
-                        reasoning={reasoning}
-                        resultsClassName={resultsClassName}
-                        emptyMessage={emptyMessage}
-                    />
-                </div>
-            )}
-        </div>
-    );
-};
+    </div>
+);
 
 // ═══════════════════════════════════════════════════════════════════════
 // Tab Content Components

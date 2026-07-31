@@ -305,15 +305,6 @@
     color: var(--accent-blue);
 }
 
-.embedded-modal-content .embedded-modal-view-toggle .modal-nav-btn {
-    width: auto;
-    min-width: 4.5rem;
-    padding: 0.25rem 0.65rem;
-    border-radius: 999px;
-    font-size: 0.75rem;
-    font-weight: 700;
-}
-
 .response-view-toggle {
     display: inline-flex;
     align-items: center;
@@ -352,25 +343,6 @@
     box-shadow: 0 0 0 1px rgba(var(--accent-blue-rgb), 0.24), 0 6px 18px rgba(var(--accent-blue-rgb), 0.14);
 }
 
-.embedded-modal-content .embedded-modal-view-toggle {
-    padding: 0.18rem;
-    background: rgba(var(--text-color-rgb), 0.055);
-    border: 1px solid rgba(var(--border-color-rgb), 0.45);
-    border-radius: 999px;
-}
-
-.embedded-modal-content .embedded-modal-view-toggle .modal-nav-btn {
-    border: 0;
-    min-width: 4.25rem;
-    height: 1.65rem;
-    background: transparent;
-}
-
-.embedded-modal-content .embedded-modal-view-toggle .modal-nav-btn.active {
-    background: rgba(var(--accent-blue-rgb), 0.16);
-    box-shadow: 0 0 0 1px rgba(var(--accent-blue-rgb), 0.24), 0 6px 18px rgba(var(--accent-blue-rgb), 0.14);
-}
-
 .embedded-modal-content .modal-nav-btn:disabled {
     opacity: 0.3;
     cursor: not-allowed;
@@ -404,10 +376,6 @@
     margin-left: auto;
 }
 
-.embedded-modal-content .embedded-modal-header-actions .embedded-response-toggle {
-    order: -1;
-}
-
 .embedded-modal-content .modal-header .close-modal-btn:hover {
     background: rgba(var(--accent-red-rgb), 0.1);
     color: var(--accent-red);
@@ -428,8 +396,7 @@
     width: 100%;
 }
 
-.submitted-artifact-surface,
-.interaction-trace-surface {
+.submitted-artifact-surface {
     width: 100%;
     min-width: 0;
     padding: 1rem;
@@ -442,11 +409,7 @@
 /* Embedded viewers deliberately keep a single reading surface. The framed
  * artifact treatment belongs to the live inspector, not inside another modal. */
 .embedded-modal-content .submitted-artifact-surface,
-.embedded-modal-content .interaction-trace-surface,
-.deepthink-embedded-response .submitted-artifact-surface,
-.deepthink-embedded-response .interaction-trace-surface,
-.artifact-trace-pane .submitted-artifact-surface,
-.artifact-trace-pane .interaction-trace-surface {
+.deepthink-embedded-response .submitted-artifact-surface {
     padding: 0;
     border: 0;
     border-radius: 0;
@@ -454,21 +417,11 @@
     box-shadow: none;
 }
 
-.interaction-trace-surface {
-    background: rgba(var(--bg-color-rgb), 0.34);
-}
-
-.deepthink-embedded-response,
-.artifact-trace-pane {
+.deepthink-embedded-response {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
     min-width: 0;
-}
-
-.embedded-response-toggle,
-.artifact-pane-toggle {
-    align-self: flex-start;
 }
 
 /* Error state used by the active solution comparison. */

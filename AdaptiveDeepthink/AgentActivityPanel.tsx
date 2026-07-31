@@ -164,6 +164,20 @@ const ToolArgumentsCard: React.FC<{ toolName: string; args?: any }> = ({ toolNam
                     </div>
                 );
             }
+            case 'sandbox_exec': {
+                return (
+                    <div className="tool-args-details">
+                        <div className="tool-args-context-block">
+                            <span className="tool-args-label">Command</span>
+                            <pre className="tool-args-context-text">{String(args.command || '')}</pre>
+                        </div>
+                    </div>
+                );
+            }
+            case 'final_output':
+            case 'submit_final_output': {
+                return null;
+            }
             default: {
                 return (
                     <div className="tool-args-details">
@@ -194,7 +208,7 @@ export const MessageCard: React.FC<{ message: AdaptiveMessage }> = ({ message })
     const getMessageIcon = () => {
         switch (message.role) {
             case 'agent': return <Icon name="smart_toy" />;
-            case 'system': return message.status === 'error' ? <Icon name="warning" /> : <Icon name="check_circle" />;
+            case 'system': return message.status === 'error' ? <Icon name="warning" /> : <Icon name="terminal" />;
             case 'user': return <Icon name="person" />;
             default: return <Icon name="person" />;
         }
@@ -263,6 +277,14 @@ export const MessageCard: React.FC<{ message: AdaptiveMessage }> = ({ message })
                             </div>
                         );
                     } else if (block.kind === 'tool_result') {
+                        if ((block.tool === 'final_output' || block.tool === 'submit_final_output') && block.result === 'Submitted') {
+                            return (
+                                <div key={`block-${idx}`} className="system-block success">
+                                    <Icon name="check_circle" className="block-icon" />
+                                    <span>Submitted</span>
+                                </div>
+                            );
+                        }
                         if (isAdaptiveDeepthinkAgentTool(block.tool)) {
                             return (
                                 <div key={`block-${idx}`} className="tool-result deepthink-agent-result concise">
@@ -277,9 +299,16 @@ export const MessageCard: React.FC<{ message: AdaptiveMessage }> = ({ message })
                             );
                         }
 
+                        if (block.tool === 'sandbox_exec' || block.tool === 'sandbox_exec()') {
+                            return (
+                                <CollapsibleContent key={`block-${idx}`} content={block.result} maxLines={30} />
+                            );
+                        }
+
+                        const toolDisplay = block.tool.endsWith('()') ? block.tool : `${block.tool}()`;
                         return (
                             <div key={`block-${idx}`} className="tool-result">
-                                <div className="tool-result-header">Tool Result: {block.tool}</div>
+                                <div className="tool-result-header">Tool Result: {toolDisplay}</div>
                                 <CollapsibleContent content={block.result} maxLines={30} />
                             </div>
                         );
@@ -302,11 +331,9 @@ export const MessageCard: React.FC<{ message: AdaptiveMessage }> = ({ message })
                 </div>
                 <div className="message-sender-info">
                     <span className="message-sender">
-                        {message.role === 'agent'
+                        {message.sender || (message.role === 'agent'
                             ? (message.segments?.[0]?.kind === 'tool' ? getAdaptiveDeepthinkAgentDisplayName(message.segments[0].tool.rawType || message.segments[0].tool.type) : 'Orchestrator')
-                            : message.role === 'system'
-                            ? 'Deepthink Agent Output'
-                            : 'User'}
+                            : 'Environment Output')}
                     </span>
                 </div>
             </div>

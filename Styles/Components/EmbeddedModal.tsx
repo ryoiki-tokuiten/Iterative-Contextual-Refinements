@@ -7,13 +7,14 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { createRoot, Root } from 'react-dom/client';
 import { Icon } from '../../UI/Icons';
 import RenderMathMarkdown from './RenderMathMarkdown';
+import { SandboxAgentActivity } from '../../Deepthink/SandboxAgentActivity';
 
 export interface ModalMessage {
     id: string;
     role: string;
     content: string;
     iterationNumber: number;
-    interactionTraceText?: string;
+    executionTraceText?: string;
 }
 
 interface EmbeddedModalViewerProps {
@@ -63,7 +64,7 @@ const EmbeddedModalViewer: React.FC<EmbeddedModalViewerProps> = ({
     const transitionTimeoutRef = useRef<number | null>(null);
     const [isTransitioning, setIsTransitioning] = useState(false);
     const [modalWidth, setModalWidth] = useState<number | undefined>(undefined);
-    const [viewMode, setViewMode] = useState<'submitted' | 'trace'>('submitted');
+    const [viewMode, setViewMode] = useState<'submitted' | 'activity'>('submitted');
 
     const messages = useMemo(() => {
         if (!currentMessage || !allMessages?.length) return [];
@@ -85,10 +86,7 @@ const EmbeddedModalViewer: React.FC<EmbeddedModalViewerProps> = ({
 
     const displayedMessage = hasNavigation && activeIndex >= 0 ? messages[activeIndex] : null;
     const submittedContent = displayedMessage?.content || content || 'No content available';
-    const interactionTraceText = displayedMessage?.interactionTraceText || currentMessage?.interactionTraceText;
-    const displayContent = viewMode === 'trace'
-        ? (interactionTraceText || 'No multi-turn interaction trace is available for this response.')
-        : submittedContent;
+    const executionTraceText = displayedMessage?.executionTraceText || currentMessage?.executionTraceText;
     const displayIteration = displayedMessage?.iterationNumber;
 
     useEffect(() => {
@@ -151,7 +149,26 @@ const EmbeddedModalViewer: React.FC<EmbeddedModalViewerProps> = ({
         });
 
         return () => window.cancelAnimationFrame(handle);
-    }, [displayContent]);
+    }, [submittedContent]);
+
+    const activityViewToggle = executionTraceText && (
+        <div className="response-view-toggle" aria-label="Response view">
+            <button
+                type="button"
+                className={`response-toggle-option ${viewMode === 'submitted' ? 'active' : ''}`}
+                onClick={() => setViewMode('submitted')}
+            >
+                Artifact
+            </button>
+            <button
+                type="button"
+                className={`response-toggle-option ${viewMode === 'activity' ? 'active' : ''}`}
+                onClick={() => setViewMode('activity')}
+            >
+                Agent Activity
+            </button>
+        </div>
+    );
 
     const overlayStyle: React.CSSProperties = {
         position: 'fixed',
@@ -188,24 +205,7 @@ const EmbeddedModalViewer: React.FC<EmbeddedModalViewerProps> = ({
                         </div>
                     </div>
                     <div className="embedded-modal-header-controls" style={{ display: 'flex', alignItems: 'center', gap: '.5rem', marginLeft: 'auto' }}>
-                        {interactionTraceText && (
-                            <div className="embedded-modal-view-toggle" style={{ display: 'inline-flex', alignItems: 'center', gap: '.25rem' }}>
-                                <button
-                                    className={`modal-nav-btn ${viewMode === 'submitted' ? 'active' : ''}`}
-                                    title="View submitted artifact"
-                                    onClick={() => setViewMode('submitted')}
-                                >
-                                    Artifact
-                                </button>
-                                <button
-                                    className={`modal-nav-btn ${viewMode === 'trace' ? 'active' : ''}`}
-                                    title="View multi-turn interaction"
-                                    onClick={() => setViewMode('trace')}
-                                >
-                                    Trace
-                                </button>
-                            </div>
-                        )}
+                        {activityViewToggle}
                         {hasNavigation && (
                             <>
                                 <button
@@ -234,9 +234,13 @@ const EmbeddedModalViewer: React.FC<EmbeddedModalViewerProps> = ({
                     </div>
                 </div>
                 <div className="modal-body custom-scrollbar" style={{ opacity: isTransitioning ? 0.3 : 1 }}>
-                    <div ref={contentWrapperRef} className="modal-content-wrapper">
-                        <RenderMathMarkdown content={displayContent} />
-                    </div>
+                    {viewMode === 'activity' && executionTraceText ? (
+                        <SandboxAgentActivity executionTraceText={executionTraceText} />
+                    ) : (
+                        <div ref={contentWrapperRef} className="modal-content-wrapper">
+                            <RenderMathMarkdown content={submittedContent} />
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

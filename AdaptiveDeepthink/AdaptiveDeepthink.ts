@@ -138,10 +138,11 @@ function buildAgentMessage(message: AIMessage): AdaptiveMessage | null {
 function buildSystemMessage(message: ToolMessage): AdaptiveMessage {
     const content = messageContentToText(message.content);
     const artifact = message.artifact as AdaptiveDeepthinkToolResultArtifact | undefined;
+    const tool = artifact?.tool || message.name || 'tool';
     const isError = message.status === 'error';
     const blocks: SystemBlock[] = isError
         ? [{ kind: 'error', message: content }]
-        : [{ kind: 'tool_result', tool: artifact?.tool || message.name || 'tool', result: content }];
+        : [{ kind: 'tool_result', tool, result: tool === 'submit_final_output' ? 'Submitted' : content }];
     return { id: newMsgId('system'), role: 'system', content, timestamp: Date.now(), status: isError ? 'error' : 'success', blocks };
 }
 

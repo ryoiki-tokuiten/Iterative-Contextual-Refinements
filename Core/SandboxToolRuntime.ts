@@ -199,19 +199,16 @@ export async function archiveSandboxRepositoryStrategy(
     return payload as SandboxArchivedStrategy;
 }
 
-export interface SandboxFinalOutputReference {
+interface SandboxInlineOutputReference {
     path: string;
     kind?: 'file' | 'image';
     label?: string;
-    description?: string;
 }
 
 export interface SandboxToolAgentResult {
     text: string;
     promptText: string;
     finalText: string;
-    interactionTraceText?: string;
-    references?: SandboxFinalOutputReference[];
     executionTrace?: SandboxToolExecutionTrace;
     executionTraceText?: string;
     geminiContent?: {
@@ -249,6 +246,11 @@ export interface SandboxToolExecutionTraceMessage {
     additional_kwargs?: unknown;
     response_metadata?: unknown;
     id?: string;
+    images?: Array<{
+        filename: string;
+        mimeType: string;
+        url: string;
+    }>;
 }
 
 export interface SeedFile {
@@ -290,17 +292,9 @@ const sandboxToolSchema = z.object({
     timeout_ms: z.number().int().positive().max(300_000).optional()
 });
 
-const finalOutputReferenceSchema = z.object({
-    path: z.string().trim().min(1),
-    kind: z.enum(['file', 'image']).optional(),
-    label: z.string().trim().optional(),
-    description: z.string().trim().optional()
-});
-
 const finalOutputToolSchema = z.object({
-    response: z.unknown(),
-    references: z.array(finalOutputReferenceSchema).optional()
-});
+    response: z.unknown()
+}).strict();
 
 const SANDBOX_TOOL_NAME = 'sandbox_exec';
 const FINAL_OUTPUT_TOOL_NAME = 'final_output';
@@ -348,8 +342,7 @@ function createFinalOutputToolDefinition(contract?: SandboxFinalOutputContract):
                 'Use this after sandbox exploration is complete. If the environment returns a validation error, correct the payload and submit it again in the same tool conversation.',
                 structuredResponse
                     ? `For ${contract!.name}, response must be the role-specific JSON object described by its schema. The environment validates it and returns a tool error for correction if it is invalid.`
-                    : 'The response field is the only answer that downstream agents receive.',
-                'Use references to point at important generated files or images that should be rendered in the UI and made easy for later agents to locate.'
+                    : 'The response field is the only answer that downstream agents receive.'
             ].join(' '),
             parameters: {
                 type: 'object',
@@ -359,34 +352,6 @@ function createFinalOutputToolDefinition(contract?: SandboxFinalOutputContract):
                         : {
                             type: 'string',
                             description: 'The complete final answer, solution, critique, test result, or role-specific output to submit to the multi-agent system.'
-                        },
-                    references: {
-                        type: 'array',
-                        description: 'Optional important files or images created or used during sandbox work.',
-                        items: {
-                            type: 'object',
-                            properties: {
-                                path: {
-                                    type: 'string',
-                                    description: 'Workspace path such as output.png, plots/result.png, /workspace/Strategy-1/result.py, or /workspace/Hypothesis-v2/Hypothesis-2/chart.png.'
-                                },
-                                kind: {
-                                    type: 'string',
-                                    enum: ['file', 'image'],
-                                    description: 'Use image for renderable image files; otherwise use file.'
-                                },
-                                label: {
-                                    type: 'string',
-                                    description: 'Short display label.'
-                                },
-                                description: {
-                                    type: 'string',
-                                    description: 'Optional one-sentence description of why this artifact matters.'
-                                }
-                            },
-                            required: ['path'],
-                            additionalProperties: false
-                        }
                     }
                 },
                 required: ['response'],
@@ -472,7 +437,7 @@ function getProviderImageContent(
     const images = files.filter(isImageUpload);
     if (providerName === 'anthropic') {
         return [
-            { type: 'text', text },
+            ...(text ? [{ type: 'text', text }] : []),
             ...images.map(image => ({
                 type: 'image',
                 source: {
@@ -486,7 +451,7 @@ function getProviderImageContent(
 
     if (providerName === 'gemini') {
         return [
-            { text },
+            ...(text ? [{ text }] : []),
             // Gemini accepts inline binary parts for its supported document,
             // image, audio, and video inputs, so preserve direct uploads as
             // native inputs instead of turning them into rough text estimates.
@@ -500,7 +465,7 @@ function getProviderImageContent(
     }
 
     return [
-        { type: 'text', text },
+        ...(text ? [{ type: 'text', text }] : []),
         ...images.map(image => ({
             type: 'image_url',
             image_url: {
@@ -551,19 +516,10 @@ function buildGeneratedImageMessage(providerName: ResolvedProvider['providerName
     const attachable = images.filter(image => !!image.base64);
     if (attachable.length === 0) return null;
 
-    const text = [
-        'The sandbox command generated or updated these image files. They are attached as native vision inputs:',
-        ...attachable.map(image => `- ${image.filename} (${image.mimeType})`)
-    ].join('\n');
-
-    return createImageMessage(
-        providerName,
-        text,
-        attachable.map(image => ({
-            mimeType: image.mimeType,
-            base64: image.base64!
-        }))
-    );
+    return createImageMessage(providerName, '', attachable.map(image => ({
+        mimeType: image.mimeType,
+        base64: image.base64!
+    })));
 }
 
 function buildGeminiHistoryContent(displayText: string, images: SandboxToolImage[]): { parts: any[] } | undefined {
@@ -708,8 +664,8 @@ function buildSystemPrompt(
             ? `- This role has a structured final-output contract (${options.finalOutputContract.name}). Put the required JSON object directly in ${FINAL_OUTPUT_TOOL_NAME}.response; do not serialize it as prose or surround it with markdown. If the environment rejects it, fix only that payload and call ${FINAL_OUTPUT_TOOL_NAME} again—your sandbox research remains available.`
             : '- Submit the complete role-specific result in the final_output.response string.',
         '- Do not include private scratchpad, command transcripts, tool logs, or exploratory dead ends in the final output unless they are essential evidence for your role.',
-        '- If generated files, plots, images, proofs, scripts, or data are useful, include them in final_output.references. You may also use inline markers like [[image:plot.png|Plot label]] or [[file:analysis.py|Analysis script]] inside the response.',
-        '- References should point to real files visible from this sandbox. Use paths relative to your writable directory for your own files, or /workspace/<visible-directory>/<file> for visible repository files.',
+        '- If generated files, plots, images, proofs, scripts, or data are useful, reference them exactly where they belong in the response with inline markers like [[image:plot.png|Plot label]] or [[file:analysis.py|Analysis script]].',
+        '- Inline references must point to real files visible from this sandbox. Use paths relative to your writable directory for your own files, or /workspace/<visible-directory>/<file> for visible repository files.',
         '',
         'Verification discipline:',
         '- A claim is externally verified only when the relevant command was actually executed in the sandbox and returned a successful exit code. Otherwise call it a sketch, estimate, conjecture, or unverified attempt.',
@@ -996,7 +952,12 @@ function normalizeWorkspaceReferencePath(rawPath: string, access?: SandboxReposi
     if (parts.length === 0) return null;
 
     if (access && access.agentDirectory && !fromWorkspaceRoot && !fromRelativeRoot) {
-        const visibleDirectories = new Set([access.agentDirectory, ...(access.readableDirectories || [])]);
+        const visibleDirectories = new Set([
+            access.agentDirectory,
+            ...(access.readableDirectories || []),
+            'direct_context',
+            'user_uploaded',
+        ]);
         if (!access.fullRepositoryRead && !visibleDirectories.has(parts[0])) {
             parts.unshift(access.agentDirectory);
         }
@@ -1010,57 +971,30 @@ function encodeSandboxFileUrl(sessionId: string, relativePath: string): string {
     return withAppBasePath(`/api/sandbox/files/${encodeURIComponent(sessionId)}/${encodedPath}`);
 }
 
-function isImageReference(reference: SandboxFinalOutputReference): boolean {
+function isImageReference(reference: SandboxInlineOutputReference): boolean {
     // Agents occasionally label an image artifact as a generic "file". The
     // actual path is authoritative here: rendering image bytes as a code file
     // both looks broken and can create an enormous text payload in the UI.
     return reference.kind === 'image' || /\.(png|jpe?g|gif|webp|bmp|tiff?|svg)$/i.test(reference.path);
 }
 
-function markdownForReference(sessionId: string, reference: SandboxFinalOutputReference): string {
+function markdownForReference(sessionId: string, reference: SandboxInlineOutputReference): string {
     const url = encodeSandboxFileUrl(sessionId, reference.path);
     const label = (reference.label || reference.path.split('/').pop() || reference.path).replace(/[\]\n\r]/g, ' ').trim();
-    const description = reference.description?.trim();
 
     if (isImageReference(reference)) {
-        return [
-            `![${label}](${url})`,
-            description,
-        ].filter(Boolean).join('\n\n');
+        return `![${label}](${url})`;
     }
 
-    return description
-        ? `${description}\n\n[${label}](${url})`
-        : `[${label}](${url})`;
+    return `[${label}](${url})`;
 }
 
-function normalizeFinalOutputReferences(
-    references: SandboxFinalOutputReference[] | undefined,
-    access?: SandboxRepositoryAccess
-): SandboxFinalOutputReference[] {
-    const seen = new Set<string>();
-    const normalized: SandboxFinalOutputReference[] = [];
-
-    for (const reference of references || []) {
-        const path = normalizeWorkspaceReferencePath(reference.path, access);
-        if (!path || seen.has(path)) continue;
-        seen.add(path);
-        normalized.push({
-            ...reference,
-            path,
-            label: reference.label?.trim() || undefined,
-            description: reference.description?.trim() || undefined,
-        });
-    }
-
-    return normalized;
-}
-
-function expandInlineReferenceMarkers(
+export function expandInlineReferenceMarkers(
     text: string,
     sessionId: string,
     access?: SandboxRepositoryAccess
 ): string {
+    if (!text) return text;
     return text.replace(/\[\[(image|file):([^\]|\n\r]+)(?:\|([^\]\n\r]+))?\]\]/g, (_match, kind, rawPath, rawLabel) => {
         const path = normalizeWorkspaceReferencePath(String(rawPath), access);
         if (!path) return '';
@@ -1072,44 +1006,12 @@ function expandInlineReferenceMarkers(
     });
 }
 
-function buildSubmittedFinalOutput(args: {
+export function buildSubmittedFinalOutput(args: {
     finalText: string;
-    references: SandboxFinalOutputReference[];
     sessionId: string;
     repositoryAccess?: SandboxRepositoryAccess;
 }): string {
-    const body = expandInlineReferenceMarkers(args.finalText.trim(), args.sessionId, args.repositoryAccess).trim();
-    if (args.references.length === 0) return body;
-
-    const renderedReferences = args.references.map(reference => markdownForReference(args.sessionId, reference)).join('\n\n');
-    return [
-        body,
-        '',
-        '### Referenced Artifacts',
-        renderedReferences,
-    ].join('\n').trim();
-}
-
-function buildInteractionTraceText(args: {
-    agentName: string;
-    sessionId: string;
-    transcriptParts: string[];
-    submittedText: string;
-    finalText: string;
-}): string {
-    const body = args.transcriptParts.join('\n\n').trim();
-    return [
-        `# Multi-turn Interaction Trace`,
-        '',
-        `Agent: ${args.agentName}`,
-        `Sandbox session: ${args.sessionId}`,
-        '',
-        body || 'No intermediate sandbox turns were recorded before final submission.',
-        '',
-        '## Submitted Artifact',
-        '',
-        args.submittedText || args.finalText,
-    ].filter(Boolean).join('\n');
+    return expandInlineReferenceMarkers(args.finalText.trim(), args.sessionId, args.repositoryAccess).trim();
 }
 
 function getFinalText(message: AIMessage): string {
@@ -1281,6 +1183,7 @@ function buildTraceMessage(message: BaseMessage): SandboxToolExecutionTraceMessa
     if (raw.additional_kwargs && Object.keys(raw.additional_kwargs).length > 0) traced.additional_kwargs = scrubTraceValue(raw.additional_kwargs);
     if (raw.response_metadata && Object.keys(raw.response_metadata).length > 0) traced.response_metadata = scrubTraceValue(raw.response_metadata);
     if (raw.id) traced.id = String(raw.id);
+    if (Array.isArray(raw.artifact?.images)) traced.images = raw.artifact.images;
 
     return traced;
 }
@@ -1332,7 +1235,6 @@ export async function runSandboxToolAgent(
     const transcriptParts: string[] = [];
     const historyImages = new Map<string, SandboxToolImage>();
     let finalText = '';
-    let finalReferences: SandboxFinalOutputReference[] = [];
     let shouldSeedBackend = true;
 
     const uploadedFileMessage = buildUploadedFileMessage(provider.providerName, seedFiles);
@@ -1365,7 +1267,6 @@ export async function runSandboxToolAgent(
             try {
                 const parsed = finalOutputToolSchema.parse(toolCall.args ?? {});
                 finalText = structuredFinalOutputText(parsed.response, options.finalOutputContract);
-                finalReferences = normalizeFinalOutputReferences(parsed.references, options.repositoryAccess);
                 break;
             } catch (error) {
                 const reason = error instanceof Error ? error.message : 'Invalid final output payload.';
@@ -1438,16 +1339,16 @@ export async function runSandboxToolAgent(
                 toolResponse.visibleFiles?.length
                     ? `visible_image_files:\n${toolResponse.visibleFiles.map(file => `- ${file.filename} (${file.mimeType})`).join('\n')}`
                     : 'visible_image_files: none',
-                toolResponse.images?.length
-                    ? 'Generated or updated images are attached as native vision inputs in the following user message.'
-                    : ''
             ].filter(Boolean).join('\n\n');
 
             messages.push(new ToolMessage({
                 name: SANDBOX_TOOL_NAME,
                 content: toolContent,
                 tool_call_id: toolCall.id ?? nanoid(8),
-                status: toolResponse.ok ? 'success' : 'error'
+                status: toolResponse.ok ? 'success' : 'error',
+                artifact: {
+                    images: (toolResponse.images ?? []).map(({ filename, mimeType, url }) => ({ filename, mimeType, url })),
+                },
             }));
 
             const generatedImageMessage = buildGeneratedImageMessage(provider.providerName, toolResponse.images ?? []);
@@ -1463,18 +1364,10 @@ export async function runSandboxToolAgent(
 
     const submittedText = buildSubmittedFinalOutput({
         finalText,
-        references: finalReferences,
         sessionId,
         repositoryAccess: options.repositoryAccess,
     });
     const displayText = submittedText || transcriptParts.join('\n\n').trim();
-    const interactionTraceText = buildInteractionTraceText({
-        agentName: options.agentName,
-        sessionId,
-        transcriptParts,
-        submittedText,
-        finalText,
-    });
 
     // Capture raw messages only for diagnostics. These must not be replayed
     // into downstream agent histories; promptText is the submitted answer.
@@ -1491,8 +1384,6 @@ export async function runSandboxToolAgent(
         text: displayText,
         promptText: submittedText || finalText,
         finalText,
-        interactionTraceText,
-        references: finalReferences,
         executionTrace,
         executionTraceText: JSON.stringify(executionTrace, null, 2),
         geminiContent: provider.providerName === 'gemini'
