@@ -28,6 +28,8 @@ const DEFAULT_MODELS: Record<string, string[]> = {
     nvidia: []
 };
 
+const REMOTE_PROVIDER_NAMES = new Set(['gemini', 'openai', 'anthropic', 'openrouter', 'nvidia']);
+
 export class ProviderManager {
     private providers: Map<string, ProviderConfig> = new Map();
     private activeProviders: Map<string, AIProvider> = new Map();
@@ -155,7 +157,6 @@ export class ProviderManager {
     }
 
     private initializeConfiguredProviders(): void {
-        const fetchPromises: Promise<void>[] = [];
         for (const [name, config] of this.providers) {
             if (config.isConfigured && config.apiKey) {
                 try {
@@ -168,12 +169,10 @@ export class ProviderManager {
 
                     if (provider.initialize(initString)) {
                         this.activeProviders.set(name, provider);
-                        if (['gemini', 'openai', 'anthropic', 'openrouter', 'nvidia'].includes(name)) {
-                            fetchPromises.push(
-                                this.fetchAndSetProviderModels(name).catch(err => {
-                                    console.error(`Async fetch of ${name} models failed:`, err);
-                                })
-                            );
+                        if (REMOTE_PROVIDER_NAMES.has(name)) {
+                            void this.fetchAndSetProviderModels(name).catch(err => {
+                                console.error(`Async fetch of ${name} models failed:`, err);
+                            });
                         }
                     }
                 } catch (e) {
@@ -249,8 +248,8 @@ export class ProviderManager {
                 this.activeProviders.set(providerName, provider);
                 this.saveToStorage();
 
-                if (['gemini', 'openai', 'anthropic', 'openrouter', 'nvidia'].includes(providerName)) {
-                    this.fetchAndSetProviderModels(providerName).catch(err => {
+                if (REMOTE_PROVIDER_NAMES.has(providerName)) {
+                    void this.fetchAndSetProviderModels(providerName).catch(err => {
                         console.error(`Async configure fetch of ${providerName} models failed:`, err);
                     });
                 } else {
@@ -274,10 +273,6 @@ export class ProviderManager {
             this.saveToStorage();
             this.notifyModelUpdateListeners();
         }
-    }
-
-    public getProvider(providerName: string): AIProvider | null {
-        return this.activeProviders.get(providerName) || null;
     }
 
     public getProviderForModel(modelId: string): AIProvider | null {
@@ -342,10 +337,6 @@ export class ProviderManager {
 
     public hasAnyConfiguredProvider(): boolean {
         return Array.from(this.providers.values()).some(config => config.isConfigured);
-    }
-
-    public getConfiguredProviders(): ProviderConfig[] {
-        return Array.from(this.providers.values()).filter(config => config.isConfigured);
     }
 
     public addCustomModel(providerName: string, modelId: string): boolean {

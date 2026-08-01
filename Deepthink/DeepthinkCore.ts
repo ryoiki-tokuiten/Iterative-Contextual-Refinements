@@ -8,7 +8,7 @@
 import { GenerateContentResponse, Part } from "@google/genai";
 import { HumanMessage } from '@langchain/core/messages';
 import { nanoid } from 'nanoid';
-import { AIProvider, ThinkingConfig } from '../Routing/AIProvider';
+import { ThinkingConfig } from '../Routing/AIProvider';
 import { archiveSandboxRepositoryStrategy, ensureDeepthinkResultsRepository, runSandboxToolAgent, snapshotDeepthinkResultsRepository, snapshotSandboxRepositoryById, type DeepthinkResultsContextFile, type SandboxFinalOutputContract } from '../Core/SandboxToolRuntime';
 import { describeProviderError } from '../Core/ProviderError';
 import { globalState } from '../Core/State';
@@ -283,8 +283,7 @@ let setActiveDeepthinkPipeline: ((pipeline: DeepthinkPipelineState | null) => vo
 let render: () => void = () => { };
 
 export interface DeepthinkCoreDeps {
-    getAIProvider: () => AIProvider | null;
-    callGemini: (parts: Part[], temperature: number, modelToUse: string, systemInstruction?: string, isJson?: boolean, topP?: number, thinkingConfig?: ThinkingConfig) => Promise<GenerateContentResponse>;
+    callAI: (parts: Part[], temperature: number, modelToUse: string, systemInstruction?: string, isJson?: boolean, topP?: number, thinkingConfig?: ThinkingConfig) => Promise<GenerateContentResponse>;
     parseJsonSafe: (raw: string, context: string) => any;
     getSelectedTemperature: () => number;
     getSelectedModel: () => string;
@@ -1808,7 +1807,7 @@ async function callAgent(args: {
                 // Tool-calling providers cannot combine native structured output
                 // with this role-specific final_output contract. The contract
                 // validates the tool payload instead.
-                : deps.callGemini(
+                : deps.callAI(
                     buildProviderParts(promptText, args.manifest.attachments),
                     temperature,
                     agentModel,
@@ -3520,12 +3519,6 @@ ${winningSolution.solution}`;
 }
 
 export async function startDeepthinkAnalysisProcess(challengeText: string) {
-    const currentAIProvider = deps.getAIProvider();
-    if (!currentAIProvider) {
-        alert('AI provider not initialized. Please check your API key configuration.');
-        return;
-    }
-
     const runConfig = captureRunConfig();
     activeDeepthinkPipeline = createPipeline(challengeText, runConfig);
     runAttachments.set(activeDeepthinkPipeline.id, buildDeepthinkAttachments({

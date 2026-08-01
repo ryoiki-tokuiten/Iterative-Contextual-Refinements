@@ -119,25 +119,14 @@ export class RoutingManager {
         return this.promptsManager;
     }
 
-    public getPromptsModal(): PromptsModal | null {
-        return this.promptsModal;
-    }
-
     public initializePromptsManager(
         deepthinkPromptsRef: { current: any },
-        adaptiveDeepthinkPromptsRef?: { current: any },
         contextualPromptsRef?: { current: any }
     ): void {
         this.promptsManager = new PromptsManager(
             deepthinkPromptsRef,
-            adaptiveDeepthinkPromptsRef,
             contextualPromptsRef
         );
-
-        // Connect PromptsManager to PromptsModal for model selector state management
-        if (this.promptsModal) {
-            this.promptsModal.setPromptsManager(this.promptsManager);
-        }
     }
 
     // Convenience methods for accessing common functionality
@@ -224,16 +213,6 @@ export class RoutingManager {
     public hasValidApiKey(): boolean {
         return this.apiKeyManager.hasValidApiKey();
     }
-
-    public getAIProvider() {
-        return this.apiKeyManager.getAIProvider();
-    }
-
-    // Convenience methods for accessing prompt states
-    public getDeepthinkPrompts() {
-        return this.promptsManager?.getDeepthinkPrompts();
-    }
-
 
     public setCurrentMode(mode: string) {
         if (this.promptsModal) {

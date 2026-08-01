@@ -45,12 +45,6 @@ const DeepthinkEmbeddedPanel: React.FC<{ state: AdaptiveDeepthinkStoreState }> =
         hideStopButton: true
     });
 
-    // Ensure the active tab is valid
-    const isActiveTabValid = allTabs.some(tab => tab.id === currentTab);
-    if (!isActiveTabValid && allTabs.length > 0) {
-        // Just fail safe visually if state is out of sync; state updates via actions
-    }
-
     useEffect(() => {
         const sidebar = document.getElementById('controls-sidebar');
         if (!sidebar) {

@@ -28,17 +28,12 @@ import {
     type SerializationOptions,
 } from './StateSerializer';
 
-// Ensure handlers are registered
-import './StateSerializer/handlers';
-
-
 import { updateUIAfterModeChange } from './AppRouter';
 import { createDefaultCustomPromptsDeepthink } from '../Deepthink/DeepthinkPrompts';
 import { createDefaultCustomPromptsContextual } from '../Contextual/ContextualPrompts';
 import { createDefaultCustomPromptsAdaptiveDeepthink } from '../AdaptiveDeepthink/AdaptiveDeepthinkPrompt';
 import {
     routingManager,
-    updateCustomPromptTextareasFromState,
     getSelectedModel,
     getSelectedTemperature,
     getSelectedTopP,
@@ -65,7 +60,7 @@ const getInitialIdeaInput = () => document.getElementById('initial-idea') as HTM
 /**
  * Export format options.
  */
-export type ExportFormat = 'auto' | 'json' | 'msgpack';
+type ExportFormat = 'auto' | 'json' | 'msgpack';
 
 /**
  * Export configuration to a file.
@@ -231,7 +226,6 @@ async function applyConfiguration(config: VersionedState): Promise<void> {
 
     // 7. Restore custom prompts
     restoreCustomPrompts(data.customPrompts);
-    updateCustomPromptTextareasFromState();
 
     // 8. Restore model parameters (with delay for UI readiness)
     setTimeout(() => {

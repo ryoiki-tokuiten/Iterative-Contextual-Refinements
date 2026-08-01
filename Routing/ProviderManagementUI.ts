@@ -529,10 +529,6 @@ export class ProviderManagementUI {
         }
     }
 
-    public getProviderManager(): ProviderManager {
-        return this.providerManager;
-    }
-
     public setOnModelsChangedCallback(callback: () => void): void {
         this.onModelsChangedCallback = callback;
     }

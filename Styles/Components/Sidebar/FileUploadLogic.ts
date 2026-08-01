@@ -2,13 +2,13 @@ import { globalState } from '../../../Core/State';
 import { getEncoding } from 'js-tiktoken';
 import { FileData } from '../../../Core/Types';
 
-export interface FileTypeConfig {
+interface FileTypeConfig {
     icon: string;
     color: string;
     label: string;
 }
 
-export const FILE_TYPE_CONFIG: Record<string, FileTypeConfig> = {
+const FILE_TYPE_CONFIG: Record<string, FileTypeConfig> = {
     'image/png': { icon: 'image', color: '#10b981', label: 'PNG' },
     'image/jpeg': { icon: 'image', color: '#10b981', label: 'JPG' },
     'image/gif': { icon: 'gif', color: '#8b5cf6', label: 'GIF' },
@@ -30,7 +30,7 @@ export const FILE_TYPE_CONFIG: Record<string, FileTypeConfig> = {
  * text. Keeping this explicit makes the picker useful while also letting us
  * validate drag-and-drop, where the browser's `accept` hint is bypassed.
  */
-export const TEXT_FILE_EXTENSIONS = [
+const TEXT_FILE_EXTENSIONS = [
     '.txt', '.md', '.mdx', '.markdown', '.rst', '.adoc', '.asciidoc', '.log',
     '.html', '.htm', '.css', '.scss', '.sass', '.less', '.xml', '.tex', '.bib',
     '.csv', '.tsv', '.json', '.jsonc', '.json5', '.ipynb', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf', '.properties', '.env', '.gitignore',
@@ -81,7 +81,7 @@ const TEXT_MIME_BY_EXTENSION: Record<string, string> = {
 
 export const ACCEPTED_FILES = ['image/*', 'text/*', ...TEXT_FILE_EXTENSIONS].join(',');
 
-export const SIZE_WARNING_THRESHOLD = 15 * 1024 * 1024;
+const SIZE_WARNING_THRESHOLD = 15 * 1024 * 1024;
 export const DIRECT_CONTEXT_TOKEN_LIMIT = 50_000;
 export const DIRECT_CONTEXT_MEDIA_LIMITS = {
     images: 20,
@@ -110,7 +110,7 @@ export function isText(mimeType: string): boolean {
     return mimeType.startsWith('text/') || mimeType === 'application/json';
 }
 
-export function isSupportedUploadFile(file: Pick<File, 'name' | 'type'>): boolean {
+function isSupportedUploadFile(file: Pick<File, 'name' | 'type'>): boolean {
     const normalizedName = file.name.trim().toLowerCase();
     const extension = getFileExtension(normalizedName);
     if (file.type.startsWith('video/') || file.type.startsWith('audio/') || REMOVED_BINARY_MIME_TYPES.has(file.type) || REMOVED_BINARY_EXTENSIONS.has(extension)) {
@@ -173,7 +173,7 @@ export function decodeBase64Content(base64: string): string {
     }
 }
 
-export function parseDataUrl(dataUrl: string): { mimeType: string; base64: string } | null {
+function parseDataUrl(dataUrl: string): { mimeType: string; base64: string } | null {
     const matches = dataUrl.match(/^data:(.+);base64,(.+)$/);
     if (matches) {
         return {
@@ -184,11 +184,11 @@ export function parseDataUrl(dataUrl: string): { mimeType: string; base64: strin
     return null;
 }
 
-export function createFileData(mimeType: string, base64: string, name: string, size: number): FileData {
+function createFileData(mimeType: string, base64: string, name: string, size: number): FileData {
     return { mimeType, base64, name, size };
 }
 
-export function processFile(file: File): Promise<FileData> {
+function processFile(file: File): Promise<FileData> {
     if (!isSupportedUploadFile(file)) {
         return Promise.reject(new Error(`Unsupported file type: ${file.name}`));
     }

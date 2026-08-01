@@ -6,15 +6,15 @@
 import { globalState } from '../Core/State';
 import { getProviderForCurrentModel } from '../Routing';
 
-export function getCodeExecutionToggle(): HTMLInputElement | null {
+function getCodeExecutionToggle(): HTMLInputElement | null {
     return document.getElementById('sandbox-code-execution-toggle') as HTMLInputElement | null;
 }
 
-export function getContextualModeControls(): HTMLElement | null {
+function getContextualModeControls(): HTMLElement | null {
     return document.getElementById('contextual-mode-controls');
 }
 
-export function getSandboxToolExecutionEnabled(): boolean {
+function getSandboxToolExecutionEnabled(): boolean {
     return globalState.virtualEnvironmentEnabled;
 }
 
@@ -23,22 +23,22 @@ export function setSandboxToolExecutionEnabled(enabled: boolean): void {
     window.dispatchEvent(new CustomEvent('sandboxToggled', { detail: { enabled } }));
 }
 
-export function getCurrentProvider(): string {
+function getCurrentProvider(): string {
     return getProviderForCurrentModel();
 }
 
-export function shouldShowCodeExecutionToggle(currentMode: string): boolean {
+function shouldShowCodeExecutionToggle(currentMode: string): boolean {
     return currentMode === 'contextual' || currentMode === 'adaptive-deepthink';
 }
 
-export function setToggleChecked(checked: boolean): void {
+function setToggleChecked(checked: boolean): void {
     const toggle = getCodeExecutionToggle();
     if (toggle) {
         toggle.checked = checked;
     }
 }
 
-export function setContainerDisplay(display: 'block' | 'none'): void {
+function setContainerDisplay(display: 'block' | 'none'): void {
     const container = getContextualModeControls();
     if (container) {
         container.style.display = display;

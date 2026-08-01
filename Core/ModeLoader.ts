@@ -98,8 +98,7 @@ export async function ensureDeepthinkInitialized(): Promise<DeepthinkModule> {
     const mod = await loadDeepthinkModule();
     if (!deepthinkInitialized) {
         mod.initializeDeepthinkModule({
-            getAIProvider: () => routingManager.getAIProvider(),
-            callGemini: callAI,
+            callAI,
             parseJsonSafe,
             updateControlsState,
             escapeHtml: (str: string) => str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'),

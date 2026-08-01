@@ -5,7 +5,6 @@
 
 import { exportConfiguration, handleImportConfiguration } from './ConfigManager';
 import { updateUIAfterModeChange } from './AppRouter';
-import { initializeEvolutionConvergenceButtons } from '../Styles/Components/Sidebar/ModelParameters';
 import {
     ensureAdaptiveDeepthinkInitialized,
     ensureContextualInitialized,
@@ -25,12 +24,8 @@ import { countFileTokens, getMediaCounts, DIRECT_CONTEXT_MEDIA_LIMITS, DIRECT_CO
 
 export class App {
     public static init() {
-        this.initializeGlobalFunctions();
         this.initializeCoreLogic();
         LayoutController.initialize();
-    }
-
-    private static initializeGlobalFunctions() {
     }
 
     private static initializeCoreLogic() {
@@ -40,10 +35,9 @@ export class App {
         // Refresh providers to update available models
         routingManager.refreshProviders();
 
-        this.initializeCustomPromptTextareas();
+        this.initializePromptManagers();
         updateUIAfterModeChange(); // Called early to set up initial UI logic based on default mode
 
-        initializeEvolutionConvergenceButtons();
         // Default to first mode if none specifically checked (e.g. after import or on fresh load)
         const appModeRadios = document.querySelectorAll('input[name="app-mode"]');
         let modeIsAlreadySet = false;
@@ -117,10 +111,9 @@ export class App {
         handleImportConfiguration(e);
     }
 
-    private static initializeCustomPromptTextareas() {
+    private static initializePromptManagers() {
         routingManager.initializePromptsManager(
             { current: globalState.customPromptsDeepthinkState },
-            { current: globalState.customPromptsAdaptiveDeepthinkState },
             { current: globalState.customPromptsContextualState }
         );
     }

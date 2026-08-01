@@ -6,57 +6,57 @@
 import { globalState } from '../Core/State';
 import { setIconSlot } from './Icons';
 
-export type ThemeMode = 'light' | 'dark';
+type ThemeMode = 'light' | 'dark';
 
-export function getSavedTheme(): ThemeMode {
+function getSavedTheme(): ThemeMode {
     return (localStorage.getItem('theme') as ThemeMode) || 'dark';
 }
 
-export function setSavedTheme(theme: ThemeMode): void {
+function setSavedTheme(theme: ThemeMode): void {
     localStorage.setItem('theme', theme);
 }
 
-export function toggleBodyLightMode(): boolean {
+function toggleBodyLightMode(): boolean {
     return document.body.classList.toggle('light-mode');
 }
 
-export function getThemeToggleButton(): HTMLElement | null {
+function getThemeToggleButton(): HTMLElement | null {
     return document.getElementById('theme-toggle-button');
 }
 
-export function getThemeIcon(): HTMLElement | null {
+function getThemeIcon(): HTMLElement | null {
     const button = getThemeToggleButton();
     return button?.querySelector('.icon-slot') || null;
 }
 
-export function setThemeIcon(isLight: boolean): void {
+function setThemeIcon(isLight: boolean): void {
     const icon = getThemeIcon();
     if (icon) {
         setIconSlot(icon, isLight ? 'dark_mode' : 'light_mode');
     }
 }
 
-export function getSidebarElement(): HTMLElement | null {
+function getSidebarElement(): HTMLElement | null {
     return document.getElementById('controls-sidebar');
 }
 
-export function getMainContentElement(): HTMLElement | null {
+function getMainContentElement(): HTMLElement | null {
     return document.getElementById('main-content');
 }
 
-export function getExpandButton(): HTMLElement | null {
+function getExpandButton(): HTMLElement | null {
     return document.getElementById('sidebar-expand-button');
 }
 
-export function getCollapseButton(): HTMLElement | null {
+function getCollapseButton(): HTMLElement | null {
     return document.getElementById('sidebar-collapse-button');
 }
 
-export function getMainHeaderContent(): HTMLElement | null {
+function getMainHeaderContent(): HTMLElement | null {
     return document.querySelector('.main-header-content');
 }
 
-export function resetSidebarCollapseButtonState(): void {
+function resetSidebarCollapseButtonState(): void {
     const collapseButton = getCollapseButton() as HTMLButtonElement | null;
     if (!collapseButton) return;
 
@@ -78,7 +78,7 @@ export function disableSidebarCollapseButton(reason = 'Sidebar collapse disabled
     collapseButton.setAttribute('aria-label', reason);
 }
 
-export function isSidebarCollapsed(): boolean {
+function isSidebarCollapsed(): boolean {
     const sidebar = getSidebarElement();
     return sidebar?.classList.contains('collapsed') || false;
 }
@@ -101,7 +101,7 @@ function hasInContentSidebarRestoreControl(): boolean {
     }
 }
 
-export function getSidebarCollapseDisabledReason(): string | null {
+function getSidebarCollapseDisabledReason(): string | null {
     if (isElementVisible(getMainHeaderContent())) {
         return null;
     }
@@ -122,45 +122,45 @@ export function getSidebarCollapseDisabledReason(): string | null {
     }
 }
 
-export function getTabsContainer(): HTMLElement | null {
+function getTabsContainer(): HTMLElement | null {
     return document.getElementById('tabs-nav-container');
 }
 
-export function getFullscreenButtons(): NodeListOf<Element> {
+function getFullscreenButtons(): NodeListOf<Element> {
     return document.querySelectorAll('.fullscreen-toggle-button');
 }
 
-export function getPreviewContainerId(buttonId: string): string {
+function getPreviewContainerId(buttonId: string): string {
     return buttonId.replace('fullscreen-btn-', 'preview-container-');
 }
 
-export function getAssociatedPreviewContainer(buttonId: string): HTMLElement | null {
+function getAssociatedPreviewContainer(buttonId: string): HTMLElement | null {
     const previewContainerId = getPreviewContainerId(buttonId);
     return document.getElementById(previewContainerId);
 }
 
-export function isFullscreenActive(): boolean {
+function isFullscreenActive(): boolean {
     return !!document.fullscreenElement;
 }
 
-export function getFullscreenElement(): Element | null {
+function getFullscreenElement(): Element | null {
     return document.fullscreenElement;
 }
 
 let sidebarIsCollapsed = false;
 
-export function setSidebarCollapsed(collapsed: boolean): void {
+function setSidebarCollapsed(collapsed: boolean): void {
     sidebarIsCollapsed = collapsed;
 }
 
-export function ensureExpandButtonVisibility(): void {
+function ensureExpandButtonVisibility(): void {
     const expandButton = getExpandButton();
     if (expandButton) {
         expandButton.style.display = sidebarIsCollapsed ? 'flex' : 'none';
     }
 }
 
-export function syncSidebarCollapseAvailability(): void {
+function syncSidebarCollapseAvailability(): void {
     const reason = getSidebarCollapseDisabledReason();
 
     if (!reason) {
@@ -177,7 +177,7 @@ export function syncSidebarCollapseAvailability(): void {
     ensureExpandButtonVisibility();
 }
 
-export function collapseSidebar(): void {
+function collapseSidebar(): void {
     if (getSidebarCollapseDisabledReason()) {
         return;
     }
@@ -190,7 +190,7 @@ export function collapseSidebar(): void {
     }
 }
 
-export function expandSidebar(): void {
+function expandSidebar(): void {
     const sidebar = getSidebarElement();
     const expandButton = getExpandButton();
     if (sidebar) {
@@ -202,7 +202,7 @@ export function expandSidebar(): void {
     }
 }
 
-export function initializeSidebarEventListeners(): void {
+function initializeSidebarEventListeners(): void {
     const expandButton = getExpandButton();
     const collapseButton = getCollapseButton();
     const sidebar = getSidebarElement();
@@ -244,7 +244,7 @@ export function initializeSidebarEventListeners(): void {
     }
 }
 
-export function initializeThemeEventListeners(): void {
+function initializeThemeEventListeners(): void {
     document.addEventListener('click', (e) => {
         const target = e.target as HTMLElement;
         const themeToggleButton = target.closest('#theme-toggle-button');
@@ -260,7 +260,7 @@ export function initializeThemeEventListeners(): void {
     }, true);
 }
 
-export function initializeFullscreenEventListeners(): void {
+function initializeFullscreenEventListeners(): void {
     document.addEventListener('fullscreenchange', () => {
         const isFullscreen = isFullscreenActive();
         const fullscreenElement = getFullscreenElement();
@@ -286,7 +286,7 @@ export function initializeFullscreenEventListeners(): void {
     });
 }
 
-export function initializeThemeFromStorage(): void {
+function initializeThemeFromStorage(): void {
     const savedTheme = getSavedTheme();
     if (savedTheme === 'light') {
         document.body.classList.add('light-mode');
@@ -294,7 +294,7 @@ export function initializeThemeFromStorage(): void {
     }
 }
 
-export function initializeTabsObserver(): void {
+function initializeTabsObserver(): void {
     const tabsContainer = getTabsContainer();
     if (tabsContainer) {
         const observer = new MutationObserver(() => {
@@ -304,7 +304,7 @@ export function initializeTabsObserver(): void {
     }
 }
 
-export function initializeSidebarAvailabilityObserver(): void {
+function initializeSidebarAvailabilityObserver(): void {
     const mainContent = getMainContentElement();
     if (!mainContent) return;
 
@@ -320,7 +320,7 @@ export function initializeSidebarAvailabilityObserver(): void {
     });
 }
 
-export function initializeLayoutController(): void {
+function initializeLayoutController(): void {
     initializeSidebarEventListeners();
     initializeThemeEventListeners();
     initializeFullscreenEventListeners();
@@ -339,7 +339,4 @@ export class LayoutController {
         initializeLayoutController();
     }
 
-    public static ensureExpandButton() {
-        ensureExpandButtonVisibility();
-    }
 }

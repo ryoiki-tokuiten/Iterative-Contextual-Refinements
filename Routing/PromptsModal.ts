@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { initializePromptStyling, updatePromptContent } from '../Styles/Components/PromptStyling';
+import { updatePromptContent } from '../Styles/Components/PromptStyling';
 import { PromptRefiner } from './PromptRefiner';
 import { globalState } from '../Core/State';
 import { renderIconMarkup } from '../UI/Icons';
@@ -24,7 +24,6 @@ export class PromptsModal {
 
     private currentMode: string = 'deepthink';
     private modelConfig: any = null;
-    public promptsManager: any = null;
     private activeRefiners: Map<string, PromptRefiner> = new Map();
 
     constructor() {
@@ -102,13 +101,10 @@ export class PromptsModal {
             this.elements.overlay.style.display = 'flex';
             setTimeout(() => {
                 this.elements.overlay!.classList.add('is-visible');
-                // Apply syntax highlighting to all prompt textareas
-                initializePromptStyling();
                 // Force initial content sync after editors are enhanced
                 setTimeout(() => updatePromptContent(), 60);
                 // Safety: run once more after layout settles
                 setTimeout(() => updatePromptContent(), 200);
-                // React-controlled components auto-sync from their managers
             }, 10);
         }
     }
@@ -133,10 +129,6 @@ export class PromptsModal {
 
     public setModelConfig(modelConfig: any): void {
         this.modelConfig = modelConfig;
-    }
-
-    public setPromptsManager(promptsManager: any): void {
-        this.promptsManager = promptsManager;
     }
 
     private initializeModal(): void {
@@ -227,10 +219,6 @@ export class PromptsModal {
         // Initialize model selectors after navigation is set up
         this.initializeModelSelectors();
 
-        // Also update model selectors from state after a short delay to ensure DOM is ready
-        setTimeout(() => {
-            this.updateModelSelectorsFromState();
-        }, 100);
     }
 
     private getPromptNavStructure() {
@@ -302,50 +290,14 @@ export class PromptsModal {
     private initializeModelSelectors(): void {
         if (!this.modelConfig) return;
 
-        // React-controlled containers manage their own select options and change handlers.
-        // We still apply createCustomModelSelect() for the visual overlay (styled dropdown,
-        // Refine button, Diff button), but skip wiping options and adding imperative listeners.
-        const reactContainerIds = new Set([
-            'deepthink-prompts-container',
-            'adaptiveDeepthink-prompts-container',
-            'contextual-prompts-container'
-        ]);
-
         const modelSelectors = document.querySelectorAll('.prompt-model-select');
         modelSelectors.forEach((selector: Element) => {
             const selectElement = selector as HTMLSelectElement;
 
-            const parentContainer = selectElement.closest('.prompts-mode-container');
-            const isReactControlled = parentContainer && reactContainerIds.has(parentContainer.id);
-
-            if (!isReactControlled) {
-                // Non-React selects: clear and repopulate options imperatively
-                while (selectElement.children.length > 1) {
-                    selectElement.removeChild(selectElement.lastChild!);
-                }
-
-                const availableModels = this.modelConfig.getAvailableModels();
-                availableModels.forEach((model: any) => {
-                    const option = document.createElement('option');
-                    option.value = model.value;
-                    option.textContent = model.value;
-                    if (model.description) {
-                        option.title = model.description;
-                    }
-                    selectElement.appendChild(option);
-                });
-
-                selectElement.addEventListener('change', (e) => {
-                    this.handleModelSelectionChange(e);
-                });
-            }
-
-            // Custom dropdown overlay is always created for consistent styling
+            // React owns the native select; this class owns the visual overlay and
+            // prompt actions layered beside it.
             this.createCustomModelSelect(selectElement);
         });
-
-        // Update model selectors with saved state values after populating options
-        this.updateModelSelectorsFromState();
 
         // Set up change detection for all textareas
         setTimeout(() => {
@@ -686,14 +638,6 @@ export class PromptsModal {
         }
 
         this.closeCustomSelect(agentName);
-    }
-
-    private updateModelSelectorsFromState(): void {
-        // React-controlled components auto-sync model selectors from their managers
-    }
-
-    private handleModelSelectionChange(_event: Event): void {
-        // Event handling is managed by PromptsManager
     }
 
     private getTextareaIdForAgent(agentName: string): string | null {

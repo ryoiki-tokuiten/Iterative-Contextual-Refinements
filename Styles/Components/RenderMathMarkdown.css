@@ -4,7 +4,6 @@
 :root {
     /* Base Font Sizes & Spacing */
     --font-size-xl: 24px;
-    --font-size-2xl: 30px;
     --font-size-lg: 20px;
     --render-math-code-block-font-size: 17px;
     --render-math-code-block-line-height: 1.7;
@@ -15,9 +14,7 @@
     --accent-purple: #8a7ff8;
     --accent-purple-light: #aea5ff;
     --accent-purple-lighter: #c2bfff;
-    --accent-gold: #ffc269;
     --text-primary: #EAEBF5;
-    --bg-glass: rgba(18, 18, 20, 0.6);
 }
 
 /* --- Main Wrapper --- */
@@ -100,17 +97,6 @@
     color: var(--accent-purple-light);
     text-shadow: 0 0 8px rgba(138, 127, 248, 0.5);
     border-bottom-color: rgba(138, 127, 248, 0.5);
-}
-
-.latex-content-wrapper a.sandbox-artifact-link {
-    color: var(--accent-blue);
-    border-bottom-color: rgba(41, 121, 255, 0.35);
-}
-
-.latex-content-wrapper a.sandbox-artifact-link:hover {
-    color: var(--accent-blue);
-    text-shadow: 0 0 8px rgba(41, 121, 255, 0.35);
-    border-bottom-color: rgba(41, 121, 255, 0.65);
 }
 
 .latex-content-wrapper a::after {
@@ -899,10 +885,6 @@ body.light-mode .exec-image-item {
     border-color: rgba(15, 23, 42, 0.08);
 }
 
-body.light-mode .exec-image-item:hover {
-    /* Hover effects removed by request */
-}
-
 body.light-mode .exec-image-error {
     background: rgba(239, 68, 68, 0.03);
     color: #dc2626;
@@ -922,40 +904,7 @@ body.light-mode .exec-image-error {
     transition: box-shadow 0.2s ease;
 }
 
-.markdown-image:hover {
-    /* Hover effects removed by request */
-}
-
-.markdown-image.image-error {
-    display: inline-block;
-    padding: 12px 16px;
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px dashed rgba(239, 68, 68, 0.3);
-    border-radius: 4px;
-    color: #f87171;
-    font-family: var(--font-family-mono);
-    font-size: 12px;
-}
-
-.image-error {
-    padding: 8px 12px;
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px dashed rgba(239, 68, 68, 0.3);
-    border-radius: 4px;
-    color: #f87171;
-    font-family: var(--font-family-mono);
-    font-size: 12px;
-    display: inline-block;
-}
-
 /* === Light Mode Image Overrides === */
 body.light-mode .markdown-image {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-
-body.light-mode .markdown-image.image-error,
-body.light-mode .image-error {
-    background: rgba(239, 68, 68, 0.05);
-    color: #dc2626;
 }

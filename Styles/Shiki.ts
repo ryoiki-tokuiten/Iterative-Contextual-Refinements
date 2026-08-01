@@ -205,14 +205,3 @@ if (typeof window !== 'undefined') {
         console.error('Failed to initialize Shiki highlighter:', err);
     });
 }
-
-export default {
-    initHighlighter,
-    isHighlighterReady,
-    highlightCode,
-    highlightCodeSync,
-    resolveLanguage,
-    isLanguageSupported,
-    getLanguageDisplayName,
-    onHighlighterReady
-};

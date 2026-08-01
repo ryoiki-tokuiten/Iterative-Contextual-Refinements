@@ -30,7 +30,6 @@
     --accent-pink: rgb(var(--dt-pink-rgb));
     --accent-green: rgb(var(--dt-green-rgb));
     --accent-yellow: rgb(var(--dt-yellow-rgb));
-    --accent-silent-blue: rgb(var(--accent-silent-blue-rgb));
     --accent-silent-green: rgb(var(--accent-silent-green-rgb));
 
     /* Layout System Tokens */

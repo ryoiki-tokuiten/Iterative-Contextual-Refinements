@@ -114,10 +114,6 @@ export class DeepthinkConfigController extends EventTarget {
         return this.modelConfig.isSkipSubStrategies();
     }
 
-    public getPqfMode(): string {
-        return this.modelConfig.getPqfAggressiveness();
-    }
-
     public isPostQualityFilterEnabled(): boolean {
         return this.isEvolvingDfsEnabled() || this.modelConfig.isPostQualityFilterEnabled();
     }
@@ -132,10 +128,6 @@ export class DeepthinkConfigController extends EventTarget {
 
     public isEvolvingDfsEnabled(): boolean {
         return this.modelConfig.isEvolvingDfsEnabled();
-    }
-
-    public isProvideAllSolutionsEnabled(): boolean {
-        return this.modelConfig.isProvideAllSolutionsToCorrectors();
     }
 
     public getMaxStrategies(): number {
@@ -406,36 +398,6 @@ export class DeepthinkConfigController extends EventTarget {
 
         this.modelConfig.updateParameter('provideAllSolutionsToCorrectors', enabled);
         this.emitChange('provideAllSolutionsEnabled');
-    }
-
-    /**
-     * Set post-quality filter enabled.
-     * Can only be enabled if Evolving Depth First Search is on.
-     */
-    public setPostQualityFilterEnabled(_enabled: boolean): void {
-        // Guard: requires Evolving DFS enabled
-        if (!this.isEvolvingDfsEnabled()) {
-            return;
-        }
-
-        this.modelConfig.updateParameter('postQualityFilterEnabled', true);
-        this.emitChange('postQualityFilterEnabled');
-    }
-
-    /**
-     * Set temperature.
-     */
-    public setTemperature(value: number): void {
-        this.modelConfig.updateParameter('temperature', value);
-        this.emitChange('temperature');
-    }
-
-    /**
-     * Set top-p.
-     */
-    public setTopP(value: number): void {
-        this.modelConfig.updateParameter('topP', value);
-        this.emitChange('topP');
     }
 
     /**

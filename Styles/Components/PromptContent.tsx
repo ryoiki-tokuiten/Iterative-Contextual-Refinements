@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { PromptCard, PromptPane } from './PromptCard';
 
-export interface PromptContentManager<T extends object> {
+interface PromptContentManager<T extends object> {
     getPrompts(): T;
     subscribe(listener: (state: T) => void): () => void;
     updatePrompt(key: keyof T, value: string): void;
@@ -20,7 +20,7 @@ export interface PromptPaneConfig<T extends object> {
     showAvailableModels?: boolean;
 }
 
-export interface PromptContentProps<T extends object> {
+interface PromptContentProps<T extends object> {
     containerId: string;
     panes: readonly PromptPaneConfig<T>[];
     manager: PromptContentManager<T>;
@@ -63,7 +63,6 @@ export function PromptContent<T extends object>({
                         textareaId={pane.textareaId}
                         rows={pane.rows}
                         agentName={pane.agentName}
-                        showModelSelector
                         value={promptValue(prompts, pane.promptKey)}
                         onChange={value => updatePrompt(pane.promptKey, value)}
                         modelValue={promptValue(prompts, pane.modelKey)}
@@ -76,5 +75,3 @@ export function PromptContent<T extends object>({
         </div>
     );
 }
-
-export default PromptContent;

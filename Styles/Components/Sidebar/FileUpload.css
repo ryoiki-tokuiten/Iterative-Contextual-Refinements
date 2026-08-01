@@ -371,16 +371,6 @@ body.light-mode .file-card {
     color: white;
 }
 
-/* File Preview */
-.file-preview {
-    width: 100%;
-    height: 80px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.2);
-}
-
 .file-image {
     width: 100%;
     height: 100%;

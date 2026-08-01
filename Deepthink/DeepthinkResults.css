@@ -46,31 +46,22 @@
     filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.05));
 }
 
-.status-ok,
 .status-completed {
     background-color: rgba(var(--accent-green-rgb), 0.15);
     color: var(--accent-green);
 }
 
-.status-error,
-.status-failed {
+.status-error {
     background-color: rgba(var(--accent-pink-rgb), 0.15);
     color: var(--accent-pink);
 }
 
-.status-processing,
-.status-retrying,
-.status-orchestrating,
-.status-orchestrating_retrying,
-.status-processing_workers,
-.status-stopping {
+.status-processing {
     background-color: rgba(var(--accent-yellow-rgb), 0.15);
     color: var(--accent-yellow);
 }
 
-.status-idle,
 .status-pending,
-.status-stopped,
 .status-cancelled {
     background-color: rgba(var(--card-bg-base-rgb), 0.4);
     color: var(--text-tertiary-color);

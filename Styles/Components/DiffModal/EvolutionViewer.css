@@ -1,35 +1,3 @@
-/* View Evolution Header Button */
-.view-evolution-header-button {
-    background: linear-gradient(135deg, rgba(var(--accent-purple-rgb), 0.12), rgba(var(--accent-blue-rgb), 0.12));
-    color: var(--accent-purple);
-    border: 1px solid rgba(var(--accent-purple-rgb), 0.3);
-    padding: 0.75rem 1rem;
-    border-radius: 18px;
-    font-weight: 600;
-    font-size: 0.85rem;
-    font-family: var(--font-family);
-    cursor: pointer;
-    gap: 0.4rem;
-    transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    position: relative;
-    z-index: 999;
-    margin-left: auto;
-}
-
-.view-evolution-header-button:hover {
-    background: linear-gradient(135deg, rgba(var(--accent-purple-rgb), 0.2), rgba(var(--accent-blue-rgb), 0.2));
-    border-color: var(--accent-purple);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(var(--accent-purple-rgb), 0.25);
-}
-
-.view-evolution-header-button .icon-slot {
-    font-size: 1.1rem;
-    color: var(--accent-purple);
-}
-
 /* Evolution Viewer Overlay */
 .evolution-viewer-overlay {
     position: fixed;
@@ -286,60 +254,6 @@
 .evolution-column:hover .evolution-column-header {
     background: rgba(var(--card-bg-base-rgb), 0.6);
     border-bottom-color: rgba(var(--accent-purple-rgb), 0.15);
-}
-
-.evolution-column-header-content {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 0;
-}
-
-/* Diff Stats - Inline with Title */
-.evolution-diff-stats {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-left: 1rem;
-}
-
-.evolution-stat-added,
-.evolution-stat-removed {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.2rem 0.55rem;
-    border-radius: 8px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    font-family: var(--font-family);
-    letter-spacing: 0.02em;
-    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-.evolution-stat-added {
-    background: rgba(var(--accent-green-rgb), 0.12);
-    color: rgba(var(--accent-green-rgb), 1);
-    border: 1px solid rgba(var(--accent-green-rgb), 0.3);
-    box-shadow: 0 2px 6px rgba(var(--accent-green-rgb), 0.1);
-}
-
-.evolution-stat-removed {
-    background: rgba(var(--accent-pink-rgb), 0.12);
-    color: var(--accent-pink);
-    border: 1px solid rgba(var(--accent-pink-rgb), 0.3);
-    box-shadow: 0 2px 6px rgba(var(--accent-pink-rgb), 0.1);
-}
-
-.evolution-column:hover .evolution-stat-added {
-    background: rgba(var(--accent-green-rgb), 0.18);
-    border-color: rgba(var(--accent-green-rgb), 0.45);
-    box-shadow: 0 3px 10px rgba(var(--accent-green-rgb), 0.2);
-}
-
-.evolution-column:hover .evolution-stat-removed {
-    background: rgba(var(--accent-pink-rgb), 0.18);
-    border-color: rgba(var(--accent-pink-rgb), 0.45);
-    box-shadow: 0 3px 10px rgba(var(--accent-pink-rgb), 0.2);
 }
 
 .evolution-column-title {
@@ -641,25 +555,8 @@
     box-shadow: 0 0 16px rgba(var(--accent-pink-rgb), 0.5);
 }
 
-/* Spacer Lines - for alignment */
-.evolution-line-spacer {
-    background: repeating-linear-gradient(-45deg,
-            transparent,
-            transparent 4px,
-            rgba(var(--border-color-rgb), 0.03) 4px,
-            rgba(var(--border-color-rgb), 0.03) 8px);
-    opacity: 0.5;
-}
-
-.evolution-line-spacer .evolution-line-content {
-    visibility: hidden;
-}
-
-
 /* Empty and Error States */
-.evolution-empty-message,
-.evolution-empty-content,
-.evolution-error-message {
+.evolution-empty-message {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -670,14 +567,6 @@
     font-size: 1.05rem;
     font-weight: 500;
     letter-spacing: -0.01em;
-}
-
-.evolution-error-message {
-    color: var(--accent-pink);
-    background: rgba(var(--accent-pink-rgb), 0.08);
-    border-radius: 16px;
-    margin: 2rem;
-    border: 1px solid rgba(var(--accent-pink-rgb), 0.2);
 }
 
 /* Hide Diff Button */

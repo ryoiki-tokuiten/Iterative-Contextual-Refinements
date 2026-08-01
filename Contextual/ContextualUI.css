@@ -31,23 +31,11 @@
 /* Left Panel - Current Best Generation */
 .contextual-text-panel {
     flex: 1;
-    display: flex;
-    flex-direction: column;
-    background: rgba(var(--card-bg-base-rgb), 0.3);
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius-lg);
-    overflow: hidden;
 }
 
 .text-panel-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: var(--space-3) var(--space-4);  /* 12px 16px */
     min-height: var(--button-height-lg);  /* 44px */
     margin: 0;
-    border-bottom: 1px solid var(--border-color);
-    background: rgba(var(--bg-color-rgb), 0.5);
 }
 
 .text-panel-header h3 {
@@ -72,6 +60,11 @@
     margin: 0;
     word-wrap: break-word;
     overflow-wrap: break-word;
+    flex: 1;
+    padding: 10px;
+    background-color: rgba(var(--bg-color-rgb), 0.2);
+    overflow-y: auto;
+    min-height: 0;
 }
 
 .empty-state {
@@ -104,7 +97,6 @@
     line-height: var(--line-height-tight);
     letter-spacing: var(--letter-spacing-tight);
     color: var(--text-color);
-    font-weight: 600;
 }
 
 .header-info {
@@ -330,23 +322,6 @@
     font-size: var(--font-size-sm);
 }
 
-/* Diff view styles */
-.diff-view {
-    font-family: var(--font-family-mono);
-    font-size: 0.9rem;
-    line-height: 1.6;
-    overflow-x: auto;
-    max-width: 100%;
-}
-
-.line-content {
-    flex: 1;
-    white-space: pre-wrap;
-    word-break: break-word;
-    overflow-wrap: break-word;
-    max-width: calc(100% - 2rem);
-}
-
 /* Panel Styling - Theme-aware */
 .contextual-text-panel,
 .contextual-agent-panel {
@@ -367,16 +342,6 @@
     justify-content: space-between;
     align-items: center;
 }
-
-.text-content-container {
-    flex: 1;
-    padding: 10px;
-    background-color: rgba(var(--bg-color-rgb), 0.2);
-    overflow-y: auto;
-    min-height: 0;
-}
-
-
 
 /* Scrollbar styling handled by .custom-scrollbar class in index.css */
 

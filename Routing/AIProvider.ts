@@ -531,9 +531,6 @@ export class GoogleAIProvider implements AIProvider {
         return 'gemini';
     }
 
-    getClient(): GoogleGenAI | null {
-        return this.client;
-    }
 }
 
 // ============================================================================

@@ -36,12 +36,6 @@ export interface ModelParameters {
     shareHypothesesToDissected: boolean;
 }
 
-export const AVAILABLE_MODELS: ModelOption[] = [
-    // Default models - will be populated dynamically by ProviderManager
-];
-
-export const DEFAULT_TEMPERATURES = [0, 0.7, 1.0, 1.5, 2.0];
-
 export const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
     temperature: 1.0,
     topP: 0.95,
@@ -194,13 +188,8 @@ export class ModelConfigManager {
     }
 
     public getModelProvider(modelValue?: string): string {
-        // Use instance's availableModels (dynamically populated), not the empty AVAILABLE_MODELS constant
         const model = this.availableModels.find(m => m.value === (modelValue || this.selectedModel));
         return model?.provider || 'google';
-    }
-
-    public getModelsByProvider(provider: string): ModelOption[] {
-        return this.availableModels.filter(m => m.provider === provider);
     }
 
     public setAvailableModels(models: ModelOption[]): void {

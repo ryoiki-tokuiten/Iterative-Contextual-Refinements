@@ -6,10 +6,9 @@
 import { RoutingManager } from './RoutingManager';
 
 // Export all routing-related functionality
-export { ApiKeyManager, type ApiKeyStatus } from './ApiConfig';
-export { ModelConfigManager, type ModelParameters, type ModelOption, AVAILABLE_MODELS, DEFAULT_TEMPERATURES, DEFAULT_MODEL_PARAMETERS } from './ModelConfig';
+export { ApiKeyManager } from './ApiConfig';
+export { ModelConfigManager, type ModelParameters, type ModelOption, DEFAULT_MODEL_PARAMETERS } from './ModelConfig';
 export { DeepthinkConfigController, type DeepthinkConfigState, type DeepthinkConfigChangeEvent } from './DeepthinkConfigController';
-export { ApiKeyUI } from './ApiKeyUI';
 export { ModelSelectionUI } from './ModelSelectionUI';
 export { PromptsManager } from './PromptsManager';
 export { PromptsModal } from './PromptsModal';
@@ -17,7 +16,7 @@ export { RoutingManager } from './RoutingManager';
 export { type AIProvider, createAIProvider } from './AIProvider';
 export { ProviderManager, type ProviderConfig, type ModelInfo } from './ProviderManager';
 export { ProviderManagementUI } from './ProviderManagementUI';
-export { callAI, callGemini } from './AIService';
+export { callAI } from './AIService';
 
 
 // Global routing manager instance - initialized lazily
@@ -45,7 +44,7 @@ export function getDeepthinkConfigController() {
     return getRoutingManager().getDeepthinkConfigController();
 }
 
-// Convenience functions for backward compatibility
+// Convenience functions for shared routing consumers
 export function getSelectedModel(): string {
     return getRoutingManager().getSelectedModel();
 }
@@ -132,11 +131,6 @@ export function getHypothesisInjectionMode(): 'parallel' | 'strategy_aware' | 's
 
 export function hasValidApiKey(): boolean {
     return getRoutingManager().hasValidApiKey();
-}
-
-export function updateCustomPromptTextareasFromState() {
-    // No-op: React-controlled components auto-sync from their managers.
-    // Kept for backward compatibility with ConfigManager.ts imports.
 }
 
 export function getProviderForCurrentModel(): string {

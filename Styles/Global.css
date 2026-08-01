@@ -9,7 +9,6 @@
             rgb(4, 5, 7) 0%,
             rgb(2, 3, 4) 50%,
             rgb(1, 1, 2) 100%);
-    --app-gradient-overlay: none;
 
     /* Unified Glassmorphism Card Style */
     --card-bg-color: rgba(var(--card-bg-base-rgb), 0.3);
@@ -45,7 +44,6 @@
     --accent-yellow-rgb: 255, 196, 0;
     --accent-purple: #AE52F5;
     --accent-purple-rgb: 174, 82, 245;
-    --accent-purple-dark: #8E3FD5;
     --accent-blue: #2979FF;
     --accent-blue-rgb: 41, 100, 205;
     --accent-silent-blue-rgb: 41, 110, 200;
@@ -54,10 +52,6 @@
 
     /* Semantic States & Focus */
     --focus-ring-color: rgba(var(--accent-blue-rgb), 0.5);
-    --success-glow: rgba(var(--accent-green-rgb), 0.35);
-    --error-glow: rgba(var(--accent-pink-rgb), 0.35);
-    --info-glow: rgba(var(--accent-blue-rgb), 0.3);
-    --purple-glow: rgba(var(--accent-purple-rgb), 0.3);
 
     /* UI Elements */
     --slider-track-color: rgba(255, 255, 255, 0.1);
@@ -65,7 +59,6 @@
 
     /* === PROFESSIONAL SPACING SYSTEM === */
     /* 8pt/4pt Grid System - Base spacing unit: 4px (0.25rem) */
-    --space-0: 0;
     --space-1: 0.25rem;
     /* 4px */
     --space-2: 0.5rem;
@@ -78,47 +71,25 @@
     /* 20px */
     --space-6: 1.5rem;
     /* 24px */
-    --space-7: 1.75rem;
-    /* 28px */
     --space-8: 2rem;
     /* 32px */
-    --space-10: 2.5rem;
-    /* 40px */
     --space-12: 3rem;
     /* 48px */
-    --space-16: 4rem;
-    /* 64px */
-    --space-20: 5rem;
-    /* 80px */
-    --space-24: 6rem;
-    /* 96px */
 
     /* Global Scaling */
     --app-scale-factor: 1.0;
 
     /* Component Spacing - Semantic naming for common patterns */
-    --spacing-component-xs: var(--space-2);
-    /* 8px - Tight spacing within components */
-    --spacing-component-sm: var(--space-3);
-    /* 12px - Small component spacing */
-    --spacing-component-md: var(--space-4);
-    /* 16px - Default component spacing */
     --spacing-component-lg: var(--space-6);
     /* 24px - Large component spacing */
-    --spacing-component-xl: var(--space-8);
-    /* 32px - Extra large component spacing */
 
     /* Layout Spacing - For sections and major layout elements */
-    --spacing-section-xs: var(--space-4);
-    /* 16px - Minimal section spacing */
     --spacing-section-sm: var(--space-6);
     /* 24px - Small section spacing */
     --spacing-section-md: var(--space-8);
     /* 32px - Default section spacing */
     --spacing-section-lg: var(--space-12);
     /* 48px - Large section spacing */
-    --spacing-section-xl: var(--space-16);
-    /* 64px - Extra large section spacing */
 
     /* Gap Spacing - For flex/grid gaps */
     --gap-xs: var(--space-2);
@@ -129,20 +100,6 @@
     /* 16px */
     --gap-lg: var(--space-6);
     /* 24px */
-    --gap-xl: var(--space-8);
-    /* 32px */
-
-    /* Padding Scale - Consistent internal spacing */
-    --padding-xs: var(--space-2);
-    /* 8px */
-    --padding-sm: var(--space-3);
-    /* 12px */
-    --padding-md: var(--space-4);
-    /* 16px */
-    --padding-lg: var(--space-6);
-    /* 24px */
-    --padding-xl: var(--space-8);
-    /* 32px */
 
     /* === TYPOGRAPHY SYSTEM === */
     /* Font Family */
@@ -165,37 +122,23 @@
     /* 20px */
     --font-size-xl: 1.5rem;
     /* 24px */
-    --font-size-2xl: 1.875rem;
-    /* 30px */
-    --font-size-3xl: 2.25rem;
-    /* 36px */
-    --font-size-4xl: 3rem;
-    /* 48px */
 
     /* Line Height - Optimized for readability */
-    --line-height-none: 1;
     --line-height-tight: 1.25;
-    --line-height-snug: 1.375;
     --line-height-normal: 1.5;
     --line-height-relaxed: 1.625;
     --line-height-loose: 2;
 
     /* Line Height by Type */
     --line-height-heading: var(--line-height-tight);
-    --line-height-body: var(--line-height-normal);
     --line-height-base: var(--line-height-normal);
 
     /* Letter Spacing - For optimal legibility */
-    --letter-spacing-tighter: -0.05em;
     --letter-spacing-tight: -0.025em;
-    --letter-spacing-normal: 0;
     --letter-spacing-wide: 0.025em;
-    --letter-spacing-wider: 0.05em;
     --letter-spacing-widest: 0.1em;
 
     /* Font Weights */
-    --font-weight-light: 300;
-    --font-weight-normal: 400;
     --font-weight-medium: 500;
     --font-weight-semibold: 600;
     --font-weight-bold: 700;
@@ -205,7 +148,6 @@
     --transition-speed-fast: 0.2s;
     --transition-speed-slow: 0.5s;
     --easing-curve: cubic-bezier(0.25, 0.8, 0.25, 1);
-    --easing-curve-subtle: cubic-bezier(0.35, 0.7, 0.4, 0.9);
 
     /* Borders & Shadows - Soft and Layered */
     --border-radius-sm: 14px;
@@ -222,8 +164,6 @@
 
     /* === COMPONENT SIZING SYSTEM === */
     /* Button Heights - Consistent across all button types */
-    --button-height-xs: 2rem;
-    /* 32px */
     --button-height-sm: 2.25rem;
     /* 36px */
     --button-height-md: 2.5rem;
@@ -233,31 +173,11 @@
     --button-height-xl: 3rem;
     /* 48px */
 
-    /* Button Padding - Horizontal padding for buttons */
-    --button-padding-x-xs: var(--space-3);
-    /* 12px */
-    --button-padding-x-sm: var(--space-4);
-    /* 16px */
-    --button-padding-x-md: var(--space-5);
-    /* 20px */
-    --button-padding-x-lg: var(--space-6);
-    /* 24px */
-    --button-padding-x-xl: var(--space-8);
-    /* 32px */
-
     /* Input Heights - Form elements */
-    --input-height-sm: 2.25rem;
-    /* 36px */
     --input-height-md: 2.5rem;
     /* 40px */
-    --input-height-lg: 3rem;
-    /* 48px */
 
     /* Icon Sizes - Consistent icon scaling */
-    --icon-size-xs: 0.875rem;
-    /* 14px */
-    --icon-size-sm: 1rem;
-    /* 16px */
     --icon-size-md: 1.25rem;
     /* 20px */
     --icon-size-lg: 1.5rem;
@@ -274,71 +194,23 @@
     /* 16px */
     --card-padding-md: var(--space-6);
     /* 24px */
-    --card-padding-lg: var(--space-8);
-    /* 32px */
-    --card-padding-xl: var(--space-10);
-    /* 40px */
-
-    /* === DENSITY SYSTEM === */
-    /* Compact Density - For information-dense interfaces */
-    --density-compact-padding: var(--space-2);
-    /* 8px */
-    --density-compact-gap: var(--space-2);
-    /* 8px */
-    --density-compact-line-height: var(--line-height-tight);
-
-    /* Normal Density - Default comfortable spacing */
-    --density-normal-padding: var(--space-4);
-    /* 16px */
-    --density-normal-gap: var(--space-4);
-    /* 16px */
-    --density-normal-line-height: var(--line-height-normal);
-
-    /* Comfortable Density - For reading-focused content */
-    --density-comfortable-padding: var(--space-6);
-    /* 24px */
-    --density-comfortable-gap: var(--space-6);
-    /* 24px */
-    --density-comfortable-line-height: var(--line-height-relaxed);
 
     /* === BORDER RADIUS SCALE === */
-    --radius-xs: 0.25rem;
-    /* 4px */
     --radius-sm: 0.5rem;
     /* 8px */
-    --radius-md: 0.75rem;
-    /* 12px */
     --radius-lg: 1rem;
     /* 16px */
     --radius-xl: 1.5rem;
     /* 24px */
-    --radius-2xl: 2rem;
-    /* 32px */
     --radius-full: 9999px;
     /* Fully rounded */
 
     /* Sub-panel specific aesthetics for internal elements */
     --sub-panel-bg-color: rgba(8, 10, 14, 0.3);
     --sub-panel-border-color: rgba(var(--border-color-rgb), 0.25);
-    --sub-panel-text-color: var(--text-secondary-color);
-    --sub-panel-strong-text-color: var(--text-color);
-
-    /* Judge Results Section */
-    --judge-section-bg: rgba(var(--accent-purple-rgb), 0.08);
-    --judge-section-border: rgba(var(--accent-purple-rgb), 0.35);
-    --judge-completed-bg: rgba(var(--accent-green-rgb), 0.1);
-    --judge-processing-bg: rgba(var(--accent-yellow-rgb), 0.1);
-    --judge-error-bg: rgba(var(--accent-pink-rgb), 0.1);
-    --judge-pending-bg: rgba(var(--border-color-rgb), 0.1);
-
     /* === Z-INDEX LAYERS === */
-    --z-index-base: 1;
-    --z-index-sticky: 100;
     --z-index-dropdown: 1000;
-    --z-index-overlay: 9999;
     --z-index-modal: 10000;
-    --z-index-tooltip: 10001;
-    --z-index-max: 2147483647;
 }
 
 /* Light Mode Theme - Anthropic-inspired minimal aesthetic */
@@ -391,7 +263,6 @@ body.light-mode {
     --accent-purple: #8B5CF6;
     /* Violet 500 */
     --accent-purple-rgb: 139, 92, 246;
-    --accent-purple-dark: #7C3AED;
     --accent-blue: #3B82F6;
     /* Blue 500 */
     --accent-blue-rgb: 59, 130, 246;
@@ -402,11 +273,6 @@ body.light-mode {
 
     /* Semantic States - Clear & Modern */
     --focus-ring-color: rgba(59, 130, 246, 0.4);
-    --success-glow: rgba(16, 185, 129, 0.25);
-    --error-glow: rgba(236, 72, 153, 0.25);
-    --info-glow: rgba(59, 130, 246, 0.2);
-    --purple-glow: rgba(139, 92, 246, 0.2);
-
     /* UI Elements */
     --slider-track-color: rgba(0, 0, 0, 0.1);
 
@@ -421,16 +287,6 @@ body.light-mode {
     /* Sub-panel specific - Layered Glass */
     --sub-panel-bg-color: rgba(255, 255, 255, 0.5);
     --sub-panel-border-color: rgba(0, 0, 0, 0.2);
-    --sub-panel-text-color: var(--text-secondary-color);
-    --sub-panel-strong-text-color: var(--text-color);
-
-    /* Judge Results Section - Elegant Tints */
-    --judge-section-bg: rgba(139, 92, 246, 0.04);
-    --judge-section-border: rgba(139, 92, 246, 0.25);
-    --judge-completed-bg: rgba(16, 185, 129, 0.06);
-    --judge-processing-bg: rgba(245, 158, 11, 0.06);
-    --judge-error-bg: rgba(236, 72, 153, 0.06);
-    --judge-pending-bg: rgba(28, 25, 23, 0.03);
 }
 
 /* Light mode gradient background adjustments - Subtle and clean */
@@ -458,8 +314,7 @@ body:not(.light-mode) .theme-toggle-button {
     border: 1px solid transparent;
 }
 
-body.light-mode .theme-toggle-button:hover,
-body:not(.light-mode) .theme-toggle-button:hover {
+body.light-mode .theme-toggle-button:hover {
     background: rgba(0, 0, 0, 0.05);
     border-color: rgba(0, 0, 0, 0.15);
 }
@@ -480,17 +335,6 @@ body.light-mode .input-label {
 }
 
 
-
-/* Light mode inline code styling */
-body.light-mode .markdown-content :not(pre)>code {
-    background-color: rgba(0, 0, 0, 0.03) !important;
-    color: var(--accent-purple-dark) !important;
-    border: 1px solid rgba(0, 0, 0, 0.06) !important;
-    text-shadow: none !important;
-    font-family: var(--font-family-mono);
-    border-radius: 4px;
-    padding: 0.1em 0.3em;
-}
 
 * {
     box-sizing: border-box;
@@ -735,15 +579,6 @@ h5 {
 
 /* Centralized animations */
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-    to {
-        opacity: 1;
-    }
-}
-
-@keyframes modalFadeIn {
     from {
         opacity: 0;
     }

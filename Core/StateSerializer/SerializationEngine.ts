@@ -33,7 +33,7 @@ export interface SerializationOptions {
 /**
  * Default serialization options.
  */
-export const DEFAULT_SERIALIZATION_OPTIONS: SerializationOptions = {
+const DEFAULT_SERIALIZATION_OPTIONS: SerializationOptions = {
     format: 'msgpack',
     compress: true,
     prettyPrint: false,

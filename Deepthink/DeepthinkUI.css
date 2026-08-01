@@ -1003,36 +1003,6 @@
     color: var(--accent-pink);
 }
 
-/* Action Buttons */
-.view-argument-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.6rem 1rem;
-
-    background: var(--surface-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-    font-weight: 500;
-
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.view-argument-button:hover {
-    background: var(--surface-tertiary);
-    border-color: var(--accent-blue);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(var(--accent-blue-rgb), 0.2);
-}
-
-.view-argument-button:active {
-    transform: translateY(0);
-}
-
 .view-critique-button {
     display: flex;
     align-items: center;
@@ -1245,17 +1215,6 @@
     .deepthink-final-result,
     .rich-content-display) {
     line-height: var(--line-height-loose);
-    --md-header-color: var(--accent-green);
-    --md-strong-color: var(--accent-green);
-    --md-em-color: var(--accent-orange);
-    --md-blockquote-border: 4px solid var(--accent-purple);
-    --md-blockquote-bg: rgba(var(--accent-purple-rgb), 0.06);
-    --md-blockquote-shadow: 0 8px 24px rgba(var(--accent-purple-rgb), 0.12);
-    --md-code-color: #e86b6b;
-    --md-code-bg: rgba(18, 18, 18, 0.6);
-    --md-code-border: rgba(255, 255, 255, 0.1);
-    --md-pre-bg: rgba(18, 18, 18, 0.8);
-    --md-pre-border: rgba(255, 255, 255, 0.1);
 
     & :is(h1, h2, h3, h4, h5, h6) {
         font-weight: var(--font-weight-semibold);

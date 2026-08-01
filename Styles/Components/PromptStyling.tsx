@@ -6,7 +6,7 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { CaretManager, Utils, Tokenizer, Renderer } from './PromptStylingLogic';
 
-export interface PromptStylingEditorProps {
+interface PromptStylingEditorProps {
   value?: string;
   onChange?: (val: string) => void;
   id?: string;
@@ -289,9 +289,3 @@ export function updatePromptContent(): void {
     window.dispatchEvent(new Event(FORCE_SYNC_EVENT));
   }
 }
-
-export function initializePromptStyling(): void {
-  // Retained as a no-op compatibility entry point; the component self-initializes.
-}
-
-export default PromptStylingEditor;

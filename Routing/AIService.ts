@@ -51,6 +51,3 @@ export async function callAI(
         thinkingConfig
     );
 }
-
-// Backward compatibility alias
-export const callGemini = callAI;

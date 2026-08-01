@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { copyToClipboard, downloadFile, openLivePreviewFullscreen } from './ActionButtonLogic';
 import { Icon } from '../../UI/Icons';
 
-export interface ActionButtonProps {
+interface ActionButtonProps {
     id?: string;
     type?: 'copy' | 'download' | 'preview' | 'custom';
     icon: string;

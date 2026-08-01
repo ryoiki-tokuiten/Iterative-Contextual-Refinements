@@ -34,5 +34,3 @@ export const VirtualEnvironmentModal: React.FC = () => {
         </BaseModal>
     );
 };
-
-export default VirtualEnvironmentModal;

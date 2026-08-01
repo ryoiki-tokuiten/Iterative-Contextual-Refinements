@@ -145,17 +145,8 @@ export class ModelSelectionUI {
     }
 
     private filterAndRenderModels(): void {
-        const availableModels = this.modelConfig.getAvailableModels();
         const selectedModel = this.modelConfig.getSelectedModel();
-        const modelsByProvider: Record<string, typeof availableModels> = {};
-        availableModels.forEach(model => {
-            const prov = model.provider || 'unknown';
-            if (!modelsByProvider[prov]) {
-                modelsByProvider[prov] = [];
-            }
-            modelsByProvider[prov].push(model);
-        });
-        this.renderModelsForProvider(this.activeProvider, modelsByProvider, selectedModel);
+        this.renderModelsForProvider(this.activeProvider, this.groupAvailableModels(), selectedModel);
     }
 
     private updateCustomSelectOptions(): void {
@@ -166,17 +157,7 @@ export class ModelSelectionUI {
 
         const availableModels = this.modelConfig.getAvailableModels();
         const selectedModel = this.modelConfig.getSelectedModel();
-
-        // Group models by provider
-        const modelsByProvider: Record<string, typeof availableModels> = {};
-        availableModels.forEach(model => {
-            const provider = model.provider || 'unknown';
-            const providerKey = provider.toLowerCase();
-            if (!modelsByProvider[providerKey]) {
-                modelsByProvider[providerKey] = [];
-            }
-            modelsByProvider[providerKey].push(model);
-        });
+        const modelsByProvider = this.groupAvailableModels();
 
         // Provider configuration with SVG logos
         const providerConfig: Record<string, { logo: string; class: string; label: string }> = {
@@ -529,10 +510,6 @@ export class ModelSelectionUI {
         }
 
         this.updateThinkingLevelVisibility();
-    }
-
-    public getModelConfig(): ModelConfigManager {
-        return this.modelConfig;
     }
 
     /**

@@ -1,7 +1,7 @@
 import { globalState } from '../Core/State';
 import { hasValidApiKey, routingManager } from '../Routing';
 
-export interface ControlsDisabledState {
+interface ControlsDisabledState {
     generateButton: boolean;
     exportConfigButton: boolean;
     importConfigInput: boolean;
@@ -14,7 +14,7 @@ export interface ControlsDisabledState {
     promptsButton: boolean;
 }
 
-export function computeIsGenerating(): boolean {
+function computeIsGenerating(): boolean {
     const { activeDeepthinkPipeline, isContextualRunning, isAdaptiveDeepthinkRunning } = globalState;
 
     const deepthinkPipelineRunningOrStopping = activeDeepthinkPipeline?.status === 'processing' || activeDeepthinkPipeline?.status === 'stopping';
@@ -22,11 +22,11 @@ export function computeIsGenerating(): boolean {
     return deepthinkPipelineRunningOrStopping || isContextualRunning || isAdaptiveDeepthinkRunning;
 }
 
-export function computeIsApiKeyReady(): boolean {
+function computeIsApiKeyReady(): boolean {
     return hasValidApiKey();
 }
 
-export function computeControlsDisabledState(): ControlsDisabledState {
+function computeControlsDisabledState(): ControlsDisabledState {
     const isGenerating = computeIsGenerating();
     const isApiKeyReady = computeIsApiKeyReady();
 

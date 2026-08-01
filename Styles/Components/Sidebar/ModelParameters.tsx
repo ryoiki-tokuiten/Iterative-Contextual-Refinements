@@ -142,6 +142,3 @@ export const ModelParameters: React.FC = () => {
 };
 
 export default ModelParameters;
-
-export function initializeEvolutionConvergenceButtons(): void {
-}

@@ -8,8 +8,7 @@
 
 import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
-import { AIProvider } from '../Routing/AIProvider';
-import { callGemini } from "@/Routing/AIService.js";
+import { callAI } from "@/Routing/AIService.js";
 import { CustomizablePromptsDeepthink } from './DeepthinkPrompts';
 import { cleanupEvolvingDfsRoot } from '../Contextual/ContextualUI';
 import { onHighlighterReady } from '../Styles/Shiki';
@@ -125,8 +124,7 @@ let filesystemRedirectListenerRegistered = false;
 // ============================================================================ 
 
 export function initializeDeepthinkModule(dependencies: {
-    getAIProvider: () => AIProvider | null;
-    callGemini: typeof callGemini;
+    callAI: typeof callAI;
     parseJsonSafe: typeof parseJsonSafe;
     updateControlsState: (newState: any) => void;
     escapeHtml: (unsafe: string) => string;

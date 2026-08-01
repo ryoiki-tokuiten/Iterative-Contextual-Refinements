@@ -1,10 +1,10 @@
 import { routingManager } from '../../../Routing';
 
-export interface ProviderUI {
+interface ProviderUI {
     mountButtons: (container: HTMLElement) => void;
 }
 
-export function getProviderManagementUI(): ProviderUI | null {
+function getProviderManagementUI(): ProviderUI | null {
     return routingManager.getProviderManagementUI();
 }
 

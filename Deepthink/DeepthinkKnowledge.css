@@ -161,17 +161,6 @@
     transform: translateY(0);
 }
 
-/* Premium sub-strategy titles */
-.agent-title {
-    font-size: 0.85rem !important;
-    font-weight: 800 !important;
-    color: var(--text-color);
-    margin: 0;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    opacity: 0.85;
-}
-
 /* Premium Agent Cards Grid (reusing for multiple sections) - Reimagined */
 .agent-grid {
     display: grid;
@@ -239,9 +228,12 @@
 .agent-title {
     margin: 0;
     color: var(--text-color);
-    font-size: 1.25rem;
-    font-weight: 600;
+    font-size: 0.85rem !important;
+    font-weight: 800 !important;
     line-height: var(--line-height-heading);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    opacity: 0.85;
 }
 
 .agent-results {

@@ -1,5 +1,5 @@
 /* ========================================================================== */
-/* == PROMPTS MODAL STYLES (Restored from index_old.css) =================== */
+/* == PROMPTS MODAL STYLES ================================================= */
 /* ========================================================================== */
 
 .prompts-mode-container {
@@ -91,23 +91,6 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
-}
-
-.prompt-placeholders {
-    font-size: var(--font-size-sm);
-    color: var(--text-tertiary-color);
-    font-weight: 400;
-}
-
-.prompt-placeholders code {
-    background-color: rgba(var(--accent-blue-rgb), 0.15);
-    color: var(--accent-blue);
-    font-size: 0.9em;
-    padding: 0.3em 0.6em;
-    border-radius: var(--border-radius-sm);
-    font-family: var(--font-family);
-    border: 1px solid rgba(var(--accent-blue-rgb), 0.3);
-    margin: 0 0.2em;
 }
 
 textarea.prompt-textarea {

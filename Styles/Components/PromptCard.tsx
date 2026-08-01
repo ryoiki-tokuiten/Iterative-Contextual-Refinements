@@ -12,8 +12,6 @@ interface PromptCardProps {
     textareaId?: string;
     rows?: number;
     agentName?: string;
-    showModelSelector?: boolean;
-    placeholders?: string;
     placeholder?: string;
     value?: string;
     onChange?: (text: string) => void;
@@ -27,8 +25,6 @@ export const PromptCard: React.FC<PromptCardProps> = ({
     textareaId,
     rows = 8,
     agentName,
-    showModelSelector = false,
-    placeholders,
     placeholder,
     value,
     onChange,
@@ -40,24 +36,19 @@ export const PromptCard: React.FC<PromptCardProps> = ({
         <div className="prompt-card">
             <div className="prompt-card-header">
                 <span className="prompt-card-title">{title}</span>
-                {(agentName || showModelSelector) && (
-                    <div className="prompt-model-selector">
-                        <select
-                            className="prompt-model-select"
-                            data-agent={agentName}
-                            value={onModelChange ? (modelValue || '') : undefined}
-                            onChange={onModelChange ? (e) => onModelChange(e.target.value) : undefined}
-                        >
-                            <option value="">Use Global Model</option>
-                            {availableModels.map(model => (
-                                <option key={model} value={model}>{model}</option>
-                            ))}
-                        </select>
-                    </div>
-                )}
-                {placeholders && (
-                    <span className="prompt-placeholders" dangerouslySetInnerHTML={{ __html: placeholders }} />
-                )}
+                <div className="prompt-model-selector">
+                    <select
+                        className="prompt-model-select"
+                        data-agent={agentName}
+                        value={onModelChange ? (modelValue || '') : undefined}
+                        onChange={onModelChange ? (e) => onModelChange(e.target.value) : undefined}
+                    >
+                        <option value="">Use Global Model</option>
+                        {availableModels.map(model => (
+                            <option key={model} value={model}>{model}</option>
+                        ))}
+                    </select>
+                </div>
             </div>
             <div className="prompt-card-body">
                 <PromptStylingEditor
@@ -87,5 +78,3 @@ export const PromptPane: React.FC<PromptPaneProps> = ({ promptKey, title, childr
         </div>
     );
 };
-
-export default PromptCard;
