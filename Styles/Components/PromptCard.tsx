@@ -9,10 +9,12 @@ import { PromptStylingEditor } from './PromptStyling';
 
 interface PromptCardProps {
     title: string;
-    textareaId: string;
+    textareaId?: string;
     rows?: number;
     agentName?: string;
+    showModelSelector?: boolean;
     placeholders?: string;
+    placeholder?: string;
     value?: string;
     onChange?: (text: string) => void;
     modelValue?: string;
@@ -25,7 +27,9 @@ export const PromptCard: React.FC<PromptCardProps> = ({
     textareaId,
     rows = 8,
     agentName,
+    showModelSelector = false,
     placeholders,
+    placeholder,
     value,
     onChange,
     modelValue,
@@ -36,7 +40,7 @@ export const PromptCard: React.FC<PromptCardProps> = ({
         <div className="prompt-card">
             <div className="prompt-card-header">
                 <span className="prompt-card-title">{title}</span>
-                {agentName && (
+                {(agentName || showModelSelector) && (
                     <div className="prompt-model-selector">
                         <select
                             className="prompt-model-select"
@@ -61,6 +65,7 @@ export const PromptCard: React.FC<PromptCardProps> = ({
                     className="prompt-textarea"
                     rows={rows}
                     value={value}
+                    placeholder={placeholder}
                     onChange={onChange}
                 />
             </div>

@@ -118,13 +118,6 @@ export function onHighlighterReady(callback: () => void): () => void {
 }
 
 /**
- * Get the highlighter instance (must be initialized first)
- */
-export function getHighlighter(): HighlighterCore | null {
-    return highlighterInstance;
-}
-
-/**
  * Check if highlighter is ready
  */
 export function isHighlighterReady(): boolean {
@@ -195,14 +188,6 @@ export function highlightCodeSync(code: string, lang: string = 'plaintext'): str
 }
 
 /**
- * Highlight code asynchronously (ensures highlighter is initialized)
- */
-export async function highlightCodeAsync(code: string, lang: string = 'plaintext'): Promise<string> {
-    await initHighlighter();
-    return highlightCode(code, lang);
-}
-
-/**
  * Escape HTML for safe rendering
  */
 function escapeHtml(str: string): string {
@@ -223,11 +208,9 @@ if (typeof window !== 'undefined') {
 
 export default {
     initHighlighter,
-    getHighlighter,
     isHighlighterReady,
     highlightCode,
     highlightCodeSync,
-    highlightCodeAsync,
     resolveLanguage,
     isLanguageSupported,
     getLanguageDisplayName,

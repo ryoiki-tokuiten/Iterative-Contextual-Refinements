@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ModelConfigManager } from './ModelConfig';
+import { ModelConfigManager, type ModelOption } from './ModelConfig';
 import { DeepthinkConfigController } from './DeepthinkConfigController';
 import { ApiCallEstimator } from './ApiCallEstimator';
 import { globalState } from '../Core/State';
@@ -326,19 +326,8 @@ export class ModelSelectionUI {
         });
 
         // Re-render models
-        const availableModels = this.modelConfig.getAvailableModels();
         const selectedModel = this.modelConfig.getSelectedModel();
-        const modelsByProvider: Record<string, typeof availableModels> = {};
-        availableModels.forEach(model => {
-            const prov = model.provider || 'unknown';
-            const provKey = prov.toLowerCase();
-            if (!modelsByProvider[provKey]) {
-                modelsByProvider[provKey] = [];
-            }
-            modelsByProvider[provKey].push(model);
-        });
-
-        this.renderModelsForProvider(provider, modelsByProvider, selectedModel);
+        this.renderModelsForProvider(provider, this.groupAvailableModels(), selectedModel);
         this.updateThinkingLevelVisibility();
     }
 
@@ -468,18 +457,20 @@ export class ModelSelectionUI {
         updateCodeExecutionToggleVisibility(globalState.currentMode);
 
         // Re-render models to update checkmark
-        const availableModels = this.modelConfig.getAvailableModels();
-        const modelsByProvider: Record<string, typeof availableModels> = {};
-        availableModels.forEach(model => {
+        this.renderModelsForProvider(this.activeProvider, this.groupAvailableModels(), value);
+        this.updateThinkingLevelVisibility();
+    }
+
+    private groupAvailableModels(): Record<string, ModelOption[]> {
+        return this.modelConfig.getAvailableModels().reduce<Record<string, ModelOption[]>>((modelsByProvider, model) => {
             const prov = model.provider || 'unknown';
             const provKey = prov.toLowerCase();
             if (!modelsByProvider[provKey]) {
                 modelsByProvider[provKey] = [];
             }
             modelsByProvider[provKey].push(model);
-        });
-        this.renderModelsForProvider(this.activeProvider, modelsByProvider, value);
-        this.updateThinkingLevelVisibility();
+            return modelsByProvider;
+        }, {});
     }
     private initializeEventListeners(): void {
         // Model selection

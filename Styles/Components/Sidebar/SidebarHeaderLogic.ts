@@ -27,7 +27,3 @@ export function createPollingInterval(
         }
     }, 100);
 }
-
-export function shouldMountButtons(containerRef: React.RefObject<HTMLDivElement | null>): boolean {
-    return !!(containerRef.current && containerRef.current.children.length === 0);
-}

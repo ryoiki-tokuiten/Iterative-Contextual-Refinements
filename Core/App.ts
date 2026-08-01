@@ -21,7 +21,6 @@ import { globalState } from './State';
 import { ApplicationMode } from './Types';
 import { updateControlsState } from '../UI/Controls';
 import { LayoutController } from '../UI/LayoutController';
-import { GlobalModals } from '../UI/GlobalModals';
 import { countFileTokens, getMediaCounts, DIRECT_CONTEXT_MEDIA_LIMITS, DIRECT_CONTEXT_TOKEN_LIMIT } from '../Styles/Components/Sidebar/FileUploadLogic';
 
 export class App {
@@ -29,7 +28,6 @@ export class App {
         this.initializeGlobalFunctions();
         this.initializeCoreLogic();
         LayoutController.initialize();
-        GlobalModals.initialize();
     }
 
     private static initializeGlobalFunctions() {

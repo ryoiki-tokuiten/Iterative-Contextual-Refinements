@@ -130,16 +130,8 @@ export function getHypothesisInjectionMode(): 'parallel' | 'strategy_aware' | 's
     return getRoutingManager().getHypothesisInjectionMode();
 }
 
-export function getAIProvider() {
-    return getRoutingManager().getAIProvider();
-}
-
 export function hasValidApiKey(): boolean {
     return getRoutingManager().hasValidApiKey();
-}
-
-export function getDeepthinkPrompts() {
-    return getRoutingManager().getDeepthinkPrompts();
 }
 
 export function updateCustomPromptTextareasFromState() {

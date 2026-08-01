@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { createRoot, Root } from 'react-dom/client';
 import { DiffViewMode } from './types';
 import {
     ContentEntry,
@@ -16,6 +15,7 @@ import {
     DEFAULT_SPEED_MS
 } from './SequentialViewer';
 import { Icon } from '../../../UI/Icons';
+import { getOrCreatePortalRoot, unmountPortalRoot } from './PortalRoots';
 
 // ─── Line Display Components ──────────────────────────────────────────────────
 
@@ -588,42 +588,17 @@ const SequentialViewerModal: React.FC<SequentialViewerProps> = ({ contentStates,
 
 // ─── Imperative Portal API ────────────────────────────────────────────────────
 
-const roots = new Map<string, Root>();
-
-function getOrCreateRoot(id: string): Root {
-    if (roots.has(id)) return roots.get(id)!;
-    const el = document.createElement('div');
-    el.id = id;
-    document.body.appendChild(el);
-    const root = createRoot(el);
-    roots.set(id, root);
-    return root;
-}
-
-function unmountRoot(id: string): void {
-    const root = roots.get(id);
-    if (root) {
-        root.unmount();
-        roots.delete(id);
-    }
-    document.getElementById(id)?.remove();
-}
-
 export function openSequentialViewer(contentStates: Array<{ title: string; content: string }>): void {
     if (!contentStates || contentStates.length === 0) return;
 
     const rootId = 'sequential-viewer-root';
-    unmountRoot(rootId);
+    unmountPortalRoot(rootId);
 
-    const root = getOrCreateRoot(rootId);
+    const root = getOrCreatePortalRoot(rootId);
     root.render(
         <SequentialViewerModal
             contentStates={contentStates}
-            onClose={() => unmountRoot(rootId)}
+            onClose={() => unmountPortalRoot(rootId)}
         />
     );
-}
-
-export function closeSequentialViewer(): void {
-    unmountRoot('sequential-viewer-root');
 }

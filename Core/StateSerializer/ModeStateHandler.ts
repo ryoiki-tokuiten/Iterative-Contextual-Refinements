@@ -71,11 +71,3 @@ export function registerModeHandler(handler: ModeStateHandler): void {
 export function getModeHandler(mode: ApplicationMode): ModeStateHandler | undefined {
     return modeHandlerRegistry.get(mode);
 }
-
-/**
- * Get all registered mode handlers.
- * @returns Array of all registered handlers
- */
-export function getAllModeHandlers(): ModeStateHandler[] {
-    return Array.from(modeHandlerRegistry.values());
-}

@@ -68,12 +68,6 @@ export interface ContextualMessage {
     executionTraceText?: string;
 }
 
-export interface IterationData {
-    iterationNumber: number;
-    iterativeCritique: string;
-    mainGeneration: string;
-}
-
 interface ContextualAgentCallResult {
     text: string;
     promptText?: string;
@@ -114,16 +108,11 @@ export function createInitialContextualState(initialUserRequest: string): Contex
 
 let activeContextualState: ContextualState | null = null;
 let onStateUpdated: ((state: ContextualState) => void) | null = null;
-let onContentUpdated: ((content: string) => void) | null = null;
 let abortController: AbortController | null = null;
 let contextualCustomPrompts: CustomizablePromptsContextual | null = null;
 
 export function setContextualStateUpdateCallback(cb: ((state: ContextualState) => void) | null) {
     onStateUpdated = cb;
-}
-
-export function setContextualContentUpdateCallback(cb: ((content: string) => void) | null) {
-    onContentUpdated = cb;
 }
 
 function newMessageId(prefix: string): string {
@@ -341,9 +330,6 @@ async function runContextualLoop() {
             mainGeneratorMessages.push(mainSubmittedMessage);
             iterativeAgentMessages.push(new HumanMessage(`Current Main Generator final output:\n${mainGenerationPromptText}`));
             
-            if (onContentUpdated) {
-                try { onContentUpdated(mainGeneration); } catch { }
-            }
             if (onStateUpdated) onStateUpdated({ ...activeContextualState });
             if (abortController?.signal.aborted || !globalState.isContextualRunning) break;
 

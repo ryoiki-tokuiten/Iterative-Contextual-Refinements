@@ -331,11 +331,6 @@ export async function openDeepthinkSolutionModal(subStrategyId: string, branchVe
     }
 }
 
-export function closeSolutionModal() {
-    removeEvolvingDfsSolutionOverlay(false);
-    unmountModal();
-}
-
 async function openSubStrategySolutionModal(subStrategyId: string, branchVersion?: number) {
     const pipeline = getActiveDeepthinkPipeline();
     if (!pipeline) return;

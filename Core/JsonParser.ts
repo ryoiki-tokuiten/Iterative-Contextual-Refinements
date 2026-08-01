@@ -4,7 +4,6 @@
  */
 
 import JSON5 from 'json5';
-import { parse as parseLossless } from 'lossless-json';
 
 /**
  * JSON parsing utilities for AI outputs and data processing
@@ -33,14 +32,4 @@ export function parseJsonSafe(raw: string, context: string): any {
             throw e;
         }
     }
-}
-
-/**
- * Parse JSON ensuring numeric precision using lossless-json
- * Use this when you expect large numbers that standard JS numbers can't handle.
- * @param raw - Raw string to parse
- * @returns Parsed JSON object with potentially special number types
- */
-export function parseJsonLossless(raw: string): any {
-    return parseLossless(raw);
 }

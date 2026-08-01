@@ -77,17 +77,6 @@ export interface SandboxFinalOutputContract {
     validate: (payload: unknown) => void;
 }
 
-/** Creates one repository-level checkpoint. Call this only at a meaningful
- * orchestration boundary, never once per individual tool-using agent. */
-export async function snapshotSandboxRepository(sessionId: string, commitMessage: string): Promise<void> {
-    const response = await fetch(`${getSandboxApiBasePath()}/snapshot`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sessionId, commitMessage }),
-    });
-    if (!response.ok) throw new Error(`Sandbox snapshot failed (${response.status}).`);
-}
-
 export async function snapshotSandboxRepositoryById(repositoryId: string, commitMessage: string): Promise<string> {
     const response = await fetch(`${getSandboxApiBasePath()}/snapshot`, {
         method: 'POST',

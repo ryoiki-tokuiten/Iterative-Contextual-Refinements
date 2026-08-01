@@ -2,18 +2,6 @@ import { globalState } from '../../../Core/State';
 
 export type AppMode = 'deepthink' | 'adaptive-deepthink' | 'contextual';
 
-export interface SidebarState {
-    currentMode: AppMode;
-    showFileUpload: boolean;
-}
-
-export function getInitialSidebarState(): SidebarState {
-    return {
-        currentMode: 'deepthink',
-        showFileUpload: true,
-    };
-}
-
 export function getShowFileUploadForMode(mode: AppMode): boolean {
     return mode === 'deepthink' || mode === 'adaptive-deepthink';
 }
@@ -45,13 +33,4 @@ export function attachModeChangeListener(
             }
         }
     };
-}
-
-export function getInitialIdeaValue(): string {
-    const input = document.getElementById('initial-idea') as HTMLTextAreaElement;
-    return input?.value ?? '';
-}
-
-export function getInitialIdeaLabel(): HTMLElement | null {
-    return document.querySelector('label[for="initial-idea"]');
 }

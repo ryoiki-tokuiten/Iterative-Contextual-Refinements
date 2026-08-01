@@ -362,48 +362,6 @@
     border-color: rgba(var(--border-color-rgb), 0.5);
 }
 
-/* Refineme
-nt Options Container */
-.refinement-options-container {
-    margin-top: 16px;
-    padding: 16px;
-    background-color: rgba(var(--card-bg-base-rgb), 0.15);
-    border: 1px solid rgba(var(--border-color-rgb), 0.3);
-    border-radius: var(--border-radius-md);
-    transition: all var(--transition-speed);
-}
-
-.refinement-options-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 12px;
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-    color: var(--text-secondary-color);
-    opacity: 0.8;
-}
-
-.refinement-options-header .icon-slot {
-    font-size: 18px;
-    opacity: 0.7;
-}
-
-.refinement-toggle-wrapper {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.refinement-description {
-    font-size: 12px;
-    color: var(--text-tertiary-color);
-    opacity: 0.7;
-    margin-left: 56px;
-    /* Align with toggle text */
-}
-
-
 /* ============================================
    STRATEGY EXECUTION OPTIONS - CODE BLOCK THEME
    ============================================ */
@@ -423,24 +381,6 @@ nt Options Container */
     backdrop-filter: var(--card-blur-effect);
     -webkit-backdrop-filter: var(--card-blur-effect);
 }
-
-.strategy-execution-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--text-primary-color);
-    letter-spacing: 0.3px;
-    margin-bottom: 4px;
-}
-
-.strategy-execution-header .icon-slot {
-    font-size: 20px;
-    color: #e86b6b;
-}
-
-/* Old strategy-execution-card styles removed - now handled in DeepthinkConfigPanel.css */
 
 /* ============================================
    REFINEMENT OPTIONS - PROFESSIONAL REDESIGN

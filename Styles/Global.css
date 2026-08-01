@@ -482,9 +482,6 @@ body.light-mode .input-label {
 
 
 /* Light mode inline code styling */
-/* Light mode inline code styling */
-body.light-mode .solution-markdown-content :not(pre)>code,
-body.light-mode .deepthink-pipeline-container :not(pre)>code,
 body.light-mode .markdown-content :not(pre)>code {
     background-color: rgba(0, 0, 0, 0.03) !important;
     color: var(--accent-purple-dark) !important;
@@ -810,15 +807,6 @@ body.light-mode .scrollbar-standard::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 0, 0, 0.25);
 }
 
-.scrollbar-hidden {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-}
-.scrollbar-hidden::-webkit-scrollbar {
-    display: none;
-    width: 0;
-    height: 0;
-}
 
 /* Global Toggle Switch component */
 .toggle-switch {

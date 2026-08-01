@@ -325,10 +325,3 @@
             rgba(var(--border-color-rgb), 0.05) 10px,
             rgba(var(--border-color-rgb), 0.05) 20px);
 }
-
-.sequential-error {
-    color: var(--accent-pink);
-    text-align: center;
-    padding: 2rem;
-    font-style: italic;
-}

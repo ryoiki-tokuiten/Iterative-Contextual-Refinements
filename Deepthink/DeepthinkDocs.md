@@ -13,9 +13,6 @@ This document describes the behavior implemented by `DeepthinkCore.ts`, `Deepthi
 
 ![Current Deepthink Architecture](SystemArchitecture.png)
 
-`SystemArchitecture.png` is the current diagram used by the README. `OldSystemArchitecture.png` is intentionally retained as the archived diagram for the previous system.
-
-The diagram is a conceptual overview. The exact context contracts, synchronization points, and replacement behavior are defined below. In particular, the hypothesis heartbeat reads the persistent generator/proximity conversation, the immediately preceding tester outputs, and recent correction/critique history; it does not receive concurrently generated solution-pool outputs.
 
 ## Architectural Principles
 
@@ -902,7 +899,7 @@ The main architectural responsibilities are separated as follows:
 | `DeepthinkAgentRegistry.ts` | Canonical typed agent kinds, labels, prompt keys, model keys, and sandbox roles |
 | `DeepthinkContext.ts` | Per-run configuration type, per-call context manifest, unified attachment routes, hypothesis routing selector, and ID validation |
 | `DeepthinkPrompts.ts` | Customizable system instructions and agent role definitions |
-| `DeepthinkPromptsContent.tsx` | System-prompt and per-agent model customization UI |
+| `PromptContent.tsx` / `PromptModeConfigs.ts` | Shared prompt editor and mode-specific prompt pane configuration |
 | `DeepthinkConfigController.ts` | Configuration constraints and mode side effects |
 | `ModelConfig.ts` | Stored Deepthink parameters and clamped getters |
 | `SolutionPool.tsx` | Solution-pool, memory-bank, and repository presentation |

@@ -85,13 +85,3 @@ export function renderContextualMode() {
         updateContextualUI(contextualUIRoot, state, stopContextualProcess);
     }
 }
-
-/**
- * Re-render helper
- */
-export function reRenderContextualUI() {
-    const state = getContextualState();
-    if (state && contextualUIRoot && activeContextualContainer) {
-        updateContextualUI(contextualUIRoot, state, stopContextualProcess);
-    }
-}

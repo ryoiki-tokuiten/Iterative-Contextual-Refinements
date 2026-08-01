@@ -7,6 +7,11 @@ import { initializePromptStyling, updatePromptContent } from '../Styles/Componen
 import { PromptRefiner } from './PromptRefiner';
 import { globalState } from '../Core/State';
 import { renderIconMarkup } from '../UI/Icons';
+import {
+    ADAPTIVE_PROMPT_PANES,
+    CONTEXTUAL_PROMPT_PANES,
+    DEEPTHINK_PROMPT_PANES
+} from './PromptsModal/PromptModeConfigs';
 
 export class PromptsModal {
     private elements: {
@@ -377,13 +382,7 @@ export class PromptsModal {
 
     private getAgentNameFromTextareaId(textareaId: string): string | null {
         // Reverse mapping from textarea ID to agent name
-        const allMaps = {
-            ...this.getDeepthinkAgentMap(),
-            ...this.getAdaptiveDeepthinkAgentMap(),
-            ...this.getContextualAgentMap()
-        };
-
-        for (const [agentName, id] of Object.entries(allMaps)) {
+        for (const [agentName, id] of Object.entries(this.getPromptAgentMap())) {
             if (id === textareaId) {
                 return agentName;
             }
@@ -394,42 +393,20 @@ export class PromptsModal {
 
 
 
-    private getDeepthinkAgentMap(): { [key: string]: string } {
-        return {
-            'initialStrategy': 'sys-deepthink-initial-strategy',
-            'subStrategy': 'sys-deepthink-sub-strategy',
-            'solutionAttempt': 'sys-deepthink-solution-attempt',
-            'solutionCritique': 'sys-deepthink-solution-critique',
-            'dissectedSynthesis': 'sys-deepthink-dissected-synthesis',
-            'selfImprovement': 'sys-deepthink-self-improvement',
-            'hypothesisGeneration': 'sys-deepthink-hypothesis-generation',
-            'hypothesisTester': 'sys-deepthink-hypothesis-tester',
-            'postQualityFilter': 'sys-deepthink-post-quality-filter',
-            'memoryBank': 'sys-deepthink-memory-bank',
-            'finalJudge': 'sys-deepthink-final-judge',
-            'structuredSolutionPool': 'sys-deepthink-structured-solution-pool'
-        };
-    }
+    private getPromptAgentMap(): Record<string, string> {
+        const map: Record<string, string> = {};
 
-    private getAdaptiveDeepthinkAgentMap(): { [key: string]: string } {
-        return {
-            'adaptive-main': 'sys-adaptive-main',
-            'adaptive-strategy-gen': 'sys-adaptive-strategy-gen',
-            'adaptive-hypothesis-gen': 'sys-adaptive-hypothesis-gen',
-            'adaptive-hypothesis-test': 'sys-adaptive-hypothesis-test',
-            'adaptive-execution': 'sys-adaptive-execution',
-            'adaptive-critique': 'sys-adaptive-critique',
-            'adaptive-corrector': 'sys-adaptive-corrector'
-        };
-    }
+        for (const pane of [
+            ...DEEPTHINK_PROMPT_PANES,
+            ...ADAPTIVE_PROMPT_PANES,
+            ...CONTEXTUAL_PROMPT_PANES
+        ]) {
+            if (pane.textareaId) {
+                map[pane.agentName ?? pane.key] = pane.textareaId;
+            }
+        }
 
-    private getContextualAgentMap(): { [key: string]: string } {
-        return {
-            'contextual-main-generator': 'sys-contextual-main-generator',
-            'contextual-iterative-agent': 'sys-contextual-iterative-agent',
-            'contextual-solution-pool': 'sys-contextual-solution-pool',
-            'contextual-memory': 'sys-contextual-memory'
-        };
+        return map;
     }
 
     private createCustomModelSelect(originalSelect: HTMLSelectElement): void {
@@ -720,42 +697,7 @@ export class PromptsModal {
     }
 
     private getTextareaIdForAgent(agentName: string): string | null {
-        // Deepthink mode agents
-        const deepthinkMap: { [key: string]: string } = {
-            'initialStrategy': 'sys-deepthink-initial-strategy',
-            'subStrategy': 'sys-deepthink-sub-strategy',
-            'solutionAttempt': 'sys-deepthink-solution-attempt',
-            'solutionCritique': 'sys-deepthink-solution-critique',
-            'dissectedSynthesis': 'sys-deepthink-dissected-synthesis',
-            'selfImprovement': 'sys-deepthink-self-improvement',
-            'hypothesisGeneration': 'sys-deepthink-hypothesis-generation',
-            'hypothesisTester': 'sys-deepthink-hypothesis-tester',
-            'postQualityFilter': 'sys-deepthink-post-quality-filter',
-            'memoryBank': 'sys-deepthink-memory-bank',
-            'finalJudge': 'sys-deepthink-final-judge',
-            'structuredSolutionPool': 'sys-deepthink-structured-solution-pool'
-        };
-
-        // Adaptive Deepthink mode agents
-        const adaptiveDeepthinkMap: { [key: string]: string } = {
-            'adaptive-main': 'sys-adaptive-main',
-            'adaptive-strategy-gen': 'sys-adaptive-strategy-gen',
-            'adaptive-hypothesis-gen': 'sys-adaptive-hypothesis-gen',
-            'adaptive-hypothesis-test': 'sys-adaptive-hypothesis-test',
-            'adaptive-execution': 'sys-adaptive-execution',
-            'adaptive-critique': 'sys-adaptive-critique',
-            'adaptive-corrector': 'sys-adaptive-corrector'
-        };
-
-        // Contextual mode agents
-        const contextualMap: { [key: string]: string } = {
-            'contextual-main-generator': 'sys-contextual-main-generator',
-            'contextual-iterative-agent': 'sys-contextual-iterative-agent',
-            'contextual-solution-pool': 'sys-contextual-solution-pool',
-            'contextual-memory': 'sys-contextual-memory'
-        };
-
-        return deepthinkMap[agentName] || adaptiveDeepthinkMap[agentName] || contextualMap[agentName] || null;
+        return this.getPromptAgentMap()[agentName] || null;
     }
 
     private openPromptRefiner(agentName: string): void {

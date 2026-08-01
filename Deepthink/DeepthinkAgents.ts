@@ -119,16 +119,6 @@ function buildCorrectionPrompt(question: string, strategy: string, execution: st
     ].filter(Boolean).join('\n\n');
 }
 
-function buildFinalJudgePrompt(question: string, allSolutions: string): string {
-    return `Core Challenge: ${question}
-
-<Candidate Solutions>
-${allSolutions}
-</Candidate Solutions>
-
-Select the best solution and return it clearly.`;
-}
-
 /** Executes a single AI call: builds parts, calls the model, cleans output. */
 async function callAgent(
     promptText: string,
@@ -410,34 +400,5 @@ export async function correctedSolutionsAgent(
             })
         );
         return { success: true, data: { results } };
-    });
-}
-
-/**
- * Select Best Solution Agent
- * Evaluates and selects the best solution from corrected solutions
- */
-export async function selectBestSolutionAgent(
-    question: string,
-    solutionIds: string[],
-    solutionsData: Map<string, { strategy: string; correctedSolution: string }>,
-    systemPrompt: string,
-    context: AgentExecutionContext,
-    images: ImageInput = []
-): Promise<AgentResponse> {
-    return wrapAgent(async () => {
-        const allSolutions = solutionIds
-            .map((id, idx) => {
-                const s = solutionsData.get(id);
-                return s
-                    ? `<Solution ${idx + 1} ID: ${id}>\nStrategy: ${s.strategy}\n\nCorrected Solution:\n${s.correctedSolution}\n</Solution ${idx + 1}>\n`
-                    : '';
-            })
-            .filter(Boolean)
-            .join('\n');
-
-        const prompt = buildFinalJudgePrompt(question, allSolutions);
-        const selection = await callAgent(prompt, images, context, systemPrompt, false);
-        return { success: true, data: { selection }, rawResponse: selection };
     });
 }

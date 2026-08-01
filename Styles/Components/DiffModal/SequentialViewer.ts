@@ -108,4 +108,4 @@ export const SPEED_OPTIONS = [
 export const DEFAULT_SPEED_MS = 200;
 
 // Re-export imperative portal API from the React component file
-export { openSequentialViewer, closeSequentialViewer } from './SequentialViewer.tsx';
+export { openSequentialViewer } from './SequentialViewer.tsx';

@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import PromptsModalLayout from './PromptsModalLayout';
-import DeepthinkPromptsContent from '../../Deepthink/DeepthinkPromptsContent';
-import AdaptivePromptsContent from '../../AdaptiveDeepthink/AdaptivePromptsContent';
-import ContextualPromptsContent from '../../Contextual/ContextualPromptsContent';
+import { PromptContent } from '../../Styles/Components/PromptContent';
+import { globalAdaptiveDeepthinkPromptsManager } from '../../AdaptiveDeepthink/AdaptiveDeepthinkPromptsManager';
+import {
+    ADAPTIVE_PROMPT_PANES,
+    CONTEXTUAL_PROMPT_PANES,
+    DEEPTHINK_PROMPT_PANES
+} from './PromptModeConfigs';
 import { getRoutingManager } from '../index';
 
 /**
  * Prompts Modal Manager
- * Orchestrates which mode-specific prompts content to display.
- * All mode-specific content components receive their manager and render via React state.
+ * Mounts one shared prompt editor for each mode and supplies its typed configuration.
  */
 export const PromptsModalManager: React.FC = () => {
     const [promptsManager, setPromptsManager] = useState(() => getRoutingManager().getPromptsManager());
@@ -31,17 +34,27 @@ export const PromptsModalManager: React.FC = () => {
         ? modelConfigManager.getAvailableModels().map((m: any) => m.value)
         : [];
 
+    const contextualPromptsManager = promptsManager.getContextualPromptsManager();
+
     return (
         <PromptsModalLayout>
-            {/* All mode-specific prompt containers are rendered */}
-            {/* The PromptsModal.ts handles showing/hiding based on active mode */}
-            <DeepthinkPromptsContent
-                promptsManager={promptsManager.getDeepthinkPromptsManager()}
+            <PromptContent
+                containerId="deepthink-prompts-container"
+                panes={DEEPTHINK_PROMPT_PANES}
+                manager={promptsManager.getDeepthinkPromptsManager()}
                 availableModels={availableModels}
             />
-            <AdaptivePromptsContent />
-            {promptsManager.getContextualPromptsManager() ? (
-                <ContextualPromptsContent manager={promptsManager.getContextualPromptsManager()!} />
+            <PromptContent
+                containerId="adaptiveDeepthink-prompts-container"
+                panes={ADAPTIVE_PROMPT_PANES}
+                manager={globalAdaptiveDeepthinkPromptsManager}
+            />
+            {contextualPromptsManager ? (
+                <PromptContent
+                    containerId="contextual-prompts-container"
+                    panes={CONTEXTUAL_PROMPT_PANES}
+                    manager={contextualPromptsManager}
+                />
             ) : null}
         </PromptsModalLayout>
     );

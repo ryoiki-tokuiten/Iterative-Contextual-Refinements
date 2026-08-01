@@ -1132,10 +1132,22 @@ export const DissectedObservationsTab: React.FC<{
                 <div className="synthesis-section">
                     <div className="synthesis-header">
                         <div className="synthesis-title"><MIcon name="integration_instructions" /><span>Dissected Observations Synthesis:</span></div>
-                        <StatusBadge
-                            status={process.dissectedSynthesisStatus}
-                            label={process.dissectedSynthesisStatus === 'completed' ? 'Synthesis Complete' : process.dissectedSynthesisStatus === 'processing' ? 'Synthesizing...' : 'Pending'}
-                        />
+                        <div className="synthesis-actions">
+                            <StatusBadge
+                                status={process.dissectedSynthesisStatus}
+                                label={process.dissectedSynthesisStatus === 'completed' ? 'Synthesis Complete' : process.dissectedSynthesisStatus === 'processing' ? 'Synthesizing...' : 'Pending'}
+                            />
+                            {process.dissectedObservationsSynthesis && (
+                                <ActionButton
+                                    type="download"
+                                    icon="download"
+                                    text="Download"
+                                    title="Download dissected observations synthesis"
+                                    content={process.dissectedObservationsSynthesis}
+                                    filename="dissected_observations_synthesis.md"
+                                />
+                            )}
+                        </div>
                     </div>
                     {process.dissectedObservationsSynthesis && (
                         <div className="synthesis-content"><MathHTML content={process.dissectedObservationsSynthesis} className="synthesis-card" /></div>

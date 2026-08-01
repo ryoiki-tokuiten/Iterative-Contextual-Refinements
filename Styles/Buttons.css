@@ -98,19 +98,6 @@ button {
         }
     }
 
-    /* Icon button modifier */
-    &.button-icon {
-        padding: 0.5rem;
-        width: 36px;
-        height: 36px;
-        line-height: 1;
-
-        & .icon-slot {
-            font-size: 1.5rem;
-            transform: none;
-        }
-    }
-
     /* Icons optical alignment */
     & .icon-slot,
     label.button & .icon-slot {
@@ -137,14 +124,4 @@ button {
         }
     }
 
-    &.copy-failed {
-        background-color: var(--accent-pink) !important;
-        color: var(--bg-color) !important;
-        border-color: var(--accent-pink) !important;
-
-        & .button-text,
-        & .icon-slot {
-            color: inherit !important;
-        }
-    }
 }

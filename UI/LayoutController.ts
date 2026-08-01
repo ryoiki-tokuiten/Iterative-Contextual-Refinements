@@ -16,10 +16,6 @@ export function setSavedTheme(theme: ThemeMode): void {
     localStorage.setItem('theme', theme);
 }
 
-export function isLightMode(): boolean {
-    return getSavedTheme() === 'light';
-}
-
 export function toggleBodyLightMode(): boolean {
     return document.body.classList.toggle('light-mode');
 }
@@ -155,10 +151,6 @@ let sidebarIsCollapsed = false;
 
 export function setSidebarCollapsed(collapsed: boolean): void {
     sidebarIsCollapsed = collapsed;
-}
-
-export function getSidebarCollapsed(): boolean {
-    return sidebarIsCollapsed;
 }
 
 export function ensureExpandButtonVisibility(): void {

@@ -78,21 +78,17 @@ export default defineConfig(({ mode }) => {
             if (id.includes('langchain') || id.includes('langsmith')) {
               return 'vendor-langchain';
             }
-            // PDF processing
-            if (id.includes('pdfjs-dist')) {
-              return 'vendor-pdf';
-            }
             // React core
             if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
               return 'vendor-react';
             }
             // Markdown/math rendering
             if (id.includes('remark-') || id.includes('rehype-') || id.includes('unified') ||
-              id.includes('katex') || id.includes('react-markdown') || id.includes('node_modules/marked')) {
+              id.includes('katex') || id.includes('react-markdown')) {
               return 'vendor-markdown';
             }
             // Diff utilities
-            if (id.includes('diff-match-patch') || id.includes('diff2html') || id.includes('node_modules/diff/')) {
+            if (id.includes('diff2html') || id.includes('node_modules/diff/')) {
               return 'vendor-diff';
             }
             // Syntax highlighting (Shiki)
@@ -100,7 +96,7 @@ export default defineConfig(({ mode }) => {
               return 'vendor-shiki';
             }
             // Other utilities
-            if (id.includes('jszip') || id.includes('nanoid') || id.includes('fuzzball') || id.includes('fast-')) {
+            if (id.includes('nanoid')) {
               return 'vendor-utils';
             }
           }

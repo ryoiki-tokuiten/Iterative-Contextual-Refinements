@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { createRoot, Root } from 'react-dom/client';
 import RenderMathMarkdown from '../RenderMathMarkdown';
 import { ContentState } from './types';
 import {
@@ -13,6 +12,7 @@ import {
 } from './EvolutionViewer';
 import { openSequentialViewer } from './SequentialViewer';
 import { Icon } from '../../../UI/Icons';
+import { getOrCreatePortalRoot, getPortalRoot, unmountPortalRoot } from './PortalRoots';
 
 // ─── Evolution Column ─────────────────────────────────────────────────────────
 
@@ -153,39 +153,18 @@ const EvolutionViewerModal: React.FC<EvolutionViewerProps> = ({
 
 // ─── Imperative Portal API ────────────────────────────────────────────────────
 
-const roots = new Map<string, Root>();
-
-function getOrCreateRoot(id: string): Root {
-    if (roots.has(id)) return roots.get(id)!;
-    const el = document.createElement('div');
-    el.id = id;
-    document.body.appendChild(el);
-    const root = createRoot(el);
-    roots.set(id, root);
-    return root;
-}
-
-function unmountRoot(id: string): void {
-    const root = roots.get(id);
-    if (root) {
-        root.unmount();
-        roots.delete(id);
-    }
-    document.getElementById(id)?.remove();
-}
-
 function mountEvolutionViewer(contentStates: ContentState[], sessionId?: string): void {
     const rootId = 'evolution-viewer-root';
-    unmountRoot(rootId);
+    unmountPortalRoot(rootId);
 
     const isInsideDeepthinkModal = document.getElementById('solution-modal-overlay') !== null;
 
     const handleClose = () => {
         if (sessionId) unregisterEvolutionViewer(sessionId);
-        unmountRoot(rootId);
+        unmountPortalRoot(rootId);
     };
 
-    const root = getOrCreateRoot(rootId);
+    const root = getOrCreatePortalRoot(rootId);
     root.render(
         <EvolutionViewerModal
             contentStates={contentStates}
@@ -220,7 +199,7 @@ export function openEvolutionViewerFromHistory(history: HistoryEntry[], sessionI
 }
 
 export function updateEvolutionViewerIfOpen(sessionId: string, history: HistoryEntry[]): void {
-    const viewer = roots.get('evolution-viewer-root');
+    const viewer = getPortalRoot('evolution-viewer-root');
     if (!viewer || !hasEvolutionViewerOpen(sessionId)) return;
 
     const contentStates = buildContentStatesFromHistory(history);
@@ -233,7 +212,7 @@ export function updateEvolutionViewerIfOpen(sessionId: string, history: HistoryE
             isInsideDeepthinkModal={isInsideDeepthinkModal}
             onClose={() => {
                 unregisterEvolutionViewer(sessionId);
-                unmountRoot(rootId);
+                unmountPortalRoot(rootId);
             }}
             sessionId={sessionId}
             scrollContainerRef={(el) => {
@@ -244,8 +223,4 @@ export function updateEvolutionViewerIfOpen(sessionId: string, history: HistoryE
             }}
         />
     );
-}
-
-export function closeEvolutionViewer(): void {
-    unmountRoot('evolution-viewer-root');
 }

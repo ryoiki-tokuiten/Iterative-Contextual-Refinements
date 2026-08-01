@@ -5,10 +5,6 @@ import { ContentState, EvolutionViewerState } from './types';
 
 const activeEvolutionViewers = new Map<string, EvolutionViewerState>();
 
-export function getActiveEvolutionViewer(sessionId: string): EvolutionViewerState | undefined {
-    return activeEvolutionViewers.get(sessionId);
-}
-
 export function registerEvolutionViewer(sessionId: string, state: EvolutionViewerState): void {
     activeEvolutionViewers.set(sessionId, state);
 }
@@ -69,4 +65,4 @@ export function splitIntoLines(content: string): string[] {
 }
 
 // Re-export imperative portal API from the React component file
-export { openEvolutionViewerFromHistory, updateEvolutionViewerIfOpen, closeEvolutionViewer } from './EvolutionViewer.tsx';
+export { openEvolutionViewerFromHistory, updateEvolutionViewerIfOpen } from './EvolutionViewer.tsx';

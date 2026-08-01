@@ -178,9 +178,7 @@
 details.sidebar-section,
 .sidebar-section-content,
 .input-group,
-.input-group-tight,
-.radio-group-modern,
-.radio-group-full-width-row {
+.input-group-tight {
     min-width: 0;
 }
 
@@ -306,12 +304,6 @@ details.sidebar-section {
     }
 }
 
-.prompt-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-
 .pipeline-content {
     display: none;
 
@@ -322,14 +314,6 @@ details.sidebar-section {
     }
 }
 
-/* App Mode Selector - Segmented Control Style */
-.radio-group-modern {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    min-width: 0;
-}
-
 .app-mode-section-label {
     font-size: 0.75rem;
     text-transform: uppercase;
@@ -338,94 +322,6 @@ details.sidebar-section {
     font-weight: 600;
     margin-bottom: var(--space-1);
     padding-left: var(--space-1);
-}
-
-.radio-group-full-width-row {
-    display: flex;
-    gap: var(--space-2);
-    width: 100%;
-    min-width: 0;
-}
-
-.radio-label-modern {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    padding: var(--space-3);
-    border-radius: var(--border-radius-md);
-    background: rgba(var(--card-bg-base-rgb), 0.3);
-    border: 1px solid var(--sub-panel-border-color);
-    transition: all var(--transition-speed-fast) var(--easing-curve);
-    user-select: none;
-    text-align: center;
-    font-size: var(--font-size-sm);
-    font-weight: 500;
-    color: var(--text-secondary-color);
-    overflow: hidden;
-    min-width: 0;
-
-    & input[type="radio"] {
-        position: absolute;
-        opacity: 0;
-        width: 0;
-        height: 0;
-    }
-
-    & span {
-        position: relative;
-        z-index: 2;
-        min-width: 0;
-        overflow-wrap: anywhere;
-    }
-
-    &:hover {
-        background: rgba(var(--card-bg-base-rgb), 0.5);
-        border-color: var(--border-hover-color);
-        color: var(--text-color);
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    }
-
-    &:has(input:checked) {
-        background: rgba(var(--accent-purple-rgb), 0.1);
-        border-color: var(--accent-purple);
-        color: var(--accent-purple);
-        box-shadow: 0 0 0 1px var(--accent-purple), 0 4px 12px rgba(var(--accent-purple-rgb), 0.15);
-        font-weight: 600;
-    }
-
-    body.light-mode & {
-        background: rgba(255, 255, 255, 0.3);
-        border-color: rgba(0, 0, 0, 0.15);
-        color: var(--text-secondary-color);
-        box-shadow: none;
-
-        &:hover {
-            background: rgba(255, 255, 255, 0.6);
-            border-color: rgba(0, 0, 0, 0.08);
-            color: var(--text-color);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
-        }
-
-        &:has(input:checked) {
-            background: rgba(59, 130, 246, 0.08);
-            border-color: var(--accent-blue);
-            color: var(--accent-blue);
-            box-shadow:
-                0 0 0 1px var(--accent-blue),
-                0 4px 12px rgba(59, 130, 246, 0.15);
-        }
-    }
-}
-
-.radio-label-half-width {
-    flex: 1;
-}
-
-.radio-label-full-width {
-    width: 100%;
 }
 
 #contextual-mode-controls {
@@ -582,22 +478,6 @@ details.sidebar-section {
     }
 }
 
-.active-dot {
-    position: absolute;
-    top: 6px;
-    right: 8px;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background-color: var(--accent-purple);
-    box-shadow: 0 0 6px var(--accent-purple);
-
-    body.light-mode & {
-        background-color: var(--accent-blue);
-        box-shadow: 0 0 6px var(--accent-blue);
-    }
-}
-
 /* Details Card */
 .mode-details-card {
     display: flex;
@@ -631,25 +511,6 @@ details.sidebar-section {
     font-weight: 700;
     color: var(--text-color);
     letter-spacing: var(--letter-spacing-tight);
-}
-
-.mode-details-preview-badge {
-    font-size: var(--font-size-2xs);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--accent-purple);
-    background: rgba(var(--accent-purple-rgb), 0.1);
-    padding: 2px 6px;
-    border-radius: var(--radius-xs);
-    border: 1px solid rgba(var(--accent-purple-rgb), 0.2);
-    animation: pulse-glow 2s ease-in-out infinite;
-
-    body.light-mode & {
-        color: var(--accent-blue);
-        background: rgba(59, 130, 246, 0.1);
-        border-color: rgba(59, 130, 246, 0.2);
-    }
 }
 
 .mode-details-tags {

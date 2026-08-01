@@ -135,23 +135,6 @@ textarea.prompt-textarea:focus {
     outline: none;
 }
 
-/* Empty State & Informational Messages */
-.empty-state-message {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 2rem;
-    min-height: 100px;
-    height: 100%;
-    width: 100%;
-    color: var(--text-tertiary-color);
-    font-style: italic;
-    background: rgba(var(--card-bg-base-rgb), 0.15);
-    border-radius: var(--border-radius-md);
-    border: 1px dashed var(--border-color);
-}
-
 /* ========================================================================== */
 /* == PROMPTS MODAL LAYOUT & NAVIGATION (Recreated) ========================= */
 /* ========================================================================== */

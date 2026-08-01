@@ -198,30 +198,6 @@ async function decompressData(data: Uint8Array): Promise<Uint8Array> {
 }
 
 /**
- * Detect the format of a file based on its name and content.
- */
-export function detectFormat(file: File): { format: SerializationFormat; compressed: boolean } {
-    const name = file.name.toLowerCase();
-
-    // Check extension
-    if (name.endsWith('.msgpack.gz')) {
-        return { format: 'msgpack', compressed: true };
-    }
-    if (name.endsWith('.msgpack')) {
-        return { format: 'msgpack', compressed: false };
-    }
-    if (name.endsWith('.json.gz')) {
-        return { format: 'json', compressed: true };
-    }
-    if (name.endsWith('.json')) {
-        return { format: 'json', compressed: false };
-    }
-
-    // Unknown extensions use the human-readable JSON decoder.
-    return { format: 'json', compressed: false };
-}
-
-/**
  * Trigger a file download from a Blob.
  */
 export function downloadBlob(blob: Blob, filename: string): void {
