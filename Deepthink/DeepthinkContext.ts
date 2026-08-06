@@ -17,8 +17,6 @@ export type HypothesisInjectionMode = 'parallel' | 'strategy_aware' | 'selective
 
 export interface DeepthinkRunConfig {
     selectedModel: string;
-    temperature: number;
-    topP: number;
     thinkingLevel: 'minimal' | 'low' | 'medium' | 'high';
     strategyCount: number;
     subStrategyCount: number;

@@ -15,20 +15,14 @@ import {
     DeepthinkHypothesisData,
 } from './DeepthinkCore';
 import { ActionButton } from '../Styles/Components/ActionButton';
-import RenderMathMarkdown from '../Styles/Components/RenderMathMarkdown';
-import { Icon } from '../UI/Icons';
+import MathHTML from '../Styles/Components/RenderMathMarkdown';
+import { Icon as MIcon } from '../UI/Icons';
 import { AgentActivityPanel } from '../Styles/Components/AgentActivity/AgentActivityPanel';
 import type { ProximityTurn } from './DeepthinkProximity';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Shared Primitives
 // ═══════════════════════════════════════════════════════════════════════
-
-const MIcon = Icon;
-
-const MathHTML: React.FC<{ content: string; className?: string }> = ({ content, className }) => (
-    <RenderMathMarkdown content={content} className={className} />
-);
 
 const solutionAttemptDisplay = (subStrategy: DeepthinkSubStrategyData): string =>
     subStrategy.solutionAttemptDisplay || subStrategy.solutionAttempt || '';

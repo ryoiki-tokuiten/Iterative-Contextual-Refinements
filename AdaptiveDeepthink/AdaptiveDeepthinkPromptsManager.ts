@@ -4,23 +4,30 @@
  */
 
 import { CustomizablePromptsAdaptiveDeepthink, createDefaultCustomPromptsAdaptiveDeepthink } from './AdaptiveDeepthinkPrompt';
+import { globalState } from '../Core/State';
+
+interface AdaptiveDeepthinkPromptsRef {
+    current: CustomizablePromptsAdaptiveDeepthink;
+}
 
 // A simple subscription-based state manager for purely functional React consumption
-export class AdaptiveDeepthinkPromptsManager {
+class AdaptiveDeepthinkPromptsManager {
     private state: CustomizablePromptsAdaptiveDeepthink;
     private listeners: Set<(state: CustomizablePromptsAdaptiveDeepthink) => void>;
-    private ref?: { current: CustomizablePromptsAdaptiveDeepthink };
+    private ref?: AdaptiveDeepthinkPromptsRef;
 
-    constructor(initialRef?: { current: CustomizablePromptsAdaptiveDeepthink }) {
+    constructor(initialRef?: AdaptiveDeepthinkPromptsRef) {
         this.ref = initialRef;
         this.state = initialRef?.current || createDefaultCustomPromptsAdaptiveDeepthink();
         this.listeners = new Set();
     }
 
-
+    private currentPrompts(): CustomizablePromptsAdaptiveDeepthink {
+        return this.ref?.current || this.state;
+    }
 
     public getPrompts(): CustomizablePromptsAdaptiveDeepthink {
-        return this.state;
+        return this.currentPrompts();
     }
 
     public setPrompts(prompts: CustomizablePromptsAdaptiveDeepthink): void {
@@ -32,16 +39,13 @@ export class AdaptiveDeepthinkPromptsManager {
     }
 
     public updatePrompt(key: keyof CustomizablePromptsAdaptiveDeepthink, value: string | undefined): void {
+        const nextState = { ...this.currentPrompts() };
         if (value === undefined || value === '') {
-            const newState = { ...this.state };
-            delete newState[key];
-            this.state = newState;
+            delete nextState[key];
         } else {
-            this.state = {
-                ...this.state,
-                [key]: value
-            };
+            nextState[key] = value;
         }
+        this.state = nextState;
         if (this.ref) {
             this.ref.current = this.state;
         }
@@ -49,23 +53,30 @@ export class AdaptiveDeepthinkPromptsManager {
     }
 
     public resetToDefaults(): void {
-        this.state = createDefaultCustomPromptsAdaptiveDeepthink();
-        this.notifyListeners();
+        this.setPrompts(createDefaultCustomPromptsAdaptiveDeepthink());
     }
 
     public subscribe(listener: (state: CustomizablePromptsAdaptiveDeepthink) => void): () => void {
         this.listeners.add(listener);
         // Immediately notify with current state
-        listener(this.state);
+        listener(this.currentPrompts());
         return () => {
             this.listeners.delete(listener);
         };
     }
 
     private notifyListeners(): void {
-        this.listeners.forEach(listener => listener(this.state));
+        this.listeners.forEach(listener => listener(this.currentPrompts()));
     }
 }
 
-// Global instance to replace imperative references
-export const globalAdaptiveDeepthinkPromptsManager = new AdaptiveDeepthinkPromptsManager();
+const adaptiveDeepthinkPromptsRef: AdaptiveDeepthinkPromptsRef = {
+    get current() {
+        return globalState.customPromptsAdaptiveDeepthinkState;
+    },
+    set current(prompts) {
+        globalState.customPromptsAdaptiveDeepthinkState = prompts;
+    },
+};
+
+export const globalAdaptiveDeepthinkPromptsManager = new AdaptiveDeepthinkPromptsManager(adaptiveDeepthinkPromptsRef);

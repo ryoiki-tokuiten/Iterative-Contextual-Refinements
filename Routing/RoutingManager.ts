@@ -134,14 +134,6 @@ export class RoutingManager {
         return this.modelConfigManager.getSelectedModel();
     }
 
-    public getTemperature(): number {
-        return this.modelConfigManager.getTemperature();
-    }
-
-    public getTopP(): number {
-        return this.modelConfigManager.getTopP();
-    }
-
     public getStrategiesCount(): number {
         return this.modelConfigManager.getStrategiesCount();
     }

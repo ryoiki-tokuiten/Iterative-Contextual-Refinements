@@ -8,8 +8,6 @@
 import {
     routingManager,
     getSelectedModel,
-    getSelectedTemperature,
-    getSelectedTopP,
     getSelectedStrategiesCount,
     getSelectedSubStrategiesCount,
     getStrategyProximityLoops,
@@ -36,16 +34,12 @@ import { updateControlsState } from '../UI/Controls';
 import { setupCodeExecutionToggle } from '../UI/setupCodeExecutionToggle';
 
 type DeepthinkModule = typeof import('../Deepthink/Deepthink');
-type SolutionPoolModule = typeof import('../Deepthink/SolutionPool');
 type ContextualModule = typeof import('../Contextual/Contextual');
 type AdaptiveDeepthinkModule = typeof import('../AdaptiveDeepthink/AdaptiveDeepthinkMode');
 
 let deepthinkModule: DeepthinkModule | null = null;
 let deepthinkModulePromise: Promise<DeepthinkModule> | null = null;
 let deepthinkInitialized = false;
-
-let solutionPoolModule: SolutionPoolModule | null = null;
-let solutionPoolModulePromise: Promise<SolutionPoolModule> | null = null;
 
 let contextualModule: ContextualModule | null = null;
 let contextualModulePromise: Promise<ContextualModule> | null = null;
@@ -62,16 +56,6 @@ async function loadDeepthinkModule(): Promise<DeepthinkModule> {
         });
     }
     return deepthinkModulePromise;
-}
-
-async function loadSolutionPoolModule(): Promise<SolutionPoolModule> {
-    if (!solutionPoolModulePromise) {
-        solutionPoolModulePromise = import('../Deepthink/SolutionPool').then((mod) => {
-            solutionPoolModule = mod;
-            return mod;
-        });
-    }
-    return solutionPoolModulePromise;
 }
 
 async function loadContextualModule(): Promise<ContextualModule> {
@@ -102,9 +86,7 @@ export async function ensureDeepthinkInitialized(): Promise<DeepthinkModule> {
             parseJsonSafe,
             updateControlsState,
             escapeHtml: (str: string) => str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'),
-            getSelectedTemperature,
             getSelectedModel,
-            getSelectedTopP,
             getSelectedStrategiesCount,
             getSelectedSubStrategiesCount,
             getStrategyProximityLoops,
@@ -135,7 +117,6 @@ export async function ensureDeepthinkInitialized(): Promise<DeepthinkModule> {
         });
         deepthinkInitialized = true;
     }
-    await loadSolutionPoolModule();
     return mod;
 }
 
@@ -154,10 +135,6 @@ export async function ensureAdaptiveDeepthinkInitialized(): Promise<AdaptiveDeep
 
 export function getLoadedDeepthinkModule(): DeepthinkModule | null {
     return deepthinkModule;
-}
-
-export function getLoadedSolutionPoolModule(): SolutionPoolModule | null {
-    return solutionPoolModule;
 }
 
 export function getLoadedContextualModule(): ContextualModule | null {

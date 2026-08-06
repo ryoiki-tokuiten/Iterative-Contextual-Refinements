@@ -122,7 +122,7 @@ All calls receive the original challenge text. Attachments are classified once a
 - When Code Execution is disabled, direct files still use their direct provider/text transports, while filesystem-context uploads are intentionally unavailable to agents.
 - Arbitrary binary files are never decoded into prompt text.
 
-Model selection may be overridden per agent. Otherwise the model captured in the run snapshot is used. The frozen temperature, top-p, and thinking level are applied to every invocation and retry.
+Model selection may be overridden per agent. Otherwise the model captured in the run snapshot is used. The frozen thinking level is applied to every invocation and retry.
 
 Dynamic IDs are validated at the structured-output boundary. Selective hypothesis targets must be unique active strategy IDs (with an empty array reserved for global routing), strategy replacements must contain exactly the requested stable slot IDs, and the Final Judge must select an actual candidate ID. Internal slot lookup fails loudly for an unknown strategy instead of silently falling back to `Strategy-1`.
 

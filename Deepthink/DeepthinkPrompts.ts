@@ -671,7 +671,7 @@ After examining the alternatives, commit to the result best supported by the tot
 </AntiAnchoringAndLocalMinimumEscape>
 
 <SolutionPoolEngagement>
-When a latest solution pool is supplied, engagement with it is mandatory, but adoption of any particular entry is not. Inspect every candidate rather than reading only the first, highest-confidence, most conventional, or correction-aligned entry. Confidence is evidence calibration from the pool agent, not a command to select that candidate. Evaluate the actual content, assumptions, internal critique, compatibility, and relevance of each entry yourself.
+When a latest solution pool is supplied, engagement with it is mandatory, but adoption of any particular entry is not. Inspect every candidate rather than reading only the first, highest-confidence, most conventional, or correction-aligned entry. Confidence is evidence calibration from the pool agent, not a command to select that candidate. Evaluate the actual content, assumptions, compatibility, and relevance of each entry yourself.
 
 Use pool entries to resolve critique obligations, replace failed mechanisms, discover stronger architectures, test alternative conclusions, import difficult derivations, strengthen edge-case handling, and escape local minima. A pool entry may be a full rival solution or a targeted intelligence package. If it is a targeted block, adapt it to the surrounding artifact rather than pasting it blindly. If it is a full alternative, verify its assumptions and strategy compatibility before rebuilding around it.
 
@@ -1269,16 +1269,16 @@ Use the memory bank to avoid stale dead ends, preserve validated invariants, rec
 <EvidenceIntegrityAndArtifactQuality>
 Every candidate must respect factual and evidentiary integrity. Do not invent citations, case law, statutes, experimental findings, benchmark results, user research, market data, API behavior, test execution, medical outcomes, financial performance, or tool results. Hypothetical assumptions and synthetic examples are allowed only when clearly identified as hypothetical or synthetic. Structured noise challenges reasoning and design choices; it does not corrupt evidence.
 
-Each entry must be independently understandable, substantively executed, and directly evaluable or reusable. When applicable, its content should make clear what exact weakness, section, function, claim, requirement, or uncertainty it targets; provide the actual artifact; state necessary assumptions or preconditions; explain how the correction agent could integrate or adapt it; and include tests, proof obligations, falsification criteria, or evaluation checks. Integration risks and trade-offs belong in the internal critique. Do not consume the pool with generic recommendations the correction agent must still derive from scratch.
+Each entry must be independently understandable, substantively executed, and directly evaluable or reusable. When applicable, its content should make clear what exact weakness, section, function, claim, requirement, or uncertainty it targets; provide the actual artifact; state necessary assumptions or preconditions; explain how the correction agent could integrate or adapt it; and include tests, proof obligations, falsification criteria, evaluation checks, integration risks, and trade-offs. Do not consume the pool with generic recommendations the correction agent must still derive from scratch.
 </EvidenceIntegrityAndArtifactQuality>
 
-<InternalCritiqueAndConfidence>
-Every entry requires a serious internal critique written before assigning confidence. Examine its decisive assumptions, logical and structural inconsistencies, known counterexamples, unresolved flaws, edge cases, sensitivity to interpretation, compatibility risks, and what evidence would raise or lower confidence. Confidence is assigned after this examination and should reflect the number and severity of surviving vulnerabilities, the strength of supporting evidence, compliance with constraints, and the probability that the central mechanism survives independent scrutiny under its stated assumptions.
+<ConfidenceCalibration>
+Before assigning confidence, examine each entry's decisive assumptions, logical and structural inconsistencies, known counterexamples, unresolved flaws, edge cases, sensitivity to interpretation, compatibility risks, and what evidence would raise or lower confidence. Confidence should reflect the number and severity of surviving vulnerabilities, the strength of supporting evidence, compliance with constraints, and the probability that the central mechanism survives independent scrutiny under its stated assumptions.
 
 Confidence must not encode the answer you, the correction agent, or the broader model family already prefers. Familiarity, consensus, rhetorical polish, similarity to the latest correction, and occupying the current answer region are not positive evidence. Do not choose a preferred conclusion first and then rationalize a high score for it. Attack all five candidates with comparable rigor and calibrate them on the resulting evidence. The highest-confidence candidate may be a completely different conclusion from the latest correction, while a familiar candidate may deserve low confidence because counterexamples and structural defects remain. Candidate order must not imply confidence rank or privileged status.
 
 Novelty and information value are also separate from confidence. A low-confidence frontier construction may be essential to the portfolio because it tests a neglected possibility, while a high-confidence candidate may be useful because it has few surviving flaws. Preserve both when they serve different search functions. Never weaken unconventional candidates on purpose so the familiar answer remains dominant.
-</InternalCritiqueAndConfidence>
+</ConfidenceCalibration>
 
 <FinalAudit>
 Before responding, verify internally that the pool contains exactly five entries; every entry obeys the Core Challenge and assigned strategy; the artifact mode fits the task; every content field contains executed material; pairwise orthogonality is real; recent work is not merely repeated; critique and strategy-aware hypothesis-testing knowledge have been used correctly; evidence has not been fabricated; and confidence follows the stated semantics rather than model preference. When the branch is locally stuck, verify that the pool contains fully executed counter-attractors with explicit alternative consequences or conclusions. For optimization tasks, verify that every constructive candidate challenges the running best unless it has a clearly different adversarial or bound-testing role. The portfolio must collectively expand the correction agent's viable choices. Do not output this audit.
@@ -1294,20 +1294,15 @@ Your response must be exclusively one valid JSON object beginning with { and end
     {
       "title": "[Brief descriptive title of the methodological approach within your strategic framework]",
       "content": "[Complete solution attempt — the full, rigorous solution execution. Must be independently understandable. Target ~5000 tokens max.]",
-      "confidence": 0.0,
-      "internal_critique": "[Your rigorous internal critique of this solution: assumptions it depends on, edge cases, vulnerabilities, counterexamples, logical foundations, and why the confidence score is what it is]",
-      "key_insights": "[Optional concise notes about what this solution contributes to the pool]"
+      "confidence": 0.0
     }
   ]
 }
 \`\`\`
 
-The "solutions" array must contain exactly five objects. Every object must include "title", "content", "confidence", and "internal_critique"; "key_insights" is optional. Confidence must be a number from 0.0 to 1.0. Do not add other top-level fields. The content field is the core deliverable and must contain the actual candidate, not instructions to generate one later.
+The "solutions" array must contain exactly five objects. Every object must include "title", "content", and "confidence". Confidence must be a number from 0.0 to 1.0. Do not add other top-level fields. The content field is the core deliverable and must contain the actual candidate, not instructions to generate one later.
 </OutputFormatRequirements>
 
     `,
   };
 }
-
-// Export the constant for use in other modules
-export { systemInstructionJsonOutputOnly };

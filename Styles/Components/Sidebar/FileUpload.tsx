@@ -31,14 +31,14 @@ type ImageCapabilityNotice = {
 
 function getImageCapabilityNotice(): ImageCapabilityNotice | null {
     const provider = getProviderForCurrentModel();
-    if (provider !== 'openrouter' && provider !== 'nvidia' && provider !== 'local') return null;
+    if (provider !== 'openrouter' && provider !== 'local') return null;
 
     const model = getSelectedModel();
     const support = getRoutingManager()
         .getApiKeyManager()
         .getProviderManager()
         .getImageInputSupportForModel(model);
-    const providerLabel = provider === 'openrouter' ? 'OpenRouter' : provider === 'nvidia' ? 'NVIDIA' : 'Local model';
+    const providerLabel = provider === 'openrouter' ? 'OpenRouter' : 'Local model';
 
     if (support === true) {
         return {

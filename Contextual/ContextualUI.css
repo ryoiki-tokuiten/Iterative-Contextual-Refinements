@@ -36,6 +36,12 @@
 .text-panel-header {
     min-height: var(--button-height-lg);  /* 44px */
     margin: 0;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(var(--accent-purple-rgb), 0.2);
+    background-color: rgba(var(--card-bg-base-rgb), 0.6);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .text-panel-header h3 {
@@ -90,21 +96,6 @@
 
 /* Right Panel - Agent Activity */
 
-.agent-panel-header h3 {
-    margin: 0;
-    font-size: var(--font-size-md);  /* 18px */
-    font-weight: var(--font-weight-semibold);
-    line-height: var(--line-height-tight);
-    letter-spacing: var(--letter-spacing-tight);
-    color: var(--text-color);
-}
-
-.header-info {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
 .iteration-badge {
     background: rgba(var(--accent-purple-rgb), 0.15);
     width: 2rem;
@@ -132,17 +123,6 @@
     flex-direction: column;
     min-height: 200px;
     max-height: 400px;
-}
-
-@keyframes slideIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
 }
 
 .minimal-message-card.main-generator-card {
@@ -304,16 +284,6 @@
     color: var(--accent-purple);
 }
 
-.action-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    background-color: rgba(var(--card-bg-base-rgb), 0.15);
-    transform: translateY(0) scale(1);
-    box-shadow: none;
-    color: var(--text-tertiary-color);
-    border-color: rgba(var(--border-color-rgb), 0.5);
-}
-
 .action-btn .icon-slot {
     font-size: 16px;
 }
@@ -331,16 +301,6 @@
     border-radius: var(--border-radius-lg);
     overflow: hidden;
     background-color: rgba(var(--card-bg-base-rgb), 0.4);
-}
-
-.text-panel-header,
-.agent-panel-header {
-    padding: 8px 12px;
-    border-bottom: 1px solid rgba(var(--accent-purple-rgb), 0.2);
-    background-color: rgba(var(--card-bg-base-rgb), 0.6);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
 }
 
 /* Scrollbar styling handled by .custom-scrollbar class in index.css */

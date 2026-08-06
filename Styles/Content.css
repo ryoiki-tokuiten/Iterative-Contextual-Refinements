@@ -5,7 +5,6 @@
 /* Premium LaTeX math content styling */
 .katex {
     color: var(--accent-pink) !important;
-    font-size: 1.25em !important;
     font-weight: 500;
     letter-spacing: 0.3px;
 
@@ -15,7 +14,6 @@
 }
 
 .katex-display {
-    margin: 1.8em 0 !important;
     color: var(--accent-pink) !important;
     padding: 1.2rem;
     background: rgba(var(--accent-pink-rgb), 0.02);

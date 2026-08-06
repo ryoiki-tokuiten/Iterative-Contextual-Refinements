@@ -181,7 +181,7 @@
    Interactive Sliders & Range Controls
    ========================================================================== */
 
-:is(.deepthink-config-scroll-container .slider, .adaptive-proximity-slider) {
+.deepthink-config-scroll-container .slider {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
@@ -218,36 +218,12 @@
     }
 
     & .strategy-execution-container .slider {
-        &::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 20px;
-            height: 20px;
-            border: 3px solid var(--dt-red, #e86b6b);
-            border-radius: 50%;
-            background: var(--card-bg-color, #1e1e24);
-            box-shadow: 0 2px 8px rgba(var(--dt-red-rgb, 232, 107, 107), 0.4);
-            cursor: pointer;
-            transition: transform var(--transition-speed-fast) var(--easing-curve);
-
-            &:hover {
-                transform: scale(1.1);
-            }
-        }
-
+        &::-webkit-slider-thumb,
         &::-moz-range-thumb {
             width: 20px;
             height: 20px;
             border: 3px solid var(--dt-red, #e86b6b);
-            border-radius: 50%;
-            background: var(--card-bg-color, #1e1e24);
             box-shadow: 0 2px 8px rgba(var(--dt-red-rgb, 232, 107, 107), 0.4);
-            cursor: pointer;
-            transition: transform var(--transition-speed-fast) var(--easing-curve);
-
-            &:hover {
-                transform: scale(1.1);
-            }
         }
     }
 }
@@ -255,6 +231,29 @@
 /* ==========================================================================
    Dotted Scale Configurations
    ========================================================================== */
+
+.deepthink-config-scroll-container .strategy-execution-container .slider::-webkit-slider-thumb,
+.deepthink-config-scroll-container .strategy-execution-container .slider::-moz-range-thumb,
+.evolving-dfs-depth-container .slider::-webkit-slider-thumb,
+.evolving-dfs-depth-container .slider::-moz-range-thumb {
+    border-radius: 50%;
+    background: var(--card-bg-color, #1e1e24);
+    cursor: pointer;
+    transition: transform var(--transition-speed-fast) var(--easing-curve);
+}
+
+.deepthink-config-scroll-container .strategy-execution-container .slider::-webkit-slider-thumb,
+.evolving-dfs-depth-container .slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.deepthink-config-scroll-container .strategy-execution-container .slider::-webkit-slider-thumb:hover,
+.deepthink-config-scroll-container .strategy-execution-container .slider::-moz-range-thumb:hover,
+.evolving-dfs-depth-container .slider::-webkit-slider-thumb:hover,
+.evolving-dfs-depth-container .slider::-moz-range-thumb:hover {
+    transform: scale(1.1);
+}
 
 .slider-with-dots {
     position: relative;
@@ -308,15 +307,9 @@
         appearance: none;
         position: relative;
         z-index: 2;
-        width: 20px;
-        height: 20px;
-        border: 3px solid var(--dt-red);
-        border-radius: 50%;
-        background: var(--card-bg-color, #1e1e24);
-        box-shadow: 0 2px 8px rgba(var(--dt-red-rgb), 0.4);
-        cursor: pointer;
     }
 
+    &::-webkit-slider-thumb,
     &::-moz-range-thumb {
         width: 20px;
         height: 20px;
@@ -364,16 +357,17 @@
     margin-top: auto;
 }
 
-.pqf-buttons {
+.pqf-buttons,
+.hypothesis-mode-buttons {
     display: flex;
     gap: 8px;
     width: 100%;
 }
 
-.pqf-button {
+.pqf-button,
+.hypothesis-mode-button {
     flex: 1;
     padding: 8px 12px;
-    border: 1px solid rgba(var(--dt-pink-rgb), 0.3);
     border-radius: 16px;
     background: rgba(255, 255, 255, 0.02);
     color: var(--text-secondary-color, #a0a0b0);
@@ -382,6 +376,10 @@
     cursor: pointer;
     backdrop-filter: var(--card-blur-effect);
     transition: all var(--transition-speed) var(--easing-curve);
+}
+
+.pqf-button {
+    border: 1px solid rgba(var(--dt-pink-rgb), 0.3);
 
     &:hover {
         border-color: rgba(var(--dt-pink-rgb), 0.5);
@@ -397,11 +395,6 @@
         box-shadow: 0 0 12px rgba(var(--dt-pink-rgb), 0.25);
     }
 
-    &:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-        pointer-events: none;
-    }
 }
 
 .pqf-description {
@@ -664,13 +657,8 @@
    Sandbox Terminal Environment Panel
    ========================================================================== */
 
-.code-execution-toggle-container {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 14px;
-    margin-bottom: var(--gap-sm);
+.code-execution-toggle-container,
+.edfs-behavior-controls {
     border: 1px solid rgba(var(--dt-purple-rgb), 0.15);
     border-radius: var(--border-radius-md);
     background: rgba(var(--dt-purple-rgb), 0.04);
@@ -682,8 +670,14 @@
     }
 }
 
-
-
+.code-execution-toggle-container {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    margin-bottom: var(--gap-sm);
+}
 .code-execution-toggle-info {
     display: flex;
     flex-direction: column;
@@ -983,36 +977,12 @@ button.token-summary-item {
     outline: none;
     cursor: pointer;
 
-    &::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 18px;
-        height: 18px;
-        border: 2.5px solid var(--accent-purple);
-        border-radius: 50%;
-        background: var(--card-bg-color, #1e1e24);
-        box-shadow: 0 2px 8px rgba(var(--dt-purple-rgb), 0.4);
-        cursor: pointer;
-        transition: transform var(--transition-speed-fast) var(--easing-curve);
-
-        &:hover {
-            transform: scale(1.1);
-        }
-    }
-
+    &::-webkit-slider-thumb,
     &::-moz-range-thumb {
         width: 18px;
         height: 18px;
         border: 2.5px solid var(--accent-purple);
-        border-radius: 50%;
-        background: var(--card-bg-color, #1e1e24);
         box-shadow: 0 2px 8px rgba(var(--dt-purple-rgb), 0.4);
-        cursor: pointer;
-        transition: transform var(--transition-speed-fast) var(--easing-curve);
-
-        &:hover {
-            transform: scale(1.1);
-        }
     }
 }
 
@@ -1022,15 +992,6 @@ button.token-summary-item {
     gap: 0;
     padding: 4px;
     margin-top: var(--gap-sm);
-    border: 1px solid rgba(var(--dt-purple-rgb), 0.15);
-    border-radius: var(--border-radius-md);
-    background: rgba(var(--dt-purple-rgb), 0.04);
-    transition: all var(--transition-speed) var(--easing-curve);
-
-    &:hover {
-        border-color: rgba(var(--dt-purple-rgb), 0.3);
-        background: rgba(var(--dt-purple-rgb), 0.07);
-    }
 }
 
 .isolate-branches-option,
@@ -1065,24 +1026,8 @@ button.token-summary-item {
    Hypothesis Mode Switching Buttons
    ========================================================================== */
 
-.hypothesis-mode-buttons {
-    display: flex;
-    gap: 8px;
-    width: 100%;
-}
-
 .hypothesis-mode-button {
-    flex: 1;
-    padding: 8px 12px;
     border: 1px solid rgba(var(--dt-blue-rgb), 0.3);
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.02);
-    color: var(--text-secondary-color, #a0a0b0);
-    font-size: 0.85rem;
-    font-weight: 500;
-    cursor: pointer;
-    backdrop-filter: var(--card-blur-effect);
-    transition: all var(--transition-speed) var(--easing-curve);
 
     &:hover {
         border-color: rgba(var(--dt-blue-rgb), 0.5);
@@ -1098,11 +1043,13 @@ button.token-summary-item {
         box-shadow: 0 0 12px rgba(var(--dt-blue-rgb), 0.25);
     }
 
-    &:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-        pointer-events: none;
-    }
+}
+
+.pqf-button:disabled,
+.hypothesis-mode-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
 }
 
 /* ==========================================================================
@@ -1833,7 +1780,7 @@ body.light-mode {
 }
 
 /* ==========================================================================
-   Sidebar model parameter sliders
+   Sidebar model controls
    ========================================================================== */
 
 #controls-sidebar {
@@ -1841,137 +1788,4 @@ body.light-mode {
         display: flex !important;
     }
 
-    & :is(#temperature-slider, #top-p-slider) {
-        display: block !important;
-        visibility: visible !important;
-    }
-}
-
-:is(#temperature-slider, #top-p-slider) {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 6px;
-    border: 1px solid var(--border-color);
-    border-radius: 3px;
-    outline: none;
-    background: var(--sub-panel-bg-color);
-    cursor: pointer;
-    backdrop-filter: var(--card-blur-effect);
-    transition: all var(--transition-speed) var(--easing-curve);
-
-    &:hover {
-        border-color: var(--border-hover-color);
-    }
-
-    &::-moz-range-track {
-        width: 100%;
-        height: 6px;
-        border: 1px solid var(--border-color);
-        border-radius: 3px;
-        background: var(--sub-panel-bg-color);
-        backdrop-filter: var(--card-blur-effect);
-    }
-}
-
-#temperature-slider {
-    &:hover {
-        box-shadow: 0 0 10px rgba(var(--accent-pink-rgb), 0.2);
-    }
-
-    &:focus {
-        border-color: var(--accent-pink);
-        box-shadow: 0 0 15px rgba(var(--accent-pink-rgb), 0.4);
-    }
-
-    &::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 20px;
-        height: 20px;
-        border: 2px solid var(--accent-pink);
-        border-radius: 50%;
-        background: var(--card-bg-color);
-        box-shadow: 0 2px 8px rgba(var(--accent-pink-rgb), 0.3);
-        cursor: pointer;
-        backdrop-filter: var(--card-blur-effect);
-        transition: all var(--transition-speed) var(--easing-curve);
-
-        &:hover {
-            border-color: var(--accent-pink);
-            background: var(--card-bg-hover-color);
-            box-shadow: 0 0 20px rgba(var(--accent-pink-rgb), 0.5);
-            transform: scale(1.1);
-        }
-    }
-
-    &::-moz-range-thumb {
-        width: 20px;
-        height: 20px;
-        border: 2px solid var(--accent-pink);
-        border-radius: 50%;
-        background: var(--card-bg-color);
-        box-shadow: 0 2px 8px rgba(var(--accent-pink-rgb), 0.3);
-        cursor: pointer;
-        backdrop-filter: var(--card-blur-effect);
-        transition: all var(--transition-speed) var(--easing-curve);
-
-        &:hover {
-            border-color: var(--accent-pink);
-            background: var(--card-bg-hover-color);
-            box-shadow: 0 0 20px rgba(var(--accent-pink-rgb), 0.5);
-            transform: scale(1.1);
-        }
-    }
-}
-
-#top-p-slider {
-    &:hover {
-        box-shadow: 0 0 10px rgba(var(--accent-blue-rgb), 0.2);
-    }
-
-    &:focus {
-        border-color: var(--accent-blue);
-        box-shadow: 0 0 15px rgba(var(--accent-blue-rgb), 0.4);
-    }
-
-    &::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 20px;
-        height: 20px;
-        border: 2px solid var(--accent-blue);
-        border-radius: 50%;
-        background: var(--card-bg-color);
-        box-shadow: 0 2px 8px rgba(var(--accent-blue-rgb), 0.3);
-        cursor: pointer;
-        backdrop-filter: var(--card-blur-effect);
-        transition: all var(--transition-speed) var(--easing-curve);
-
-        &:hover {
-            border-color: var(--accent-blue);
-            background: var(--card-bg-hover-color);
-            box-shadow: 0 0 20px rgba(var(--accent-blue-rgb), 0.5);
-            transform: scale(1.1);
-        }
-    }
-
-    &::-moz-range-thumb {
-        width: 20px;
-        height: 20px;
-        border: 2px solid var(--accent-blue);
-        border-radius: 50%;
-        background: var(--card-bg-color);
-        box-shadow: 0 2px 8px rgba(var(--accent-blue-rgb), 0.3);
-        cursor: pointer;
-        backdrop-filter: var(--card-blur-effect);
-        transition: all var(--transition-speed) var(--easing-curve);
-
-        &:hover {
-            border-color: var(--accent-blue);
-            background: var(--card-bg-hover-color);
-            box-shadow: 0 0 20px rgba(var(--accent-blue-rgb), 0.5);
-            transform: scale(1.1);
-        }
-    }
 }

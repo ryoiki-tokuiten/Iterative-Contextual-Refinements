@@ -6,10 +6,7 @@
  */
 
 // Core interfaces and types
-export {
-    type ModeStateHandler,
-    getModeHandler,
-} from './ModeStateHandler';
+export { getModeHandler } from './ModeStateHandler';
 
 // State sanitization
 export {
@@ -26,7 +23,6 @@ export {
 
 // Serialization engine
 export {
-    type SerializationFormat,
     type SerializationOptions,
     serialize,
     deserialize,

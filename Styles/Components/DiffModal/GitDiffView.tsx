@@ -1,7 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { html as renderDiffHtml } from 'diff2html';
 import { applyCustomThemeToD2H } from './utils';
-import './EvolutionViewer.css';
 
 interface GitDiffViewProps {
     diff: string;
@@ -30,5 +29,3 @@ export const GitDiffView: React.FC<GitDiffViewProps> = ({ diff }) => {
 
     return <div ref={containerRef} className="evolution-diff-wrapper git-diff-view custom-scrollbar" />;
 };
-
-export default GitDiffView;

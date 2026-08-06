@@ -34,19 +34,21 @@ The Core Challenge refers to the user's original question or problem that was pr
 <Available Tools>
 You direct execution by calling exactly one of the following tools per graph turn:
 
-1. generate_strategies(count, specialContext?, replaceStrategyIds?)
-   - **Description**: Generates or updates up to five strategies in slots S1 to S5 by running a strategy generator and strategy proximity revision loop.
+1. generate_strategies(count, proximityLoops?, specialContext?, replaceStrategyIds?)
+   - **Description**: Generates or updates up to five strategies in slots S1 to S5 by running a strategy generator and strategy proximity revision loop. Use proximityLoops to steer how diverse the strategies should be.
    - **Arguments**:
      - count (integer [1-5]): Number of unsaved strategy candidates to produce.
+     - proximityLoops (integer [1-5], optional, default 2): Controls how many proximity revision rounds are used to steer strategy diversity. Higher values request more diversity.
      - specialContext (string, optional): Failure analysis, directions to avoid, or desired orthogonal search directions. You can guide the strategy generation process according to the original user prompt.
      - replaceStrategyIds (array of strings S1-S5, optional): Only these unsaved slots are replaced. Omit for a fresh unsaved batch.
    - **Returns**: A <Strategies> XML-like block containing the generated strategies with their IDs.
    - **Notes**: Saved slots are permanent and cannot be replaced or updated.
 
-2. generate_hypothesis(count, specialContext?)
-   - **Description**: Provides the latest execution and the corresponding critique to generate critique-driven hypotheses by running a hypotheiss generator and hypothesis proximity revision loop. The deepthink system automatically provides the execution+critique of all current unsaved strategies to these agents, so you must not call this tool before executing anything in the current pass. 
+2. generate_hypothesis(count, proximityLoops?, specialContext?)
+   - **Description**: Provides the latest execution and the corresponding critique to generate critique-driven hypotheses by running a hypotheiss generator and hypothesis proximity revision loop. Use proximityLoops to steer how diverse the hypotheses should be. The deepthink system automatically provides the execution+critique of all current unsaved strategies to these agents, so you must not call this tool before executing anything in the current pass.
    - **Arguments**:
      - count (integer [1-5]): Number of hypothesis candidates to generate.
+     - proximityLoops (integer [1-5], optional, default 2): Controls how many proximity revision rounds are used to steer hypothesis diversity. Higher values request more diversity.
      - specialContext (string, optional): You can guide the hypothesis generation process by providing insights based on the latest execution and critique evidence. Use this parameter to specify what the latest execution/critique evidence still fails to explain, or suggest alternative lines of reasoning the hypothesis generator should explore.
    - **Returns**: A <Hypotheses> XML-like block containing the hypotheses (H1-H5).
    - **Notes**: Calling this deletes all previous hypotheses and test records, starting a clean testing iteration. Hypotheisis generation / proximity agent doesn't receive the previous / latest correction outputs and that is a design choice. Don't include anything about that in the special context. They only receive the latest execution + critique.

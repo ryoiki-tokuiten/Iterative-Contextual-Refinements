@@ -37,7 +37,7 @@ export function activateTab(idToActivate: string | number) {
     }
 }
 
-export function renderActiveMode() {
+function renderActiveMode() {
     const token = ++renderToken;
     const mode = globalState.currentMode;
 

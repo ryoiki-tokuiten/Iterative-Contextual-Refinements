@@ -8,14 +8,10 @@
 import type { ModeStateHandler } from '../ModeStateHandler';
 import type { DeepthinkPipelineState } from '../../../Deepthink/DeepthinkCore';
 import { activateTab } from '../../AppRouter';
-import { ensureDeepthinkInitialized, getLoadedDeepthinkModule, getLoadedSolutionPoolModule } from '../../ModeLoader';
+import { ensureDeepthinkInitialized, getLoadedDeepthinkModule } from '../../ModeLoader';
 
-/**
- * Extended state that includes solution pool versions for evolution view.
- */
-export interface DeepthinkExportState {
+interface DeepthinkExportState {
     pipeline: DeepthinkPipelineState | null;
-    solutionPoolVersions: Array<{ content: string; title: string; timestamp: number }> | null;
     activeTabId: string;
 }
 
@@ -33,10 +29,8 @@ export const deepthinkStateHandler: ModeStateHandler<DeepthinkExportState> = {
             return null;
         }
 
-        const solutionPool = getLoadedSolutionPoolModule();
         return {
             pipeline,
-            solutionPoolVersions: solutionPool ? solutionPool.getSolutionPoolVersionsForExport(pipeline.id) : null,
             activeTabId: pipeline.activeTabId || 'strategic-solver',
         };
     },
@@ -56,11 +50,6 @@ export const deepthinkStateHandler: ModeStateHandler<DeepthinkExportState> = {
             }
 
             mod.setActiveDeepthinkPipelineForImport(state.pipeline);
-
-            const solutionPool = getLoadedSolutionPoolModule();
-            if (state.solutionPoolVersions && state.solutionPoolVersions.length > 0 && solutionPool) {
-                solutionPool.restoreSolutionPoolVersions(state.pipeline.id, state.solutionPoolVersions);
-            }
 
             mod.renderActiveDeepthinkPipeline();
             if (state.activeTabId) {

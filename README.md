@@ -111,7 +111,6 @@ User Request → Main Generator → Generated Content
 Supports configuration of:
 - AI provider (Google, OpenAI, Anthropic)
 - Model selection per provider
-- Temperature and Top-P sampling parameters
 - Mode-specific parameters (iteration depth, agent counts)
 - Local Models
 

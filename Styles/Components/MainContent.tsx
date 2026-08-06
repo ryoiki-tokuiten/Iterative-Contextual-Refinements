@@ -6,7 +6,7 @@ import { Icon } from '../../UI/Icons';
  * Main content area component
  * Contains tabs navigation and pipeline content container
  */
-export const MainContent: React.FC = () => {
+const MainContent: React.FC = () => {
     const [currentMode, setCurrentMode] = useState(globalState.currentMode);
 
     useEffect(() => {

@@ -1868,14 +1868,17 @@ function getChangedImages(before: ImageSnapshot, after: VisibleImage[]): Visible
     });
 }
 
-async function snapshotImagesForTranscript(workspace: string, images: VisibleImage[]): Promise<VisibleImage[]> {
+async function snapshotImagesForTranscript(
+    images: VisibleImage[],
+    resolveSource: (filename: string) => string,
+): Promise<VisibleImage[]> {
     if (images.length === 0) return [];
 
     const artifactId = randomUUID();
     const artifactWorkspace = path.join(ARTIFACT_ROOT, artifactId);
 
     return Promise.all(images.map(async image => {
-        const source = safeJoin(workspace, image.filename);
+        const source = resolveSource(image.filename);
         const destination = safeJoin(artifactWorkspace, image.filename);
         await mkdir(path.dirname(destination), { recursive: true });
         await copyFile(source, destination);
@@ -1888,26 +1891,12 @@ async function snapshotImagesForTranscript(workspace: string, images: VisibleIma
 }
 
 async function snapshotVisibleImagesForTranscript(context: SandboxCommandWorkspace, images: VisibleImage[]): Promise<VisibleImage[]> {
-    if (!context.repositoryAccess) {
-        return snapshotImagesForTranscript(context.visibleRootPath, images);
-    }
-
-    if (images.length === 0) return [];
-
-    const artifactId = randomUUID();
-    const artifactWorkspace = path.join(ARTIFACT_ROOT, artifactId);
-
-    return Promise.all(images.map(async image => {
-        const source = resolveVisiblePath(context, image.filename);
-        const destination = safeJoin(artifactWorkspace, image.filename);
-        await mkdir(path.dirname(destination), { recursive: true });
-        await copyFile(source, destination);
-
-        return {
-            ...image,
-            url: `/api/sandbox/artifacts/${encodeURIComponent(artifactId)}/${image.filename.split('/').map(encodeURIComponent).join('/')}`,
-        };
-    }));
+    return snapshotImagesForTranscript(
+        images,
+        filename => context.repositoryAccess
+            ? resolveVisiblePath(context, filename)
+            : safeJoin(context.visibleRootPath, filename),
+    );
 }
 
 
@@ -2464,7 +2453,10 @@ async function handleExecute(req: IncomingMessage, res: ServerResponse) {
     const viewedImages = await fileExists(viewedImagesRoot)
         ? await listImageFiles(viewedImagesRoot, payload.sessionId, true)
         : [];
-    const viewedTranscriptImages = await snapshotImagesForTranscript(viewedImagesRoot, viewedImages);
+    const viewedTranscriptImages = await snapshotImagesForTranscript(
+        viewedImages,
+        filename => safeJoin(viewedImagesRoot, filename),
+    );
 
     sendJson(res, 200, {
         ...execution,
@@ -2906,16 +2898,23 @@ async function walkDir(
     return files;
 }
 
+function parseExplorerQuery(req: IncomingMessage) {
+    const parsedUrl = new URL(req.url || '/', 'http://localhost');
+    return {
+        sessionId: parsedUrl.searchParams.get('sessionId') || '',
+        repositoryId: parsedUrl.searchParams.get('repositoryId') || '',
+        relativePath: parsedUrl.searchParams.get('path') || '',
+        commit: parsedUrl.searchParams.get('commit') || '',
+        repositoryScope: parsedUrl.searchParams.get('scope') === 'repository',
+    };
+}
+
 async function handleListFiles(req: IncomingMessage, res: ServerResponse) {
     if (req.method !== 'GET') {
         sendJson(res, 405, { ok: false, error: 'Method not allowed.' });
         return;
     }
-    const parsedUrl = new URL(req.url || '/', 'http://localhost');
-    const sessionId = parsedUrl.searchParams.get('sessionId') || '';
-    const repositoryId = parsedUrl.searchParams.get('repositoryId') || '';
-    const commit = parsedUrl.searchParams.get('commit') || '';
-    const repositoryScope = parsedUrl.searchParams.get('scope') === 'repository';
+    const { sessionId, repositoryId, commit, repositoryScope } = parseExplorerQuery(req);
 
     const target = await resolveExplorerRepositoryTarget({
         sessionId: sessionId || undefined,
@@ -2963,12 +2962,7 @@ async function handleGetFileContent(req: IncomingMessage, res: ServerResponse) {
         sendJson(res, 405, { ok: false, error: 'Method not allowed.' });
         return;
     }
-    const parsedUrl = new URL(req.url || '/', 'http://localhost');
-    const sessionId = parsedUrl.searchParams.get('sessionId') || '';
-    const repositoryId = parsedUrl.searchParams.get('repositoryId') || '';
-    const relativePath = parsedUrl.searchParams.get('path') || '';
-    const commit = parsedUrl.searchParams.get('commit') || '';
-    const repositoryScope = parsedUrl.searchParams.get('scope') === 'repository';
+    const { sessionId, repositoryId, relativePath, commit, repositoryScope } = parseExplorerQuery(req);
 
     const target = await resolveExplorerRepositoryTarget({
         sessionId: sessionId || undefined,

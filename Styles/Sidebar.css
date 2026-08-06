@@ -43,17 +43,19 @@
     flex-shrink: 0;
 }
 
+.sidebar-collapse-button:hover,
+.sidebar-expand-button:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+body.light-mode .sidebar-collapse-button:hover,
+body.light-mode .sidebar-expand-button:hover {
+    background: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.1);
+}
+
 .sidebar-collapse-button {
-    &:hover {
-        background: rgba(255, 255, 255, 0.05);
-        border-color: rgba(255, 255, 255, 0.1);
-
-        body.light-mode & {
-            background: rgba(0, 0, 0, 0.05);
-            border-color: rgba(0, 0, 0, 0.1);
-        }
-    }
-
     &:disabled,
     &:disabled:hover,
     &:disabled:focus-visible {
@@ -63,14 +65,6 @@
         transform: none !important;
     }
 
-    & .icon-slot {
-        font-size: 1.125rem;
-        color: var(--text-color);
-
-        body.light-mode & {
-            color: #666666;
-        }
-    }
 }
 
 .theme-toggle-button {
@@ -90,14 +84,6 @@
         background: rgba(107, 91, 184, 0.2) !important;
     }
 
-    & .icon-slot {
-        font-size: 1.125rem;
-        color: var(--text-color);
-
-        body.light-mode & {
-            color: #666666;
-        }
-    }
 }
 
 .sidebar-expand-button {
@@ -106,26 +92,19 @@
     height: fit-content;
     position: relative;
     z-index: 10;
-    transition: all var(--transition-speed-fast) ease;
+}
 
-    &:hover {
-        background: rgba(255, 255, 255, 0.05);
-        border-color: rgba(255, 255, 255, 0.1);
+.sidebar-collapse-button .icon-slot,
+.theme-toggle-button .icon-slot,
+.sidebar-expand-button .icon-slot {
+    font-size: 1.125rem;
+    color: var(--text-color);
+}
 
-        body.light-mode & {
-            background: rgba(0, 0, 0, 0.05);
-            border-color: rgba(0, 0, 0, 0.1);
-        }
-    }
-
-    & .icon-slot {
-        font-size: 1.125rem;
-        color: var(--text-color);
-
-        body.light-mode & {
-            color: #666666;
-        }
-    }
+body.light-mode .sidebar-collapse-button .icon-slot,
+body.light-mode .theme-toggle-button .icon-slot,
+body.light-mode .sidebar-expand-button .icon-slot {
+    color: #666666;
 }
 
 /* Ensure tabs container has proper flex layout when expand button is present */
@@ -147,14 +126,6 @@
     padding-right: var(--space-2);
     scrollbar-gutter: stable;
     overscroll-behavior: contain;
-}
-
-.adaptive-proximity-loop-controls {
-    display: grid;
-    gap: 12px;
-    margin-bottom: 14px;
-    padding-bottom: 14px;
-    border-bottom: 1px solid rgba(var(--border-color-rgb), 0.45);
 }
 
 .sidebar-footer {
@@ -230,7 +201,7 @@ details.sidebar-section,
     white-space: nowrap;
 }
 
-.api-call-warning {
+.api-call-sandbox-info {
     font-size: 18px;
     color: #f59e0b;
     opacity: 0.9;
@@ -301,16 +272,6 @@ details.sidebar-section {
         display: flex;
         flex-direction: column;
         gap: 1.75rem;
-    }
-}
-
-.pipeline-content {
-    display: none;
-
-    &.active {
-        display: flex;
-        flex-direction: column;
-        animation: fadeIn 0.3s ease-out;
     }
 }
 

@@ -93,14 +93,10 @@ function calculateDeepthinkApiCallsFromParams(params: ModelParameters): { min: n
 export class ApiCallEstimator {
     private modelConfig: ModelConfigManager;
     private countElement: HTMLElement | null;
-    private warningElement: HTMLElement | null;
-    private pqfWarningElement: HTMLElement | null;
 
     constructor(modelConfig: ModelConfigManager) {
         this.modelConfig = modelConfig;
         this.countElement = document.getElementById('api-call-count');
-        this.warningElement = document.getElementById('api-call-warning');
-        this.pqfWarningElement = document.getElementById('api-call-pqf-warning');
     }
 
     private calculateDeepthinkApiCalls(): { min: number; max: number } {
@@ -112,8 +108,7 @@ export class ApiCallEstimator {
      */
     public updateApiCallDisplay(): void {
         const { min, max } = this.calculateDeepthinkApiCalls();
-        const params = this.modelConfig.getParameters();
-        const evolvingDfsEnabled = params.refinementEnabled && params.evolvingDfsEnabled;
+        const currentEstimatedApiCalls = min === max ? `${min}` : `${min} to ${max}`;
 
         // Update the count display
         if (this.countElement) {
@@ -124,18 +119,11 @@ export class ApiCallEstimator {
             }
         }
 
-        // The evaluation warning is no longer shown.
-        if (this.warningElement) {
-            this.warningElement.style.display = 'none';
-        }
-
-        // Show/hide the PQF warning icon
-        if (this.pqfWarningElement) {
-            if (evolvingDfsEnabled) {
-                this.pqfWarningElement.style.display = 'block';
-            } else {
-                this.pqfWarningElement.style.display = 'none';
-            }
+        const sandboxInfoElement = document.getElementById('api-call-sandbox-info');
+        if (sandboxInfoElement) {
+            const sandboxMessage = `Since virtual env is enabled, each API call now means an agent invocation in a harness. Worst case scenario can be horrible. Think of it like running your cc or codex instance for ${currentEstimatedApiCalls} times on average.`;
+            sandboxInfoElement.title = sandboxMessage;
+            sandboxInfoElement.setAttribute('aria-label', sandboxMessage);
         }
     }
 

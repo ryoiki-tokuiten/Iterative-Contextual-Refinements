@@ -21,30 +21,35 @@ const CollapsibleContent: React.FC<{ content: string; maxLines: number }> = ({ c
     const lines = content.split('\n');
     const needsCollapse = lines.length > maxLines;
 
-    if (!needsCollapse || expanded) {
-        return (
-            <div className="tool-result-content">
-                <RenderMathMarkdown content={content} />
-                {needsCollapse && (
-                    <button className="action-btn" onClick={() => setExpanded(false)}>
-                        Show less
-                    </button>
-                )}
-            </div>
-        );
-    }
+    const displayContent = expanded || !needsCollapse
+        ? content
+        : lines.slice(0, maxLines).join('\n');
 
-    const preview = lines.slice(0, maxLines).join('\n');
     return (
         <div className="tool-result-content">
-            <RenderMathMarkdown content={preview} />
-            <div className="content-truncated">... {lines.length - maxLines} more lines ...</div>
-            <button className="action-btn" onClick={() => setExpanded(true)}>
-                Show all
-            </button>
+            <RenderMathMarkdown content={displayContent} />
+            {needsCollapse && (expanded ? (
+                <button className="action-btn" onClick={() => setExpanded(false)}>
+                    Show less
+                </button>
+            ) : (
+                <>
+                    <div className="content-truncated">... {lines.length - maxLines} more lines ...</div>
+                    <button className="action-btn" onClick={() => setExpanded(true)}>
+                        Show all
+                    </button>
+                </>
+            ))}
         </div>
     );
 };
+
+function getProximityLoopLength(toolName: string, args: unknown): number | null {
+    if (toolName !== 'generate_strategies' && toolName !== 'generate_hypothesis') return null;
+    if (!args || typeof args !== 'object') return null;
+    const value = (args as { proximityLoops?: unknown }).proximityLoops;
+    return typeof value === 'number' && Number.isInteger(value) ? value : null;
+}
 
 // Component for displaying tool arguments visually
 const ToolArgumentsCard: React.FC<{ toolName: string; args?: any }> = ({ toolName, args }) => {
@@ -243,14 +248,22 @@ export const MessageCard: React.FC<{ message: AdaptiveMessage }> = ({ message })
                         const rawToolType = tool.rawType;
                         const isDeepthinkTool = !!rawToolType && isAdaptiveDeepthinkAgentTool(rawToolType);
                         const agentIcon = rawToolType ? getAdaptiveDeepthinkAgentIcon(rawToolType) : 'smart_toy';
+                        const proximityLoopLength = getProximityLoopLength(rawToolType || toolType, tool.args);
 
                         return (
                             <div key={`seg-${idx}`} className="tool-segment-wrapper">
-                                <div className={`tool-call-indicator ${isDeepthinkTool ? 'deepthink-tool-indicator' : ''}`}>
-                                    {isDeepthinkTool && agentIcon && (
-                                        <Icon name={agentIcon} className="tool-indicator-icon" />
+                                <div className="tool-call-display">
+                                    <div className={`tool-call-indicator ${isDeepthinkTool ? 'deepthink-tool-indicator' : ''}`}>
+                                        {isDeepthinkTool && agentIcon && (
+                                            <Icon name={agentIcon} className="tool-indicator-icon" />
+                                        )}
+                                        <span className="tool-name">{toolType}</span>
+                                    </div>
+                                    {proximityLoopLength !== null && (
+                                        <span className="tool-call-parameter-pill">
+                                            proximity-loop-length={proximityLoopLength}
+                                        </span>
                                     )}
-                                    <span className="tool-name">{toolType}</span>
                                 </div>
                                 <ToolArgumentsCard toolName={rawToolType || toolType} args={tool.args} />
                             </div>
@@ -319,10 +332,6 @@ export const MessageCard: React.FC<{ message: AdaptiveMessage }> = ({ message })
         );
     };
 
-    const formatContent = (content: string) => {
-        return <RenderMathMarkdown content={content} />;
-    };
-
     return (
         <div className={getMessageClass()}>
             <div className="message-header">
@@ -343,7 +352,7 @@ export const MessageCard: React.FC<{ message: AdaptiveMessage }> = ({ message })
                 ) : message.role === 'system' && message.blocks ? (
                     renderSystemBlocks()
                 ) : (
-                    formatContent(message.content)
+                    <RenderMathMarkdown content={message.content} />
                 )}
             </div>
         </div>
@@ -351,7 +360,7 @@ export const MessageCard: React.FC<{ message: AdaptiveMessage }> = ({ message })
 };
 
 // Component for the right panel showing agent activity
-export interface AgentActivityPanelProps {
+interface AgentActivityPanelProps {
     messages: AdaptiveMessage[];
     isProcessing: boolean;
     isComplete: boolean;

@@ -38,7 +38,6 @@ import {
     refineWithProximity,
     type ProximityTurn,
 } from './DeepthinkProximity';
-import { addSolutionPoolVersion } from './SolutionPool';
 import {
     buildDeepthinkSandboxRepositoryAccess,
     DEEPTHINK_SANDBOX_DIRECTORY_POLICY,
@@ -82,8 +81,6 @@ export interface SolutionPoolParsedSolution {
     title: string;
     content: string;
     confidence: number;
-    internal_critique: string;
-    key_insights?: string;
 }
 
 export interface SolutionPoolParsedResponse {
@@ -169,14 +166,14 @@ export interface DeepthinkPostQualityFilterData {
     groupStrategyIds?: string[];
 }
 
-export interface DeepthinkMemoryBankAgentData {
+interface DeepthinkMemoryBankAgentData {
     mainStrategyId: string;
     branchVersion?: number;
     memoryBank?: string;
     globalIteration: number;
 }
 
-export interface DeepthinkStrategyReplacementRecord {
+interface DeepthinkStrategyReplacementRecord {
     strategyId: string;
     previousStrategyText: string;
     replacementStrategyText: string;
@@ -239,7 +236,6 @@ export interface DeepthinkPipelineState {
     finalJudgingStatus?: AgentStatus;
     finalJudgingError?: string;
     structuredSolutionPoolEnabled?: boolean;
-    structuredSolutionPool?: string;
     structuredSolutionPoolAgents: DeepthinkStructuredSolutionPoolAgentData[];
     structuredSolutionPoolStatus?: 'pending' | 'processing' | 'completed' | 'error' | 'cancelled';
     strategySpecificKnowledgePackets?: Record<string, string>;
@@ -263,31 +259,27 @@ export interface DeepthinkLiveEvent {
     error?: string;
     attempt?: number;
     modelName?: string;
-    temperature?: number;
-    topP?: number;
     codeExecutionEnabled?: boolean;
     executionId?: string;
     executionGroupId?: string;
     executionGroupName?: string;
 }
 
-export class PipelineStopRequestedError extends Error {
+class PipelineStopRequestedError extends Error {
     constructor(message: string) {
         super(message);
         this.name = "PipelineStopRequestedError";
     }
 }
 
-export let activeDeepthinkPipeline: DeepthinkPipelineState | null = null;
+let activeDeepthinkPipeline: DeepthinkPipelineState | null = null;
 let setActiveDeepthinkPipeline: ((pipeline: DeepthinkPipelineState | null) => void) | null = null;
 let render: () => void = () => { };
 
 export interface DeepthinkCoreDeps {
-    callAI: (parts: Part[], temperature: number, modelToUse: string, systemInstruction?: string, isJson?: boolean, topP?: number, thinkingConfig?: ThinkingConfig) => Promise<GenerateContentResponse>;
+    callAI: (parts: Part[], modelToUse: string, systemInstruction?: string, isJson?: boolean, thinkingConfig?: ThinkingConfig) => Promise<GenerateContentResponse>;
     parseJsonSafe: (raw: string, context: string) => any;
-    getSelectedTemperature: () => number;
     getSelectedModel: () => string;
-    getSelectedTopP: () => number;
     getSelectedStrategiesCount: () => number;
     getSelectedSubStrategiesCount: () => number;
     getStrategyProximityLoops: () => number;
@@ -331,8 +323,6 @@ function captureRunConfig(): DeepthinkRunConfig {
     const prompts = Object.freeze({ ...deps.getCustomPromptsDeepthinkState() });
     return Object.freeze({
         selectedModel: deps.getSelectedModel(),
-        temperature: deps.getSelectedTemperature(),
-        topP: deps.getSelectedTopP(),
         thinkingLevel: deps.getSelectedThinkingLevel?.() || 'high',
         strategyCount: evolvingDfsEnabled
             ? Math.min(deps.getSelectedStrategiesCount(), 5)
@@ -1334,10 +1324,8 @@ function solutionPoolOutputContract(strategyId: string): SandboxFinalOutputContr
             title: STRING_SCHEMA,
             content: STRING_SCHEMA,
             confidence: { type: 'number' },
-            internal_critique: STRING_SCHEMA,
-            key_insights: STRING_SCHEMA,
         },
-        required: ['title', 'content', 'confidence', 'internal_critique'],
+        required: ['title', 'content', 'confidence'],
         additionalProperties: false,
     };
     return structuredContract('Structured Solution Pool', {
@@ -1360,14 +1348,12 @@ function solutionPoolOutputContract(strategyId: string): SandboxFinalOutputContr
         }
         root.solutions.forEach((solution, index) => {
             const entry = asJsonObject(solution, `Structured Solution Pool response.solutions[${index}]`);
-            requireExactKeys(entry, `Structured Solution Pool response.solutions[${index}]`, ['title', 'content', 'confidence', 'internal_critique'], ['key_insights']);
+            requireExactKeys(entry, `Structured Solution Pool response.solutions[${index}]`, ['title', 'content', 'confidence']);
             requireString(entry.title, `Structured Solution Pool response.solutions[${index}].title`);
             requireString(entry.content, `Structured Solution Pool response.solutions[${index}].content`);
-            requireString(entry.internal_critique, `Structured Solution Pool response.solutions[${index}].internal_critique`);
             if (typeof entry.confidence !== 'number' || !Number.isFinite(entry.confidence) || entry.confidence < 0 || entry.confidence > 1) {
                 throw new Error(`Structured Solution Pool response.solutions[${index}].confidence must be a number from 0 to 1.`);
             }
-            if (entry.key_insights !== undefined) requireString(entry.key_insights, `Structured Solution Pool response.solutions[${index}].key_insights`);
         });
     });
 }
@@ -1702,8 +1688,6 @@ function addLiveEvent(
     render();
 }
 
-export { addLiveEvent };
-
 export function initializeDeepthinkCore(dependencies: DeepthinkCoreDeps & {
     setActiveDeepthinkPipeline: (pipeline: DeepthinkPipelineState | null) => void;
     renderActiveDeepthinkPipeline: () => void;
@@ -1727,8 +1711,6 @@ async function callDeepthinkSandboxToolAgent(args: {
     process: DeepthinkPipelineState;
     manifest: DeepthinkAgentContextManifest;
     modelName: string;
-    temperature: number;
-    topP?: number;
 }): Promise<DeepthinkAgentCallOutput> {
     const promptMessage = new HumanMessage(args.manifest.promptText);
 
@@ -1738,8 +1720,6 @@ async function callDeepthinkSandboxToolAgent(args: {
         messages: [promptMessage],
         systemPrompt: args.manifest.systemInstruction,
         modelName: args.modelName,
-        temperature: args.temperature,
-        topP: args.topP,
         seedFiles: buildAttachmentSeedFiles(args.manifest.attachments),
         filesystemFiles: buildFilesystemAttachmentFiles(args.manifest.attachments),
         runScopeDescription: 'same Deepthink run',
@@ -1769,8 +1749,6 @@ async function callAgent(args: {
     const startedAt = Date.now();
     const executionId = `inv-${nanoid(10)}`;
     const agentModel = deepthinkAgentModel(args.manifest.agentKind, config.prompts, config.selectedModel);
-    const temperature = config.temperature;
-    const topP = config.topP;
     const sandboxTransport = usesSandboxTransportForRun(args.process);
     const nativeJsonOutput = !sandboxTransport && !!args.manifest.outputContract;
     const thinkingConfig: ThinkingConfig = { thinkingLevel: config.thinkingLevel };
@@ -1788,8 +1766,6 @@ async function callAgent(args: {
                 prompt: promptText,
                 attempt,
                 modelName: agentModel,
-                temperature,
-                topP,
                 codeExecutionEnabled: config.codeExecutionEnabled,
                 executionId,
             });
@@ -1801,19 +1777,15 @@ async function callAgent(args: {
                     process: args.process,
                     manifest: args.manifest,
                     modelName: agentModel,
-                    temperature,
-                    topP,
                 })
                 // Tool-calling providers cannot combine native structured output
                 // with this role-specific final_output contract. The contract
                 // validates the tool payload instead.
                 : deps.callAI(
                     buildProviderParts(promptText, args.manifest.attachments),
-                    temperature,
                     agentModel,
                     args.manifest.systemInstruction,
                     nativeJsonOutput,
-                    topP,
                     thinkingConfig,
                 )
                     .then(response => {
@@ -1836,8 +1808,6 @@ async function callAgent(args: {
                 response: responseOutput.displayText,
                 executionTraceText: responseOutput.executionTraceText,
                 modelName: agentModel,
-                temperature,
-                topP,
                 codeExecutionEnabled: config.codeExecutionEnabled,
                 executionId,
             });
@@ -1851,8 +1821,6 @@ async function callAgent(args: {
                 error: errorMessage,
                 attempt,
                 modelName: agentModel,
-                temperature,
-                topP,
                 codeExecutionEnabled: config.codeExecutionEnabled,
                 executionId,
             });
@@ -2123,65 +2091,6 @@ function buildDeepthinkResultsContextFiles(process: DeepthinkPipelineState): Dee
     }
 
     return files;
-}
-
-function buildStructuredSolutionPool(process: DeepthinkPipelineState, runtimes: Map<string, BranchRuntime>): string {
-    const strategies = activeStrategies(process).map((strategy, index) => {
-        const runtime = runtimes.get(strategy.id) || createRuntime(strategy);
-        const directSub = ensureDirectSubStrategy(strategy);
-        const history = runtime.history.map(entry => ({
-            global_iteration: entry.globalIteration,
-            branch_iteration: entry.branchIteration,
-            label: entry.label,
-            critique: entry.critique,
-            corrected_solution: entry.solution,
-        }));
-        const poolAgent = process.structuredSolutionPoolAgents
-            .filter(agent => agent.mainStrategyId === strategy.id && (agent.branchVersion || 1) === runtime.branchVersion)
-            .sort((a, b) => (b.globalIteration || 0) - (a.globalIteration || 0))[0];
-        return {
-            strategy_id: strategy.id,
-            slot_index: index + 1,
-            branch_version: runtime.branchVersion,
-            branch_iteration_count: runtime.branchIterationCount,
-            strategy_text: strategy.strategyText,
-            memory_bank: runtime.memoryBank || strategy.memoryBank || null,
-            original_solution: directSub.solutionAttempt || '',
-            latest_critique: directSub.solutionCritique || runtime.history[runtime.history.length - 1]?.critique || '',
-            iterations: history,
-            solution_pool: poolAgent?.parsedPoolResponse || poolAgent?.poolResponse || null,
-            pool_history: runtime.poolHistory.map(entry => ({
-                global_iteration: entry.globalIteration,
-                branch_iteration: entry.branchIteration,
-                pool: entry.poolResponse,
-            })),
-            replaced_branches: (strategy.replacementHistory || []).map(record => ({
-                strategy_id: record.strategyId,
-                branch_version: record.previousBranchVersion,
-                replaced_at_global_iteration: record.replacedAtGlobalIteration,
-                strategy_text: record.previousStrategyText,
-                replacement_strategy_text: record.replacementStrategyText,
-                replacement_reason: record.pqfReasoning,
-                memory_bank: record.memoryBank || null,
-                latest_solution: record.latestSolution || '',
-                latest_critique: record.latestCritique || '',
-                iterations: (record.branchHistory || []).map(entry => ({
-                    global_iteration: entry.globalIteration,
-                    branch_iteration: entry.branchIteration,
-                    label: entry.label,
-                    critique: entry.critique,
-                    corrected_solution: entry.solution,
-                })),
-                pool_history: (record.poolHistory || []).map(entry => ({
-                    global_iteration: entry.globalIteration,
-                    branch_iteration: entry.branchIteration,
-                    pool: entry.poolResponse,
-                })),
-            })),
-        };
-    });
-
-    return JSON.stringify({ schema: 'deepthink-evolving-dfs-solution-pool-v1', strategies }, null, 2);
 }
 
 async function generateStrategyCandidates(args: {
@@ -2664,7 +2573,6 @@ async function runSolutionPools(args: {
 }): Promise<void> {
     args.process.structuredSolutionPoolEnabled = true;
     args.process.structuredSolutionPoolStatus = 'processing';
-    args.process.structuredSolutionPool = buildStructuredSolutionPool(args.process, args.runtimes);
     render();
 
     const config = configFor(args.process);
@@ -2738,8 +2646,6 @@ async function runSolutionPools(args: {
         render();
     }));
 
-    args.process.structuredSolutionPool = buildStructuredSolutionPool(args.process, args.runtimes);
-    addSolutionPoolVersion(args.process.id, args.process.structuredSolutionPool, args.globalIteration);
     args.process.structuredSolutionPoolStatus = 'completed';
     render();
 }
@@ -3206,7 +3112,6 @@ async function runPostFiveIterationMaintenance(args: {
     }));
 
     if (updatedIds.length > 0) {
-        args.process.structuredSolutionPool = buildStructuredSolutionPool(args.process, args.runtimes);
         render();
     }
 
@@ -3289,7 +3194,7 @@ async function snapshotDeepthinkRepositoryState(process: DeepthinkPipelineState,
     }
 }
 
-export async function snapshotDeepthinkIteration(process: DeepthinkPipelineState, globalIteration: number): Promise<void> {
+async function snapshotDeepthinkIteration(process: DeepthinkPipelineState, globalIteration: number): Promise<void> {
     await snapshotDeepthinkRepositoryState(process, `Deepthink iteration ${globalIteration}`);
 }
 
@@ -3386,7 +3291,6 @@ async function runEvolvingDepthFirstSearch(args: {
         const sub = ensureDirectSubStrategy(strategy);
         if (sub.evolvingDfs) sub.evolvingDfs.status = 'completed';
     });
-    args.process.structuredSolutionPool = buildStructuredSolutionPool(args.process, runtimes);
     args.process.structuredSolutionPoolStatus = 'completed';
     render();
 }

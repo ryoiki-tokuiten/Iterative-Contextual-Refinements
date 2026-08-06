@@ -93,7 +93,7 @@ import {
 
 type IconAttributes = Record<string, string | number | boolean | null | undefined>;
 
-export interface IconProps extends Omit<React.HTMLAttributes<HTMLSpanElement>, 'children'> {
+interface IconProps extends Omit<React.HTMLAttributes<HTMLSpanElement>, 'children'> {
     name: string;
     size?: number | string;
     strokeWidth?: number;
@@ -256,7 +256,7 @@ function renderSvgMarkup(name: string, size: number | string = '1em', strokeWidt
     );
 }
 
-export function resolveIconName(name: string): string {
+function resolveIconName(name: string): string {
     const trimmed = name.trim();
     return ICON_COMPONENTS[trimmed] ? trimmed : (ICON_ALIASES[trimmed] || trimmed);
 }

@@ -6,11 +6,11 @@
  * These agents are independent API calls without conversation history
  */
 
-import { Part, GenerateContentResponse } from "@google/genai";
+import { Part } from "@google/genai";
 import { describeProviderError } from '../Core/ProviderError';
 
 // Agent response interface
-export interface AgentResponse {
+interface AgentResponse {
     success: boolean;
     data?: any;
     error?: string;
@@ -19,12 +19,10 @@ export interface AgentResponse {
 
 // Agent execution context
 export interface AgentExecutionContext {
-    callAI: (parts: Part[], temperature: number, modelToUse: string, systemInstruction?: string, isJson?: boolean, topP?: number) => Promise<GenerateContentResponse>;
+    callAI: (parts: Part[], modelToUse: string, systemInstruction?: string, isJson?: boolean) => Promise<any>;
     cleanOutputByType: (rawOutput: string, type?: string) => string;
     parseJsonSafe: (raw: string, context: string) => any;
-    getSelectedTemperature: () => number;
     getSelectedModel: () => string;
-    getSelectedTopP: () => number;
     /**
      * Optional transport used by modes that run these shared roles inside the
      * Deepthink sandbox. Keeping the agent contracts here lets Adaptive
@@ -138,11 +136,9 @@ async function callAgent(
 
     const response = await context.callAI(
         buildPromptParts(promptText, images),
-        context.getSelectedTemperature(),
         context.getSelectedModel(),
         systemPrompt,
-        isJson,
-        context.getSelectedTopP()
+        isJson
     );
     return context.cleanOutputByType(response.text || '', isJson ? 'json' : undefined);
 }

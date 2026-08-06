@@ -15,7 +15,6 @@
     border-bottom-right-radius: var(--border-radius-lg);
     box-shadow: none;
     overflow: hidden;
-    animation: none;
 }
 
 #pipelines-content-container.filesystem-active {
@@ -134,7 +133,8 @@
     gap: 6px;
 }
 
-.tree-label {
+.tree-label,
+.vfs-file-path {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -264,13 +264,6 @@
 
 .vfs-file-info .icon-slot {
     color: var(--text-secondary-color);
-}
-
-.vfs-file-path {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .vfs-pdf-preview {
@@ -625,11 +618,6 @@
     color: #c9f7ce;
 }
 
-.vfs-compare-trigger-footer:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-}
-
 .vfs-refresh-btn-footer {
     flex: 0 0 30px;
     width: 30px;
@@ -652,6 +640,7 @@
     border-color: rgba(100, 110, 220, 0.3);
 }
 
+.vfs-compare-trigger-footer:disabled,
 .vfs-refresh-btn-footer:disabled {
     cursor: not-allowed;
     opacity: 0.5;

@@ -72,7 +72,8 @@
     font-weight: 500;
 }
 
-.sequential-header-actions {
+.sequential-header-actions,
+.sequential-controls-left {
     display: flex;
     align-items: center;
     gap: 1rem;
@@ -151,14 +152,7 @@
     -webkit-backdrop-filter: var(--card-blur-effect);
 }
 
-.sequential-controls-left {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-}
-
 .sequential-control-btn {
-    background: var(--surface-secondary);
     border: 1px solid var(--border-color);
     color: var(--text-color);
     width: 48px;
@@ -172,7 +166,6 @@
 }
 
 .sequential-control-btn:hover {
-    background: var(--surface-tertiary);
     border-color: var(--accent-purple);
     color: var(--accent-purple);
     transform: scale(1.05);
@@ -187,7 +180,6 @@
 }
 
 .sequential-play-btn:hover {
-    background: var(--accent-purple-hover);
     color: white;
     box-shadow: 0 4px 12px rgba(var(--accent-purple-rgb), 0.4);
 }

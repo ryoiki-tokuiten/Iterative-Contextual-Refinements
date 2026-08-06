@@ -77,7 +77,7 @@ const readinessListeners: (() => void)[] = [];
 /**
  * Initialize the Shiki highlighter with dual themes for light/dark mode
  */
-export async function initHighlighter(): Promise<HighlighterCore> {
+async function initHighlighter(): Promise<HighlighterCore> {
     if (highlighterInstance) return highlighterInstance;
     if (initPromise) return initPromise;
 
@@ -151,7 +151,7 @@ export function getLanguageDisplayName(lang: string): string {
  * Highlight code with dual themes (light + dark)
  * Returns HTML with CSS variables for instant theme switching
  */
-export function highlightCode(code: string, lang: string = 'plaintext'): string {
+function highlightCode(code: string, lang: string = 'plaintext'): string {
     if (!highlighterInstance) {
         // Init in background if not started
         if (!initPromise) initHighlighter().catch(console.error);

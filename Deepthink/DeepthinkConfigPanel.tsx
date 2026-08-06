@@ -1668,5 +1668,3 @@ export function renderDeepthinkConfigPanelInContainer(pipelinesContentContainer:
     renderPanel(controller);
     subscribeToController(controller);
 }
-
-export { renderDeepthinkConfigPanelInContainer as renderDeepthinkConfigPanel };

@@ -363,12 +363,6 @@
     color: var(--accent-blue, #00d2ff);
 }
 
-.config-badge.exec {
-    background: rgba(0, 230, 118, 0.08);
-    border-color: rgba(0, 230, 118, 0.2);
-    color: #00e676;
-}
-
 .inspector-content {
     flex: 1;
     overflow: hidden;
@@ -737,68 +731,51 @@
     border-color: rgba(var(--accent-blue-rgb, 0, 210, 255), 0.45);
 }
 
-/* ALL -> Blue */
+/* Variant tokens keep the base, active, and hover states in one place. */
 .console-tab-button.tab-all {
-    background: rgba(var(--accent-blue-rgb, 0, 210, 255), 0.08);
-    color: var(--accent-blue, #00d2ff);
-    border-color: rgba(var(--accent-blue-rgb, 0, 210, 255), 0.1);
-}
-.console-tab-button.tab-all.active {
-    border-color: rgba(var(--accent-blue-rgb, 0, 210, 255), 0.5);
-    box-shadow: 0 0 6px rgba(var(--accent-blue-rgb, 0, 210, 255), 0.2),
-                0 0 2px rgba(var(--accent-blue-rgb, 0, 210, 255), 0.3) inset;
-}
-.console-tab-button.tab-all:hover:not(.active) {
-    background: rgba(var(--accent-blue-rgb, 0, 210, 255), 0.18);
-    border-color: rgba(var(--accent-blue-rgb, 0, 210, 255), 0.35);
+    --console-tab-rgb: var(--accent-blue-rgb, 0, 210, 255);
+    --console-tab-color: var(--accent-blue, #00d2ff);
 }
 
-/* AGENTS -> Purple */
 .console-tab-button.tab-agents {
-    background: rgba(var(--accent-purple-rgb, 124, 74, 240), 0.08);
-    color: var(--accent-purple, #7c4af0);
-    border-color: rgba(var(--accent-purple-rgb, 124, 74, 240), 0.1);
-}
-.console-tab-button.tab-agents.active {
-    border-color: rgba(var(--accent-purple-rgb, 124, 74, 240), 0.5);
-    box-shadow: 0 0 6px rgba(var(--accent-purple-rgb, 124, 74, 240), 0.2),
-                0 0 2px rgba(var(--accent-purple-rgb, 124, 74, 240), 0.3) inset;
-}
-.console-tab-button.tab-agents:hover:not(.active) {
-    background: rgba(var(--accent-purple-rgb, 124, 74, 240), 0.18);
-    border-color: rgba(var(--accent-purple-rgb, 124, 74, 240), 0.35);
+    --console-tab-rgb: var(--accent-purple-rgb, 124, 74, 240);
+    --console-tab-color: var(--accent-purple, #7c4af0);
 }
 
-/* INFO -> Green */
 .console-tab-button.tab-info {
-    background: rgba(var(--accent-green-rgb, 0, 230, 118), 0.08);
-    color: var(--accent-green, #00e676);
-    border-color: rgba(var(--accent-green-rgb, 0, 230, 118), 0.1);
-}
-.console-tab-button.tab-info.active {
-    border-color: rgba(var(--accent-green-rgb, 0, 230, 118), 0.5);
-    box-shadow: 0 0 6px rgba(var(--accent-green-rgb, 0, 230, 118), 0.2),
-                0 0 2px rgba(var(--accent-green-rgb, 0, 230, 118), 0.3) inset;
-}
-.console-tab-button.tab-info:hover:not(.active) {
-    background: rgba(var(--accent-green-rgb, 0, 230, 118), 0.18);
-    border-color: rgba(var(--accent-green-rgb, 0, 230, 118), 0.35);
+    --console-tab-rgb: var(--accent-green-rgb, 0, 230, 118);
+    --console-tab-color: var(--accent-green, #00e676);
 }
 
-/* ERRORS -> Red */
 .console-tab-button.tab-errors {
-    background: rgba(var(--accent-pink-rgb, 255, 23, 68), 0.08);
-    color: var(--accent-pink, #ff1744);
-    border-color: rgba(var(--accent-pink-rgb, 255, 23, 68), 0.1);
+    --console-tab-rgb: var(--accent-pink-rgb, 255, 23, 68);
+    --console-tab-color: var(--accent-pink, #ff1744);
 }
+
+.console-tab-button.tab-all,
+.console-tab-button.tab-agents,
+.console-tab-button.tab-info,
+.console-tab-button.tab-errors {
+    background: rgba(var(--console-tab-rgb), 0.08);
+    color: var(--console-tab-color);
+    border-color: rgba(var(--console-tab-rgb), 0.1);
+}
+
+.console-tab-button.tab-all.active,
+.console-tab-button.tab-agents.active,
+.console-tab-button.tab-info.active,
 .console-tab-button.tab-errors.active {
-    border-color: rgba(var(--accent-pink-rgb, 255, 23, 68), 0.5);
-    box-shadow: 0 0 6px rgba(var(--accent-pink-rgb, 255, 23, 68), 0.2),
-                0 0 2px rgba(var(--accent-pink-rgb, 255, 23, 68), 0.3) inset;
+    border-color: rgba(var(--console-tab-rgb), 0.5);
+    box-shadow: 0 0 6px rgba(var(--console-tab-rgb), 0.2),
+        0 0 2px rgba(var(--console-tab-rgb), 0.3) inset;
 }
+
+.console-tab-button.tab-all:hover:not(.active),
+.console-tab-button.tab-agents:hover:not(.active),
+.console-tab-button.tab-info:hover:not(.active),
 .console-tab-button.tab-errors:hover:not(.active) {
-    background: rgba(var(--accent-pink-rgb, 255, 23, 68), 0.18);
-    border-color: rgba(var(--accent-pink-rgb, 255, 23, 68), 0.35);
+    background: rgba(var(--console-tab-rgb), 0.18);
+    border-color: rgba(var(--console-tab-rgb), 0.35);
 }
 
 .search-box {

@@ -112,7 +112,6 @@
 }
 
 .modal-close-button:hover {
-    background: rgba(var(--text-color-rgb), 0.1);
     color: var(--text-color);
 }
 
@@ -310,7 +309,6 @@
     align-items: center;
     gap: 0.125rem;
     padding: 0.18rem;
-    background: rgba(var(--text-color-rgb), 0.055);
     border: 1px solid rgba(var(--border-color-rgb), 0.45);
     border-radius: 999px;
 }
@@ -374,11 +372,6 @@
     align-items: center;
     gap: 0.5rem;
     margin-left: auto;
-}
-
-.embedded-modal-content .modal-header .close-modal-btn:hover {
-    background: rgba(var(--accent-red-rgb), 0.1);
-    color: var(--accent-red);
 }
 
 .embedded-modal-content .modal-body {

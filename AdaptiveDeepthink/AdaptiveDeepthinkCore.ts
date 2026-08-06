@@ -63,8 +63,8 @@ export type AdaptiveAgentRole =
     | 'correction';
 
 export type AdaptiveDeepthinkToolCall =
-    | { type: 'generate_strategies'; count: number; specialContext?: string; replaceStrategyIds?: string[] }
-    | { type: 'generate_hypothesis'; count: number; specialContext?: string }
+    | { type: 'generate_strategies'; count: number; proximityLoops?: number; specialContext?: string; replaceStrategyIds?: string[] }
+    | { type: 'generate_hypothesis'; count: number; proximityLoops?: number; specialContext?: string }
     | { type: 'test_hypothesis'; hypothesisIds: string[] }
     | { type: 'execute'; executions: AdaptiveExecutionRequest[]; specialContext?: string }
     | { type: 'save'; strategyIds: string[] }
@@ -73,7 +73,7 @@ export type AdaptiveDeepthinkToolCall =
     | { type: 'virtual_environment'; command: string; timeoutMs?: number }
     | { type: 'submit_final_output'; response: string };
 
-export interface AdaptiveExecutionRequest {
+interface AdaptiveExecutionRequest {
     strategyId: string;
     hypothesisIds: string[];
     /** Branch-local instructions. Never forwarded to critique or correction. */
@@ -91,7 +91,7 @@ export interface AdaptiveDeepthinkToolPrompts {
     sys_deepthink_selfImprovement: string;
 }
 
-export interface AdaptiveStrategy {
+interface AdaptiveStrategy {
     id: string;
     text: string;
     slotIndex: number;
@@ -101,19 +101,19 @@ export interface AdaptiveStrategy {
     preCorrectionSnapshot?: { commit: string; passNumber: number };
 }
 
-export interface AdaptiveHypothesis {
+interface AdaptiveHypothesis {
     id: string;
     text: string;
     passNumber: number;
 }
 
-export interface AdaptiveHypothesisTesting {
+interface AdaptiveHypothesisTesting {
     hypothesis: string;
     testing: string;
     passNumber: number;
 }
 
-export interface AdaptiveExecutionRecord {
+interface AdaptiveExecutionRecord {
     id: string;
     passNumber: number;
     strategyId: string;
@@ -131,7 +131,7 @@ export interface AdaptivePassRecord {
     completedAt?: number;
 }
 
-export interface AdaptiveArtifact {
+interface AdaptiveArtifact {
     path: string;
     content: string;
 }
@@ -157,14 +157,10 @@ export interface AdaptiveDeepthinkState {
 
 export interface AdaptiveDeepthinkToolExecutionContext {
     pipeline: DeepthinkPipelineState;
-    callAI: (parts: Part[], temperature: number, modelToUse: string, systemInstruction?: string, isJson?: boolean, topP?: number) => Promise<GenerateContentResponse>;
+    callAI: (parts: Part[], modelToUse: string, systemInstruction?: string, isJson?: boolean) => Promise<GenerateContentResponse>;
     cleanOutputByType: (raw: string, type?: string) => string;
     parseJsonSafe: (raw: string, context: string) => any;
-    getSelectedTemperature: () => number;
     getSelectedModel: () => string;
-    getSelectedTopP: () => number;
-    getStrategyProximityLoops: () => number;
-    getHypothesisProximityLoops: () => number;
     getModelFor: (role: AdaptiveAgentRole) => string;
     sandboxEnabled: boolean;
     images?: Array<{ base64: string; mimeType: string }>;
@@ -173,6 +169,7 @@ export interface AdaptiveDeepthinkToolExecutionContext {
 }
 
 const MAX_BATCH_SIZE = 5;
+const DEFAULT_PROXIMITY_LOOPS = 2;
 
 /**
  * Adaptive owns its embedded React tree. Mutating the shared pipeline without
@@ -330,17 +327,13 @@ function syncAgentContext(
         callAI: context.callAI,
         cleanOutputByType: context.cleanOutputByType,
         parseJsonSafe: context.parseJsonSafe,
-        getSelectedTemperature: context.getSelectedTemperature,
         getSelectedModel: () => modelName,
-        getSelectedTopP: context.getSelectedTopP,
         runPrompt: async ({ promptText, isJson, images }) => {
             const executionId = nanoid(8);
             addAdaptiveLiveEvent(context, agentName, `Invoking ${agentName} agent`, 'agent_start', {
                 systemInstruction: systemPrompt,
                 prompt: promptText,
                 modelName,
-                temperature: context.getSelectedTemperature(),
-                topP: context.getSelectedTopP(),
                 codeExecutionEnabled: context.sandboxEnabled,
                 executionId,
                 executionGroupId,
@@ -352,11 +345,9 @@ function syncAgentContext(
                 if (!context.sandboxEnabled) {
                     const response = await context.callAI(
                         [...images.map(image => ({ inlineData: { mimeType: image.mimeType, data: image.base64 } })), { text: promptText }],
-                        context.getSelectedTemperature(),
                         modelName,
                         systemPrompt,
                         isJson,
-                        context.getSelectedTopP(),
                     );
                     const output = context.cleanOutputByType(response.text || '', isJson ? 'json' : undefined);
                     const outputPath = nextArtifactPath(state, artifactOutputPath(state, strategyId, role));
@@ -371,8 +362,6 @@ function syncAgentContext(
                     addAdaptiveLiveEvent(context, agentName, `${agentName} agent completed`, 'agent_complete', {
                         response: output,
                         modelName,
-                        temperature: context.getSelectedTemperature(),
-                        topP: context.getSelectedTopP(),
                         codeExecutionEnabled: false,
                         executionId,
                         executionGroupId,
@@ -386,8 +375,6 @@ function syncAgentContext(
                     messages: [new HumanMessage(promptText)],
                     systemPrompt,
                     modelName,
-                    temperature: context.getSelectedTemperature(),
-                    topP: context.getSelectedTopP(),
                     seedFiles: seedFiles(),
                     runScopeDescription: 'same Adaptive Deepthink run',
                     repositoryAccess: access,
@@ -410,8 +397,6 @@ function syncAgentContext(
                     response: result.text,
                     executionTraceText: result.executionTraceText,
                     modelName,
-                    temperature: context.getSelectedTemperature(),
-                    topP: context.getSelectedTopP(),
                     codeExecutionEnabled: true,
                     executionId,
                     executionGroupId,
@@ -423,8 +408,6 @@ function syncAgentContext(
                 addAdaptiveLiveEvent(context, agentName, `${agentName} agent failed: ${message}`, 'agent_error', {
                     error: message,
                     modelName,
-                    temperature: context.getSelectedTemperature(),
-                    topP: context.getSelectedTopP(),
                     codeExecutionEnabled: context.sandboxEnabled,
                     executionId,
                     executionGroupId,
@@ -520,7 +503,7 @@ function setStrategies(
     return assigned;
 }
 
-function getDirectTextContext(): string {
+export function getDirectTextContext(): string {
     const textFiles = globalState.directContextFiles.filter(file => file.mimeType.startsWith('text/') || file.mimeType === 'application/json');
     if (!textFiles.length) return '';
     const decoder = new TextDecoder();
@@ -587,7 +570,7 @@ async function generateStrategyBatch(
     const generatorContext = syncAgentContext(state, context, 'strategy-generator', prompts.sys_deepthink_initialStrategy, undefined, undefined, [], executionGroupId, executionGroupName);
     const proximityContext = syncAgentContext(state, context, 'strategy-proximity', prompts.sys_deepthink_strategyProximity, undefined, undefined, [], executionGroupId, executionGroupName);
     const result = await refineWithProximity<string>({
-        loops: context.getStrategyProximityLoops(),
+        loops: toolCall.proximityLoops ?? DEFAULT_PROXIMITY_LOOPS,
         history: state.strategyGenerationHistory,
         generate: async (conversationHistory, revision) => {
             const generationContext = [
@@ -670,7 +653,7 @@ async function generateHypothesisBatch(
     const generatorContext = syncAgentContext(state, context, 'hypothesis-generator', prompts.sys_deepthink_hypothesisGeneration, undefined, undefined, [], executionGroupId, executionGroupName);
     const proximityContext = syncAgentContext(state, context, 'hypothesis-proximity', prompts.sys_deepthink_hypothesisProximity, undefined, undefined, [], executionGroupId, executionGroupName);
     const result = await refineWithProximity<string>({
-        loops: context.getHypothesisProximityLoops(),
+        loops: toolCall.proximityLoops ?? DEFAULT_PROXIMITY_LOOPS,
         history: state.hypothesisGenerationHistory,
         version: state.passNumber,
         generate: async (conversationHistory, revision) => {

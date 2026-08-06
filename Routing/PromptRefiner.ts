@@ -7,7 +7,7 @@ import { callAI } from './AIService';
 import { renderIconMarkup } from '../UI/Icons';
 import { describeProviderError } from '../Core/ProviderError';
 
-export interface PromptRefinerConfig {
+interface PromptRefinerConfig {
     agentName: string;
     currentPrompt: string;
     onPromptUpdated: (newPrompt: string) => void;
@@ -361,11 +361,9 @@ Please provide the complete refined prompt:`;
 
         const response = await callAI(
             userPrompt,
-            0.7,
             model,
             systemPrompt,
-            false,
-            0.95
+            false
         );
 
         const refinedPrompt = response.text?.trim() || '';

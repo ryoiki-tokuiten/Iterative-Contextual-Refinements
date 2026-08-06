@@ -1,13 +1,25 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ApplicationMode } from '../../../Core/Types';
 import { App } from '../../../Core/App';
+import { getRoutingManager } from '../../../Routing';
 import { Icon } from '../../../UI/Icons';
 
 interface SidebarFooterProps {
     currentMode: ApplicationMode;
 }
 
+const isDeepthinkSandboxEnabled = (): boolean =>
+    getRoutingManager().getDeepthinkConfigController().isCodeExecutionEnabled();
+
 export const SidebarFooter: React.FC<SidebarFooterProps> = ({ currentMode }) => {
+    const [sandboxEnabled, setSandboxEnabled] = useState(isDeepthinkSandboxEnabled);
+
+    useEffect(() => {
+        const handleSandboxToggle = () => setSandboxEnabled(isDeepthinkSandboxEnabled());
+
+        window.addEventListener('sandboxToggled', handleSandboxToggle);
+        return () => window.removeEventListener('sandboxToggled', handleSandboxToggle);
+    }, []);
 
     const handleGenerateClick = (e: React.MouseEvent<HTMLButtonElement>) => {
         e.preventDefault();
@@ -33,18 +45,9 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({ currentMode }) => 
                     <span className="api-call-label">API Calls</span>
                 </div>
                 <span
-                    className="api-call-warning"
-                    id="api-call-warning"
-                    style={{ display: 'none' }}
-                    title="Evolution Filter status"
-                >
-                    <Icon name="info" />
-                </span>
-                <span
-                    className="api-call-warning"
-                    id="api-call-pqf-warning"
-                    style={{ display: 'none', marginLeft: '4px' }}
-                    title="Evolving DFS includes required PQF maintenance passes"
+                    className="api-call-sandbox-info"
+                    id="api-call-sandbox-info"
+                    style={{ display: sandboxEnabled ? 'block' : 'none', marginLeft: '4px' }}
                 >
                     <Icon name="info" />
                 </span>

@@ -12,7 +12,7 @@
 
 import { MAX_HYPOTHESIS_COUNT, ModelConfigManager } from './ModelConfig';
 
-export interface DeepthinkConfigState {
+interface DeepthinkConfigState {
     strategiesCount: number;
     strategyProximityLoops: number;
     subStrategiesCount: number;
@@ -29,14 +29,12 @@ export interface DeepthinkConfigState {
     isolateBranches: boolean;
     disableSolutionPool: boolean;
     provideAllSolutionsEnabled: boolean;
-    temperature: number;
-    topP: number;
     codeExecutionEnabled: boolean;
     hypothesisInjectionMode: 'parallel' | 'strategy_aware' | 'selective_injection';
     shareHypothesesToDissected: boolean;
 }
 
-export type DeepthinkConfigChangeEvent = CustomEvent<{
+type DeepthinkConfigChangeEvent = CustomEvent<{
     property: keyof DeepthinkConfigState | 'all';
     state: DeepthinkConfigState;
 }>;
@@ -76,8 +74,6 @@ export class DeepthinkConfigController extends EventTarget {
             isolateBranches: params.isolateBranches === true,
             disableSolutionPool: params.disableSolutionPool === true,
             provideAllSolutionsEnabled: params.provideAllSolutionsToCorrectors,
-            temperature: params.temperature,
-            topP: params.topP,
             codeExecutionEnabled: params.deepthinkCodeExecutionEnabled,
             hypothesisInjectionMode: params.evolvingDfsEnabled && params.refinementEnabled
                 ? 'selective_injection'

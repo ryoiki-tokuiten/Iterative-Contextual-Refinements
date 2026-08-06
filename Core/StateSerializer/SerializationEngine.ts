@@ -11,7 +11,7 @@ import { encode, decode } from '@msgpack/msgpack';
 /**
  * Serialization format options.
  */
-export type SerializationFormat = 'json' | 'msgpack';
+type SerializationFormat = 'json' | 'msgpack';
 
 /**
  * Options for serialization.
@@ -50,7 +50,7 @@ export function getFileExtension(options: SerializationOptions): string {
 /**
  * MIME type for each format.
  */
-export function getMimeType(options: SerializationOptions): string {
+function getMimeType(options: SerializationOptions): string {
     if (options.compress) {
         return 'application/gzip';
     }

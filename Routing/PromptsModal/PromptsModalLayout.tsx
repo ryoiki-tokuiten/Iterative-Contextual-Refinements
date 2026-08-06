@@ -5,7 +5,7 @@ import { Icon } from '../../UI/Icons';
  * Prompts Modal Layout component
  * Provides the modal shell structure for customizing prompts
  */
-export const PromptsModalLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
+const PromptsModalLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) => {
     return (
         <div id="prompts-modal-overlay" className="modal-overlay">
             <div className="modal-content" role="dialog" aria-modal="true" aria-labelledby="prompts-modal-title">

@@ -53,7 +53,7 @@ export interface ModeStateHandler<TState = unknown> {
  * Registry of all mode state handlers.
  * Populated by individual mode handler modules.
  */
-export const modeHandlerRegistry = new Map<ApplicationMode, ModeStateHandler>();
+const modeHandlerRegistry = new Map<ApplicationMode, ModeStateHandler>();
 
 /**
  * Register a mode state handler.

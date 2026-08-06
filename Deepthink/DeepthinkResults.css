@@ -10,20 +10,6 @@
     background-color: transparent;
 }
 
-.code-block-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-bottom: var(--space-4);
-    border-bottom: 1px solid var(--border-color);
-    margin-bottom: var(--space-4);
-}
-
-.code-actions {
-    display: flex;
-    gap: var(--gap-xs);
-}
-
 .status-badge {
     padding: var(--space-2) var(--space-4);
     border-radius: var(--radius-full);

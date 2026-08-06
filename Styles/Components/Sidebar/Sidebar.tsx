@@ -7,7 +7,7 @@ import { FileUpload } from './FileUpload';
 import { AppMode, getShowFileUploadForMode, createModeChangeHandler, attachModeChangeListener } from './SidebarLogic';
 import { Icon } from '../../../UI/Icons';
 
-export const Sidebar: React.FC = () => {
+const Sidebar: React.FC = () => {
     const [currentMode, setCurrentMode] = useState<AppMode>('deepthink');
     const importInputRef = React.useRef<HTMLInputElement>(null);
 

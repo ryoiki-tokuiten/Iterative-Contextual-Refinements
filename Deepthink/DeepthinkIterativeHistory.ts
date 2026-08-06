@@ -6,7 +6,7 @@
  * These helpers intentionally avoid external conversation-history managers.
  */
 
-export type PromptMessage = { role: 'user' | 'assistant' | 'system'; content: string };
+type PromptMessage = { role: 'user' | 'assistant' | 'system'; content: string };
 
 export interface StrategySnapshot {
     id: string;

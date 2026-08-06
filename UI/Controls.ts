@@ -22,13 +22,9 @@ function computeIsGenerating(): boolean {
     return deepthinkPipelineRunningOrStopping || isContextualRunning || isAdaptiveDeepthinkRunning;
 }
 
-function computeIsApiKeyReady(): boolean {
-    return hasValidApiKey();
-}
-
 function computeControlsDisabledState(): ControlsDisabledState {
     const isGenerating = computeIsGenerating();
-    const isApiKeyReady = computeIsApiKeyReady();
+    const isApiKeyReady = hasValidApiKey();
 
     return {
         generateButton: isGenerating || !isApiKeyReady,

@@ -20,6 +20,7 @@ import {
 } from './AdaptiveDeepthinkCore';
 
 const boundedCount = z.number().int().min(1).max(5);
+const optionalProximityLoops = z.number().int().min(1).max(5).optional();
 const optionalContext = z.string().trim().min(1).max(8_000).optional();
 const strategyIds = z.array(z.string().trim().regex(/^S[1-5]$/)).min(1).max(5);
 const hypothesisIds = z.array(z.string().trim().regex(/^H[1-5]$/)).min(1).max(5);
@@ -32,10 +33,11 @@ const executionRequestSchema = z.object({
 
 const generateStrategiesSchema = z.object({
     count: boundedCount,
+    proximityLoops: optionalProximityLoops,
     specialContext: optionalContext,
     replaceStrategyIds: z.array(z.string().trim().regex(/^S[1-5]$/)).max(5).optional(),
 });
-const generateHypothesisSchema = z.object({ count: boundedCount, specialContext: optionalContext });
+const generateHypothesisSchema = z.object({ count: boundedCount, proximityLoops: optionalProximityLoops, specialContext: optionalContext });
 const testHypothesisSchema = z.object({ hypothesisIds });
 const executeSchema = z.object({ executions: z.array(executionRequestSchema).min(1).max(5), specialContext: optionalContext });
 const saveSchema = z.object({ strategyIds });
@@ -48,16 +50,18 @@ function definition(name: string, description: string, parameters: ToolDefinitio
 }
 
 const tools: ToolDefinition[] = [
-    definition('generate_strategies', 'Generate or update up to five divergent strategies. This internally runs the configured shared generator/proximity revision loop and always ends on a generator result. Saved IDs cannot be replaced.', {
+    definition('generate_strategies', 'Generate or update up to five divergent strategies. The proximityLoops argument steers how diverse the strategies should be by controlling the shared generator/proximity revision loop; it defaults to 2 and may be set from 1 to 5. The loop always ends on a generator result. Saved IDs cannot be replaced.', {
         type: 'object', properties: {
             count: { type: 'integer', minimum: 1, maximum: 5, description: 'Number of unsaved strategy candidates to produce.' },
+            proximityLoops: { type: 'integer', minimum: 1, maximum: 5, default: 2, description: 'How diverse the generated strategies should be. Higher values request more proximity revision rounds; defaults to 2.' },
             specialContext: { type: 'string', description: 'Failure analysis or desired orthogonal search direction.' },
             replaceStrategyIds: { type: 'array', items: { type: 'string' }, maxItems: 5, description: 'Only these unsaved slots are replaced. Omit for a fresh unsaved batch.' },
         }, required: ['count'], additionalProperties: false,
     }),
-    definition('generate_hypothesis', 'Generate critique-driven hypotheses through the configured shared hypothesis/proximity revision loop, which always ends on a generator result. This replaces every prior hypothesis and test packet.', {
+    definition('generate_hypothesis', 'Generate critique-driven hypotheses through the shared hypothesis/proximity revision loop. The proximityLoops argument steers how diverse the hypotheses should be; it defaults to 2 and may be set from 1 to 5. The loop always ends on a generator result. This replaces every prior hypothesis and test packet.', {
         type: 'object', properties: {
             count: { type: 'integer', minimum: 1, maximum: 5 },
+            proximityLoops: { type: 'integer', minimum: 1, maximum: 5, default: 2, description: 'How diverse the generated hypotheses should be. Higher values request more proximity revision rounds; defaults to 2.' },
             specialContext: { type: 'string', description: 'What the latest execution/critique evidence still fails to explain.' },
         }, required: ['count'], additionalProperties: false,
     }),
@@ -90,7 +94,7 @@ const tools: ToolDefinition[] = [
     }),
 ];
 
-export const AdaptiveDeepthinkGraphAnnotation = Annotation.Root({
+const AdaptiveDeepthinkGraphAnnotation = Annotation.Root({
     messages: Annotation<BaseMessage[]>({ reducer: messagesStateReducer, default: () => [] }),
     coreState: Annotation<AdaptiveDeepthinkState>({ reducer: (_, value) => value, default: () => createAdaptiveDeepthinkState('') }),
     shouldExit: Annotation<boolean>({ reducer: (_, value) => value, default: () => false }),
@@ -105,8 +109,6 @@ export interface AdaptiveDeepthinkToolResultArtifact {
 
 interface AdaptiveDeepthinkGraphOptions {
     modelName: string;
-    temperature: number;
-    topP?: number;
     systemPrompt: string;
     deepthinkPrompts: AdaptiveDeepthinkToolPrompts;
     createExecutionContext: (toolCall: AdaptiveDeepthinkToolCall) => AdaptiveDeepthinkToolExecutionContext;

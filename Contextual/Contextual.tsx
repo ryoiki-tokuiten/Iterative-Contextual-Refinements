@@ -4,7 +4,7 @@
  */
 
 import { Root } from 'react-dom/client';
-import { renderContextualUI, updateContextualUI, renderEvolvingDfsUI, cleanupEvolvingDfsRoot } from './ContextualUI';
+import { renderContextualUI, updateContextualUI, renderEvolvingDfsUI } from './ContextualUI';
 import {
     startContextualProcess,
     stopContextualProcess,
@@ -24,7 +24,6 @@ export {
     getContextualState,
     setContextualStateForImport,
     renderEvolvingDfsUI,
-    cleanupEvolvingDfsRoot
 };
 
 /**
@@ -79,9 +78,5 @@ export function renderContextualMode() {
         return;
     }
 
-    if (!contextualUIRoot) {
-        contextualUIRoot = renderContextualUI(contextualContainer, state, stopContextualProcess);
-    } else {
-        updateContextualUI(contextualUIRoot, state, stopContextualProcess);
-    }
+    contextualUIRoot = renderContextualUI(contextualContainer, state, stopContextualProcess);
 }

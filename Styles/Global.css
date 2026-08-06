@@ -613,35 +613,6 @@ body.light-mode .scrollbar-compact::-webkit-scrollbar-thumb:hover {
     background: rgba(0, 0, 0, 0.2);
 }
 
-.scrollbar-standard {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(100, 110, 220, 0.25) rgba(0, 0, 0, 0.05);
-}
-.scrollbar-standard::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-.scrollbar-standard::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.03);
-    border-radius: 4px;
-}
-body.light-mode .scrollbar-standard::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.02);
-}
-.scrollbar-standard::-webkit-scrollbar-thumb {
-    background: rgba(100, 110, 220, 0.25);
-    border-radius: 4px;
-}
-.scrollbar-standard::-webkit-scrollbar-thumb:hover {
-    background: rgba(120, 130, 240, 0.38);
-}
-body.light-mode .scrollbar-standard::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.15);
-}
-body.light-mode .scrollbar-standard::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.25);
-}
-
 
 /* Global Toggle Switch component */
 .toggle-switch {

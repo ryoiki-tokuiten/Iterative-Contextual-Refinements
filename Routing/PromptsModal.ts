@@ -541,7 +541,6 @@ export class PromptsModal {
         // Provider configuration with colors (same as ModelSelectionUI)
         const providerConfig: Record<string, { class: string }> = {
             'openai': { class: 'openai' },
-            'nvidia': { class: 'nvidia' },
             'anthropic': { class: 'anthropic' },
             'google': { class: 'google' },
             'gemini': { class: 'google' },
@@ -552,7 +551,7 @@ export class PromptsModal {
 
         // Sort providers for consistent ordering
         const sortedProviders = Object.keys(modelsByProvider).sort((a, b) => {
-            const order = ['openai', 'nvidia', 'anthropic', 'google', 'gemini', 'meta', 'mistral'];
+            const order = ['openai', 'anthropic', 'google', 'gemini', 'meta', 'mistral'];
             const aIndex = order.indexOf(a.toLowerCase());
             const bIndex = order.indexOf(b.toLowerCase());
             if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);

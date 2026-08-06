@@ -271,7 +271,8 @@
     border-radius: 0 2px 2px 0;
 }
 
-.latex-content-wrapper blockquote::after {
+.latex-content-wrapper blockquote::after,
+.latex-content-wrapper pre::before {
     content: '';
     position: absolute;
     top: 0;
@@ -387,16 +388,6 @@
     -webkit-backdrop-filter: var(--card-blur-effect);
 }
 
-.latex-content-wrapper pre::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(138, 127, 248, 0.3), transparent);
-}
-
 /* Code Block Containers */
 .code-block-container {
     margin: 1.5rem 0;
@@ -418,6 +409,7 @@
     background: transparent;
     min-height: 0;
     border-bottom: 1px solid rgba(105, 116, 165, 0.14);
+    margin-bottom: var(--space-4);
 }
 
 .code-block-title {

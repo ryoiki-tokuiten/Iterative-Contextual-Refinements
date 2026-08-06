@@ -8,11 +8,7 @@
 
 import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
-import { callAI } from "@/Routing/AIService.js";
-import { CustomizablePromptsDeepthink } from './DeepthinkPrompts';
-import { cleanupEvolvingDfsRoot } from '../Contextual/ContextualUI';
 import { onHighlighterReady } from '../Styles/Shiki';
-import { parseJsonSafe } from "../Core/JsonParser";
 import { renderIconMarkup } from '../UI/Icons';
 
 // React component imports
@@ -42,6 +38,7 @@ import {
     DeepthinkMainStrategyData,
     DeepthinkPipelineState,
     DeepthinkStructuredSolutionPoolAgentData,
+    type DeepthinkCoreDeps,
     getActiveDeepthinkPipeline,
     setActiveDeepthinkPipelineForImport,
     initializeDeepthinkCore,
@@ -123,38 +120,14 @@ let filesystemRedirectListenerRegistered = false;
 // Initialization
 // ============================================================================ 
 
-export function initializeDeepthinkModule(dependencies: {
-    callAI: typeof callAI;
-    parseJsonSafe: typeof parseJsonSafe;
-    updateControlsState: (newState: any) => void;
+interface DeepthinkModuleDependencies extends DeepthinkCoreDeps {
     escapeHtml: (unsafe: string) => string;
-    getSelectedTemperature: () => number;
-    getSelectedModel: () => string;
-    getSelectedTopP: () => number;
-    getSelectedStrategiesCount: () => number;
-    getSelectedSubStrategiesCount: () => number;
-    getStrategyProximityLoops: () => number;
-    getRefinementEnabled: () => boolean;
-    getSelectedHypothesisCount: () => number;
-    getHypothesisProximityLoops: () => number;
-    getSelectedPqfAggressiveness: () => string;
-    getSkipSubStrategies: () => boolean;
-    getDissectedObservationsEnabled: () => boolean;
-    getShareHypothesesToDissected: () => boolean;
-    getEvolvingDfsEnabled: () => boolean;
-    getEvolvingDfsDepth: () => number;
-    getIsolateBranchesEnabled: () => boolean;
-    getSolutionPoolDisabled: () => boolean;
-    getProvideAllSolutionsToCorrectors: () => boolean;
-    getPostQualityFilterEnabled: () => boolean;
-    getDeepthinkCodeExecutionEnabled: () => boolean;
-    getHypothesisInjectionMode: () => 'parallel' | 'strategy_aware' | 'selective_injection';
-    getSelectedThinkingLevel?: () => 'low' | 'medium' | 'high' | 'minimal';
-    getCustomPromptsDeepthinkState: () => CustomizablePromptsDeepthink;
     tabsNavContainer: HTMLElement | null;
     pipelinesContentContainer: HTMLElement | null;
     setActiveDeepthinkPipeline: (pipeline: DeepthinkPipelineState | null) => void;
-}) {
+}
+
+export function initializeDeepthinkModule(dependencies: DeepthinkModuleDependencies) {
     Object.assign(moduleState, {
         tabsNavContainer: dependencies.tabsNavContainer,
         pipelinesContentContainer: dependencies.pipelinesContentContainer,
@@ -222,7 +195,6 @@ function unmountModal(): void {
         modalRoot.render(null);
     }
     activeSolutionModalSubStrategyId = null;
-    if (cleanupEvolvingDfsRoot) cleanupEvolvingDfsRoot();
 }
 
 function removeEvolvingDfsSolutionOverlay(immediate = true): void {
@@ -249,10 +221,9 @@ function removeEvolvingDfsSolutionOverlay(immediate = true): void {
 
     activeSolutionModalSubStrategyId = null;
     activeSolutionModalBranchVersion = undefined;
-    cleanupEvolvingDfsRoot();
 }
 
-export async function openDeepthinkSolutionModal(subStrategyId: string, branchVersion?: number) {
+async function openDeepthinkSolutionModal(subStrategyId: string, branchVersion?: number) {
     const pipeline = getActiveDeepthinkPipeline();
     const subStrategy = pipeline?.initialStrategies.flatMap(ms => ms.subStrategies).find(ss => ss.id === subStrategyId);
     if (!subStrategy) return;
@@ -566,9 +537,7 @@ export function renderActiveDeepthinkPipeline() {
     syncDeepthinkDomReferences();
     const { tabsNavContainer, pipelinesContentContainer } = moduleState;
 
-    if (!deepthinkProcess || !tabsNavContainer || !pipelinesContentContainer) {
-        if (!moduleState.tabsNavContainer || !moduleState.pipelinesContentContainer || !deepthinkProcess) return;
-    }
+    if (!deepthinkProcess || !tabsNavContainer || !pipelinesContentContainer) return;
 
     // Restore UI state
     const sidebarBtn = document.getElementById('sidebar-collapse-button') as HTMLButtonElement;

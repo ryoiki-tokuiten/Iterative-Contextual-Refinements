@@ -29,7 +29,7 @@ const MODE_DETAILS: Record<ApplicationMode, {
     }
 };
 
-export const AppModeSelector: React.FC = () => {
+const AppModeSelector: React.FC = () => {
     const [currentMode, setCurrentMode] = useState<ApplicationMode>(globalState.currentMode as ApplicationMode);
 
     useEffect(() => {

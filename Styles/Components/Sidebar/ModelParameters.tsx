@@ -3,13 +3,9 @@ import { globalState } from '../../../Core/State';
 import { ApplicationMode } from '../../../Core/Types';
 import { Icon } from '../../../UI/Icons';
 import { setSandboxToolExecutionEnabled } from '../../../UI/setupCodeExecutionToggle';
-import { getDeepthinkConfigController } from '../../../Routing';
 
-export const ModelParameters: React.FC = () => {
+const ModelParameters: React.FC = () => {
     const [currentMode, setCurrentMode] = useState<ApplicationMode>(globalState.currentMode as ApplicationMode);
-    const configController = getDeepthinkConfigController();
-    const [strategyProximityLoops, setStrategyProximityLoops] = useState(() => configController.getStrategyProximityLoops());
-    const [hypothesisProximityLoops, setHypothesisProximityLoops] = useState(() => configController.getHypothesisProximityLoops());
 
     useEffect(() => {
         const handleModeChange = () => {
@@ -22,20 +18,6 @@ export const ModelParameters: React.FC = () => {
             window.removeEventListener('appModeChanged', handleModeChange);
         };
     }, []);
-
-    useEffect(() => {
-        const handleConfigChange = () => {
-            setStrategyProximityLoops(configController.getStrategyProximityLoops());
-            setHypothesisProximityLoops(configController.getHypothesisProximityLoops());
-        };
-        configController.addEventListener('configchange', handleConfigChange);
-        return () => configController.removeEventListener('configchange', handleConfigChange);
-    }, [configController]);
-
-    const proximityControls = [
-        ['strategy', 'Strategy–proximity', strategyProximityLoops, configController.setStrategyProximityLoops.bind(configController), '#e86b6b'],
-        ['hypothesis', 'Hypothesis–proximity', hypothesisProximityLoops, configController.setHypothesisProximityLoops.bind(configController), 'var(--accent-blue)'],
-    ] as const;
 
     return (
         <details className="sidebar-section" open>
@@ -57,61 +39,7 @@ export const ModelParameters: React.FC = () => {
                 </div>
 
                 <div id="model-parameters-container" className="input-group-tight">
-                    <div className="input-group-tight">
-                        <label htmlFor="temperature-slider" className="input-label">
-                            Temperature: <span id="temperature-value">1.0</span>
-                        </label>
-                        <input
-                            type="range"
-                            id="temperature-slider"
-                            className="slider"
-                            min="0"
-                            max="2"
-                            step="0.1"
-                            defaultValue="1.0"
-                            aria-label="Temperature slider"
-                        />
-                    </div>
-                    <div className="input-group-tight">
-                        <label htmlFor="top-p-slider" className="input-label">
-                            Top P: <span id="top-p-value">0.95</span>
-                        </label>
-                        <input
-                            type="range"
-                            id="top-p-slider"
-                            className="slider"
-                            min="0"
-                            max="1"
-                            step="0.05"
-                            defaultValue="0.95"
-                            aria-label="Top P slider"
-                        />
-                    </div>
-
                     <div id="contextual-mode-controls" style={{ display: (currentMode === 'contextual' || currentMode === 'adaptive-deepthink') ? '' : 'none' }}>
-                        {currentMode === 'adaptive-deepthink' && (
-                            <div className="adaptive-proximity-loop-controls">
-                                {proximityControls.map(([kind, label, value, update, color]) => (
-                                    <div className="input-group-tight" key={kind}>
-                                        <label htmlFor={`adaptive-${kind}-proximity-slider`} className="input-label">
-                                            {label} loops: <span>{value}</span>
-                                        </label>
-                                        <input
-                                            type="range"
-                                            id={`adaptive-${kind}-proximity-slider`}
-                                            className={`slider adaptive-proximity-slider adaptive-${kind}-proximity-slider`}
-                                            min="1"
-                                            max="5"
-                                            value={value}
-                                            style={{
-                                                background: `linear-gradient(to right, ${color} 0%, ${color} ${(value - 1) * 25}%, var(--slider-track-color) ${(value - 1) * 25}%, var(--slider-track-color) 100%)`,
-                                            }}
-                                            onChange={event => update(Number(event.currentTarget.value))}
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        )}
                         <div className="code-execution-container">
                             <div className="code-execution-header">
                                 <Icon name="code" />

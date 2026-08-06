@@ -2,11 +2,10 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  *
- * SolutionPool — Pure data/version management logic.
+ * SolutionPool — Pure solution-pool data and download logic.
  * No DOM manipulation. React components live in SolutionPool.tsx.
  */
 
-import { openEvolutionViewerFromHistory } from '../Styles/Components/DiffModal/EvolutionViewer';
 import {
     DeepthinkPipelineState,
     getActiveDeepthinkPipeline,
@@ -18,79 +17,57 @@ import {
 export type { SolutionPoolParsedSolution, SolutionPoolParsedResponse };
 
 // ═══════════════════════════════════════════════════════════════════════
-// Version History Store
-// ═══════════════════════════════════════════════════════════════════════
-
-export interface SolutionPoolVersion {
-    content: string;
-    title: string;
-    timestamp: number;
-}
-
-const solutionPoolVersions = new Map<string, SolutionPoolVersion[]>();
-
-function sessionKey(pipelineId: string): string {
-    return `solution-pool-${pipelineId}`;
-}
-
-/** Appends a new snapshot of the solution pool for a given pipeline. */
-export function addSolutionPoolVersion(pipelineId: string, poolContent: string, iterationNumber: number): void {
-    if (!pipelineId || !poolContent) return;
-
-    const key = sessionKey(pipelineId);
-    let versions = solutionPoolVersions.get(key);
-    if (!versions) {
-        versions = [];
-        solutionPoolVersions.set(key, versions);
-    }
-    versions.push({ content: poolContent, title: `Iteration ${iterationNumber}`, timestamp: Date.now() });
-}
-
-/** Returns a defensive copy of the version history, or null if empty. */
-export function getSolutionPoolVersionsForExport(pipelineId: string): SolutionPoolVersion[] | null {
-    const versions = solutionPoolVersions.get(sessionKey(pipelineId));
-    return versions && versions.length > 0 ? [...versions] : null;
-}
-
-/** Restores version history from a previously exported array. */
-export function restoreSolutionPoolVersions(pipelineId: string, versions: SolutionPoolVersion[]): void {
-    if (!pipelineId || !versions?.length) return;
-    solutionPoolVersions.set(sessionKey(pipelineId), [...versions]);
-}
-
-// ═══════════════════════════════════════════════════════════════════════
 // Actions (side-effectful but no DOM rendering)
 // ═══════════════════════════════════════════════════════════════════════
 
-/** Opens the diff evolution viewer for a pipeline's solution pool history. */
-export function openSolutionPoolEvolution(pipelineId: string): void {
-    const key = sessionKey(pipelineId);
-    const versions = solutionPoolVersions.get(key);
-
-    if (!versions || versions.length === 0) {
-        alert('No solution pool history available yet. The pool needs at least one update to view evolution.');
-        return;
-    }
-    openEvolutionViewerFromHistory(versions, key);
-}
-
-/** Downloads the current pool as a JSON file. */
-export function downloadSolutionPoolAsJSON(pipelineId: string): void {
+/** Downloads the latest pool snapshot for every branch as a JSON file. */
+export function downloadAllLatestPoolsAsJSON(pipelineId: string): void {
     const pipeline = getActiveDeepthinkPipeline();
     if (!pipeline || pipeline.id !== pipelineId) {
         alert('Pipeline not found.');
         return;
     }
-    if (!pipeline.structuredSolutionPool?.trim()) {
+    const latestPoolsByBranch = new Map<string, {
+        strategy_id: string;
+        branch_version: number;
+        global_iteration?: number;
+        branch_iteration?: number;
+        status: string;
+        pool: SolutionPoolParsedResponse | string | null;
+    }>();
+
+    (pipeline.structuredSolutionPoolAgents || []).forEach(agent => {
+        if (agent.status === 'skipped' || (!agent.poolResponse?.trim() && !agent.parsedPoolResponse)) return;
+
+        const branchVersion = agent.branchVersion || 1;
+        const key = `${agent.mainStrategyId}-v${branchVersion}`;
+        const existing = latestPoolsByBranch.get(key);
+        if (existing && (existing.global_iteration || 0) >= (agent.globalIteration || 0)) return;
+
+        latestPoolsByBranch.set(key, {
+            strategy_id: agent.mainStrategyId,
+            branch_version: branchVersion,
+            global_iteration: agent.globalIteration,
+            branch_iteration: agent.branchIteration,
+            status: agent.status,
+            pool: agent.parsedPoolResponse || agent.poolResponse || null,
+        });
+    });
+
+    if (latestPoolsByBranch.size === 0) {
         alert('No solution pool content available yet. The pool is still initializing.');
         return;
     }
 
-    const blob = new Blob([pipeline.structuredSolutionPool], { type: 'application/json' });
+    const payload = {
+        schema: 'deepthink-latest-solution-pools-v1',
+        pools: Array.from(latestPoolsByBranch.values()),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'solution_pool.json';
+    a.download = 'all_latest_solution_pools.json';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

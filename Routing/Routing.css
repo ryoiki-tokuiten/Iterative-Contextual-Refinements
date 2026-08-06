@@ -57,11 +57,6 @@
     color: rgb(16, 163, 127);
 }
 
-.provider-tab.nvidia.active {
-    background: rgba(118, 185, 0, 0.12);
-    color: rgb(118, 185, 0);
-}
-
 .provider-tab.anthropic.active {
     background: rgba(204, 85, 68, 0.12);
     color: rgb(204, 85, 68);
@@ -246,14 +241,7 @@
    ============================================ */
 
 .strategy-execution-container {
-    display: flex;
-    flex-direction: column;
     gap: 16px;
-    margin-top: 16px;
-    padding: 20px;
-    background: rgba(var(--card-bg-base-rgb), 0.02);
-    border: 1px solid rgba(232, 107, 107, 0.15);
-    border-radius: 26px;
     transition: all 0.4s cubic-bezier(0.23, 1, 0.320, 1);
     box-shadow: 0 2px 16px rgba(232, 107, 107, 0.04),
         inset 0 1px 0 rgba(232, 107, 107, 0.08);
@@ -266,23 +254,13 @@
    ============================================ */
 
 .refinement-options-container {
-    display: flex;
-    flex-direction: column;
     gap: 20px;
-    margin-top: 16px;
-    padding: 24px;
-    background: rgba(var(--card-bg-base-rgb), 0.02);
-    border: 1px solid rgba(139, 92, 246, 0.2);
-    border-radius: 26px;
-    transition: all 0.3s ease;
     box-shadow: 0 2px 16px rgba(139, 92, 246, 0.04),
         inset 0 1px 0 rgba(139, 92, 246, 0.08);
 }
 
 /* Refinement Methods */
 .refinement-methods {
-    display: flex;
-    flex-direction: column;
     gap: 12px;
 }
 
@@ -298,10 +276,6 @@
 
 /* Method Card */
 .refinement-method-card {
-    background: rgba(var(--card-bg-base-rgb), 0.25);
-    border: 1px solid rgba(139, 92, 246, 0.15);
-    border-radius: var(--border-radius-md);
-    padding: 16px;
     transition: all 0.3s cubic-bezier(0.23, 1, 0.320, 1);
     cursor: pointer;
 }
@@ -318,13 +292,6 @@
     border-color: rgba(139, 92, 246, 0.4);
     box-shadow: 0 4px 16px rgba(139, 92, 246, 0.15),
         inset 0 1px 0 rgba(139, 92, 246, 0.2);
-}
-
-.method-card-header {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 10px;
 }
 
 .method-card-selector {
@@ -420,16 +387,6 @@
     }
 }
 
-/* Evolution Filter Options Container */
-.evolution-filter-options-container {
-    margin-top: 16px;
-    padding: 16px;
-    background: rgba(var(--accent-pink-rgb), 0.04) !important;
-    border: 1px solid rgba(var(--accent-pink-rgb), 0.15) !important;
-    border-radius: var(--border-radius-md);
-    transition: all var(--transition-speed);
-}
-
 .evolution-filter-options-header {
     display: flex;
     align-items: center;
@@ -447,14 +404,10 @@
 }
 
 .pqf-toggle-wrapper {
-    display: flex;
-    flex-direction: column;
     gap: 6px;
 }
 
 .pqf-buttons {
-    display: flex;
-    gap: 8px;
     flex-wrap: wrap;
 }
 
@@ -507,12 +460,6 @@
     border-bottom: 1px solid var(--border-color);
 }
 
-.window-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
 .window-toggle-label {
     display: flex;
     align-items: center;
@@ -559,14 +506,10 @@
 }
 
 .window-controls {
-    display: flex;
     gap: 6px;
 }
 
 .window-button {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
     cursor: pointer;
 }
 
@@ -582,28 +525,13 @@
     background-color: #28ca42;
 }
 
-.window-content {
-    padding: 16px;
-}
-
-.loading-info {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
 .loading-line {
     height: 12px;
     background-color: rgba(var(--accent-blue-rgb), 0.2);
     border-radius: 8px;
-    animation: none;
 }
 
 
-
-.execution-agents-visualization {
-    margin-top: 12px;
-}
 
 .connection-nodes {
     height: 40px;
@@ -612,7 +540,6 @@
 
 .connection-svg {
     width: 100%;
-    height: 100%;
 }
 
 .execution-agents-wrapper {
@@ -621,7 +548,6 @@
 
 .execution-agents-text {
     font-size: 0.8rem;
-    color: var(--accent-green-rgb1);
     font-weight: 500;
 }
 

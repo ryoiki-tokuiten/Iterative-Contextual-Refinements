@@ -12,7 +12,7 @@ import { globalState } from "../Core/State";
 // Types & Interfaces
 // ============================================================================
 
-export interface StructuredMessage {
+interface StructuredMessage {
     role: 'system' | 'assistant' | 'user';
     content: string;
     /** Optional: raw Gemini Parts for model turns with native function calling.
@@ -27,13 +27,13 @@ export interface ThinkingConfig {
     tools?: any[];  // Function declarations to enable thought signatures
 }
 
-export interface DiscoveredModel {
+interface DiscoveredModel {
     id: string;
     /** Undefined means the provider did not publish a reliable vision capability. */
     supportsImageInput?: boolean;
 }
 
-export type ListedModel = string | DiscoveredModel;
+type ListedModel = string | DiscoveredModel;
 
 
 // ============================================================================
@@ -54,7 +54,18 @@ export type ListedModel = string | DiscoveredModel;
  * model, then tag your agent in this file, let it read the docs and search the web for that model
  * and change the config.
  */
-export type ThinkingType = 'level' | 'budget' | 'openai_effort' | 'anthropic_effort' | 'none';
+type ThinkingType = 'level' | 'budget' | 'openai_effort' | 'anthropic_effort' | 'none';
+
+const THINKING_EFFORT_MAP: Record<string, string> = {
+    minimal: 'low',
+    low: 'low',
+    medium: 'medium',
+    high: 'high',
+};
+
+function getThinkingEffort(level: string, fallback: string): string {
+    return THINKING_EFFORT_MAP[level] || fallback;
+}
 
 export function getModelThinkingType(modelId: string): ThinkingType {
     const name = modelId.toLowerCase();
@@ -87,12 +98,10 @@ export interface AIProvider {
     initialize(apiKey: string): boolean;
     generateContent(
         promptOrParts: string | Part[] | StructuredMessage[],
-        temperature: number,
         modelToUse: string,
         systemInstruction?: string,
         isJsonOutput?: boolean,
-        topP?: number,
-        thinkingConfig?: any
+        thinkingConfig?: ThinkingConfig
     ): Promise<GenerateContentResponse>;
     isInitialized(): boolean;
     getProviderName(): string;
@@ -173,6 +182,25 @@ function buildChatMessages(
     return messages;
 }
 
+async function generateOpenAICompatibleContent(
+    client: OpenAI | null,
+    providerName: string,
+    promptOrParts: string | Part[] | StructuredMessage[],
+    modelToUse: string,
+    systemInstruction?: string,
+    isJsonOutput: boolean = false,
+): Promise<GenerateContentResponse> {
+    if (!client) throw new Error(`${providerName} client not initialized.`);
+
+    const messages = buildChatMessages(promptOrParts, systemInstruction, true);
+    const requestOptions: any = { model: modelToUse, messages };
+
+    if (isJsonOutput) requestOptions.response_format = { type: "json_object" };
+
+    const response = await client.chat.completions.create(requestOptions);
+    return wrapAsGeminiResponse(response.choices[0]?.message?.content || '');
+}
+
 /**
  * Builds Anthropic-compatible messages and extracts system prompt separately.
  * Anthropic requires system messages in a dedicated field rather than in the messages array,
@@ -196,7 +224,7 @@ function buildAnthropicMessages(
             }
         }
         if (systemMessages.length > 0) systemPrompt = systemMessages.join('\n\n');
-    } else if (Array.isArray(promptOrParts) && promptOrParts.length > 0 && !isStructuredMessages(promptOrParts)) {
+    } else if (Array.isArray(promptOrParts) && promptOrParts.length > 0) {
         const contentParts: any[] = [];
         for (const part of promptOrParts) {
             if (hasText(part)) {
@@ -306,9 +334,6 @@ function normalizeGoogleApiError(error: any, modelToUse: string): Error {
 
     if (isTransientGoogleApiError(parsed)) {
         message += ' This is a provider-side failure.';
-    }
-
-    if (isTransientGoogleApiError(parsed)) {
         message += ' Retry the run, and if it repeats switch to a stable non-preview Gemini model.';
     }
 
@@ -320,7 +345,7 @@ function normalizeGoogleApiError(error: any, modelToUse: string): Error {
     return normalized;
 }
 
-export class GoogleAIProvider implements AIProvider {
+class GoogleAIProvider implements AIProvider {
     private client: GoogleGenAI | null = null;
     private apiKey: string = '';
 
@@ -388,11 +413,9 @@ export class GoogleAIProvider implements AIProvider {
 
     async generateContent(
         promptOrParts: string | Part[] | StructuredMessage[],
-        temperature: number,
         modelToUse: string,
         systemInstruction?: string,
         isJsonOutput: boolean = false,
-        topP?: number,
         thinkingConfig?: any
     ): Promise<GenerateContentResponse> {
         if (!this.client) throw new Error("Google AI client not initialized.");
@@ -465,8 +488,7 @@ export class GoogleAIProvider implements AIProvider {
             }];
         }
 
-        const config: any = { temperature, maxOutputTokens: 65536 };
-        if (topP !== undefined) config.topP = topP;
+        const config: any = { maxOutputTokens: 65536 };
         if (systemInstruction) config.systemInstruction = systemInstruction;
         if (isJsonOutput) config.responseMimeType = "application/json";
 
@@ -537,7 +559,7 @@ export class GoogleAIProvider implements AIProvider {
 // OpenAI Provider
 // ============================================================================
 
-export class OpenAIProvider implements AIProvider {
+class OpenAIProvider implements AIProvider {
     private client: OpenAI | null = null;
 
     initialize(apiKey: string): boolean {
@@ -568,11 +590,9 @@ export class OpenAIProvider implements AIProvider {
 
     async generateContent(
         promptOrParts: string | Part[] | StructuredMessage[],
-        temperature: number,
         modelToUse: string,
         systemInstruction?: string,
         isJsonOutput: boolean = false,
-        topP?: number,
         _thinkingConfig?: any  // Not used by OpenAI but maintained for interface consistency
     ): Promise<GenerateContentResponse> {
         if (!this.client) throw new Error("OpenAI client not initialized.");
@@ -584,11 +604,7 @@ export class OpenAIProvider implements AIProvider {
 
         if (thinkingType === 'openai_effort') {
             const level = _thinkingConfig?.thinkingLevel || 'high';
-            const effortMap: Record<string, string> = { 'minimal': 'low', 'low': 'low', 'medium': 'medium', 'high': 'high' };
-            requestOptions.reasoning_effort = effortMap[level] || 'medium';
-        } else {
-            requestOptions.temperature = temperature;
-            if (topP !== undefined) requestOptions.top_p = topP;
+            requestOptions.reasoning_effort = getThinkingEffort(level, 'medium');
         }
 
         if (isJsonOutput) requestOptions.response_format = { type: "json_object" };
@@ -610,7 +626,7 @@ export class OpenAIProvider implements AIProvider {
 // OpenRouter Provider
 // ============================================================================
 
-export class OpenRouterProvider implements AIProvider {
+class OpenRouterProvider implements AIProvider {
     private client: OpenAI | null = null;
 
     initialize(apiKey: string): boolean {
@@ -653,23 +669,19 @@ export class OpenRouterProvider implements AIProvider {
 
     async generateContent(
         promptOrParts: string | Part[] | StructuredMessage[],
-        temperature: number,
         modelToUse: string,
         systemInstruction?: string,
         isJsonOutput: boolean = false,
-        topP?: number,
         _thinkingConfig?: any
     ): Promise<GenerateContentResponse> {
-        if (!this.client) throw new Error("OpenRouter client not initialized.");
-
-        const messages = buildChatMessages(promptOrParts, systemInstruction, true);
-        const requestOptions: any = { model: modelToUse, messages, temperature };
-
-        if (topP !== undefined) requestOptions.top_p = topP;
-        if (isJsonOutput) requestOptions.response_format = { type: "json_object" };
-
-        const response = await this.client.chat.completions.create(requestOptions);
-        return wrapAsGeminiResponse(response.choices[0]?.message?.content || '');
+        return generateOpenAICompatibleContent(
+            this.client,
+            'OpenRouter',
+            promptOrParts,
+            modelToUse,
+            systemInstruction,
+            isJsonOutput,
+        );
     }
 
     isInitialized(): boolean {
@@ -685,7 +697,7 @@ export class OpenRouterProvider implements AIProvider {
 // Anthropic Provider
 // ============================================================================
 
-export class AnthropicProvider implements AIProvider {
+class AnthropicProvider implements AIProvider {
     private client: Anthropic | null = null;
 
     initialize(apiKey: string): boolean {
@@ -714,11 +726,9 @@ export class AnthropicProvider implements AIProvider {
 
     async generateContent(
         promptOrParts: string | Part[] | StructuredMessage[],
-        temperature: number,
         modelToUse: string,
         systemInstruction?: string,
         isJsonOutput: boolean = false,
-        topP?: number,
         _thinkingConfig?: any
     ): Promise<GenerateContentResponse> {
         if (!this.client) throw new Error("Anthropic client not initialized.");
@@ -730,16 +740,11 @@ export class AnthropicProvider implements AIProvider {
 
         if (thinkingType === 'anthropic_effort') {
             const level = _thinkingConfig?.thinkingLevel || 'high';
-            const effortMap: Record<string, string> = { 'minimal': 'low', 'low': 'low', 'medium': 'medium', 'high': 'high' };
             requestOptions.thinking = { type: 'adaptive' };
-            requestOptions.effort = effortMap[level] || 'high';
-            requestOptions.temperature = 1.0;
-        } else {
-            requestOptions.temperature = temperature;
+            requestOptions.effort = getThinkingEffort(level, 'high');
         }
 
         if (systemPrompt) requestOptions.system = systemPrompt;
-        if (topP !== undefined) requestOptions.top_p = topP;
 
         // Anthropic has no native JSON mode — inject instruction into system prompt
         if (isJsonOutput && systemPrompt) {
@@ -766,7 +771,7 @@ export class AnthropicProvider implements AIProvider {
 // Local Models Provider
 // ============================================================================
 
-export class LocalModelsProvider implements AIProvider {
+class LocalModelsProvider implements AIProvider {
     private client: OpenAI | null = null;
     private endpointUrl: string = '';
 
@@ -798,11 +803,9 @@ export class LocalModelsProvider implements AIProvider {
 
     async generateContent(
         promptOrParts: string | Part[] | StructuredMessage[],
-        temperature: number,
         modelToUse: string,
         systemInstruction?: string,
         isJsonOutput: boolean = false,
-        topP?: number,
         _thinkingConfig?: any
     ): Promise<GenerateContentResponse> {
         if (!this.client) throw new Error("Local Models client not initialized.");
@@ -815,8 +818,7 @@ export class LocalModelsProvider implements AIProvider {
         }
 
         const messages = buildChatMessages(promptOrParts, effectiveSystemInstruction, true);
-        const requestOptions: any = { model: modelToUse, messages, temperature };
-        if (topP !== undefined) requestOptions.top_p = topP;
+        const requestOptions: any = { model: modelToUse, messages };
 
         const response = await this.client.chat.completions.create(requestOptions);
         return wrapAsGeminiResponse(response.choices[0]?.message?.content || '');
@@ -828,76 +830,6 @@ export class LocalModelsProvider implements AIProvider {
 
     getProviderName(): string {
         return 'local';
-    }
-}
-
-// ============================================================================
-// NVIDIA Provider
-// ============================================================================
-
-export class NvidiaProvider implements AIProvider {
-    private client: OpenAI | null = null;
-
-    initialize(apiKey: string): boolean {
-        try {
-            const isBrowser = typeof window !== 'undefined';
-            const baseUrl = isBrowser ? ((import.meta as any).env?.BASE_URL || '/') : '/';
-            const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-            const baseURL = isBrowser
-                ? `${window.location.origin}${normalizedBase}/api/nvidia/v1`
-                : "https://integrate.api.nvidia.com/v1";
-
-            this.client = new OpenAI({
-                apiKey,
-                baseURL,
-                dangerouslyAllowBrowser: true
-            });
-            return true;
-        } catch (e) {
-            console.error("Failed to initialize NVIDIA:", e);
-            return false;
-        }
-    }
-
-    async listModels(): Promise<string[]> {
-        if (!this.client) return [];
-        try {
-            const response = await this.client.models.list();
-            if (!response || !response.data) return [];
-            return response.data.map((m: any) => m.id);
-        } catch (e) {
-            console.error("Failed to fetch NVIDIA models:", e);
-            return [];
-        }
-    }
-
-    async generateContent(
-        promptOrParts: string | Part[] | StructuredMessage[],
-        temperature: number,
-        modelToUse: string,
-        systemInstruction?: string,
-        isJsonOutput: boolean = false,
-        topP?: number,
-        _thinkingConfig?: any
-    ): Promise<GenerateContentResponse> {
-        if (!this.client) throw new Error("NVIDIA client not initialized.");
-
-        const messages = buildChatMessages(promptOrParts, systemInstruction, true);
-        const requestOptions: any = { model: modelToUse, messages, temperature };
-
-        if (topP !== undefined) requestOptions.top_p = topP;
-        if (isJsonOutput) requestOptions.response_format = { type: "json_object" };
-
-        const response = await this.client.chat.completions.create(requestOptions);
-        return wrapAsGeminiResponse(response.choices[0]?.message?.content || '');
-    }
-
-    isInitialized(): boolean {
-        return this.client !== null;
-    }
-
-    getProviderName(): string {
-        return 'nvidia';
     }
 }
 
@@ -918,8 +850,6 @@ export function createAIProvider(provider: string): AIProvider {
             return new AnthropicProvider();
         case 'local':
             return new LocalModelsProvider();
-        case 'nvidia':
-            return new NvidiaProvider();
         default:
             return new GoogleAIProvider();
     }

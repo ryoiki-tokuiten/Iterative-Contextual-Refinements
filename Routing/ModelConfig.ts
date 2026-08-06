@@ -13,8 +13,6 @@ export interface ModelOption {
 export const MAX_HYPOTHESIS_COUNT = 10;
 
 export interface ModelParameters {
-    temperature: number;
-    topP: number;
     strategiesCount: number;
     strategyProximityLoops: number;
     subStrategiesCount: number;
@@ -36,9 +34,7 @@ export interface ModelParameters {
     shareHypothesesToDissected: boolean;
 }
 
-export const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
-    temperature: 1.0,
-    topP: 0.95,
+const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
     strategiesCount: 3,
     strategyProximityLoops: 2,
     subStrategiesCount: 0,
@@ -88,14 +84,6 @@ export class ModelConfigManager {
         value: ModelParameters[K]
     ): void {
         this.parameters[key] = value;
-    }
-
-    public getTemperature(): number {
-        return Math.max(0, Math.min(2, this.parameters.temperature));
-    }
-
-    public getTopP(): number {
-        return Math.max(0, Math.min(1, this.parameters.topP));
     }
 
     public getStrategiesCount(): number {

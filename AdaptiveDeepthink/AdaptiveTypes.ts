@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type ToolCall = {
+type ToolCall = {
     type: string;
     rawType?: string;
     args?: any;

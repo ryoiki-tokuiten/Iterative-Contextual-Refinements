@@ -69,7 +69,10 @@
 .reasoning-fullscreen-btn.reasoning-pill {
     display: inline-flex;
     align-items: center;
+    justify-content: space-between;
     gap: 0.5rem;
+    width: 100%;
+    height: auto;
     padding: 0.5rem 1rem;
     background: rgba(var(--accent-pink-rgb), 0.1);
     border: 1px solid rgba(var(--accent-pink-rgb), 0.25);
@@ -151,7 +154,6 @@
 }
 
 .view-argument-button:hover {
-    background: var(--surface-tertiary);
     border-color: var(--accent-blue);
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(var(--accent-blue-rgb), 0.2);
@@ -301,7 +303,6 @@
 
 .button.disabled {
     background: var(--text-tertiary-color) !important;
-    color: var(--text-muted) !important;
     cursor: not-allowed !important;
     opacity: 0.6;
 }

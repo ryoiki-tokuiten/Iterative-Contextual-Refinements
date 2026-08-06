@@ -530,21 +530,11 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                                             />
                                                         </div>
                                                     </div>
-                                                    {selectedEvent && (selectedEvent.modelName || selectedEvent.temperature !== undefined) && (
+                                                    {selectedEvent && (selectedEvent.modelName || selectedEvent.codeExecutionEnabled !== undefined) && (
                                                         <div className="selected-agent-config font-mono" style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                                                             {selectedEvent.modelName && (
                                                                 <span className="config-badge model" title="Model Name">
                                                                     <MIcon name="smart_toy" /> {selectedEvent.modelName}
-                                                                </span>
-                                                            )}
-                                                            {selectedEvent.temperature !== undefined && (
-                                                                <span className="config-badge temp" title="Temperature">
-                                                                    Temp: {selectedEvent.temperature}
-                                                                </span>
-                                                            )}
-                                                            {selectedEvent.topP !== undefined && (
-                                                                <span className="config-badge topp" title="Top-P">
-                                                                    Top-P: {selectedEvent.topP}
                                                                 </span>
                                                             )}
                                                             {selectedEvent.codeExecutionEnabled !== undefined && (

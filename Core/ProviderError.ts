@@ -72,7 +72,7 @@ function findMessage(value: unknown, visited = new Set<unknown>(), depth = 0): s
 }
 
 /** Returns an HTTP-like status code when the provider SDK exposed one. */
-export function getProviderErrorStatus(error: unknown): number | null {
+function getProviderErrorStatus(error: unknown): number | null {
     const record = asRecord(error);
     const directStatus = record?.status;
     if (typeof directStatus === 'number') return directStatus;

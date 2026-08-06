@@ -13,7 +13,7 @@ import { getRoutingManager } from '../index';
  * Prompts Modal Manager
  * Mounts one shared prompt editor for each mode and supplies its typed configuration.
  */
-export const PromptsModalManager: React.FC = () => {
+const PromptsModalManager: React.FC = () => {
     const [promptsManager, setPromptsManager] = useState(() => getRoutingManager().getPromptsManager());
 
     // This root is rendered independently from the app root. Its first render

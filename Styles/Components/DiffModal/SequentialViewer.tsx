@@ -41,6 +41,23 @@ const SequentialLine = React.memo<LineProps>(({ entry, animated, dataIndex }) =>
     );
 });
 
+const LineList: React.FC<{
+    lines: LineEntry[];
+    animatedUpTo: number;
+    dataPrefix: string;
+}> = ({ lines, animatedUpTo, dataPrefix }) => (
+    <>
+        {lines.map((line, i) => (
+            <SequentialLine
+                key={i}
+                entry={line}
+                animated={i < animatedUpTo}
+                dataIndex={`${dataPrefix}-${i}`}
+            />
+        ))}
+    </>
+);
+
 // ─── Unified View ─────────────────────────────────────────────────────────────
 
 interface UnifiedViewProps {
@@ -56,14 +73,7 @@ const UnifiedView: React.FC<UnifiedViewProps> = ({ lines, animatedUpTo, contentR
         ref={contentRef}
     >
         <pre><code>
-            {lines.map((line, i) => (
-                <SequentialLine
-                    key={i}
-                    entry={line}
-                    animated={i < animatedUpTo}
-                    dataIndex={`line-${i}`}
-                />
-            ))}
+            <LineList lines={lines} animatedUpTo={animatedUpTo} dataPrefix="line" />
         </code></pre>
     </div>
 );
@@ -100,14 +110,7 @@ const SplitView: React.FC<SplitViewProps> = ({
             <div className="sequential-split-content" id="sequential-left-content" ref={leftRef}>
                 <div className="sequential-content-display">
                     <pre><code>
-                        {leftLines.map((line, i) => (
-                            <SequentialLine
-                                key={i}
-                                entry={line}
-                                animated={i < animatedUpTo}
-                                dataIndex={`left-${i}`}
-                            />
-                        ))}
+                        <LineList lines={leftLines} animatedUpTo={animatedUpTo} dataPrefix="left" />
                     </code></pre>
                 </div>
             </div>
@@ -122,14 +125,7 @@ const SplitView: React.FC<SplitViewProps> = ({
             <div className="sequential-split-content" id="sequential-right-content" ref={rightRef}>
                 <div className="sequential-content-display">
                     <pre><code>
-                        {rightLines.map((line, i) => (
-                            <SequentialLine
-                                key={i}
-                                entry={line}
-                                animated={i < animatedUpTo}
-                                dataIndex={`right-${i}`}
-                            />
-                        ))}
+                        <LineList lines={rightLines} animatedUpTo={animatedUpTo} dataPrefix="right" />
                     </code></pre>
                 </div>
             </div>
@@ -379,8 +375,30 @@ const SequentialViewerModal: React.FC<SequentialViewerProps> = ({ contentStates,
         }
     }, [startAnimation, stopAnimation]);
 
-    const handleNext = useCallback(() => {
-        if (currentIteration >= contentStates.length - 1) return;
+    const restoreIterationPosition = useCallback((progressPct: number, wasPlaying: boolean) => {
+        setTimeout(() => {
+            const newTotal = viewMode === 'split'
+                ? Math.max(
+                    leftContentRef.current?.querySelectorAll('.sequential-line').length ?? 0,
+                    rightContentRef.current?.querySelectorAll('.sequential-line').length ?? 0
+                )
+                : unifiedContentRef.current?.querySelectorAll('.sequential-line').length ?? 0;
+            const restored = computeRestoredLineIndex(progressPct, newTotal);
+            currentLineRef.current = restored;
+            setAnimatedUpTo(restored);
+            if (wasPlaying) {
+                isPlayingRef.current = true;
+                setIsPlaying(true);
+                startAnimation();
+            }
+        }, 50);
+    }, [viewMode, startAnimation]);
+
+    const changeIteration = useCallback((direction: 1 | -1) => {
+        const atBoundary = direction === 1
+            ? currentIteration >= contentStates.length - 1
+            : currentIteration <= 0;
+        if (atBoundary) return;
         const wasPlaying = isPlayingRef.current;
         const progressPct = computeProgressPercent(currentLineRef.current, totalLines);
 
@@ -388,57 +406,13 @@ const SequentialViewerModal: React.FC<SequentialViewerProps> = ({ contentStates,
         if (wasPlaying) { isPlayingRef.current = false; setIsPlaying(false); }
 
         setCurrentIteration(prev => {
-            const next = prev + 1;
-            // Restore position after render
-            setTimeout(() => {
-                const newTotal = viewMode === 'split'
-                    ? Math.max(
-                        leftContentRef.current?.querySelectorAll('.sequential-line').length ?? 0,
-                        rightContentRef.current?.querySelectorAll('.sequential-line').length ?? 0
-                    )
-                    : unifiedContentRef.current?.querySelectorAll('.sequential-line').length ?? 0;
-                const restored = computeRestoredLineIndex(progressPct, newTotal);
-                currentLineRef.current = restored;
-                setAnimatedUpTo(restored);
-                if (wasPlaying) {
-                    isPlayingRef.current = true;
-                    setIsPlaying(true);
-                    startAnimation();
-                }
-            }, 50);
-            return next;
+            restoreIterationPosition(progressPct, wasPlaying);
+            return prev + direction;
         });
-    }, [currentIteration, contentStates.length, stopAnimation, startAnimation, viewMode, totalLines]);
+    }, [currentIteration, contentStates.length, stopAnimation, restoreIterationPosition, totalLines]);
 
-    const handlePrev = useCallback(() => {
-        if (currentIteration <= 0) return;
-        const wasPlaying = isPlayingRef.current;
-        const progressPct = computeProgressPercent(currentLineRef.current, totalLines);
-
-        stopAnimation();
-        if (wasPlaying) { isPlayingRef.current = false; setIsPlaying(false); }
-
-        setCurrentIteration(prev => {
-            const next = prev - 1;
-            setTimeout(() => {
-                const newTotal = viewMode === 'split'
-                    ? Math.max(
-                        leftContentRef.current?.querySelectorAll('.sequential-line').length ?? 0,
-                        rightContentRef.current?.querySelectorAll('.sequential-line').length ?? 0
-                    )
-                    : unifiedContentRef.current?.querySelectorAll('.sequential-line').length ?? 0;
-                const restored = computeRestoredLineIndex(progressPct, newTotal);
-                currentLineRef.current = restored;
-                setAnimatedUpTo(restored);
-                if (wasPlaying) {
-                    isPlayingRef.current = true;
-                    setIsPlaying(true);
-                    startAnimation();
-                }
-            }, 50);
-            return next;
-        });
-    }, [currentIteration, stopAnimation, startAnimation, viewMode, totalLines]);
+    const handleNext = useCallback(() => changeIteration(1), [changeIteration]);
+    const handlePrev = useCallback(() => changeIteration(-1), [changeIteration]);
 
     const handleSpeedChange = useCallback((ms: number) => {
         speedRef.current = ms;

@@ -10,7 +10,6 @@ class GlobalStateManager {
     isGenerating: boolean = false;
     directContextFiles: FileData[] = [];
     filesystemContextFiles: FileData[] = [];
-    isCustomPromptsOpen: boolean = false;
 
     // Mode running states
     isContextualRunning: boolean = false;

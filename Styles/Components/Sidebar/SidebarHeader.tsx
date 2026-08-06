@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { mountProviderButtons, createPollingInterval } from './SidebarHeaderLogic';
 import { Icon } from '../../../UI/Icons';
 
-export const SidebarHeader: React.FC = () => {
+const SidebarHeader: React.FC = () => {
     const buttonsContainerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {

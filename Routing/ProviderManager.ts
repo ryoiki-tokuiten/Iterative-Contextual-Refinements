@@ -24,11 +24,10 @@ const DEFAULT_MODELS: Record<string, string[]> = {
     gemini: [],
     openrouter: [],
     anthropic: [],
-    openai: [],
-    nvidia: []
+    openai: []
 };
 
-const REMOTE_PROVIDER_NAMES = new Set(['gemini', 'openai', 'anthropic', 'openrouter', 'nvidia']);
+const REMOTE_PROVIDER_NAMES = new Set(['gemini', 'openai', 'anthropic', 'openrouter']);
 
 export class ProviderManager {
     private providers: Map<string, ProviderConfig> = new Map();
@@ -68,13 +67,6 @@ export class ProviderManager {
             name: 'openai',
             displayName: 'OpenAI',
             models: [...DEFAULT_MODELS.openai],
-            isConfigured: false
-        });
-
-        this.providers.set('nvidia', {
-            name: 'nvidia',
-            displayName: 'NVIDIA',
-            models: [...DEFAULT_MODELS.nvidia],
             isConfigured: false
         });
 
@@ -147,13 +139,6 @@ export class ProviderManager {
             config.isConfigured = true;
         }
 
-        // Check for NVIDIA API key
-        const nvidiaKey = process.env.NVIDIA_API_KEY;
-        if (nvidiaKey) {
-            const config = this.providers.get('nvidia')!;
-            config.apiKey = nvidiaKey;
-            config.isConfigured = true;
-        }
     }
 
     private initializeConfiguredProviders(): void {
@@ -212,8 +197,6 @@ export class ProviderManager {
                 return config.apiKey === process.env.ANTHROPIC_API_KEY;
             case 'openrouter':
                 return config.apiKey === process.env.OPENROUTER_API_KEY;
-            case 'nvidia':
-                return config.apiKey === process.env.NVIDIA_API_KEY;
             default:
                 return false;
         }

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type ProximityRole = 'generator' | 'proximity';
+type ProximityRole = 'generator' | 'proximity';
 
 export interface ProximityTurn {
     role: ProximityRole;
@@ -27,7 +27,7 @@ export function normalizeProximityHistory(value: unknown): ProximityTurn[] {
     });
 }
 
-export function formatProximityHistory(history: ProximityTurn[]): string {
+function formatProximityHistory(history: ProximityTurn[]): string {
     if (!history.length) return 'No earlier generator/proximity turns.';
     return history
         .map(turn => `<${turn.role === 'generator' ? 'Generator' : 'Proximity'}>\n${turn.content}\n</${turn.role === 'generator' ? 'Generator' : 'Proximity'}>`)

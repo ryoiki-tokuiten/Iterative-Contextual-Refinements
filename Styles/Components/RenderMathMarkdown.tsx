@@ -50,7 +50,7 @@ type RenderSegment =
 type ExecutionKind = 'code' | 'output' | 'image';
 interface ExecutionBlock { kind: ExecutionKind; start: number; end: number }
 
-export interface RenderMathMarkdownProps {
+interface RenderMathMarkdownProps {
     content: string;
     className?: string;
 }
@@ -666,7 +666,7 @@ const RenderedContent = React.memo<{
     );
 });
 
-export const RenderMathMarkdown: React.FC<RenderMathMarkdownProps> = React.memo(function RenderMathMarkdown({ content, className = '' }) {
+const RenderMathMarkdown: React.FC<RenderMathMarkdownProps> = React.memo(function RenderMathMarkdown({ content, className = '' }) {
     const [highlightingVersion, setHighlightingVersion] = useState(isHighlighterReady() ? 1 : 0);
     const [previewData, setPreviewData] = useState<ImagePreviewData | null>(null);
 

@@ -9,7 +9,7 @@ import { Icon } from '../../UI/Icons';
 import RenderMathMarkdown from './RenderMathMarkdown';
 import { SandboxAgentActivity } from '../../Deepthink/SandboxAgentActivity';
 
-export interface ModalMessage {
+interface ModalMessage {
     id: string;
     role: string;
     content: string;

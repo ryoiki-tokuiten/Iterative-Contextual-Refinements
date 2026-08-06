@@ -5,17 +5,6 @@
 
 import { RoutingManager } from './RoutingManager';
 
-// Export all routing-related functionality
-export { ApiKeyManager } from './ApiConfig';
-export { ModelConfigManager, type ModelParameters, type ModelOption, DEFAULT_MODEL_PARAMETERS } from './ModelConfig';
-export { DeepthinkConfigController, type DeepthinkConfigState, type DeepthinkConfigChangeEvent } from './DeepthinkConfigController';
-export { ModelSelectionUI } from './ModelSelectionUI';
-export { PromptsManager } from './PromptsManager';
-export { PromptsModal } from './PromptsModal';
-export { RoutingManager } from './RoutingManager';
-export { type AIProvider, createAIProvider } from './AIProvider';
-export { ProviderManager, type ProviderConfig, type ModelInfo } from './ProviderManager';
-export { ProviderManagementUI } from './ProviderManagementUI';
 export { callAI } from './AIService';
 
 
@@ -51,14 +40,6 @@ export function getSelectedModel(): string {
 
 export function getSelectedThinkingLevel(): 'low' | 'medium' | 'high' | 'minimal' {
     return getRoutingManager().getThinkingLevel();
-}
-
-export function getSelectedTemperature(): number {
-    return getRoutingManager().getTemperature();
-}
-
-export function getSelectedTopP(): number {
-    return getRoutingManager().getTopP();
 }
 
 export function getSelectedStrategiesCount(): number {

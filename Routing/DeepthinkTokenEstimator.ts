@@ -5,7 +5,7 @@
 
 import { MAX_HYPOTHESIS_COUNT } from './ModelConfig';
 
-export interface EvolvingDfsTokenEstimateInput {
+interface EvolvingDfsTokenEstimateInput {
     strategiesCount: number;
     hypothesisCount: number;
     evolvingDfsDepth: number;
@@ -13,12 +13,12 @@ export interface EvolvingDfsTokenEstimateInput {
     disableSolutionPool?: boolean;
 }
 
-export interface TokenRange {
+interface TokenRange {
     average: number;
     worst: number;
 }
 
-export interface ApiCallRange {
+interface ApiCallRange {
     min: number;
     max: number;
 }

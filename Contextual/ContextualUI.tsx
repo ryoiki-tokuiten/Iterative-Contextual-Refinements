@@ -20,7 +20,7 @@ interface ContextualUIProps {
     onStop: () => void;
 }
 
-export function ContextualUI({ state, onStop }: ContextualUIProps) {
+function ContextualUI({ state, onStop }: ContextualUIProps) {
     // Update evolution viewer when content history changes
     useEffect(() => {
         const updateViewer = async () => {
@@ -43,7 +43,6 @@ export function ContextualUI({ state, onStop }: ContextualUIProps) {
         }}>
             <CurrentBestGenerationPanel
                 content={state.currentBestGeneration}
-                originalContent={state.initialMainGeneration}
                 state={state}
             />
             <AgentActivityPanel state={state} onStop={onStop} />
@@ -87,7 +86,7 @@ function useSidebar() {
 }
 
 // Left Panel - Current Best Generation
-const CurrentBestGenerationPanel: React.FC<{ content: string; originalContent: string; state: ContextualState }> = ({ content, state }) => {
+const CurrentBestGenerationPanel: React.FC<{ content: string; state: ContextualState }> = ({ content, state }) => {
     const { isCollapsed: sidebarCollapsed, expandSidebar } = useSidebar();
 
     const renderContent = () => {
@@ -355,11 +354,6 @@ export function updateContextualUI(
  * Render Evolving DFS correction UI (for Deepthink mode)
  * Uses the same UI as Contextual mode
  */
-export function cleanupEvolvingDfsRoot() {
-    // Root cleanup is handled automatically by WeakMap when containers are GC'd
-    // This function is kept for shared timeline rendering
-}
-
 export function renderEvolvingDfsUI(
     container: HTMLElement,
     originalSolution: string,

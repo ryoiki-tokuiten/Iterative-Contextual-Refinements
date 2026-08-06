@@ -264,17 +264,6 @@
     background: rgba(var(--bg-color-rgb), 0.5);
 }
 
-.agent-panel-header h3 {
-    margin: 0;
-    font-size: var(--font-size-md);  /* 18px */
-    font-weight: var(--font-weight-semibold);
-    line-height: var(--line-height-tight);
-    letter-spacing: var(--letter-spacing-tight);
-    color: var(--text-color);
-}
-
-
-
 /* Message Cards */
 .adaptive-message-card {
     background: rgba(var(--bg-color-rgb), 0.3);
@@ -378,6 +367,27 @@
     color: var(--accent-blue);
 }
 
+.tool-call-display {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.tool-call-parameter-pill {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid rgba(var(--accent-purple-rgb), 0.3);
+    border-radius: 999px;
+    padding: 0.35rem 0.6rem;
+    background: rgba(var(--accent-purple-rgb), 0.08);
+    color: var(--accent-purple);
+    font-family: var(--font-family-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
 .tool-call-indicator.deepthink-tool-indicator {
     background: linear-gradient(135deg, 
         rgba(var(--accent-blue-rgb), 0.1), 
@@ -465,7 +475,8 @@
 }
 
 /* System blocks styling */
-.system-blocks {
+.system-blocks,
+.tool-args-executions {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
@@ -584,12 +595,6 @@
     padding: 2px 4px;
     border-radius: 3px;
     word-break: break-all;
-}
-
-.tool-args-executions {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
 }
 
 .tool-args-exec-item {

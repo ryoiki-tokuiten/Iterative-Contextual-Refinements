@@ -35,8 +35,6 @@ import { createDefaultCustomPromptsAdaptiveDeepthink } from '../AdaptiveDeepthin
 import {
     routingManager,
     getSelectedModel,
-    getSelectedTemperature,
-    getSelectedTopP,
     getSelectedStrategiesCount,
     getSelectedSubStrategiesCount,
     getStrategyProximityLoops,
@@ -105,8 +103,6 @@ export async function exportConfiguration(format: ExportFormat = 'auto'): Promis
                 adaptiveDeepthink: globalState.customPromptsAdaptiveDeepthinkState,
             },
             modelParameters: {
-                temperature: getSelectedTemperature(),
-                topP: getSelectedTopP(),
                 strategiesCount: getSelectedStrategiesCount(),
                 strategyProximityLoops: getStrategyProximityLoops(),
                 subStrategiesCount: getSelectedSubStrategiesCount(),
@@ -203,36 +199,34 @@ async function applyConfiguration(config: VersionedState): Promise<void> {
         modeRadio.checked = true;
     }
 
-
-
-    // 3. Restore initial idea
+    // 2. Restore initial idea
     const initialIdeaInput = getInitialIdeaInput();
     if (initialIdeaInput) {
         initialIdeaInput.value = data.initialIdea || '';
     }
 
-    // 4. Clear problem images for non-deepthink modes
+    // 3. Clear problem images for non-deepthink modes
     if (globalState.currentMode !== 'deepthink') {
         globalState.directContextFiles = [];
     }
 
-    // 5. Update UI for mode change
+    // 4. Update UI for mode change
     updateUIAfterModeChange();
 
-    // 6. Reinitialize sidebar controls
+    // 5. Reinitialize sidebar controls
     if ((window as any).reinitializeSidebarControls) {
         (window as any).reinitializeSidebarControls();
     }
 
-    // 7. Restore custom prompts
+    // 6. Restore custom prompts
     restoreCustomPrompts(data.customPrompts);
 
-    // 8. Restore model parameters (with delay for UI readiness)
+    // 7. Restore model parameters (with delay for UI readiness)
     setTimeout(() => {
         restoreModelParameters(data.modelParameters);
     }, 150);
 
-    // 9. Restore mode-specific state via handler
+    // 8. Restore mode-specific state via handler
     const handler = getModeHandler(data.currentMode);
     if (handler && data.modeState) {
         const sanitizedState = sanitizeState(data.modeState);
@@ -250,7 +244,7 @@ async function applyConfiguration(config: VersionedState): Promise<void> {
         handler.renderAfterImport();
     }
 
-    // 10. Update controls state
+    // 9. Update controls state
     updateControlsState();
 }
 
@@ -293,16 +287,29 @@ function restoreCustomPrompts(prompts: ExportedConfig['customPrompts']): void {
 function restoreModelParameters(params: ExportedConfig['modelParameters']): void {
     const modelConfig = routingManager.getModelConfigManager();
 
-    // Iterate over all keys in the params object and update if strictly defined
-    // This automatically handles any new parameters added to the interface
-    Object.keys(params).forEach(key => {
-        const paramKey = key as keyof typeof params;
-        if (params[paramKey] !== undefined) {
-            // Safe to cast as any because the updated internal logic handles validation if needed
-            // and the keys come from the strongly typed ExportedConfig['modelParameters']
-            modelConfig.updateParameter(paramKey as any, params[paramKey]);
+    const modelParameterKeys: Array<keyof ExportedConfig['modelParameters']> = [
+        'strategiesCount',
+        'strategyProximityLoops',
+        'subStrategiesCount',
+        'hypothesisCount',
+        'hypothesisProximityLoops',
+        'pqfAggressiveness',
+        'refinementEnabled',
+        'skipSubStrategies',
+        'dissectedObservationsEnabled',
+        'evolvingDfsEnabled',
+        'evolvingDfsDepth',
+        'isolateBranches',
+        'disableSolutionPool',
+        'provideAllSolutionsToCorrectors',
+    ];
+
+    for (const key of modelParameterKeys) {
+        const value = params[key];
+        if (value !== undefined) {
+            modelConfig.updateParameter(key as any, value);
         }
-    });
+    }
 
     // Sync UI with restored parameters
     const modelSelectionUI = routingManager.getModelSelectionUI();

@@ -68,7 +68,6 @@ interface EvolutionViewerProps {
     contentStates: ContentState[];
     isInsideDeepthinkModal: boolean;
     onClose: () => void;
-    sessionId?: string;
     scrollContainerRef?: (el: HTMLDivElement | null) => void;
 }
 
@@ -170,7 +169,6 @@ function mountEvolutionViewer(contentStates: ContentState[], sessionId?: string)
             contentStates={contentStates}
             isInsideDeepthinkModal={isInsideDeepthinkModal}
             onClose={handleClose}
-            sessionId={sessionId}
             scrollContainerRef={(el) => {
                 if (sessionId && el) {
                     registerEvolutionViewer(sessionId, { scrollContainer: el, lastCount: contentStates.length });
@@ -214,7 +212,6 @@ export function updateEvolutionViewerIfOpen(sessionId: string, history: HistoryE
                 unregisterEvolutionViewer(sessionId);
                 unmountPortalRoot(rootId);
             }}
-            sessionId={sessionId}
             scrollContainerRef={(el) => {
                 if (el) {
                     registerEvolutionViewer(sessionId, { scrollContainer: el, lastCount: history.length });

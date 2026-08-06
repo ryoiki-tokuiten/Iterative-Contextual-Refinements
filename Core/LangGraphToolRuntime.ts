@@ -9,20 +9,19 @@ import { ChatAnthropic } from '@langchain/anthropic';
 import { type Content as GeminiContent, type Part as GeminiPart } from '@google/genai';
 import { ChatOpenAI } from '@langchain/openai';
 import { nanoid } from 'nanoid';
-import { getRoutingManager, type ProviderConfig, callAI } from '../Routing';
+import { getRoutingManager, callAI } from '../Routing';
+import type { ProviderConfig } from '../Routing/ProviderManager';
 
-export interface ToolCallingAgentOptions {
+interface ToolCallingAgentOptions {
     modelName: string;
-    temperature: number;
-    topP?: number;
 }
 
 export type ResolvedProvider = {
-    providerName: 'gemini' | 'openai' | 'openrouter' | 'local' | 'anthropic' | 'nvidia';
+    providerName: 'gemini' | 'openai' | 'openrouter' | 'local' | 'anthropic';
     providerConfig: ProviderConfig;
 };
 
-export type ToolCallingChatModel = ChatAnthropic | ChatOpenAI;
+type ToolCallingChatModel = ChatAnthropic | ChatOpenAI;
 
 export function resolveProviderForModel(modelName: string): ResolvedProvider {
     const providerManager = getRoutingManager().getApiKeyManager().getProviderManager();
@@ -51,9 +50,7 @@ function normalizeLocalEndpoint(endpoint: string): string {
 
 function getAgentModelOptions(options: ToolCallingAgentOptions) {
     return {
-        model: options.modelName,
-        temperature: options.temperature,
-        ...(options.topP != null ? { topP: options.topP } : {})
+        model: options.modelName
     };
 }
 
@@ -98,20 +95,6 @@ export function createToolCallingAgentModel(
                 ...browserSafeConfig,
                 baseURL: normalizeLocalEndpoint(providerConfig.apiKey!)
             });
-
-        case 'nvidia': {
-            const isBrowser = typeof window !== 'undefined';
-            const baseUrl = isBrowser ? ((import.meta as any).env?.BASE_URL || '/') : '/';
-            const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-            const nvidiaBaseURL = isBrowser
-                ? `${window.location.origin}${normalizedBase}/api/nvidia/v1`
-                : 'https://integrate.api.nvidia.com/v1';
-
-            return createOpenAICompatibleAgentModel(options, providerConfig.apiKey!, {
-                ...browserSafeConfig,
-                baseURL: nvidiaBaseURL
-            });
-        }
 
         case 'anthropic':
             return new ChatAnthropic({
@@ -270,11 +253,9 @@ export async function invokeGeminiToolAgentTurn(
     const contents = buildGeminiContents(messages);
     const response = await callAI(
         contents as any,
-        options.temperature,
         options.modelName,
         systemPrompt,
         false,
-        options.topP,
         {
             tools: [{
                 functionDeclarations: buildGeminiFunctionDeclarations(tools)

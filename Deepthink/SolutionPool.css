@@ -8,7 +8,6 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    background: var(--bg-primary);
 }
 
 /* Header Section — Bold Statement */
@@ -20,7 +19,6 @@
     /* 24px 32px */
     min-height: var(--button-height-xl);
     /* 48px */
-    background: var(--bg-secondary);
     border-bottom: 1px solid var(--border-color);
     position: relative;
 }
@@ -65,7 +63,6 @@
     margin: 0;
     font-size: var(--font-size-xs);
     /* 12px */
-    color: var(--text-secondary);
     font-weight: var(--font-weight-medium);
     letter-spacing: var(--letter-spacing-wide);
     line-height: var(--line-height-tight);
@@ -85,8 +82,6 @@
 }
 
 /* Base button styles for normalization */
-.solution-pool-current-button,
-.solution-pool-evolution-button,
 .solution-pool-download-button {
     display: flex;
     align-items: center;
@@ -103,58 +98,9 @@
     letter-spacing: 0.01em;
 }
 
-/* Current Pool Button — Database View */
-.solution-pool-current-button {
-    background: rgba(var(--accent-blue-rgb), 0.08);
-    border: 1px solid rgba(var(--accent-blue-rgb), 0.2);
-    color: var(--accent-blue);
-}
-
-.solution-pool-current-button:hover {
-    background: rgba(var(--accent-blue-rgb), 0.15);
-    border-color: rgba(var(--accent-blue-rgb), 0.4);
-    box-shadow: 0 8px 24px rgba(var(--accent-blue-rgb), 0.2),
-        0 0 0 1px rgba(var(--accent-blue-rgb), 0.1);
-}
-
-.solution-pool-current-button:active {
-    background: rgba(var(--accent-blue-rgb), 0.2);
-    box-shadow: 0 4px 12px rgba(var(--accent-blue-rgb), 0.25);
-}
-
-/* Light Mode Override for Current Pool Button */
-body.light-mode .solution-pool-current-button {
-    border-color: rgba(var(--accent-blue-rgb), 0.4);
-    background: rgba(var(--accent-blue-rgb), 0.1);
-}
-
-.solution-pool-current-button .icon-slot {
+.solution-pool-download-button .icon-slot {
     font-size: 1rem;
     transition: opacity 0.3s ease;
-}
-
-.solution-pool-current-button:hover .icon-slot {
-    opacity: 0.9;
-}
-
-/* Evolution Button — Refined Interaction */
-.solution-pool-evolution-button {
-    background: rgba(var(--accent-purple-rgb), 0.08);
-    border: 1px solid rgba(var(--accent-purple-rgb), 0.2);
-    color: var(--accent-purple);
-    /* margin-left: auto; Removed to keep buttons grouped */
-}
-
-.solution-pool-evolution-button:hover {
-    background: rgba(var(--accent-purple-rgb), 0.15);
-    border-color: rgba(var(--accent-purple-rgb), 0.4);
-    box-shadow: 0 8px 24px rgba(var(--accent-purple-rgb), 0.2),
-        0 0 0 1px rgba(var(--accent-purple-rgb), 0.1);
-}
-
-.solution-pool-evolution-button:active {
-    background: rgba(var(--accent-purple-rgb), 0.2);
-    box-shadow: 0 4px 12px rgba(var(--accent-purple-rgb), 0.15);
 }
 
 /* Light Mode Override for View Pool Button */
@@ -163,22 +109,7 @@ body.light-mode .view-pool-button {
     background: rgba(var(--accent-purple-rgb), 0.1);
 }
 
-.solution-pool-evolution-button .icon-slot {
-    font-size: 1rem;
-    transition: opacity 0.3s ease;
-}
-
-.solution-pool-evolution-button:hover .icon-slot {
-    opacity: 0.9;
-}
-
-/* Light Mode Override for Evolution Button */
-body.light-mode .solution-pool-evolution-button {
-    border-color: rgba(var(--accent-purple-rgb), 0.4);
-    background: rgba(var(--accent-purple-rgb), 0.1);
-}
-
-/* Download Pool Button — Green Accent */
+/* Download All Latest Pools Button — Green Accent */
 .solution-pool-download-button {
     background: rgba(34, 197, 94, 0.08);
     border: 1px solid rgba(34, 197, 94, 0.2);
@@ -197,11 +128,6 @@ body.light-mode .solution-pool-evolution-button {
     box-shadow: 0 4px 12px rgba(34, 197, 94, 0.15);
 }
 
-.solution-pool-download-button .icon-slot {
-    font-size: 1rem;
-    transition: opacity 0.3s ease;
-}
-
 .solution-pool-download-button:hover .icon-slot {
     opacity: 0.9;
 }
@@ -213,7 +139,8 @@ body.light-mode .solution-pool-download-button {
 }
 
 /* Disabled State — Elegant Messaging */
-.solution-pool-disabled-state {
+.solution-pool-disabled-state,
+.solution-pool-empty-state {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -224,7 +151,6 @@ body.light-mode .solution-pool-download-button {
 
 .disabled-icon {
     font-size: 3rem;
-    color: var(--text-tertiary);
     opacity: 0.3;
     margin-bottom: 1rem;
     animation: gentlePulse 3s ease-in-out infinite;
@@ -242,7 +168,8 @@ body.light-mode .solution-pool-download-button {
     }
 }
 
-.solution-pool-disabled-state h4 {
+.solution-pool-disabled-state h4,
+.solution-pool-empty-state h4 {
     margin: 0 0 0.5rem 0;
     font-size: 1.125rem;
     font-weight: 700;
@@ -250,9 +177,9 @@ body.light-mode .solution-pool-download-button {
     letter-spacing: -0.01em;
 }
 
-.solution-pool-disabled-state p {
+.solution-pool-disabled-state p,
+.solution-pool-empty-state p {
     margin: 0.25rem 0;
-    color: var(--text-secondary);
     max-width: 480px;
     font-size: 0.875rem;
     line-height: 1.6;
@@ -271,19 +198,8 @@ body.light-mode .solution-pool-download-button {
     letter-spacing: 0.01em;
 }
 
-/* Empty State — Refined Waiting */
-.solution-pool-empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 4rem 2rem;
-    text-align: center;
-}
-
 .empty-icon {
     font-size: 3rem;
-    color: var(--text-tertiary);
     opacity: 0.4;
     margin-bottom: 1rem;
     animation: smoothSpin 4s linear infinite;
@@ -303,29 +219,12 @@ body.light-mode .solution-pool-download-button {
     }
 }
 
-.solution-pool-empty-state h4 {
-    margin: 0 0 0.5rem 0;
-    font-size: 1.125rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    letter-spacing: -0.01em;
-}
-
-.solution-pool-empty-state p {
-    margin: 0.25rem 0;
-    color: var(--text-secondary);
-    max-width: 480px;
-    font-size: 0.875rem;
-    line-height: 1.6;
-    font-weight: 500;
-}
-
 /* Solution Pool Content — Breathing Space */
-.solution-pool-content-wrapper {
+.solution-pool-content-wrapper,
+.sp-fullscreen-body {
     flex: 1;
     overflow-y: auto;
     padding: 1.5rem;
-    background: var(--bg-primary);
 }
 
 .sp-memory-bank-strip {
@@ -333,7 +232,6 @@ body.light-mode .solution-pool-download-button {
     padding: 1.25rem;
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius-sm);
-    background: var(--bg-secondary);
 }
 
 .sp-memory-bank-strip-header {
@@ -357,11 +255,11 @@ body.light-mode .solution-pool-download-button {
 
 .sp-memory-bank-strip-header p {
     margin: 0.15rem 0 0 0;
-    color: var(--text-secondary);
     font-size: 0.8rem;
 }
 
-.sp-memory-bank-grid {
+.sp-memory-bank-grid,
+.sp-cards-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
     gap: 1rem;
@@ -395,7 +293,6 @@ body.light-mode .solution-pool-download-button {
 
 .sp-memory-bank-meta {
     margin-bottom: 0.6rem;
-    color: var(--text-secondary);
     font-size: 0.75rem;
     font-weight: 600;
 }
@@ -410,7 +307,6 @@ body.light-mode .solution-pool-download-button {
 
 .sp-branch-card-subtitle {
     margin: -0.35rem 0 0.7rem 0;
-    color: var(--text-secondary);
     font-size: 0.74rem;
     font-weight: 600;
 }
@@ -418,35 +314,6 @@ body.light-mode .solution-pool-download-button {
 .agent-card.replaced-branch {
     border-style: dashed;
     opacity: 0.82;
-}
-
-.sp-replaced-branches {
-    display: grid;
-    gap: 1rem;
-    margin-bottom: 1.25rem;
-}
-
-.sp-replaced-branch-card {
-    padding: 1rem;
-    border: 1px dashed rgba(var(--accent-purple-rgb), 0.28);
-    border-radius: var(--border-radius-sm);
-    background: rgba(var(--accent-purple-rgb), 0.035);
-}
-
-.sp-replaced-branch-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 0.75rem;
-    color: var(--text-primary);
-    font-size: 0.85rem;
-}
-
-.sp-replaced-branch-header span {
-    color: var(--text-secondary);
-    font-size: 0.75rem;
-    font-weight: 600;
 }
 
 /* Scrollbar Styling — Refined Elegance */
@@ -468,7 +335,8 @@ body.light-mode .solution-pool-download-button {
     transition: background 0.3s ease;
 }
 
-.solution-pool-content-wrapper::-webkit-scrollbar-thumb:hover {
+.solution-pool-content-wrapper::-webkit-scrollbar-thumb:hover,
+.sp-fullscreen-body::-webkit-scrollbar-thumb:hover {
     background: rgba(var(--accent-purple-rgb), 0.4);
     background-clip: padding-box;
 }
@@ -488,8 +356,7 @@ body.light-mode .solution-pool-download-button {
         gap: 0.5rem;
     }
 
-    .solution-pool-current-button,
-    .solution-pool-evolution-button {
+    .solution-pool-download-button {
         width: 100%;
         justify-content: center;
     }
@@ -565,6 +432,12 @@ body.light-mode .solution-pool-download-button {
 
 .pool-iteration-container {
     animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    margin-bottom: 1.5rem;
+    border-radius: var(--border-radius-sm);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    opacity: 1;
 }
 
 .pool-iteration-container:nth-child(1) {
@@ -580,23 +453,15 @@ body.light-mode .solution-pool-download-button {
 }
 
 /* Iteration Container — Architectural Presence */
-.pool-iteration-container {
-    margin-bottom: 1.5rem;
-    background: var(--bg-secondary);
-    border-radius: var(--border-radius-sm);
-    border: 1px solid var(--border-color);
-    overflow: hidden;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    opacity: 1;
-}
-
-.pool-iteration-container:hover {
+.pool-iteration-container:hover,
+.sp-solution-card:hover {
     border-color: rgba(var(--accent-purple-rgb), 0.35);
     box-shadow: 0 12px 36px rgba(0, 0, 0, 0.12);
 }
 
 /* Light Mode Override for Pool Iteration Container */
-body.light-mode .pool-iteration-container {
+body.light-mode .pool-iteration-container,
+body.light-mode .knowledge-packet-card {
     border-color: rgba(0, 0, 0, 0.15);
     background: rgba(255, 255, 255, 0.8);
 }
@@ -623,7 +488,6 @@ body.light-mode .pool-iteration-header {
 
 .pool-iteration-content {
     padding: 1.5rem;
-    background: var(--bg-secondary);
 }
 
 /* Pool Empty State Mini — Subtle Feedback */
@@ -633,7 +497,6 @@ body.light-mode .pool-iteration-header {
     justify-content: center;
     gap: 0.5rem;
     padding: 1.5rem 1rem;
-    color: var(--text-tertiary);
     font-size: 0.875rem;
     font-weight: 600;
     letter-spacing: 0.01em;
@@ -651,7 +514,6 @@ body.light-mode .pool-iteration-header {
 .status-badge.status-skipped {
     border: 1px solid rgba(var(--text-secondary-rgb, 148, 163, 184), 0.24);
     background: rgba(var(--text-secondary-rgb, 148, 163, 184), 0.1);
-    color: var(--text-tertiary);
 }
 
 @keyframes breathe {
@@ -685,12 +547,6 @@ body.light-mode .agent-card {
     border-color: rgba(0, 0, 0, 0.15);
     background: rgba(255, 255, 255, 0.8);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-}
-
-/* Light Mode Override for Knowledge Packet Card */
-body.light-mode .knowledge-packet-card {
-    border-color: rgba(0, 0, 0, 0.15);
-    background: rgba(255, 255, 255, 0.8);
 }
 
 /* Light Mode Override for Text Containers */
@@ -797,7 +653,6 @@ body.light-mode .sp-fullscreen-overlay {
     position: fixed;
     inset: 0;
     border-radius: 0;
-    background: var(--bg-primary);
     border: none;
     display: flex;
     flex-direction: column;
@@ -867,7 +722,6 @@ body.light-mode .sp-fullscreen-header {
     border: none;
     border-radius: 50%;
     background: transparent;
-    color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s ease;
 }
@@ -881,22 +735,9 @@ body.light-mode .sp-fullscreen-header {
     font-size: 1.25rem;
 }
 
-/* Body */
-.sp-fullscreen-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1.5rem;
-}
-
 /* ==========================================================================
    SOLUTION CARDS GRID
    ========================================================================== */
-
-.sp-cards-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-    gap: 1rem;
-}
 
 @media (max-width: 900px) {
     .sp-cards-grid {
@@ -912,7 +753,6 @@ body.light-mode .sp-fullscreen-header {
 
 /* Solution Card */
 .sp-solution-card {
-    background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: 12px;
     overflow: hidden;
@@ -933,11 +773,6 @@ body.light-mode .sp-fullscreen-header {
         opacity: 1;
         transform: translateY(0);
     }
-}
-
-.sp-solution-card:hover {
-    border-color: rgba(var(--accent-purple-rgb), 0.35);
-    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.12);
 }
 
 body.light-mode .sp-solution-card {
@@ -1053,7 +888,6 @@ body.light-mode .sp-card-content {
     left: 0;
     right: 0;
     height: 40px;
-    background: linear-gradient(to top, var(--bg-secondary), transparent);
     pointer-events: none;
     opacity: 0.8;
     border-radius: 0 0 12px 12px;
@@ -1078,216 +912,6 @@ body.light-mode .sp-card-content-wrapper::after {
 
 .sp-card-content::-webkit-scrollbar-thumb:hover {
     background: rgba(var(--accent-purple-rgb), 0.3);
-}
-
-/* Internal Critique / Key Insights — Collapsible Toggles */
-.sp-critique-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    width: fit-content;
-    margin: 0.5rem 0.75rem 0.25rem;
-    padding: 0.5rem 1rem;
-    border: 1px solid rgba(var(--border-color-rgb, 128, 128, 128), 0.25);
-    background: rgba(245, 158, 11, 0.04);
-    color: #f59e0b;
-    font-size: 0.8125rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    text-align: left;
-    border-radius: 999px;
-}
-
-.sp-critique-toggle:hover {
-    background: rgba(245, 158, 11, 0.08);
-    border-color: rgba(245, 158, 11, 0.3);
-}
-
-.sp-critique-toggle .icon-slot {
-    font-size: 1rem;
-    opacity: 0.8;
-}
-
-.sp-critique-chevron {
-    margin-left: 0.25rem;
-    transition: transform 0.2s ease;
-}
-
-.sp-critique-body {
-    padding: 0.75rem 1rem;
-    margin: 0 0.75rem 0.5rem;
-    font-size: 0.8125rem;
-    line-height: 1.6;
-    color: var(--text-secondary);
-    border: 1px solid rgba(245, 158, 11, 0.12);
-    background: rgba(245, 158, 11, 0.02);
-    max-height: 300px;
-    overflow-y: auto;
-    transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
-    border-radius: 12px;
-}
-
-.sp-critique-body.sp-collapsed {
-    max-height: 0;
-    padding: 0 1.125rem;
-    opacity: 0;
-    overflow: hidden;
-    border-top: none;
-}
-
-/* Compressed Iterations Banner */
-.sp-compressed-banner {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    padding: 0.75rem 1.25rem;
-    margin: 0.75rem 1.25rem;
-    background: rgba(var(--accent-blue-rgb), 0.06);
-    border: 1px solid rgba(var(--accent-blue-rgb), 0.15);
-    border-radius: 8px;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    color: var(--accent-blue);
-    line-height: 1.5;
-}
-
-.sp-compressed-banner .icon-slot {
-    font-size: 1.125rem;
-    opacity: 0.8;
-    flex-shrink: 0;
-}
-
-body.light-mode .sp-compressed-banner {
-    background: rgba(var(--accent-blue-rgb), 0.08);
-    border-color: rgba(var(--accent-blue-rgb), 0.2);
-}
-
-.sp-corrected-label {
-    color: var(--accent-purple);
-}
-
-.sp-corrected-label .icon-slot {
-    color: var(--accent-purple);
-}
-
-/* ==========================================================================
-   STRATEGY SECTIONS (Full Repository View)
-   ========================================================================== */
-
-.sp-strategy-section {
-    margin-bottom: 2rem;
-    border: 1px solid var(--border-color);
-    border-radius: 12px;
-    background: var(--bg-secondary);
-    overflow: hidden;
-    animation: spCardFadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-    opacity: 0;
-}
-
-body.light-mode .sp-strategy-section {
-    border-color: rgba(0, 0, 0, 0.12);
-    background: #ffffff;
-}
-
-.sp-strategy-section-header {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 1rem 1.25rem;
-    background: rgba(var(--accent-purple-rgb), 0.04);
-    border-bottom: 1px solid var(--border-color);
-    flex-wrap: wrap;
-}
-
-body.light-mode .sp-strategy-section-header {
-    background: rgba(99, 102, 241, 0.05);
-    border-bottom-color: rgba(0, 0, 0, 0.08);
-}
-
-.sp-strategy-section-header .icon-slot {
-    font-size: 1.25rem;
-    color: var(--accent-purple);
-    opacity: 0.9;
-}
-
-.sp-strategy-section-header h3 {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-}
-
-.sp-strategy-subtitle {
-    flex-basis: 100%;
-    font-size: 0.8125rem;
-    color: var(--text-secondary);
-    line-height: 1.5;
-    margin-top: 0.25rem;
-    font-weight: 500;
-}
-
-body.light-mode .sp-strategy-subtitle {
-    color: #6b7280;
-}
-
-body.light-mode .sp-strategy-section-header h3 {
-    color: #1f2937;
-}
-
-/* Pool Label */
-.sp-pool-label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.25rem;
-    font-size: 0.8125rem;
-    font-weight: 700;
-    color: var(--accent-purple);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    border-bottom: 1px solid rgba(var(--border-color-rgb, 128, 128, 128), 0.2);
-}
-
-.sp-pool-label .icon-slot {
-    font-size: 1rem;
-}
-
-.sp-original-label {
-    color: var(--accent-green, #22c55e);
-}
-
-.sp-critique-label {
-    color: var(--accent-orange, #f59e0b);
-}
-
-/* Strategy Section Card Grid */
-.sp-strategy-section .sp-cards-grid {
-    padding: 1rem 1.25rem;
-}
-
-.sp-timeline-section {
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid rgba(var(--border-color-rgb, 128, 128, 128), 0.15);
-}
-
-.sp-timeline-section:last-child {
-    border-bottom: none;
-}
-
-.sp-timeline-section-content {
-    font-size: 0.8125rem;
-    line-height: 1.6;
-    color: var(--text-primary);
-    max-height: 250px;
-    overflow-y: auto;
-    word-wrap: break-word;
-}
-
-body.light-mode .sp-timeline-section-content {
-    color: #374151;
 }
 
 /* ==========================================================================
@@ -1319,7 +943,6 @@ body.light-mode .sp-timeline-section-content {
 
 .sp-raw-content {
     padding: 1rem;
-    background: var(--bg-secondary);
     border: 1px solid var(--border-color);
     border-radius: 8px;
     font-family: var(--font-mono);
@@ -1370,11 +993,6 @@ body.light-mode .sp-timeline-section-content {
     background-clip: padding-box;
 }
 
-.sp-fullscreen-body::-webkit-scrollbar-thumb:hover {
-    background: rgba(var(--accent-purple-rgb), 0.4);
-    background-clip: padding-box;
-}
-
 /* ==========================================================================
    RESPONSIVE — PANEL
    ========================================================================== */
@@ -1388,7 +1006,4 @@ body.light-mode .sp-timeline-section-content {
         grid-template-columns: 1fr;
     }
 
-    .sp-strategy-section .sp-cards-grid {
-        padding: 0.75rem;
-    }
 }

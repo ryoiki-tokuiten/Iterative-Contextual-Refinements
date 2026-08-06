@@ -16,14 +16,12 @@ import {
     type ResolvedProvider
 } from './LangGraphToolRuntime';
 
-export interface SandboxToolAgentOptions {
+interface SandboxToolAgentOptions {
     agentName: string;
     sessionId?: string;
     messages: BaseMessage[];
     systemPrompt: string;
     modelName: string;
-    temperature: number;
-    topP?: number;
     seedFiles?: SeedFile[];
     filesystemFiles?: SeedFile[];
     runScopeDescription?: string;
@@ -38,7 +36,7 @@ export interface SandboxToolAgentOptions {
     finalOutputContract?: SandboxFinalOutputContract;
 }
 
-export type ContextualSandboxToolAgentOptions = SandboxToolAgentOptions;
+type ContextualSandboxToolAgentOptions = SandboxToolAgentOptions;
 
 export interface SandboxRepositoryAccess {
     repositoryId: string;
@@ -164,7 +162,7 @@ export async function ensureDeepthinkResultsRepository(repositoryId: string): Pr
     if (!response.ok) throw new Error(`Could not initialize Deepthink Results (${response.status}).`);
 }
 
-export interface SandboxArchivedStrategy {
+interface SandboxArchivedStrategy {
     archivedDirectory?: string;
     activeDirectory: string;
 }
@@ -194,7 +192,7 @@ interface SandboxInlineOutputReference {
     label?: string;
 }
 
-export interface SandboxToolAgentResult {
+interface SandboxToolAgentResult {
     text: string;
     promptText: string;
     finalText: string;
@@ -208,7 +206,7 @@ export interface SandboxToolAgentResult {
     loopMessages?: BaseMessage[];
 }
 
-export type ContextualSandboxToolAgentResult = SandboxToolAgentResult;
+type ContextualSandboxToolAgentResult = SandboxToolAgentResult;
 
 export interface SandboxToolExecutionTrace {
     schema: 'sandbox_tool_execution_trace.v1';
@@ -716,9 +714,7 @@ async function invokeAgentTurn(
             systemPrompt,
             tools,
             {
-                modelName: options.modelName,
-                temperature: options.temperature,
-                topP: options.topP
+                modelName: options.modelName
             }
         );
     }
@@ -727,9 +723,7 @@ async function invokeAgentTurn(
         provider.providerName,
         provider.providerConfig,
         {
-            modelName: options.modelName,
-            temperature: options.temperature,
-            topP: options.topP
+            modelName: options.modelName
         }
     ).bindTools(tools);
 
@@ -767,7 +761,7 @@ async function executeSandboxTool(
     return normalizeSandboxToolResponseUrls(payload as SandboxToolResponse);
 }
 
-export interface VirtualEnvironmentCommandOptions {
+interface VirtualEnvironmentCommandOptions {
     sessionId: string;
     command: string;
     seedFiles?: SeedFile[];
@@ -818,17 +812,18 @@ async function getSandboxEnvironmentProfile(): Promise<SandboxEnvironmentProfile
     return sandboxEnvironmentProfilePromise;
 }
 
-function getSandboxApiBasePath(): string {
+function getAppBasePath(): string {
     const baseUrl = (import.meta as any).env?.BASE_URL || '/';
-    const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-    return `${normalizedBase}/api/sandbox`;
+    return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+}
+
+function getSandboxApiBasePath(): string {
+    return `${getAppBasePath()}/api/sandbox`;
 }
 
 function withAppBasePath(url: string): string {
     if (!url.startsWith('/api/sandbox/')) return url;
-    const baseUrl = (import.meta as any).env?.BASE_URL || '/';
-    const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-    return `${normalizedBase}${url}`;
+    return `${getAppBasePath()}${url}`;
 }
 
 function normalizeSandboxToolImageUrls(images?: SandboxToolImage[]): SandboxToolImage[] | undefined {
@@ -995,7 +990,7 @@ export function expandInlineReferenceMarkers(
     });
 }
 
-export function buildSubmittedFinalOutput(args: {
+function buildSubmittedFinalOutput(args: {
     finalText: string;
     sessionId: string;
     repositoryAccess?: SandboxRepositoryAccess;

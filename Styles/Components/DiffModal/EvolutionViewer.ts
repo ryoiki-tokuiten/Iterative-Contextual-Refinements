@@ -36,7 +36,7 @@ export function buildContentStatesFromHistory(history: HistoryEntry[]): ContentS
 
 // ─── Diff Line Computation ────────────────────────────────────────────────────
 
-export interface DiffLine {
+interface DiffLine {
     text: string;
     type: 'added' | 'removed' | 'unchanged';
 }

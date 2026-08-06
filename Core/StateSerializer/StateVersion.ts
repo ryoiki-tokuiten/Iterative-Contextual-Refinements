@@ -10,7 +10,7 @@ import type { ApplicationMode } from '../Types';
 /**
  * Current state version. Increment when making breaking changes to state structure.
  */
-export const CURRENT_STATE_VERSION = 2;
+export const CURRENT_STATE_VERSION = 3;
 
 /**
  * Wrapper for versioned state exports.
@@ -53,8 +53,6 @@ export interface ExportedConfig {
     };
     // Model parameters
     modelParameters: {
-        temperature: number;
-        topP: number;
         strategiesCount: number;
         strategyProximityLoops: number;
         subStrategiesCount: number;

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { callAI, getSelectedModel, getSelectedTemperature, getSelectedTopP } from '../Routing';
+import { callAI, getSelectedModel } from '../Routing';
 import { updateControlsState } from '../UI/Controls';
 import { globalState } from '../Core/State';
 import { CustomizablePromptsContextual } from './ContextualPrompts';
@@ -12,13 +12,13 @@ import { BaseMessage, HumanMessage, AIMessage, SystemMessage } from '@langchain/
 import { messageContentToText } from '../Core/LangGraphToolRuntime';
 import { describeProviderError } from '../Core/ProviderError';
 
-export interface ContentHistoryEntry {
+interface ContentHistoryEntry {
     content: string;
     title: string;
     timestamp: number;
 }
 
-export interface HistoryMessage {
+interface HistoryMessage {
     role: 'system' | 'assistant' | 'user';
     content: string;
     rawParts?: any[];
@@ -46,11 +46,11 @@ export interface ContextualState {
     contentHistory: ContentHistoryEntry[];
 }
 
-export type ContextualSystemBlock =
+type ContextualSystemBlock =
     | { kind: 'error'; message: string }
     | { kind: 'info'; message: string };
 
-export interface CodeExecutionPart {
+interface CodeExecutionPart {
     code: string;
     language: string;
     output?: string;
@@ -76,13 +76,13 @@ interface ContextualAgentCallResult {
     executionTraceText?: string;
 }
 
-export interface MemorySnapshot {
+interface MemorySnapshot {
     memory: string;
     finalGeneration: string;
     condensePoint: number;
 }
 
-export function createInitialContextualState(initialUserRequest: string): ContextualState {
+function createInitialContextualState(initialUserRequest: string): ContextualState {
     return {
         id: `contextual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         initialUserRequest,
@@ -573,8 +573,6 @@ async function callContextualAgent(
     if (!activeContextualState) return null;
 
     const modelName = getSelectedModel();
-    const temperature = getSelectedTemperature();
-    const topP = getSelectedTopP();
     const sandboxEnabled = isContextualSandboxToolEnabled();
     const responseTimeoutMs = sandboxEnabled ? SANDBOX_AGENT_TIMEOUT_MS : STANDARD_AGENT_TIMEOUT_MS;
     const startedAt = Date.now();
@@ -610,8 +608,6 @@ async function callContextualAgent(
                     messages,
                     systemPrompt,
                     modelName,
-                    temperature,
-                    topP,
                     repositoryAccess: getContextualSandboxRepositoryAccess(agentName)
                 }), remaining, agentName);
             }
@@ -629,11 +625,9 @@ async function callContextualAgent(
 
             const result = await withContextualTimeout(callAI(
                 structuredMessages,
-                temperature,
                 modelName,
                 systemPrompt,
-                false,
-                topP
+                false
             ), remaining, agentName);
 
             const text = result.text || '';

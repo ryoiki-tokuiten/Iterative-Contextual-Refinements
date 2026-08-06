@@ -13,7 +13,7 @@ export function setApiKeyManager(manager: ApiKeyManager) {
     apiKeyManager = manager;
 }
 
-export interface StructuredMessage {
+interface StructuredMessage {
     role: 'system' | 'assistant' | 'user';
     content: string;
     /** Optional: raw Gemini Parts for model turns with native function calling.
@@ -25,11 +25,9 @@ export interface StructuredMessage {
 
 export async function callAI(
     promptOrParts: string | Part[] | StructuredMessage[], 
-    temperature: number, 
     modelToUse: string, 
     systemInstruction?: string, 
     isJsonOutput: boolean = false, 
-    topP?: number,
     thinkingConfig?: ThinkingConfig
 ): Promise<GenerateContentResponse> {
     if (!apiKeyManager) throw new Error("API key manager not initialized.");
@@ -43,11 +41,9 @@ export async function callAI(
     
     return await aiProvider.generateContent(
         promptOrParts, 
-        temperature, 
         modelToUse, 
         systemInstruction, 
         isJsonOutput, 
-        topP,
         thinkingConfig
     );
 }

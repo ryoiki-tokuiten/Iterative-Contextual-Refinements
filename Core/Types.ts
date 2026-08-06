@@ -1,21 +1,9 @@
 
 import type {
-    DeepthinkSolutionCritiqueData,
-    DeepthinkSubStrategyData,
-    DeepthinkHypothesisData,
-    DeepthinkPostQualityFilterData,
-    DeepthinkMainStrategyData,
-    DeepthinkStructuredSolutionPoolAgentData,
     DeepthinkPipelineState
 } from '../Deepthink/DeepthinkCore';
 
 export type {
-    DeepthinkSolutionCritiqueData,
-    DeepthinkSubStrategyData,
-    DeepthinkHypothesisData,
-    DeepthinkPostQualityFilterData,
-    DeepthinkMainStrategyData,
-    DeepthinkStructuredSolutionPoolAgentData,
     DeepthinkPipelineState
 };
 

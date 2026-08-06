@@ -10,15 +10,12 @@ import type { DeepthinkPipelineState } from '../Deepthink/DeepthinkCore';
 import { setActiveDeepthinkPipelineForImport } from '../Deepthink/Deepthink';
 import {
     callAI,
-    getHypothesisProximityLoops,
     getSelectedModel,
-    getSelectedTemperature,
-    getSelectedTopP,
-    getStrategyProximityLoops,
 } from '../Routing';
 import { updateControlsState } from '../UI/Controls';
 import {
     createAdaptiveDeepthinkState,
+    getDirectTextContext,
     syncAdaptiveDeepthinkPipeline,
     type AdaptiveAgentRole,
     type AdaptiveDeepthinkState,
@@ -67,7 +64,7 @@ export function subscribeToAdaptiveDeepthinkState(listener: (state: AdaptiveDeep
     return () => listeners.delete(listener);
 }
 
-export function notifyAdaptiveDeepthinkListeners() {
+function notifyAdaptiveDeepthinkListeners() {
     listeners.forEach(listener => listener(activeAdaptiveDeepthinkState ? { ...activeAdaptiveDeepthinkState } : null));
 }
 
@@ -230,11 +227,7 @@ function createToolExecutionContext(
                 return null;
             }
         },
-        getSelectedTemperature,
         getSelectedModel,
-        getSelectedTopP,
-        getStrategyProximityLoops,
-        getHypothesisProximityLoops,
         getModelFor: role => customPrompts[ROLE_MODEL_MAP[role]] || getSelectedModel(),
         sandboxEnabled: sandboxEnabled(),
         notifyUpdate: () => notifyAdaptiveDeepthinkListeners(),
@@ -258,22 +251,6 @@ async function syncGraphState(graphState: AdaptiveDeepthinkGraphState, processed
     syncAdaptiveDeepthinkPipeline(graphState.coreState, activeAdaptiveDeepthinkState.deepthinkPipelineState);
     setActiveDeepthinkPipelineForImport(activeAdaptiveDeepthinkState.deepthinkPipelineState);
     notifyAdaptiveDeepthinkListeners();
-}
-
-function getDirectTextContext(): string {
-    const textFiles = globalState.directContextFiles.filter(file => file.mimeType.startsWith('text/') || file.mimeType === 'application/json');
-    if (!textFiles.length) return '';
-    const decoder = new TextDecoder();
-    const contents = textFiles.map(file => {
-        try {
-            const binary = atob(file.base64);
-            const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
-            return `\n\n--- ${file.name || 'uploaded text file'} ---\n${decoder.decode(bytes)}\n--- end file ---`;
-        } catch {
-            return `\n\n--- ${file.name || 'uploaded text file'} ---\n[Unable to decode file]\n--- end file ---`;
-        }
-    });
-    return `\n\nDirect context files:${contents.join('')}`;
 }
 
 export async function startAdaptiveDeepthinkProcess(
@@ -310,8 +287,6 @@ async function runAdaptiveDeepthinkGraph(question: string, customPrompts: Custom
         const pipeline = activeAdaptiveDeepthinkState.deepthinkPipelineState;
         const graph = createAdaptiveDeepthinkGraph({
             modelName: customPrompts.model_main || getSelectedModel(),
-            temperature: getSelectedTemperature(),
-            topP: getSelectedTopP(),
             systemPrompt: customPrompts.sys_adaptiveDeepthink_main,
             deepthinkPrompts: createDeepthinkPrompts(customPrompts),
             images,

@@ -96,83 +96,57 @@
 
 /* Specific Tab Colors (Always applied, not just active) */
 
-/* Strategic Solver -> Purple */
+/* Per-tab color tokens keep the shared state rules identical across tabs. */
 #deepthink-tab-strategic-solver {
-    background: rgba(var(--accent-purple-rgb), 0.08);
-    color: var(--accent-purple);
-    border-color: rgba(var(--accent-purple-rgb), 0.1);
+    --deepthink-tab-rgb: var(--accent-purple-rgb);
+    --deepthink-tab-color: var(--accent-purple);
 }
 
-#deepthink-tab-strategic-solver.active {
-    border-color: rgba(var(--accent-purple-rgb), 0.5);
-    box-shadow: 0 0 6px rgba(var(--accent-purple-rgb), 0.2),
-        0 0 2px rgba(var(--accent-purple-rgb), 0.3) inset;
-}
-
-/* Hypothesis Explorer -> Blue */
 #deepthink-tab-hypothesis-explorer {
-    background: rgba(var(--accent-blue-rgb), 0.08);
-    color: var(--accent-blue);
-    border-color: rgba(var(--accent-blue-rgb), 0.1);
+    --deepthink-tab-rgb: var(--accent-blue-rgb);
+    --deepthink-tab-color: var(--accent-blue);
 }
 
-#deepthink-tab-hypothesis-explorer.active {
-    border-color: rgba(var(--accent-blue-rgb), 0.5);
-    box-shadow: 0 0 6px rgba(var(--accent-blue-rgb), 0.2),
-        0 0 2px rgba(var(--accent-blue-rgb), 0.3) inset;
-}
-
-/* Solution Pool -> Yellow */
 #deepthink-tab-solution-pool {
-    background: rgba(var(--accent-yellow-rgb), 0.08);
-    color: var(--accent-yellow);
-    border-color: rgba(var(--accent-yellow-rgb), 0.1);
+    --deepthink-tab-rgb: var(--accent-yellow-rgb);
+    --deepthink-tab-color: var(--accent-yellow);
 }
 
-#deepthink-tab-solution-pool.active {
-    border-color: rgba(var(--accent-yellow-rgb), 0.5);
-    box-shadow: 0 0 6px rgba(var(--accent-yellow-rgb), 0.2),
-        0 0 2px rgba(var(--accent-yellow-rgb), 0.3) inset;
-}
-
-/* Dissected Observations -> Orange */
 #deepthink-tab-dissected-observations {
-    background: rgba(245, 158, 11, 0.08);
-    /* fallback hex converted to rgba */
-    color: var(--accent-orange, #F59E0B);
-    border-color: rgba(245, 158, 11, 0.1);
+    --deepthink-tab-rgb: 245, 158, 11;
+    --deepthink-tab-color: var(--accent-orange, #F59E0B);
 }
 
-#deepthink-tab-dissected-observations.active {
-    border-color: rgba(245, 158, 11, 0.5);
-    box-shadow: 0 0 6px rgba(245, 158, 11, 0.2),
-        0 0 2px rgba(245, 158, 11, 0.3) inset;
-}
-
-/* Evolution Filter -> Red (Pink) */
 #deepthink-tab-evolution-filter {
-    background: rgba(var(--accent-pink-rgb), 0.08);
-    color: var(--accent-pink);
-    border-color: rgba(var(--accent-pink-rgb), 0.1);
+    --deepthink-tab-rgb: var(--accent-pink-rgb);
+    --deepthink-tab-color: var(--accent-pink);
 }
 
-#deepthink-tab-evolution-filter.active {
-    border-color: rgba(var(--accent-pink-rgb), 0.5);
-    box-shadow: 0 0 6px rgba(var(--accent-pink-rgb), 0.2),
-        0 0 2px rgba(var(--accent-pink-rgb), 0.3) inset;
-}
-
-/* Final Result -> Green */
 #deepthink-tab-final-result {
-    background: rgba(var(--accent-green-rgb), 0.08);
-    color: var(--accent-green);
-    border-color: rgba(var(--accent-green-rgb), 0.1);
+    --deepthink-tab-rgb: var(--accent-green-rgb);
+    --deepthink-tab-color: var(--accent-green);
 }
 
+#deepthink-tab-strategic-solver,
+#deepthink-tab-hypothesis-explorer,
+#deepthink-tab-solution-pool,
+#deepthink-tab-dissected-observations,
+#deepthink-tab-evolution-filter,
+#deepthink-tab-final-result {
+    background: rgba(var(--deepthink-tab-rgb), 0.08);
+    color: var(--deepthink-tab-color);
+    border-color: rgba(var(--deepthink-tab-rgb), 0.1);
+}
+
+#deepthink-tab-strategic-solver.active,
+#deepthink-tab-hypothesis-explorer.active,
+#deepthink-tab-solution-pool.active,
+#deepthink-tab-dissected-observations.active,
+#deepthink-tab-evolution-filter.active,
 #deepthink-tab-final-result.active {
-    border-color: rgba(var(--accent-green-rgb), 0.5);
-    box-shadow: 0 0 6px rgba(var(--accent-green-rgb), 0.2),
-        0 0 2px rgba(var(--accent-green-rgb), 0.3) inset;
+    border-color: rgba(var(--deepthink-tab-rgb), 0.5);
+    box-shadow: 0 0 6px rgba(var(--deepthink-tab-rgb), 0.2),
+        0 0 2px rgba(var(--deepthink-tab-rgb), 0.3) inset;
 }
 
 /* Live and Filesystem share the same quiet red navigation treatment. */
@@ -573,7 +547,6 @@
     font-size: var(--font-size-sm);
     font-weight: 600;
     line-height: var(--line-height-tight);
-    color: var(--text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -822,7 +795,6 @@
 
 .dissected-strategy-panel-header h4 {
     margin: 0 0 0.35rem 0;
-    color: var(--text-primary-color);
     font-size: 0.95rem;
     font-weight: 800;
 }
@@ -874,7 +846,6 @@
 
 .dissected-critique-card-header h5 {
     margin: 0.15rem 0 0;
-    color: var(--text-primary-color);
     font-size: 0.9rem;
     font-weight: 800;
 }
@@ -1127,33 +1098,6 @@
    12. EVOLUTION FILTER REASONING PILL
    -------------------------------------------------------------------------- */
 
-.reasoning-fullscreen-btn.reasoning-pill {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-
-    width: 100%;
-    height: auto;
-    padding: 0.85rem 1rem;
-
-    background: linear-gradient(135deg, rgba(var(--accent-pink-rgb), 0.18), rgba(var(--card-bg-base-rgb), 0.35));
-    border: 1px solid transparent;
-    border-color: rgba(var(--accent-pink-rgb), 0.35);
-    border-radius: 18px;
-
-    color: var(--text-color);
-    cursor: pointer;
-    transition: all 0.3s ease;
-}
-
-.reasoning-fullscreen-btn.reasoning-pill:hover {
-    background: linear-gradient(135deg, rgba(var(--accent-pink-rgb), 0.25), rgba(var(--card-bg-base-rgb), 0.45));
-    border-color: var(--accent-pink);
-    color: var(--text-color);
-    transform: translateY(-1px);
-}
-
 .reasoning-pill .pill-content {
     display: flex;
     align-items: center;
@@ -1225,7 +1169,6 @@
 
     & p {
         margin-bottom: var(--space-4);
-        color: var(--text-primary-color);
     }
 
     & :is(ul, ol) {
@@ -1235,7 +1178,6 @@
 
     & li {
         margin-bottom: var(--space-2);
-        color: var(--text-primary-color);
     }
 
     & blockquote {
@@ -1262,12 +1204,6 @@
 /* --------------------------------------------------------------------------
    14. SOLUTION COMPARISON MODAL
    -------------------------------------------------------------------------- */
-
-.solution-comparison-grid {
-    display: grid;
-    gap: 20px;
-    height: 100%;
-}
 
 .solution-panel {
     display: flex;
