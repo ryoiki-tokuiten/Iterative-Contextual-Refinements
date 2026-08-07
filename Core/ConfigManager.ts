@@ -36,19 +36,14 @@ import {
     routingManager,
     getSelectedModel,
     getSelectedStrategiesCount,
-    getSelectedSubStrategiesCount,
     getStrategyProximityLoops,
     getSelectedHypothesisCount,
     getHypothesisProximityLoops,
     getSelectedPqfAggressiveness,
-    getRefinementEnabled,
-    getSkipSubStrategies,
-    getDissectedObservationsEnabled,
-    getEvolvingDfsEnabled,
-    getEvolvingDfsDepth,
+    getDeepthinkDepth,
     getIsolateBranchesEnabled,
     getSolutionPoolDisabled,
-    getProvideAllSolutionsToCorrectors
+    getSelectedThinkingLevel
 } from '../Routing';
 import { updateControlsState } from '../UI/Controls';
 
@@ -105,18 +100,14 @@ export async function exportConfiguration(format: ExportFormat = 'auto'): Promis
             modelParameters: {
                 strategiesCount: getSelectedStrategiesCount(),
                 strategyProximityLoops: getStrategyProximityLoops(),
-                subStrategiesCount: getSelectedSubStrategiesCount(),
                 hypothesisCount: getSelectedHypothesisCount(),
                 hypothesisProximityLoops: getHypothesisProximityLoops(),
                 pqfAggressiveness: getSelectedPqfAggressiveness(),
-                refinementEnabled: getRefinementEnabled(),
-                skipSubStrategies: getSkipSubStrategies(),
-                dissectedObservationsEnabled: getDissectedObservationsEnabled(),
-                evolvingDfsEnabled: getEvolvingDfsEnabled(),
-                evolvingDfsDepth: getEvolvingDfsDepth(),
+                deepthinkDepth: getDeepthinkDepth(),
                 isolateBranches: getIsolateBranchesEnabled(),
                 disableSolutionPool: getSolutionPoolDisabled(),
-                provideAllSolutionsToCorrectors: getProvideAllSolutionsToCorrectors(),
+                deepthinkCodeExecutionEnabled: routingManager.getDeepthinkConfigController().isCodeExecutionEnabled(),
+                thinkingLevel: getSelectedThinkingLevel(),
             },
         },
     };
@@ -290,18 +281,14 @@ function restoreModelParameters(params: ExportedConfig['modelParameters']): void
     const modelParameterKeys: Array<keyof ExportedConfig['modelParameters']> = [
         'strategiesCount',
         'strategyProximityLoops',
-        'subStrategiesCount',
         'hypothesisCount',
         'hypothesisProximityLoops',
         'pqfAggressiveness',
-        'refinementEnabled',
-        'skipSubStrategies',
-        'dissectedObservationsEnabled',
-        'evolvingDfsEnabled',
-        'evolvingDfsDepth',
+        'deepthinkDepth',
         'isolateBranches',
         'disableSolutionPool',
-        'provideAllSolutionsToCorrectors',
+        'deepthinkCodeExecutionEnabled',
+        'thinkingLevel',
     ];
 
     for (const key of modelParameterKeys) {

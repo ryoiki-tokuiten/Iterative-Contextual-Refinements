@@ -31,7 +31,6 @@ import type {
     DeepthinkMainStrategyData,
     DeepthinkPipelineState,
     DeepthinkSolutionCritiqueData,
-    DeepthinkSubStrategyData,
 } from '../Deepthink/DeepthinkCore';
 import {
     buildDeepthinkSandboxRepositoryAccess,
@@ -88,7 +87,7 @@ export interface AdaptiveDeepthinkToolPrompts {
     sys_deepthink_hypothesisTester: string;
     sys_deepthink_solutionAttempt: string;
     sys_deepthink_solutionCritique: string;
-    sys_deepthink_selfImprovement: string;
+    sys_deepthink_solutionCorrection: string;
 }
 
 interface AdaptiveStrategy {
@@ -866,8 +865,8 @@ async function executeOneStrategy(
             [executionId],
             executionMap,
             new Map([[executionId, { critique: critiqueResult.critique, hypothesisPacket }]]),
-            prompts.sys_deepthink_selfImprovement,
-            syncAgentContext(state, context, 'correction', prompts.sys_deepthink_selfImprovement, strategy, undefined, selectedHypothesisIds, executionGroupId, executionGroupName),
+            prompts.sys_deepthink_solutionCorrection,
+            syncAgentContext(state, context, 'correction', prompts.sys_deepthink_solutionCorrection, strategy, undefined, selectedHypothesisIds, executionGroupId, executionGroupName),
             images,
         ),
         context,
@@ -1051,23 +1050,17 @@ export function syncAdaptiveDeepthinkPipeline(state: AdaptiveDeepthinkState, pip
         const latest = Array.from(state.executions.values())
             .filter(record => record.strategyId === strategy.id)
             .sort((left, right) => right.passNumber - left.passNumber)[0];
-        const subStrategy: DeepthinkSubStrategyData = {
-            id: `${strategy.id}-adaptive`,
-            subStrategyText: strategy.text,
-            status: latest ? 'completed' : 'pending',
+        return {
+            id: strategy.id,
+            strategyText: `${strategy.text}${strategy.saved ? '\n\n> Permanently saved.' : ''}`,
+            status: latest || strategy.saved ? 'completed' : 'pending',
             solutionAttempt: latest?.execution,
             solutionAttemptDisplay: latest?.execution,
             refinedSolution: latest?.correction,
             refinedSolutionDisplay: latest?.correction,
-            selfImprovementStatus: latest?.correction ? 'completed' : latest ? 'skipped' : undefined,
+            correctionStatus: latest?.correction ? 'completed' : latest ? 'skipped' : undefined,
             solutionCritique: latest?.critique,
             solutionCritiqueDisplay: latest?.critique,
-        } as DeepthinkSubStrategyData;
-        return {
-            id: strategy.id,
-            strategyText: `${strategy.text}${strategy.saved ? '\n\n> Permanently saved.' : ''}`,
-            subStrategies: [subStrategy],
-            status: latest || strategy.saved ? 'completed' : 'pending',
             branchVersion: 1,
             branchIterationCount: Math.max(0, ...Array.from(state.executions.values()).filter(record => record.strategyId === strategy.id).map(record => record.passNumber)),
         } as DeepthinkMainStrategyData;
@@ -1095,8 +1088,6 @@ export function syncAdaptiveDeepthinkPipeline(state: AdaptiveDeepthinkState, pip
     pipeline.hypothesisExplorerComplete = pipeline.hypotheses.length > 0 && pipeline.hypotheses.every(hypothesis => hypothesis.testerStatus === 'completed');
     pipeline.knowledgePacket = Array.from(state.hypothesisTestings.entries()).map(([id, testing]) => `<Hypothesis id="${id}">\n${testing.hypothesis}\n\n${testing.testing}\n</Hypothesis>`).join('\n\n');
     pipeline.solutionCritiquesStatus = pipeline.solutionCritiques.length ? 'completed' : 'pending';
-    pipeline.dissectedSynthesisStatus = pipeline.solutionCritiques.length ? 'completed' : 'pending';
-    pipeline.dissectedObservationsSynthesis = recentExecutionCritiques(state);
     if (state.selectedSolution) {
         pipeline.finalJudgedBestSolution = state.selectedSolution;
         pipeline.finalJudgingResponseText = state.selectedSolution;

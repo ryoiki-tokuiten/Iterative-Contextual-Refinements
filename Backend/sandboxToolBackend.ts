@@ -2736,7 +2736,6 @@ function getFriendlyAgentName(sessionId: string, repositoryAccess?: SandboxRepos
         if (sessionId.includes('hypothesis-testing')) kind = 'Hypothesis Testing';
         else if (sessionId.includes('solution-attempt')) kind = 'Solution Attempt';
         else if (sessionId.includes('solution-critique')) kind = 'Solution Critique';
-        else if (sessionId.includes('self-improvement')) kind = 'Self-Improvement';
         else if (sessionId.includes('solution-correction')) kind = 'Solution Correction';
         else kind = 'Deepthink Agent';
 

@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  *
- * Deterministic prompt and repository builders for Deepthink Evolving DFS.
+ * Deterministic prompt and repository builders for the Deepthink iteration loop.
  * These helpers intentionally avoid external conversation-history managers.
  */
 
@@ -68,7 +68,7 @@ interface StrategyPromptContext {
 interface PreviousHypothesisTestResult {
     hypothesisId: string;
     hypothesisText: string;
-    targetStrategyIds: string[];
+    targetBranchIds: string[];
     testerOutput: string;
     testerStatus: string;
 }
@@ -179,9 +179,9 @@ export function buildCorrectionRepository(args: {
     return {
         peerContext: otherSections.length
             ? [
-                '<Context From Other Strategies For Cross-Learning, Synthesis, Gap Anticipation, Critique Anticipation, And Orthogonality>',
+                '<Context From Other Strategies For Cross-Learning, Integration, Gap Anticipation, Critique Anticipation, And Orthogonality>',
                 otherSections.join('\n\n'),
-                '</Context From Other Strategies For Cross-Learning, Synthesis, Gap Anticipation, Critique Anticipation, And Orthogonality>',
+                '</Context From Other Strategies For Cross-Learning, Integration, Gap Anticipation, Critique Anticipation, And Orthogonality>',
             ].join('\n')
             : '',
         currentContext: [
@@ -223,7 +223,7 @@ Produce the next corrected solution for the assigned strategy. Work inside the a
 ${args.context.peerContext}
 
 ${SECTION_SEPARATOR}
-${fence('Strategy-Aware Selective Knowledge Packet', args.hypothesisPacket)}
+${fence('Branch Hypothesis Packet', args.hypothesisPacket)}
 
 ${SECTION_SEPARATOR}
 ${args.context.currentContext}`;
@@ -268,9 +268,9 @@ export function buildSolutionPoolRepository(args: {
     return {
         peerContext: otherSections.length
             ? [
-                '<Context From Other Strategies For Cross-Learning, Synthesis, Gap Anticipation, Critique Anticipation, And Orthogonality>',
+                '<Context From Other Strategies For Cross-Learning, Integration, Gap Anticipation, Critique Anticipation, And Orthogonality>',
                 otherSections.join('\n\n'),
-                '</Context From Other Strategies For Cross-Learning, Synthesis, Gap Anticipation, Critique Anticipation, And Orthogonality>',
+                '</Context From Other Strategies For Cross-Learning, Integration, Gap Anticipation, Critique Anticipation, And Orthogonality>',
             ].join('\n')
             : '',
         currentContext: [
@@ -312,7 +312,7 @@ Generate the solution pool for the assigned strategy. Use only the assigned stra
 ${args.context.peerContext}
 
 ${SECTION_SEPARATOR}
-${fence('Strategy-Aware Selective Knowledge Packet', args.hypothesisPacket)}
+${fence('Branch Hypothesis Packet', args.hypothesisPacket)}
 
 ${SECTION_SEPARATOR}
 ${args.context.currentContext}`;
@@ -488,7 +488,7 @@ export function buildHypothesisRefreshPrompt(args: {
         ? args.previousTestingOutputs.map(result => [
             `<Hypothesis id="${result.hypothesisId}" status="${result.testerStatus}">`,
             fence('Text', result.hypothesisText),
-            fence('TargetStrategies', result.targetStrategyIds.join(', ') || 'All'),
+            fence('TargetBranches', result.targetBranchIds.join(', ') || 'All'),
             fence('TestingOutput', result.testerOutput),
             '</Hypothesis>',
         ].join('\n')).join('\n\n')
@@ -500,7 +500,7 @@ ${args.challenge}
 <Hypothesis Heartbeat>
 Completed global iteration: ${args.completedGlobalIteration}
 Generate exactly ${args.hypothesisCount} new or updated hypotheses.
-Mode: selective, strategy-aware routing only.
+Return branch routing metadata separately from each self-contained hypothesis.
 </Hypothesis Heartbeat>
 
 <Current Active Strategies And Last Two Histories>
@@ -522,12 +522,12 @@ Return only JSON:
   "hypotheses": [
     {
       "text": "Hypothesis text",
-      "target_strategies": ["main1"]
+      "target_branches": ["main1"]
     }
   ]
 }
 
-Use empty target_strategies only for globally useful hypotheses. Do not solve the original challenge or embed assumed final answers.`;
+Use empty target_branches only for globally useful hypotheses. Do not solve the original challenge or embed assumed final answers.`;
 
     return [{ role: 'user', content }];
 }

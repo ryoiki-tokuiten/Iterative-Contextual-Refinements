@@ -107,17 +107,15 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
         if (name.includes('evolution filter') || desc.includes('evolution filter') || name.includes('postqualityfilter') || desc.includes('postqualityfilter') || name.includes('attack') || desc.includes('attack')) {
             return 'redteam'; // Red
         }
-        // Correction / Refinement / Dissect / Quality filter / PostQF
+        // Correction / Quality filter / PostQF
         if (
             name.includes('correction') || desc.includes('correction') || 
-            name.includes('refinement') || desc.includes('refinement') ||
-            name.includes('dissect') || desc.includes('dissect') || 
             name.includes('quality filter') || desc.includes('quality filter') || 
             name.includes('postqf')
         ) {
-            return 'dissected'; // Green
+            return 'correction'; // Green
         }
-        // Strategy / Sub-Strategy / Execution / Attempt / Solver
+        // Strategy / Execution / Attempt / Solver
         if (
             name.includes('strategy') || desc.includes('strategy') || 
             name.includes('attempt') || desc.includes('attempt') || 

@@ -4,7 +4,7 @@
  */
 
 import { Root } from 'react-dom/client';
-import { renderContextualUI, updateContextualUI, renderEvolvingDfsUI } from './ContextualUI';
+import { renderContextualUI, updateContextualUI, renderBranchHistoryUI } from './ContextualUI';
 import {
     startContextualProcess,
     stopContextualProcess,
@@ -23,7 +23,7 @@ export {
     stopContextualProcess,
     getContextualState,
     setContextualStateForImport,
-    renderEvolvingDfsUI,
+    renderBranchHistoryUI,
 };
 
 /**

@@ -11,50 +11,34 @@ export interface ModelOption {
     providerLabel?: string;
 }
 
+export const MAX_DEEPTHINK_STRATEGIES = 5;
 export const MAX_HYPOTHESIS_COUNT = 10;
+export const MAX_DEEPTHINK_DEPTH = 10;
 
 export interface ModelParameters {
     strategiesCount: number;
     strategyProximityLoops: number;
-    subStrategiesCount: number;
     hypothesisCount: number;
     hypothesisProximityLoops: number;
     pqfAggressiveness: string;
-    refinementEnabled: boolean;
-    skipSubStrategies: boolean;
-    dissectedObservationsEnabled: boolean;
-    evolvingDfsEnabled: boolean;
-    evolvingDfsDepth: number;
+    deepthinkDepth: number;
     isolateBranches: boolean;
     disableSolutionPool: boolean;
-    provideAllSolutionsToCorrectors: boolean;
-    postQualityFilterEnabled: boolean;
     deepthinkCodeExecutionEnabled: boolean;
-    hypothesisInjectionMode: 'parallel' | 'strategy_aware' | 'selective_injection';
     thinkingLevel: 'low' | 'medium' | 'high' | 'minimal';
-    shareHypothesesToDissected: boolean;
 }
 
 const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
     strategiesCount: 3,
     strategyProximityLoops: 2,
-    subStrategiesCount: 0,
     hypothesisCount: 4,
     hypothesisProximityLoops: 2,
     pqfAggressiveness: 'balanced',
-    refinementEnabled: true,
-    skipSubStrategies: true,
-    dissectedObservationsEnabled: false,
-    evolvingDfsEnabled: true,
-    evolvingDfsDepth: 3,
+    deepthinkDepth: 3,
     isolateBranches: false,
     disableSolutionPool: false,
-    provideAllSolutionsToCorrectors: false,
-    postQualityFilterEnabled: true,
     deepthinkCodeExecutionEnabled: false,
-    hypothesisInjectionMode: 'selective_injection' as const,
     thinkingLevel: 'high',
-    shareHypothesesToDissected: false
 };
 
 export class ModelConfigManager {
@@ -80,26 +64,12 @@ export class ModelConfigManager {
         return { ...this.parameters };
     }
 
-    public updateParameter<K extends keyof ModelParameters>(
-        key: K,
-        value: ModelParameters[K]
-    ): void {
+    public updateParameter<K extends keyof ModelParameters>(key: K, value: ModelParameters[K]): void {
         this.parameters[key] = value;
     }
 
     public getStrategiesCount(): number {
-        if (this.isEvolvingDfsEnabled()) {
-            return Math.max(1, Math.min(5, this.parameters.strategiesCount));
-        }
-        return Math.max(1, Math.min(10, this.parameters.strategiesCount));
-    }
-
-    public getSubStrategiesCount(): number {
-        const count = this.parameters.subStrategiesCount;
-        if (count === 0) {
-            return 0;
-        }
-        return Math.max(2, Math.min(5, count));
+        return Math.max(1, Math.min(MAX_DEEPTHINK_STRATEGIES, this.parameters.strategiesCount));
     }
 
     public getStrategyProximityLoops(): number {
@@ -115,61 +85,23 @@ export class ModelConfigManager {
     }
 
     public getPqfAggressiveness(): string {
-        return this.parameters.pqfAggressiveness;
+        return this.parameters.pqfAggressiveness === 'off' ? 'balanced' : this.parameters.pqfAggressiveness;
     }
 
-    public isRefinementEnabled(): boolean {
-        return this.parameters.refinementEnabled;
-    }
-
-    public isSkipSubStrategies(): boolean {
-        return this.parameters.skipSubStrategies;
-    }
-
-    public isDissectedObservationsEnabled(): boolean {
-        // Dissected observations can only be enabled if refinement is enabled
-        return this.parameters.refinementEnabled && this.parameters.dissectedObservationsEnabled;
-    }
-
-    public isShareHypothesesToDissected(): boolean {
-        return this.parameters.shareHypothesesToDissected === true;
-    }
-
-    public isEvolvingDfsEnabled(): boolean {
-        // Iterative corrections can only be enabled if refinement is enabled
-        return this.parameters.refinementEnabled && this.parameters.evolvingDfsEnabled;
-    }
-
-    public getEvolvingDfsDepth(): number {
-        return Math.max(1, Math.min(10, this.parameters.evolvingDfsDepth));
+    public getDeepthinkDepth(): number {
+        return Math.max(1, Math.min(MAX_DEEPTHINK_DEPTH, Math.round(this.parameters.deepthinkDepth)));
     }
 
     public isIsolateBranchesEnabled(): boolean {
-        return this.isEvolvingDfsEnabled() && this.parameters.isolateBranches === true;
+        return this.parameters.isolateBranches === true;
     }
 
     public isSolutionPoolDisabled(): boolean {
-        return this.isEvolvingDfsEnabled() && this.parameters.disableSolutionPool === true;
-    }
-
-    public isProvideAllSolutionsToCorrectors(): boolean {
-        // Can only be enabled if refinement is enabled
-        return this.parameters.refinementEnabled && !this.isEvolvingDfsEnabled() && this.parameters.provideAllSolutionsToCorrectors;
-    }
-
-    public isPostQualityFilterEnabled(): boolean {
-        return this.isEvolvingDfsEnabled() ? true : this.parameters.postQualityFilterEnabled;
+        return this.parameters.disableSolutionPool === true;
     }
 
     public isDeepthinkCodeExecutionEnabled(): boolean {
         return this.parameters.deepthinkCodeExecutionEnabled;
-    }
-
-    public getHypothesisInjectionMode(): 'parallel' | 'strategy_aware' | 'selective_injection' {
-        if (this.isEvolvingDfsEnabled()) {
-            return 'selective_injection';
-        }
-        return this.parameters.hypothesisInjectionMode || 'selective_injection';
     }
 
     public getThinkingLevel(): 'low' | 'medium' | 'high' | 'minimal' {
@@ -177,14 +109,13 @@ export class ModelConfigManager {
     }
 
     public getModelProvider(modelValue?: string): string {
-        const model = this.availableModels.find(m => m.value === (modelValue || this.selectedModel));
+        const model = this.availableModels.find(candidate => candidate.value === (modelValue || this.selectedModel));
         return model?.provider || 'google';
     }
 
     public setAvailableModels(models: ModelOption[]): void {
         this.availableModels = models;
-        // If current selected model is not available, select the first available model
-        if (!models.some(m => m.value === this.selectedModel) && models.length > 0) {
+        if (!models.some(model => model.value === this.selectedModel) && models.length > 0) {
             this.setSelectedModel(models[0].value);
         }
     }

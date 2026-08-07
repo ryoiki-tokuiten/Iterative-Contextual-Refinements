@@ -14,13 +14,11 @@ import { renderIconMarkup } from '../UI/Icons';
 // React component imports
 import {
     BaseModal,
-    DefaultSolutionUI,
-    SubStrategyComparisonUI,
     EmbeddedModalContent,
     StructuredResponseModalContent,
     StrategicSolverTab,
     HypothesisExplorerTab,
-    DissectedObservationsTab,
+    CritiqueHistoryTab,
     EvolutionFilterTab,
     FinalResultTab,
 } from './Deepthink.tsx';
@@ -32,7 +30,6 @@ import { DeepthinkFilesystemTab } from './DeepthinkFilesystemTab.tsx';
 // Core Imports
 import {
     DeepthinkSolutionCritiqueData,
-    DeepthinkSubStrategyData,
     DeepthinkHypothesisData,
     DeepthinkPostQualityFilterData,
     DeepthinkMainStrategyData,
@@ -51,7 +48,6 @@ import {
 
 export type {
     DeepthinkSolutionCritiqueData,
-    DeepthinkSubStrategyData,
     DeepthinkHypothesisData,
     DeepthinkPostQualityFilterData,
     DeepthinkMainStrategyData,
@@ -89,24 +85,7 @@ const moduleState: DeepthinkModuleState = {
     escapeHtml: (s) => s,
 };
 
-function isEvolvingRun(process: DeepthinkPipelineState): boolean {
-    return process.runConfig?.evolvingDfsEnabled
-        ?? process.initialStrategies.some(strategy =>
-            strategy.subStrategies.some(subStrategy => subStrategy.evolvingDfs?.enabled));
-}
-
-function isRefinementRun(process: DeepthinkPipelineState): boolean {
-    return process.runConfig?.refinementEnabled
-        ?? process.solutionCritiques.length > 0;
-}
-
-function hasDissectedSurface(process: DeepthinkPipelineState): boolean {
-    return isRefinementRun(process)
-        || isEvolvingRun(process)
-        || !!process.dissectedObservationsSynthesis;
-}
-
-let activeSolutionModalSubStrategyId: string | null = null;
+let activeSolutionModalStrategyId: string | null = null;
 let activeSolutionModalBranchVersion: number | undefined;
 
 // React roots for React-rendered content
@@ -146,7 +125,7 @@ export function initializeDeepthinkModule(dependencies: DeepthinkModuleDependenc
             const process = getActiveDeepthinkPipeline();
             if (!process) return;
             if (document.getElementById('solution-modal-overlay')) {
-                removeEvolvingDfsSolutionOverlay(true);
+                removeDeepthinkSolutionOverlay(true);
             }
             process.activeTabId = 'filesystem';
             renderActiveDeepthinkPipeline();
@@ -194,10 +173,28 @@ function unmountModal(): void {
     if (modalRoot) {
         modalRoot.render(null);
     }
-    activeSolutionModalSubStrategyId = null;
+    activeSolutionModalStrategyId = null;
 }
 
-function removeEvolvingDfsSolutionOverlay(immediate = true): void {
+function openCritiqueModal(critiqueId: string): void {
+    const pipeline = getActiveDeepthinkPipeline();
+    const critique = pipeline?.solutionCritiques.find(candidate => candidate.id === critiqueId);
+    if (!critique || document.querySelector('.embedded-modal-overlay')) return;
+
+    const close = () => unmountModal();
+    mountModal(
+        React.createElement(BaseModal, {
+            title: 'Solution Critique',
+            isEmbedded: true,
+            onClose: close,
+            children: React.createElement(EmbeddedModalContent, {
+                content: critique.critiqueResponseDisplay || critique.critiqueResponse || critique.error || 'No critique available',
+            })
+        })
+    );
+}
+
+function removeDeepthinkSolutionOverlay(immediate = true): void {
     const overlay = document.getElementById('solution-modal-overlay') as (HTMLElement & {
         cleanup?: () => void;
     }) | null;
@@ -219,25 +216,21 @@ function removeEvolvingDfsSolutionOverlay(immediate = true): void {
         }, 200);
     }
 
-    activeSolutionModalSubStrategyId = null;
+    activeSolutionModalStrategyId = null;
     activeSolutionModalBranchVersion = undefined;
 }
 
-async function openDeepthinkSolutionModal(subStrategyId: string, branchVersion?: number) {
+async function openDeepthinkSolutionModal(strategyId: string, branchVersion?: number) {
     const pipeline = getActiveDeepthinkPipeline();
-    const subStrategy = pipeline?.initialStrategies.flatMap(ms => ms.subStrategies).find(ss => ss.id === subStrategyId);
-    if (!subStrategy) return;
+    const strategy = pipeline?.initialStrategies.find(candidate => candidate.id === strategyId);
+    if (!strategy) return;
 
-    const evolvingDfsEnabled = pipeline ? isEvolvingRun(pipeline) : false;
-
-    if (evolvingDfsEnabled) {
-        removeEvolvingDfsSolutionOverlay(true);
+        removeDeepthinkSolutionOverlay(true);
         unmountModal();
-        activeSolutionModalSubStrategyId = subStrategyId;
+        activeSolutionModalStrategyId = strategyId;
         activeSolutionModalBranchVersion = branchVersion;
 
-        // For Evolving DFS corrections, we keep the imperative approach because it uses
-        // the external ContextualUI component which has its own rendering lifecycle
+        // The branch-history viewer owns an imperative rendering lifecycle.
         const overlay = document.createElement('div') as HTMLElement & { cleanup?: () => void };
         overlay.className = 'modal-overlay';
         overlay.id = 'solution-modal-overlay';
@@ -252,9 +245,7 @@ async function openDeepthinkSolutionModal(subStrategyId: string, branchVersion?:
         header.className = 'modal-header';
         const title = document.createElement('h2');
         title.className = 'modal-title';
-        title.textContent = branchVersion
-            ? `Evolving Depth First Search - Branch v${branchVersion}`
-            : 'Evolving Depth First Search';
+        title.textContent = branchVersion ? `Deepthink Branch v${branchVersion}` : 'Deepthink Branch';
         header.appendChild(title);
 
         const closeBtn = document.createElement('button');
@@ -274,7 +265,7 @@ async function openDeepthinkSolutionModal(subStrategyId: string, branchVersion?:
         overlay.appendChild(content);
         document.body.appendChild(overlay);
 
-        const close = () => removeEvolvingDfsSolutionOverlay(false);
+        const close = () => removeDeepthinkSolutionOverlay(false);
         const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
 
         closeBtn.addEventListener('click', close);
@@ -283,90 +274,7 @@ async function openDeepthinkSolutionModal(subStrategyId: string, branchVersion?:
         overlay.cleanup = () => document.removeEventListener('keydown', onKey);
         setTimeout(() => overlay.classList.add('is-visible'), 10);
 
-        await updateSolutionModalContent(body, subStrategyId, branchVersion);
-    } else {
-        // Non-iterative: mount React components
-        const close = () => unmountModal();
-        mountModal(
-            React.createElement(BaseModal, {
-                title: 'Solution Details',
-                onClose: close,
-                children: React.createElement(DefaultSolutionUI, {
-                    subStrategy,
-                    refinementEnabled: pipeline ? isRefinementRun(pipeline) : false,
-                })
-            })
-        );
-    }
-}
-
-async function openSubStrategySolutionModal(subStrategyId: string, branchVersion?: number) {
-    const pipeline = getActiveDeepthinkPipeline();
-    if (!pipeline) return;
-
-    if (isEvolvingRun(pipeline)) {
-        await openDeepthinkSolutionModal(subStrategyId, branchVersion);
-        return;
-    }
-
-    const subStrategy = pipeline.initialStrategies.flatMap(s => s.subStrategies).find(sub => sub.id === subStrategyId);
-    if (!subStrategy) return;
-
-    const close = () => unmountModal();
-    mountModal(
-        React.createElement(BaseModal, {
-            title: 'Sub-Strategy Solution',
-            className: 'fullscreen-modal',
-            onClose: close,
-            children: React.createElement(SubStrategyComparisonUI, {
-                subStrategy,
-                refinementEnabled: isRefinementRun(pipeline),
-            })
-        })
-    );
-}
-
-function openCritiqueModal(critiqueId: string) {
-    const pipeline = getActiveDeepthinkPipeline();
-    const critique = pipeline?.solutionCritiques.find(c => c.id === critiqueId);
-    if (!critique || document.querySelector('.embedded-modal-overlay')) return;
-
-    const close = () => unmountModal();
-    mountModal(
-        React.createElement(BaseModal, {
-            title: 'Solution Critique',
-            isEmbedded: true,
-            onClose: close,
-            children: React.createElement(EmbeddedModalContent, {
-                content: critique.critiqueResponseDisplay || critique.critiqueResponse || 'No critique available',
-            })
-        })
-    );
-}
-
-function openSubStrategyCritiqueModal(subStrategyId: string) {
-    const pipeline = getActiveDeepthinkPipeline();
-    if (document.querySelector('.embedded-modal-overlay')) return;
-
-    let subStrategy: any = null;
-    let mainStrategyId = '';
-    for (const strategy of pipeline?.initialStrategies ?? []) {
-        subStrategy = strategy.subStrategies.find(sub => sub.id === subStrategyId);
-        if (subStrategy) { mainStrategyId = strategy.id; break; }
-    }
-    if (!subStrategy?.solutionCritique) return;
-
-    const close = () => unmountModal();
-    mountModal(
-        React.createElement(BaseModal, {
-            title: `Solution Critique - ${mainStrategyId}`,
-            isEmbedded: true,
-            onClose: close,
-            children: React.createElement(EmbeddedModalContent, {
-                content: subStrategy.solutionCritiqueDisplay || subStrategy.solutionCritique,
-            })
-        })
-    );
+        await updateSolutionModalContent(body, strategyId, branchVersion);
 }
 
 function openHypothesisArgumentModal(hypothesisId: string) {
@@ -410,15 +318,6 @@ function openPostQualityFilterModal(agent: DeepthinkPostQualityFilterData) {
     );
 }
 
-// Update active modal content dynamically (for Evolving Depth First Search)
-function findStrategyForSubStrategy(pipeline: DeepthinkPipelineState | null, subStrategyId: string) {
-    for (const strategy of pipeline?.initialStrategies ?? []) {
-        const subStrategy = strategy.subStrategies.find(sub => sub.id === subStrategyId);
-        if (subStrategy) return { strategy, subStrategy };
-    }
-    return null;
-}
-
 function readIterationBranchVersion(iteration: any): number | undefined {
     if (typeof iteration.branchVersion === 'number' && iteration.branchVersion > 0) return iteration.branchVersion;
     if (typeof iteration.branchVersion === 'string') {
@@ -443,11 +342,10 @@ function isCurrentBranchIteration(strategy: DeepthinkMainStrategyData, iteration
     return targetBranchVersion === 1 && !hasEverBeenReplaced;
 }
 
-async function updateSolutionModalContent(modalBody: HTMLElement, subStrategyId: string, branchVersion?: number) {
+async function updateSolutionModalContent(modalBody: HTMLElement, strategyId: string, branchVersion?: number) {
     const pipeline = getActiveDeepthinkPipeline();
-    const found = findStrategyForSubStrategy(pipeline, subStrategyId);
-    if (!found) return;
-    const { strategy, subStrategy } = found;
+    const strategy = pipeline?.initialStrategies.find(candidate => candidate.id === strategyId);
+    if (!strategy) return;
     const targetBranchVersion = branchVersion || strategy.branchVersion || 1;
     const isCurrentBranch = targetBranchVersion === (strategy.branchVersion || 1);
 
@@ -455,9 +353,8 @@ async function updateSolutionModalContent(modalBody: HTMLElement, subStrategyId:
         ? undefined
         : (strategy.replacementHistory || []).find(record => record.previousBranchVersion === targetBranchVersion);
 
-    const evolvingDfsData = subStrategy.evolvingDfs;
     const activeIterations = isCurrentBranch
-        ? (evolvingDfsData?.iterations || []).filter((iteration: any) =>
+        ? (strategy.iterationHistory?.iterations || []).filter((iteration: any) =>
             isCurrentBranchIteration(strategy, iteration, targetBranchVersion)
         )
         : [];
@@ -480,22 +377,22 @@ async function updateSolutionModalContent(modalBody: HTMLElement, subStrategyId:
         correctedSolution: iteration.correctedSolutionDisplay || iteration.correctedSolution,
     }));
     const originalSolution = isCurrentBranch
-        ? iterations[0]?.correctedSolution || subStrategy.solutionAttemptDisplay || subStrategy.solutionAttempt || 'Processing...'
+        ? iterations[0]?.correctedSolution || strategy.solutionAttemptDisplay || strategy.solutionAttempt || 'Processing...'
         : iterations[0]?.correctedSolution || replacementRecord?.latestSolutionDisplay || replacementRecord?.latestSolution || 'Retired branch solution not available.';
     const latestCorrection = iterations.length > 0 ? iterations[iterations.length - 1]?.correctedSolution : null;
     const currentBestSolution = latestCorrection || (isCurrentBranch
-        ? subStrategy.refinedSolutionDisplay || subStrategy.refinedSolution || subStrategy.solutionAttemptDisplay || subStrategy.solutionAttempt
+        ? strategy.refinedSolutionDisplay || strategy.refinedSolution || strategy.solutionAttemptDisplay || strategy.solutionAttempt
         : replacementRecord?.latestSolutionDisplay || replacementRecord?.latestSolution) || 'Processing...';
-    const isProcessing = subStrategy.status === 'processing' ||
-        subStrategy.status === 'pending' ||
-        subStrategy.solutionCritiqueStatus === 'processing' ||
-        subStrategy.solutionCritiqueStatus === 'pending' ||
-        subStrategy.selfImprovementStatus === 'processing' ||
-        subStrategy.selfImprovementStatus === 'pending' ||
-        evolvingDfsData?.status === 'processing';
+    const isProcessing = strategy.status === 'processing' ||
+        strategy.status === 'pending' ||
+        strategy.solutionCritiqueStatus === 'processing' ||
+        strategy.solutionCritiqueStatus === 'pending' ||
+        strategy.correctionStatus === 'processing' ||
+        strategy.correctionStatus === 'pending' ||
+        strategy.iterationHistory?.status === 'processing';
 
-    const { renderEvolvingDfsUI } = await import('../Contextual/ContextualUI');
-    await renderEvolvingDfsUI(
+    const { renderBranchHistoryUI } = await import('../Contextual/ContextualUI');
+    await renderBranchHistoryUI(
         modalBody,
         originalSolution,
         currentBestSolution,
@@ -505,10 +402,10 @@ async function updateSolutionModalContent(modalBody: HTMLElement, subStrategyId:
 }
 
 async function updateActiveSolutionModal() {
-    if (activeSolutionModalSubStrategyId && document.getElementById('solution-modal-overlay')) {
+    if (activeSolutionModalStrategyId && document.getElementById('solution-modal-overlay')) {
         const modalBody = document.querySelector('#solution-modal-overlay .modal-body') as HTMLElement;
         if (modalBody) {
-            await updateSolutionModalContent(modalBody, activeSolutionModalSubStrategyId, activeSolutionModalBranchVersion);
+            await updateSolutionModalContent(modalBody, activeSolutionModalStrategyId, activeSolutionModalBranchVersion);
         }
     }
 }
@@ -608,26 +505,35 @@ type DeepthinkTabContentCallbacks = {
     onViewSolution?: (id: string, branchVersion?: number) => void;
     onViewArgument?: (id: string) => void;
     onViewCritique?: (id: string) => void;
-    onViewSubStrategyCritique?: (id: string) => void;
     onViewReasoning?: (id: string) => void;
     hideStopButton?: boolean;
 };
 
-export function getVisibleDeepthinkTabs(process: DeepthinkPipelineState): DeepthinkTabDefinition[] {
-    const hasPostQualityFilter = process.postQualityFilterAgents?.length > 0;
-    const isHypothesisEnabled = process.runConfig
-        ? process.runConfig.hypothesisCount > 0
-        : process.hypotheses.length > 0 || (process.hypothesisHistory?.length || 0) > 0;
-    const isDissectedEnabled = hasDissectedSurface(process);
+function getDeepthinkTabVisibility(process: DeepthinkPipelineState): {
+    showFilesystem: boolean;
+    showHypothesis: boolean;
+    showSolutionPool: boolean;
+    showEvolutionFilter: boolean;
+} {
+    const config = process.runConfig;
+    return {
+        showFilesystem: config?.codeExecutionEnabled ?? true,
+        showHypothesis: config ? config.hypothesisCount > 0 : true,
+        showSolutionPool: config ? !config.solutionPoolDisabled : true,
+        showEvolutionFilter: process.postQualityFilterAgents.length > 0,
+    };
+}
 
+export function getVisibleDeepthinkTabs(process: DeepthinkPipelineState): DeepthinkTabDefinition[] {
+    const { showFilesystem, showHypothesis, showSolutionPool, showEvolutionFilter } = getDeepthinkTabVisibility(process);
     return [
         { id: 'live', label: 'Live', icon: 'terminal', visible: true },
-        { id: 'filesystem', label: 'Filesystem', icon: 'folder', visible: true },
+        { id: 'filesystem', label: 'Filesystem', icon: 'folder', visible: showFilesystem },
         { id: 'strategic-solver', label: 'Strategic Solver', icon: 'psychology', visible: true },
-        { id: 'hypothesis-explorer', label: 'Hypothesis Explorer', icon: 'science', visible: isHypothesisEnabled },
-        { id: 'solution-pool', label: 'Solution Pool', icon: 'database', visible: process.structuredSolutionPoolEnabled },
-        { id: 'dissected-observations', label: 'Dissected Observations', icon: 'troubleshoot', visible: isDissectedEnabled },
-        { id: 'evolution-filter', label: 'Evolution Filter', icon: 'security', visible: hasPostQualityFilter },
+        { id: 'hypothesis-explorer', label: 'Hypothesis Explorer', icon: 'science', visible: showHypothesis },
+        { id: 'critique-history', label: 'Critique History', icon: 'rate_review', visible: true },
+        { id: 'solution-pool', label: 'Solution Pool', icon: 'database', visible: showSolutionPool },
+        { id: 'evolution-filter', label: 'Evolution Filter', icon: 'security', visible: showEvolutionFilter },
         { id: 'final-result', label: 'Final Result', icon: 'flag', visible: true, alignRight: true }
     ]
         .filter(tab => tab.visible)
@@ -645,10 +551,9 @@ export function createDeepthinkTabContent(
         process.activeStrategyTab = idx;
         renderActiveDeepthinkPipeline();
     });
-    const onViewSolution = callbacks.onViewSolution ?? ((id: string, branchVersion?: number) => openSubStrategySolutionModal(id, branchVersion));
+    const onViewSolution = callbacks.onViewSolution ?? ((id: string, branchVersion?: number) => openDeepthinkSolutionModal(id, branchVersion));
     const onViewArgument = callbacks.onViewArgument ?? ((id: string) => openHypothesisArgumentModal(id));
     const onViewCritique = callbacks.onViewCritique ?? ((id: string) => openCritiqueModal(id));
-    const onViewSubStrategyCritique = callbacks.onViewSubStrategyCritique ?? ((id: string) => openSubStrategyCritiqueModal(id));
     const onViewReasoning = callbacks.onViewReasoning ?? ((id: string) => {
         const pqfAgent = process.postQualityFilterAgents.find(a => a.id === id);
         if (pqfAgent?.reasoning) {
@@ -678,13 +583,10 @@ export function createDeepthinkTabContent(
             });
         case 'solution-pool':
             return React.createElement(SolutionPoolTabContent, { process });
-        case 'dissected-observations':
-            return React.createElement(DissectedObservationsTab, {
+        case 'critique-history':
+            return React.createElement(CritiqueHistoryTab, {
                 process,
-                refinementEnabled: isRefinementRun(process),
-                evolvingDfsEnabled: isEvolvingRun(process),
                 onViewCritique,
-                onViewSubStrategyCritique,
             });
         case 'evolution-filter':
             return React.createElement(EvolutionFilterTab, {
@@ -724,10 +626,10 @@ function getTabStatusClass(tabId: string, process: DeepthinkPipelineState): stri
             if (process.structuredSolutionPoolStatus === 'processing') return 'status-deepthink-processing';
             if (process.structuredSolutionPoolStatus === 'error') return 'status-deepthink-error';
             return '';
-        case 'dissected-observations':
-            if (process.dissectedSynthesisStatus === 'completed') return 'status-deepthink-completed';
-            if (process.dissectedSynthesisStatus === 'error') return 'status-deepthink-error';
-            if (process.dissectedSynthesisStatus === 'processing' || process.solutionCritiquesStatus === 'processing') return 'status-deepthink-processing';
+        case 'critique-history':
+            if (process.solutionCritiquesStatus === 'completed') return 'status-deepthink-completed';
+            if (process.solutionCritiquesStatus === 'processing' || process.solutionCritiques.some(critique => critique.status === 'processing')) return 'status-deepthink-processing';
+            if (process.solutionCritiquesStatus === 'error' || process.solutionCritiques.some(critique => critique.status === 'error')) return 'status-deepthink-error';
             return '';
         case 'evolution-filter':
             if (process.postQualityFilterStatus === 'completed') return 'status-deepthink-completed';

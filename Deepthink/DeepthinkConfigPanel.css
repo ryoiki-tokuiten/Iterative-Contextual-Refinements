@@ -101,6 +101,12 @@
     min-width: 0;
 }
 
+.strategy-controls-column {
+    align-self: start;
+    min-width: 0;
+    gap: var(--gap-sm);
+}
+
 /* ==========================================================================
    Section Frames & Structural Containers
    ========================================================================== */
@@ -110,16 +116,17 @@
         .strategy-execution-container,
         .evolution-filter-options-container,
         .information-packet-window,
-        .refinement-options-container
+        .deepthink-options-container
     ) {
         flex: 1;
         margin: 0;
     }
 
     & .strategy-execution-container {
+        flex: 0 0 auto;
         display: flex;
         flex-direction: column;
-        padding: var(--card-padding-sm);
+        padding: var(--card-padding-xs) var(--card-padding-sm);
         border: 1px solid rgba(var(--dt-red-rgb), 0.15);
         border-radius: var(--border-radius-md);
         background: rgba(var(--dt-red-rgb), 0.04);
@@ -152,7 +159,7 @@
 
 
 
-    & .refinement-options-container {
+    & .deepthink-options-container {
         display: flex;
         flex-direction: column;
         overflow: hidden;
@@ -200,11 +207,11 @@
 
 .deepthink-config-scroll-container {
     & .strategy-execution-card {
-        flex: 1;
+        flex: 0 0 auto;
         display: flex;
         flex-direction: column;
-        justify-content: center;
-        gap: var(--gap-sm);
+        justify-content: flex-start;
+        gap: var(--gap-xs);
     }
 
     & .strategy-execution-section {
@@ -234,8 +241,8 @@
 
 .deepthink-config-scroll-container .strategy-execution-container .slider::-webkit-slider-thumb,
 .deepthink-config-scroll-container .strategy-execution-container .slider::-moz-range-thumb,
-.evolving-dfs-depth-container .slider::-webkit-slider-thumb,
-.evolving-dfs-depth-container .slider::-moz-range-thumb {
+.deepthink-depth-container .slider::-webkit-slider-thumb,
+.deepthink-depth-container .slider::-moz-range-thumb {
     border-radius: 50%;
     background: var(--card-bg-color, #1e1e24);
     cursor: pointer;
@@ -243,15 +250,15 @@
 }
 
 .deepthink-config-scroll-container .strategy-execution-container .slider::-webkit-slider-thumb,
-.evolving-dfs-depth-container .slider::-webkit-slider-thumb {
+.deepthink-depth-container .slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
 }
 
 .deepthink-config-scroll-container .strategy-execution-container .slider::-webkit-slider-thumb:hover,
 .deepthink-config-scroll-container .strategy-execution-container .slider::-moz-range-thumb:hover,
-.evolving-dfs-depth-container .slider::-webkit-slider-thumb:hover,
-.evolving-dfs-depth-container .slider::-moz-range-thumb:hover {
+.deepthink-depth-container .slider::-webkit-slider-thumb:hover,
+.deepthink-depth-container .slider::-moz-range-thumb:hover {
     transform: scale(1.1);
 }
 
@@ -334,7 +341,7 @@
         opacity: 0.7;
     }
 
-    & .refinement-method-card {
+    & .deepthink-method-card {
         &.disabled {
             opacity: 0.38;
             cursor: not-allowed;
@@ -357,15 +364,13 @@
     margin-top: auto;
 }
 
-.pqf-buttons,
-.hypothesis-mode-buttons {
+.pqf-buttons {
     display: flex;
     gap: 8px;
     width: 100%;
 }
 
-.pqf-button,
-.hypothesis-mode-button {
+.pqf-button {
     flex: 1;
     padding: 8px 12px;
     border-radius: 16px;
@@ -405,24 +410,24 @@
 }
 
 /* ==========================================================================
-   Refinement Methods Base Configuration
+   deepthink Methods Base Configuration
    ========================================================================== */
 
 .deepthink-config-scroll-container {
-    & .refinement-methods {
+    & .deepthink-methods {
         flex: 1;
         display: flex;
         flex-direction: column;
     }
 
-    & .refinement-methods-row {
+    & .deepthink-methods-row {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: var(--gap-xs);
         margin-bottom: var(--space-2);
     }
 
-    & .refinement-method-card {
+    & .deepthink-method-card {
         padding: var(--card-padding-xs);
         border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
         border-radius: var(--border-radius-md);
@@ -430,19 +435,6 @@
         margin-bottom: var(--space-2);
     }
 
-
-    & .method-card-header {
-        display: flex;
-        align-items: center;
-        gap: var(--gap-xs);
-        margin-bottom: 8px;
-    }
-
-    & .method-name {
-        font-size: 0.85rem;
-        font-weight: 600;
-        color: var(--text-primary-color, #ffffff);
-    }
 }
 
 /* ==========================================================================
@@ -509,12 +501,12 @@
     }
 
     & .connection-nodes {
-        flex: 0 0 76px;
-        min-height: 76px;
+        flex: 0 0 116px;
+        min-height: 116px;
     }
 
     & .connection-svg {
-        min-height: 76px;
+        min-height: 116px;
         height: 100%;
     }
 }
@@ -566,25 +558,6 @@
     height: 8px;
     border-radius: 10px;
     background: rgba(var(--dt-blue-rgb), 0.35);
-}
-
-.execution-agents-wrapper {
-    position: relative;
-    overflow: hidden;
-    padding: 18px;
-    margin: 0;
-    border: 1px solid rgba(var(--accent-silent-green-rgb), 0.2);
-    border-radius: 16px;
-    background: rgba(var(--accent-silent-green-rgb), 0.04);
-}
-
-.execution-agents-text {
-    color: var(--accent-silent-green);
-    font-size: 0.85rem;
-    font-weight: 600;
-    text-align: center;
-    letter-spacing: 0.5px;
-    white-space: nowrap;
 }
 
 /* ==========================================================================
@@ -658,7 +631,7 @@
    ========================================================================== */
 
 .code-execution-toggle-container,
-.edfs-behavior-controls {
+.deepthink-behavior-controls {
     border: 1px solid rgba(var(--dt-purple-rgb), 0.15);
     border-radius: var(--border-radius-md);
     background: rgba(var(--dt-purple-rgb), 0.04);
@@ -676,7 +649,7 @@
     align-items: center;
     gap: 12px;
     padding: 12px 14px;
-    margin-bottom: var(--gap-sm);
+    margin-bottom: 0;
 }
 .code-execution-toggle-info {
     display: flex;
@@ -829,7 +802,7 @@ button.token-summary-item {
 .token-chart-svg {
     display: block;
     width: 100%;
-    height: 174px;
+    height: 360px;
     cursor: crosshair;
 }
 
@@ -965,10 +938,10 @@ button.token-summary-item {
 }
 
 /* ==========================================================================
-   Evolving DFS Controls & Sub-Options
+   Deepthink Controls & Sub-Options
    ========================================================================== */
 
-.evolving-dfs-depth-container .slider {
+.deepthink-depth-container .slider {
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
@@ -986,7 +959,7 @@ button.token-summary-item {
     }
 }
 
-.edfs-behavior-controls {
+.deepthink-behavior-controls {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0;
@@ -1013,7 +986,7 @@ button.token-summary-item {
     border-right: 1px solid rgba(var(--dt-purple-rgb), 0.1);
 }
 
-.edfs-behavior-label {
+.deepthink-behavior-label {
     min-width: 0;
     color: var(--text-color);
     font-size: 0.76rem;
@@ -1026,27 +999,8 @@ button.token-summary-item {
    Hypothesis Mode Switching Buttons
    ========================================================================== */
 
-.hypothesis-mode-button {
-    border: 1px solid rgba(var(--dt-blue-rgb), 0.3);
 
-    &:hover {
-        border-color: rgba(var(--dt-blue-rgb), 0.5);
-        background: rgba(255, 255, 255, 0.05);
-        color: var(--text-color, #ffffff);
-    }
-
-    &.active {
-        border-color: var(--accent-blue);
-        background: rgba(var(--dt-blue-rgb), 0.15);
-        color: var(--accent-blue);
-        font-weight: 600;
-        box-shadow: 0 0 12px rgba(var(--dt-blue-rgb), 0.25);
-    }
-
-}
-
-.pqf-button:disabled,
-.hypothesis-mode-button:disabled {
+.pqf-button:disabled {
     opacity: 0.4;
     cursor: not-allowed;
     pointer-events: none;
@@ -1056,7 +1010,7 @@ button.token-summary-item {
    Visualizer Architecture & Graph Nodes
    ========================================================================== */
 
-.refinement-card-vis {
+.deepthink-card-vis {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1070,16 +1024,6 @@ button.token-summary-item {
     background: rgba(255, 255, 255, 0.01);
 }
 
-.refinement-method-card {
-    &:has(.method-checkbox:checked) .refinement-card-vis {
-        border-color: rgba(var(--dt-purple-rgb), 0.35);
-        background: rgba(var(--dt-purple-rgb), 0.04);
-    }
-
-    &.disabled .refinement-card-vis {
-        opacity: 0.4;
-    }
-}
 
 .vis-inputs,
 .vis-solutions {
@@ -1212,10 +1156,48 @@ button.token-summary-item {
     }
 }
 
-.edfs-process-vis {
+.deepthink-process-vis {
     justify-content: center;
-    gap: 6px;
+    gap: 12px;
     max-width: 100%;
+    height: 108px;
+    padding: 0 18px;
+}
+
+.deepthink-process-vis .vis-pool-node {
+    width: 32px;
+    height: 32px;
+}
+
+.deepthink-process-vis .vis-node {
+    width: 30px;
+    height: 30px;
+    font-size: 12px;
+}
+
+.deepthink-process-vis .vis-critique-loop-pill {
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 18px;
+}
+
+.deepthink-process-vis .flow-arrow-svg {
+    height: 24px;
+}
+
+.deepthink-process-vis .vis-memory-connector {
+    flex-basis: 64px;
+    width: 64px;
+    height: 38px;
+}
+
+.deepthink-process-vis .vis-memory-connector .flow-arrow-svg {
+    width: 64px;
+    height: 34px;
+}
+
+.deepthink-process-vis .vis-memory-interval {
+    font-size: 9px;
 }
 
 .vis-pool-connector {
@@ -1226,7 +1208,7 @@ button.token-summary-item {
     }
 }
 
-.vis-critique-refinement-pill {
+.vis-critique-loop-pill {
     display: flex;
     flex-shrink: 0;
     align-items: center;
@@ -1299,7 +1281,7 @@ button.token-summary-item {
     min-height: 0;
     padding: 4px 0 2px;
 
-    &.selective .vis-strategies-row {
+    &.branch-routing .vis-strategies-row {
         gap: 4px;
     }
 
@@ -1339,14 +1321,14 @@ button.token-summary-item {
     margin: 0;
 }
 
-.vis-sub-packets-row {
+.vis-branch-packets-row {
     display: flex;
     justify-content: space-between;
     gap: 6px;
     width: 100%;
 }
 
-.vis-sub-packet {
+.vis-branch-packet {
     flex: 1;
     display: flex;
     min-height: 75px;
@@ -1359,7 +1341,7 @@ button.token-summary-item {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-.vis-sub-packet-title {
+.vis-branch-packet-title {
     margin-bottom: 2px;
     color: var(--accent-blue);
     font-size: 8.5px;
@@ -1369,7 +1351,7 @@ button.token-summary-item {
     letter-spacing: 0.3px;
 }
 
-.selective-agents {
+.branch-agents {
     display: flex;
     justify-content: space-between;
     gap: 6px;
@@ -1505,39 +1487,10 @@ button.token-summary-item {
 }
 
 /* ==========================================================================
-   Critique Synthesis Sub-Options
+   Deepthink Sub-Options
    ========================================================================== */
 
-.method-sub-option {
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    box-sizing: border-box;
-    width: 100%;
-    gap: 12px;
-    padding: 8px 12px;
-    margin-top: 12px;
-    margin-bottom: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: var(--border-radius-sm);
-    background: rgba(255, 255, 255, 0.02);
-    color: var(--text-secondary-color, #a0a0b0);
-    font-size: 0.825rem;
-    user-select: none;
-    cursor: pointer;
-    transition: all var(--transition-speed) var(--easing-curve);
 
-    &:hover {
-        border-color: rgba(var(--dt-purple-rgb), 0.25);
-        background: rgba(255, 255, 255, 0.04);
-        color: var(--text-color, #ffffff);
-    }
-}
-
-.method-sub-option-label {
-    font-weight: 500;
-    cursor: pointer;
-}
 
 /* ==========================================================================
    Light Theme Adaptations
@@ -1555,7 +1508,7 @@ body.light-mode {
             background-color: rgba(var(--dt-blue-rgb), 0.05);
         }
 
-        & .refinement-options-container {
+        & .deepthink-options-container {
             border-color: rgba(var(--dt-purple-rgb), 0.35);
             background: rgba(var(--dt-purple-rgb), 0.05);
         }
@@ -1566,7 +1519,7 @@ body.light-mode {
         }
 
         & :is(
-            .refinement-method-card,
+            .deepthink-method-card,
             .strategy-execution-card,
             .hypothesis-controls,
             .information-packet-window,
@@ -1578,14 +1531,13 @@ body.light-mode {
             box-shadow: 0 1px 6px rgba(0, 0, 0, 0.02);
         }
 
-        & .refinement-method-card {
+        & .deepthink-method-card {
             background: rgba(255, 255, 255, 0.85);
         }
     }
 
     & :is(
         .input-label,
-        .method-name,
         .window-title,
         .evolution-filter-options-header
     ) {
@@ -1618,15 +1570,12 @@ body.light-mode {
         stroke: rgba(0, 0, 0, 0.12);
     }
 
-    & .refinement-card-vis {
+    & .deepthink-card-vis {
         border-color: rgba(0, 0, 0, 0.08);
         background: rgba(0, 0, 0, 0.015);
     }
 
-    & .refinement-method-card:has(.method-checkbox:checked) .refinement-card-vis {
-        border-color: rgba(var(--dt-purple-rgb), 0.45);
-        background: rgba(var(--dt-purple-rgb), 0.06);
-    }
+
 
     & .critique-node {
         border-color: rgba(220, 38, 38, 0.15);
@@ -1674,7 +1623,7 @@ body.light-mode {
         color: #d97706;
     }
 
-    & .vis-critique-refinement-pill {
+    & .vis-critique-loop-pill {
         border-color: rgba(0, 0, 0, 0.06);
         background: rgba(0, 0, 0, 0.01);
     }
@@ -1690,12 +1639,12 @@ body.light-mode {
         color: #6d28d9;
     }
 
-    & .vis-sub-packet {
+    & .vis-branch-packet {
         border-color: rgba(37, 99, 235, 0.18);
         background: rgba(37, 99, 235, 0.02);
     }
 
-    & :is(.vis-sub-packet-title, .agent-pill) {
+    & :is(.vis-branch-packet-title, .agent-pill) {
         color: #1d4ed8;
     }
 
@@ -1745,7 +1694,7 @@ body.light-mode {
         grid-template-columns: 1fr !important;
     }
 
-    .deepthink-config-scroll-container .refinement-methods-row {
+    .deepthink-config-scroll-container .deepthink-methods-row {
         grid-template-columns: 1fr;
     }
 }
@@ -1775,7 +1724,7 @@ body.light-mode {
     }
 
     .token-chart-svg {
-        height: 160px;
+        height: 280px;
     }
 }
 

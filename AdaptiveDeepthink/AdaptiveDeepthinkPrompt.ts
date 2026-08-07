@@ -217,6 +217,6 @@ export function createDefaultCustomPromptsAdaptiveDeepthink(): CustomizablePromp
     sys_adaptiveDeepthink_hypothesisTesting: deepthinkPrompts.sys_deepthink_hypothesisTester,
     sys_adaptiveDeepthink_execution: deepthinkPrompts.sys_deepthink_solutionAttempt,
     sys_adaptiveDeepthink_solutionCritique: deepthinkPrompts.sys_deepthink_solutionCritique,
-    sys_adaptiveDeepthink_corrector: deepthinkPrompts.sys_deepthink_selfImprovement,
+    sys_adaptiveDeepthink_corrector: deepthinkPrompts.sys_deepthink_solutionCorrection,
   };
 }

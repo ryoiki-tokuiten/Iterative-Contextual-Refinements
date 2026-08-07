@@ -159,7 +159,7 @@ const CurrentBestGenerationPanel: React.FC<{ content: string; state: ContextualS
                         <Icon name="movie" />
                         Evolutions
                     </button>
-                    {state.id !== 'evolving-dfs' && (
+                    {state.id !== 'deepthink-branch-history' && (
                         <>
                             <button
                                 className="action-btn"
@@ -193,7 +193,7 @@ const CurrentBestGenerationPanel: React.FC<{ content: string; state: ContextualS
                     <button
                         className="action-btn"
                         onClick={() => window.dispatchEvent(new CustomEvent('openVirtualEnvironment', {
-                            detail: state.id === 'evolving-dfs' ? undefined : { repositoryId: state.id },
+                            detail: state.id === 'deepthink-branch-history' ? undefined : { repositoryId: state.id },
                         }))}
                         title="Open Sandbox Virtual Environment Explorer"
                     >
@@ -351,10 +351,10 @@ export function updateContextualUI(
 }
 
 /**
- * Render Evolving DFS correction UI (for Deepthink mode)
+ * Render iterative branch correction history for Deepthink.
  * Uses the same UI as Contextual mode
  */
-export function renderEvolvingDfsUI(
+export function renderBranchHistoryUI(
     container: HTMLElement,
     originalSolution: string,
     finalSolution: string,
@@ -428,10 +428,10 @@ export function renderEvolvingDfsUI(
     }
 
     const mockState: ContextualState = {
-        id: 'evolving-dfs',
+        id: 'deepthink-branch-history',
         initialUserRequest: '',
         initialMainGeneration: originalSolution || 'Processing...',
-        currentBestGeneration: finalSolution || 'Processing Evolving DFS corrections...',
+        currentBestGeneration: finalSolution || 'Processing branch corrections...',
         currentBestSuggestions: '',
         allIterativeSuggestions: [],
         mainGeneratorHistory: [],

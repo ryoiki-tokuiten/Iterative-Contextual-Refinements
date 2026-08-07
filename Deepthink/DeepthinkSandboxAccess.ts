@@ -83,9 +83,7 @@ export function buildDeepthinkSandboxRepositoryAccess(input: DeepthinkSandboxAcc
         case 'Main Strategy Generation':
             return { ...fullRepositoryRead(input.repositoryId), revision };
 
-        case 'Sub-Strategy Generation':
         case 'Hypothesis Generation':
-        case 'Dissected Observations Synthesis':
         case 'Final Judge':
             return { ...fullRepositoryRead(input.repositoryId, true), revision };
 
@@ -152,15 +150,13 @@ export function buildDeepthinkSandboxRepositoryAccess(input: DeepthinkSandboxAcc
     const readableDirectories = [
         ...selectedHypothesisDirectories,
         ...peerStrategyDirectories,
-        ...(input.role === 'Self-Improvement' || input.role === 'Solution Correction' ? [currentCritiqueDirectory] : []),
+        ...(input.role === 'Solution Correction' ? [currentCritiqueDirectory] : []),
         ...(input.role === 'Solution Correction' ? [currentSolutionPoolDirectory] : []),
     ];
 
     const hiddenDirectories = input.role === 'Solution Attempt'
         ? [currentCritiqueDirectory, currentSolutionPoolDirectory]
-        : input.role === 'Self-Improvement'
-            ? [currentSolutionPoolDirectory]
-            : [];
+        : [];
 
     return {
         repositoryId: input.repositoryId,

@@ -10,7 +10,7 @@ import type { ApplicationMode } from '../Types';
 /**
  * Current state version. Increment when making breaking changes to state structure.
  */
-export const CURRENT_STATE_VERSION = 3;
+export const CURRENT_STATE_VERSION = 4;
 
 /**
  * Wrapper for versioned state exports.
@@ -55,18 +55,14 @@ export interface ExportedConfig {
     modelParameters: {
         strategiesCount: number;
         strategyProximityLoops: number;
-        subStrategiesCount: number;
         hypothesisCount: number;
         hypothesisProximityLoops: number;
         pqfAggressiveness: string;
-        refinementEnabled: boolean;
-        skipSubStrategies: boolean;
-        dissectedObservationsEnabled: boolean;
-        evolvingDfsEnabled: boolean;
-        evolvingDfsDepth: number;
+        deepthinkDepth: number;
         isolateBranches: boolean;
         disableSolutionPool: boolean;
-        provideAllSolutionsToCorrectors: boolean;
+        deepthinkCodeExecutionEnabled: boolean;
+        thinkingLevel: 'low' | 'medium' | 'high' | 'minimal';
     };
 
 }

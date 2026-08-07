@@ -5,10 +5,10 @@
 
 import { MAX_HYPOTHESIS_COUNT } from './ModelConfig';
 
-interface EvolvingDfsTokenEstimateInput {
+interface DeepthinkTokenEstimateInput {
     strategiesCount: number;
     hypothesisCount: number;
-    evolvingDfsDepth: number;
+    deepthinkDepth: number;
     isolateBranches?: boolean;
     disableSolutionPool?: boolean;
 }
@@ -23,7 +23,7 @@ interface ApiCallRange {
     max: number;
 }
 
-export interface EvolvingDfsTokenEstimate {
+export interface DeepthinkTokenEstimate {
     depth: number;
     strategiesCount: number;
     hypothesisCount: number;
@@ -53,11 +53,11 @@ interface TokenProfile {
     strategyUpdateOutput: number;
     finalJudgeOutput: number;
     updateBranchShare: number;
-    selectivePacketShare: number;
+    branchPacketShare: number;
 }
 
-const MAX_EVOLVING_DFS_STRATEGIES = 5;
-const MAX_EVOLVING_DFS_DEPTH = 10;
+const MAX_DEEPTHINK_STRATEGIES = 5;
+const MAX_DEEPTHINK_DEPTH = 10;
 const MEMORY_INTERVAL = 5;
 const HYPOTHESIS_HEARTBEAT_INTERVAL = 2;
 const PQF_GROUP_SIZE = 2;
@@ -84,7 +84,7 @@ const WORST_PROFILE: TokenProfile = {
     strategyUpdateOutput: 3_000,
     finalJudgeOutput: 5_000,
     updateBranchShare: 1,
-    selectivePacketShare: 1,
+    branchPacketShare: 1,
 };
 
 const AVERAGE_PROFILE: TokenProfile = {
@@ -107,7 +107,7 @@ const AVERAGE_PROFILE: TokenProfile = {
     strategyUpdateOutput: 800,
     finalJudgeOutput: 1_500,
     updateBranchShare: 0.2,
-    selectivePacketShare: 0.5,
+    branchPacketShare: 0.5,
 };
 
 function clampInteger(value: number, min: number, max: number): number {
@@ -180,20 +180,20 @@ function calculateBranchInput(
     disableSolutionPool: boolean
 ): number {
     let input = 0;
-    const selectivePacketContext = hypothesisCount *
+    const branchPacketContext = hypothesisCount *
         profile.hypothesisPacketContext *
-        profile.selectivePacketShare;
+        profile.branchPacketShare;
 
     for (let currentDepth = 1; currentDepth <= depth; currentDepth++) {
         if (currentDepth === 1) {
-            input += strategyCount * (profile.initialExecutionInput + selectivePacketContext);
+            input += strategyCount * (profile.initialExecutionInput + branchPacketContext);
         } else {
             const currentHistoryPairs = Math.min(currentDepth - 1, MEMORY_INTERVAL);
             const correctionInput = Math.min(
                 (isolateBranches ? 0 : (strategyCount - 1) * profile.branchPairContext) +
                 (currentHistoryPairs * profile.branchPairContext) +
                 (disableSolutionPool ? 0 : profile.poolContext) +
-                selectivePacketContext,
+                branchPacketContext,
                 CORRECTOR_CONTEXT_CEILING
             );
             input += strategyCount * correctionInput;
@@ -209,7 +209,7 @@ function calculateBranchInput(
             const poolInput = Math.min(
                 profile.branchPairContext +
                 (poolContextCount * profile.poolContext) +
-                selectivePacketContext,
+                branchPacketContext,
                 SOLUTION_POOL_CONTEXT_CEILING
             );
             input += strategyCount * poolInput;
@@ -305,10 +305,10 @@ function calculateOutputTokens(
     );
 }
 
-export function calculateEvolvingDfsTokenEstimate(args: EvolvingDfsTokenEstimateInput): EvolvingDfsTokenEstimate {
-    const strategiesCount = clampInteger(args.strategiesCount, 1, MAX_EVOLVING_DFS_STRATEGIES);
+export function calculateDeepthinkTokenEstimate(args: DeepthinkTokenEstimateInput): DeepthinkTokenEstimate {
+    const strategiesCount = clampInteger(args.strategiesCount, 1, MAX_DEEPTHINK_STRATEGIES);
     const hypothesisCount = clampInteger(args.hypothesisCount, 0, MAX_HYPOTHESIS_COUNT);
-    const depth = clampInteger(args.evolvingDfsDepth, 1, MAX_EVOLVING_DFS_DEPTH);
+    const depth = clampInteger(args.deepthinkDepth, 1, MAX_DEEPTHINK_DEPTH);
     const isolateBranches = args.isolateBranches === true;
     const disableSolutionPool = args.disableSolutionPool === true;
 
@@ -337,10 +337,10 @@ export function calculateEvolvingDfsTokenEstimate(args: EvolvingDfsTokenEstimate
     };
 }
 
-export function buildEvolvingDfsTokenTrend(args: Omit<EvolvingDfsTokenEstimateInput, 'evolvingDfsDepth'> & { maxDepth?: number }): EvolvingDfsTokenEstimate[] {
-    const maxDepth = clampInteger(args.maxDepth ?? MAX_EVOLVING_DFS_DEPTH, 1, MAX_EVOLVING_DFS_DEPTH);
-    return Array.from({ length: maxDepth }, (_, index) => calculateEvolvingDfsTokenEstimate({
+export function buildDeepthinkTokenTrend(args: Omit<DeepthinkTokenEstimateInput, 'deepthinkDepth'> & { maxDepth?: number }): DeepthinkTokenEstimate[] {
+    const maxDepth = clampInteger(args.maxDepth ?? MAX_DEEPTHINK_DEPTH, 1, MAX_DEEPTHINK_DEPTH);
+    return Array.from({ length: maxDepth }, (_, index) => calculateDeepthinkTokenEstimate({
         ...args,
-        evolvingDfsDepth: index + 1,
+        deepthinkDepth: index + 1,
     }));
 }

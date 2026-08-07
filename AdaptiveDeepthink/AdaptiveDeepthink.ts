@@ -164,7 +164,6 @@ function createInitialDeepthinkPipelineState(id: string, question: string): Deep
         finalJudgingStatus: 'pending',
         isStopRequested: false,
         hypothesisGenStatus: 'pending',
-        dissectedSynthesisStatus: 'pending',
         solutionCritiquesStatus: 'pending',
         liveEvents: [],
     };
@@ -179,7 +178,7 @@ function createDeepthinkPrompts(prompts: CustomizablePromptsAdaptiveDeepthink): 
         sys_deepthink_hypothesisTester: prompts.sys_adaptiveDeepthink_hypothesisTesting,
         sys_deepthink_solutionAttempt: prompts.sys_adaptiveDeepthink_execution,
         sys_deepthink_solutionCritique: prompts.sys_adaptiveDeepthink_solutionCritique,
-        sys_deepthink_selfImprovement: prompts.sys_adaptiveDeepthink_corrector,
+        sys_deepthink_solutionCorrection: prompts.sys_adaptiveDeepthink_corrector,
     };
 }
 

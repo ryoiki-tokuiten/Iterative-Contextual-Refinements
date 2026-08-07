@@ -11,10 +11,8 @@ import { createPortal } from 'react-dom';
 import {
     DeepthinkPipelineState,
     DeepthinkMainStrategyData,
-    DeepthinkSubStrategyData,
     DeepthinkHypothesisData,
 } from './DeepthinkCore';
-import { ActionButton } from '../Styles/Components/ActionButton';
 import MathHTML from '../Styles/Components/RenderMathMarkdown';
 import { Icon as MIcon } from '../UI/Icons';
 import { AgentActivityPanel } from '../Styles/Components/AgentActivity/AgentActivityPanel';
@@ -24,11 +22,11 @@ import type { ProximityTurn } from './DeepthinkProximity';
 // Shared Primitives
 // ═══════════════════════════════════════════════════════════════════════
 
-const solutionAttemptDisplay = (subStrategy: DeepthinkSubStrategyData): string =>
-    subStrategy.solutionAttemptDisplay || subStrategy.solutionAttempt || '';
+const solutionAttemptDisplay = (strategy: DeepthinkMainStrategyData): string =>
+    strategy.solutionAttemptDisplay || strategy.solutionAttempt || '';
 
-const refinedSolutionDisplay = (subStrategy: DeepthinkSubStrategyData): string =>
-    subStrategy.refinedSolutionDisplay || subStrategy.refinedSolution || '';
+const refinedSolutionDisplay = (strategy: DeepthinkMainStrategyData): string =>
+    strategy.refinedSolutionDisplay || strategy.refinedSolution || '';
 
 const critiqueDisplay = (value: {
     critiqueResponseDisplay?: string;
@@ -78,15 +76,6 @@ const ProximityHistoryModal: React.FC<{
         </AgentActivityPanel>
     </BaseModal>,
     document.body,
-);
-
-const ArtifactPane: React.FC<{
-    artifact: string;
-    emptyMessage: string;
-}> = ({ artifact, emptyMessage }) => (
-    <div>
-        <MathHTML content={artifact || emptyMessage} />
-    </div>
 );
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -164,128 +153,6 @@ export const BaseModal: React.FC<{
 };
 
 // Default (non-iterative) solution modal body
-export const DefaultSolutionUI: React.FC<{
-    subStrategy: DeepthinkSubStrategyData;
-    refinementEnabled: boolean;
-}> = ({ subStrategy, refinementEnabled }) => {
-    const refinementWasPerformed = subStrategy.refinedSolution !== subStrategy.solutionAttempt;
-    const attemptContent = solutionAttemptDisplay(subStrategy);
-    const refinedContent = refinedSolutionDisplay(subStrategy);
-
-    return (
-        <div className="solution-comparison-grid" style={{ gridTemplateColumns: refinementEnabled ? '1fr 1fr' : '1fr' }}>
-            <div className="solution-panel">
-                <div className="solution-panel-header">
-                    <h4 style={{ margin: 0 }}><MIcon name="psychology" />{refinementEnabled ? 'Attempted Solution' : 'Solution'}</h4>
-                </div>
-                <div className="solution-panel-body">
-                    <ArtifactPane
-                        artifact={attemptContent}
-                        emptyMessage="Solution not available"
-                    />
-                </div>
-            </div>
-
-            <div className={`solution-panel${!refinementWasPerformed ? ' disabled-pane' : ''}`} style={!refinementWasPerformed ? { position: 'relative' } : undefined}>
-                <div className="solution-panel-header">
-                    <h4 style={{ margin: 0, ...(!refinementEnabled ? { opacity: 0.6 } : {}) }}>
-                        <MIcon name={refinementEnabled ? 'auto_fix_high' : 'auto_fix_off'} />
-                        {refinementEnabled ? 'Refined Solution' : 'Refined Solution (Disabled)'}
-                    </h4>
-                </div>
-                <div className="solution-panel-body" style={!refinementWasPerformed ? { position: 'relative' } : undefined}>
-                    <ArtifactPane
-                        artifact={refinementEnabled
-                            ? (refinedContent || 'Refined solution not available')
-                            : (refinedContent || attemptContent || 'Solution refinement is disabled')}
-                        emptyMessage="Refined solution not available"
-                    />
-                    {!refinementWasPerformed && <div className="disabled-overlay">Refinement Disabled</div>}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// Fullscreen sub-strategy comparison modal body
-export const SubStrategyComparisonUI: React.FC<{
-    subStrategy: DeepthinkSubStrategyData;
-    refinementEnabled: boolean;
-}> = ({ subStrategy, refinementEnabled }) => {
-    const refinementWasPerformed = subStrategy.refinedSolution !== subStrategy.solutionAttempt;
-    const refinedIcon = refinementEnabled ? 'verified' : 'auto_fix_off';
-    const refinedTitle = refinementEnabled ? 'Refined Solution' : 'Refined Solution (Disabled)';
-    const attemptContent = solutionAttemptDisplay(subStrategy);
-    const refinedContent = refinedSolutionDisplay(subStrategy);
-    const attemptDisplay = attemptContent || 'No solution attempt available';
-    const refinedDisplay = refinedContent || 'No refined solution available';
-
-    return (
-        <div className="solution-comparison-grid">
-            <div className="solution-panel">
-                <div className="solution-panel-header">
-                    <h4 className="comparison-title no-padding-left">
-                        <MIcon name="psychology" /><span>Solution Attempt</span>
-                    </h4>
-                    <div className="code-actions">
-                        <ActionButton
-                            type="copy"
-                            content={attemptContent}
-                            icon="content_copy"
-                            text="Copy"
-                            className="copy-solution-btn"
-                        />
-                        <ActionButton
-                            type="download"
-                            content={attemptContent}
-                            filename="solution-attempt.md"
-                            icon="download"
-                            text="Download"
-                            className="download-solution-btn"
-                        />
-                    </div>
-                </div>
-                <div className="solution-panel-body custom-scrollbar">
-                    <MathHTML content={attemptDisplay} />
-                </div>
-            </div>
-
-            <div className={`solution-panel${refinementWasPerformed ? '' : ' disabled-pane'}`}>
-                <div className="solution-panel-header">
-                    <h4 className="comparison-title no-padding-left">
-                        <MIcon name={refinedIcon} /><span>{refinedTitle}</span>
-                    </h4>
-                    <div className="code-actions">
-                        <ActionButton
-                            type="copy"
-                            disabled={!refinementWasPerformed}
-                            content={refinedContent}
-                            icon="content_copy"
-                            text="Copy"
-                            className="copy-solution-btn"
-                        />
-                        <ActionButton
-                            type="download"
-                            disabled={!refinementWasPerformed}
-                            content={refinedContent}
-                            filename="refined-solution.md"
-                            icon="download"
-                            text="Download"
-                            className="download-solution-btn"
-                        />
-                    </div>
-                </div>
-                <div className="solution-panel-body custom-scrollbar">
-                    <MathHTML content={refinedDisplay} />
-                    {subStrategy.error && <div className="error-content">{subStrategy.error}</div>}
-                    {!refinementWasPerformed && <div className="disabled-overlay">Refinement Disabled</div>}
-                </div>
-            </div>
-        </div>
-    );
-};
-
-// Embedded modals (critique, hypothesis argument, post quality filter)
 export const EmbeddedModalContent: React.FC<{
     content: string;
     contentClass?: string;
@@ -426,7 +293,7 @@ export const StrategicSolverTab: React.FC<{
     process: DeepthinkPipelineState;
     escapeHtml: (s: string) => string;
     onStrategyTabClick: (idx: number) => void;
-    onViewSolution: (subStrategyId: string, branchVersion?: number) => void;
+    onViewSolution: (strategyId: string, branchVersion?: number) => void;
 }> = ({ process, escapeHtml, onStrategyTabClick, onViewSolution }) => {
     const [proximityVersion, setProximityVersion] = useState<number | null>(null);
     const proximityVersions = Array.from(new Set((process.strategyGenerationHistory || []).map(turn => turn.version))).sort((a, b) => a - b);
@@ -442,13 +309,13 @@ export const StrategicSolverTab: React.FC<{
 
     return (
         <div className="deepthink-strategic-solver">
-            <div className="sub-tabs-container">
-                <div className="sub-tabs-content">
+            <div className="branch-tabs-container">
+                <div className="branch-tabs-content">
                     {process.initialStrategies.map((strategy, index) => (
-                        <div key={strategy.id} className={`sub-tab-content${index === activeIndex ? ' active' : ''}`}>
+                        <div key={strategy.id} className={`branch-tab-content${index === activeIndex ? ' active' : ''}`}>
                             <div className="strategy-card">
                                 {/* Nav buttons */}
-                                <div className="sub-tabs-nav">
+                                <div className="branch-tabs-nav">
                                     <div className="proximity-history-nav">
                                         {proximityVersions.map(version => (
                                             <button
@@ -465,7 +332,7 @@ export const StrategicSolverTab: React.FC<{
                                         {process.initialStrategies.map((s, idx) => (
                                             <button
                                                 key={s.id}
-                                                className={`sub-tab-button${idx === activeIndex ? ' active' : ''}`}
+                                                className={`branch-tab-button${idx === activeIndex ? ' active' : ''}`}
                                                 title={`Strategy ${idx + 1}`}
                                                 onClick={() => onStrategyTabClick(idx)}
                                             >
@@ -481,14 +348,6 @@ export const StrategicSolverTab: React.FC<{
                                     onViewSolution={onViewSolution}
                                 />
 
-                                {/* Sub-strategies grid (skip mode = no grid) */}
-                                {!(strategy.subStrategies.length === 1 && strategy.subStrategies[0].id.endsWith('-direct')) && (
-                                    <SubStrategiesGrid
-                                        subStrategies={strategy.subStrategies}
-                                        escapeHtml={escapeHtml}
-                                        onViewSolution={onViewSolution}
-                                    />
-                                )}
                             </div>
                         </div>
                     ))}
@@ -511,8 +370,6 @@ const StrategyContent: React.FC<{
     escapeHtml: (s: string) => string;
     onViewSolution: (id: string, branchVersion?: number) => void;
 }> = ({ strategy, escapeHtml, onViewSolution }) => {
-    const isSkipMode = strategy.subStrategies.length === 1 && strategy.subStrategies[0].id.endsWith('-direct');
-    const directSub = isSkipMode ? strategy.subStrategies[0] : null;
     const currentBranchVersion = strategy.branchVersion || 1;
     const branchViews = [
         ...(strategy.replacementHistory || []).map(record => ({
@@ -534,8 +391,8 @@ const StrategyContent: React.FC<{
                 ? `Created after Evolution Filter update at iteration ${strategy.postQualityFilterIteration}.`
                 : undefined,
             memoryBank: strategy.memoryBank,
-            latestCritique: directSub ? critiqueDisplay(directSub) : undefined,
-            latestSolution: directSub ? refinedSolutionDisplay(directSub) || solutionAttemptDisplay(directSub) : undefined,
+            latestCritique: critiqueDisplay(strategy) || undefined,
+            latestSolution: refinedSolutionDisplay(strategy) || solutionAttemptDisplay(strategy) || undefined,
         },
     ];
     const [selectedBranchVersion, setSelectedBranchVersion] = useState(currentBranchVersion);
@@ -602,63 +459,16 @@ const StrategyContent: React.FC<{
                 </div>
             )}
             <div className="strategy-actions" style={{ display: 'flex', gap: '8px' }}>
-                {isSkipMode && directSub && (
+                {strategy.id && (
                     <button
                         className="view-solution-button"
-                        onClick={() => onViewSolution(directSub!.id, selectedBranch.version)}
+                        onClick={() => onViewSolution(strategy.id, selectedBranch.version)}
                     >
                         <MIcon name="visibility" /> {selectedBranch.isCurrent ? 'View Solution' : 'View Branch History'}
                     </button>
                 )}
             </div>
             {strategy.error && <div className="error-message">{escapeHtml(strategy.error)}</div>}
-        </div>
-    );
-};
-
-const SubStrategiesGrid: React.FC<{
-    subStrategies: DeepthinkSubStrategyData[];
-    escapeHtml: (s: string) => string;
-    onViewSolution: (id: string, branchVersion?: number) => void;
-}> = ({ subStrategies, escapeHtml, onViewSolution }) => {
-    if (!subStrategies?.length) return null;
-
-    return (
-        <div className="agent-grid">
-            {subStrategies.map((sub, index) => {
-                return (
-                    <div key={sub.id} className="agent-card">
-                        <div className="agent-header">
-                            <h4 className="agent-title">Sub-Strategy {index + 1}</h4>
-                            <StatusBadge
-                                status={sub.refinedSolution ? 'completed' : sub.solutionAttempt ? 'processing' : 'pending'}
-                                label={sub.refinedSolution ? 'Completed' : sub.solutionAttempt ? 'Processing (1/2)' : 'Processing'}
-                            />
-                        </div>
-                        <div className="agent-results">
-                            <div className="sub-strategy-content-wrapper">
-                                <ExpandableText
-                                    text={sub.subStrategyText || 'No sub-strategy text available'}
-                                    maxLength={150}
-                                    containerClassName="sub-strategy-text-container"
-                                    textClassName="sub-strategy-text"
-                                />
-                                <div className="sub-strategy-actions">
-                                    {sub.id && (
-                                        <button
-                                            className="view-solution-button"
-                                            onClick={() => onViewSolution(sub.id)}
-                                        >
-                                            <MIcon name="visibility" /> View Solution
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                            {sub.error && <div className="error-message">{escapeHtml(sub.error)}</div>}
-                        </div>
-                    </div>
-                );
-            })}
         </div>
     );
 };
@@ -677,7 +487,7 @@ const formatStrategyCircleLabel = (id: string): string => {
     return match?.[0] || id.slice(0, 2).toUpperCase();
 };
 
-function resolveCritiqueBranchVersion(critique: any, _strategy?: DeepthinkMainStrategyData): number {
+function resolveCritiqueBranchVersion(critique: { branchVersion?: number | string }): number {
     if (typeof critique.branchVersion === 'number' && critique.branchVersion > 0) return critique.branchVersion;
     if (typeof critique.branchVersion === 'string') {
         const parsed = parseInt(critique.branchVersion, 10);
@@ -787,18 +597,14 @@ export const HypothesisExplorerTab: React.FC<{
                                 <div className="agent-results">
                                     <div className="hypothesis-targets">
                                         <span>Targeting:</span>
-                                        {process.runConfig?.hypothesisInjectionMode === 'selective_injection' ? (
-                                            h.targetStrategyIds && h.targetStrategyIds.length > 0 ? (
-                                                h.targetStrategyIds.map(id => (
+                                        {h.targetBranchIds && h.targetBranchIds.length > 0 ? (
+                                                h.targetBranchIds.map(id => (
                                                     <span key={id} className="strategy-target-badge">
                                                         {formatStrategyId(id)}
                                                     </span>
                                                 ))
                                             ) : (
-                                                <span className="strategy-target-badge fallback">All (Fallback)</span>
-                                            )
-                                        ) : (
-                                            <span className="strategy-target-badge">All Strategies</span>
+                                                <span className="strategy-target-badge fallback">All Branches</span>
                                         )}
                                     </div>
                                     <ExpandableText
@@ -859,15 +665,15 @@ const KnowledgePacketSection: React.FC<{
         const blob = new Blob([content], { type: 'text/xml' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = 'information_packet.xml';
+        a.href = url; a.download = 'hypothesis_testing_packet.xml';
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(url);
     };
 
     // Parse hypothesis sections if present
     let packetBody: React.ReactNode;
-    if (content.includes('<Full Information Packet>')) {
-        const hypothesisRegex = /<Hypothesis ([^>]+)>\s*Hypothesis:\s*([\s\S]*?)(?:\s*Target Strategies:\s*[^\n]+)?\s*Hypothesis Testing:\s*([\s\S]*?)\s*<\/Hypothesis \1>/g;
+    if (content.includes('<Hypothesis-Testing-Packet>')) {
+        const hypothesisRegex = /<Hypothesis ([^>]+)>\s*Hypothesis:\s*([\s\S]*?)(?:\s*Target Branches:\s*[^\n]+)?\s*Hypothesis Testing:\s*([\s\S]*?)\s*<\/Hypothesis \1>/g;
         const matches: Array<{ number: string; hypothesis: string; testing: string }> = [];
         let match;
         while ((match = hypothesisRegex.exec(content)) !== null) {
@@ -911,14 +717,10 @@ const KnowledgePacketSection: React.FC<{
             mappedSource.forEach((h, index) => {
                 const hypNum = index + 1; // 1-based index corresponding to Hypothesis 1, 2...
                 
-                if (process.runConfig?.hypothesisInjectionMode !== 'selective_injection') {
+                const isMapped = h.targetBranchIds?.includes(strategy.id);
+                const isGlobal = !h.targetBranchIds || h.targetBranchIds.length === 0;
+                if (isMapped || isGlobal) {
                     mappedHypotheses.push(hypNum);
-                } else {
-                    const isMapped = h.targetStrategyIds?.includes(strategy.id);
-                    const isFallback = !h.targetStrategyIds || h.targetStrategyIds.length === 0;
-                    if (isMapped || isFallback) {
-                        mappedHypotheses.push(hypNum);
-                    }
                 }
             });
 
@@ -928,12 +730,12 @@ const KnowledgePacketSection: React.FC<{
                 hypotheses: mappedHypotheses
             };
         });
-    }, [hypotheses, process.hypotheses, process.initialStrategies, process.runConfig?.hypothesisInjectionMode]);
+    }, [hypotheses, process.hypotheses, process.initialStrategies]);
 
     return (
         <div className="knowledge-packet-section">
             <div className="knowledge-packet-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <div className="knowledge-packet-title"><MIcon name="psychology" /><span>Full Information Packet</span></div>
+                <div className="knowledge-packet-title"><MIcon name="psychology" /><span>Hypothesis Testing Packet</span></div>
                 <div className="code-actions" style={{ marginTop: 0 }}>
                     <button className="action-btn copy-xml-btn" onClick={handleCopyXml}>
                         <MIcon name={copiedState ? 'check' : 'content_copy'} /> {copiedState ? 'Copied' : 'XML'}
@@ -983,22 +785,19 @@ const KnowledgePacketSection: React.FC<{
     );
 };
 
-// Dissected Observations Tab
-export const DissectedObservationsTab: React.FC<{
+// Critique History Tab
+export const CritiqueHistoryTab: React.FC<{
     process: DeepthinkPipelineState;
-    refinementEnabled: boolean;
-    evolvingDfsEnabled: boolean;
     onViewCritique: (critiqueId: string) => void;
-    onViewSubStrategyCritique: (subId: string) => void;
-}> = ({ process, refinementEnabled, evolvingDfsEnabled, onViewCritique, onViewSubStrategyCritique }) => {
+}> = ({ process, onViewCritique }) => {
     const hasExistingCritique = process.solutionCritiques?.length > 0;
-    const hasSubStrategyCritiques = evolvingDfsEnabled && process.initialStrategies.some(s =>
-        s.subStrategies.some(sub => (sub.solutionCritique?.length ?? 0) > 0)
-    );
     const selectableStrategies = process.initialStrategies.filter(strategy =>
         process.solutionCritiques.some(critique => critique.mainStrategyId === strategy.id)
     );
-    const [selectedStrategyId, setSelectedStrategyId] = useState(selectableStrategies[0]?.id || process.initialStrategies[0]?.id || '');
+    const [selectedStrategyId, setSelectedStrategyId] = useState(
+        selectableStrategies[0]?.id || process.initialStrategies[0]?.id || ''
+    );
+
     useEffect(() => {
         if (!selectedStrategyId || !selectableStrategies.some(strategy => strategy.id === selectedStrategyId)) {
             setSelectedStrategyId(selectableStrategies[0]?.id || process.initialStrategies[0]?.id || '');
@@ -1009,148 +808,81 @@ export const DissectedObservationsTab: React.FC<{
     const selectedCritiques = process.solutionCritiques
         .filter(critique => critique.mainStrategyId === selectedStrategyId)
         .sort((a, b) => {
-            const branchDiff = resolveCritiqueBranchVersion(a, selectedStrategy) - resolveCritiqueBranchVersion(b, selectedStrategy);
+            const branchDiff = resolveCritiqueBranchVersion(a) - resolveCritiqueBranchVersion(b);
             if (branchDiff !== 0) return branchDiff;
             const iterationDiff = (a.branchIteration || 0) - (b.branchIteration || 0);
             if (iterationDiff !== 0) return iterationDiff;
             return (a.globalIteration || 0) - (b.globalIteration || 0);
         });
 
-    if (process.solutionCritiquesStatus === 'processing' && !hasExistingCritique) return <div className="loading">Critiquing solutions...</div>;
-    if (!refinementEnabled && !hasExistingCritique && !hasSubStrategyCritiques)
-        return <div className="status-message">Dissected Observations are only available when refinement is enabled.</div>;
-    if (!hasSubStrategyCritiques && !hasExistingCritique && (process.solutionCritiquesStatus as string) !== 'processing')
+    if (process.solutionCritiquesStatus === 'processing' && !hasExistingCritique) {
+        return <div className="loading">Critiquing solutions...</div>;
+    }
+    if (!hasExistingCritique && process.solutionCritiquesStatus !== 'processing') {
         return <div className="status-message">Solution critiques not yet started. Waiting for solutions to be generated.</div>;
+    }
 
     return (
-        <div className="deepthink-dissected-observations">
-            {hasExistingCritique ? (
-                <div className="dissected-observations-layout">
-                    <div className="dissected-strategy-pills" aria-label="Critique strategy filter">
-                        {selectableStrategies.map(strategy => (
-                            <button
-                                key={strategy.id}
-                                type="button"
-                                className={`dissected-strategy-pill${strategy.id === selectedStrategyId ? ' active' : ''}`}
-                                title={formatStrategyId(strategy.id)}
-                                onClick={() => setSelectedStrategyId(strategy.id)}
-                            >
-                                {formatStrategyCircleLabel(strategy.id)}
-                            </button>
-                        ))}
-                    </div>
-
-                    <section className="dissected-strategy-panel">
-                        <div className="dissected-strategy-panel-header">
-                            <div>
-                                <h4>{selectedStrategy ? formatStrategyId(selectedStrategy.id) : 'Selected Strategy'}</h4>
-                                <p>{selectedStrategy?.strategyText || 'No strategy text available.'}</p>
-                            </div>
-                            <span className="status-badge status-completed">{selectedCritiques.length} critiques</span>
-                        </div>
-                        <div className="dissected-critique-rail custom-scrollbar">
-                            {selectedCritiques.map((critique, index) => {
-                                const resolvedBranchVersion = resolveCritiqueBranchVersion(critique, selectedStrategy);
-                                const label = critique.branchIteration
-                                    ? `Iteration ${critique.branchIteration}`
-                                    : critique.globalIteration
-                                        ? `Global ${critique.globalIteration}`
-                                        : `Critique ${index + 1}`;
-                                const branchLabel = `Branch v${resolvedBranchVersion}`;
-                                return (
-                                    <article key={critique.id} className="dissected-critique-card">
-                                        <div className="dissected-critique-card-header">
-                                            <div>
-                                                <span className="dissected-critique-branch">{branchLabel}</span>
-                                                <h5>{label}</h5>
-                                            </div>
-                                            <StatusBadge status={critique.status} />
-                                        </div>
-                                        <div className="dissected-critique-preview">
-                                            <MathHTML
-                                                content={critiqueDisplay(critique) || 'Critique is still processing.'}
-                                                className="critique-content"
-                                            />
-                                        </div>
-                                        {critique.critiqueResponse ? (
-                                            <button
-                                                className="view-critique-button"
-                                                onClick={() => onViewCritique(critique.id)}
-                                            >
-                                                <MIcon name="rate_review" /> View Full Critique
-                                            </button>
-                                        ) : critique.status === 'error' ? (
-                                            <div className="error-message">{critique.error || 'Critique failed'}</div>
-                                        ) : null}
-                                    </article>
-                                );
-                            })}
-                        </div>
-                    </section>
+        <div className="deepthink-critique-history">
+            <div className="critique-history-layout">
+                <div className="critique-history-pills" aria-label="Critique strategy filter">
+                    {selectableStrategies.map(strategy => (
+                        <button
+                            key={strategy.id}
+                            type="button"
+                            className={`critique-history-pill${strategy.id === selectedStrategyId ? ' active' : ''}`}
+                            title={formatStrategyId(strategy.id)}
+                            onClick={() => setSelectedStrategyId(strategy.id)}
+                        >
+                            {formatStrategyCircleLabel(strategy.id)}
+                        </button>
+                    ))}
                 </div>
-            ) : hasSubStrategyCritiques ? (
-                <div className="agent-grid">
-                    {process.initialStrategies.map(mainStrategy => {
-                        const directSub = mainStrategy.subStrategies[0];
-                        if (!directSub?.solutionCritique) return null;
-                        const status = directSub.solutionCritiqueStatus || 'completed';
 
-                        return (
-                            <div key={mainStrategy.id} className="agent-card">
-                                <div className="agent-header">
-                                    <h4 className="agent-title">Critique: {mainStrategy.id}</h4>
-                                    <StatusBadge status={status} />
-                                </div>
-                                <div className="agent-results">
-                                    <div className="sub-strategy-text-container">
-                                        <div className="sub-strategy-label">Strategy:</div>
-                                        <MathHTML content={mainStrategy.strategyText?.substring(0, 150) + '...' || ''} className="sub-strategy-text" />
+                <section className="critique-history-panel">
+                    <div className="critique-history-panel-header">
+                        <div>
+                            <h4>{selectedStrategy ? formatStrategyId(selectedStrategy.id) : 'Selected Strategy'}</h4>
+                            <p>{selectedStrategy?.strategyText || 'No strategy text available.'}</p>
+                        </div>
+                        <span className="status-badge status-completed">{selectedCritiques.length} critiques</span>
+                    </div>
+                    <div className="critique-history-rail custom-scrollbar">
+                        {selectedCritiques.map((critique, index) => {
+                            const branchVersion = resolveCritiqueBranchVersion(critique);
+                            const label = critique.branchIteration
+                                ? `Iteration ${critique.branchIteration}`
+                                : critique.globalIteration
+                                    ? `Global ${critique.globalIteration}`
+                                    : `Critique ${index + 1}`;
+                            return (
+                                <article key={critique.id} className="critique-history-card">
+                                    <div className="critique-history-card-header">
+                                        <div>
+                                            <span className="critique-history-branch">Branch v{branchVersion}</span>
+                                            <h5>{label}</h5>
+                                        </div>
+                                        <StatusBadge status={critique.status} />
                                     </div>
-                                    <div className="agent-reasoning-section">
-                                        <button
-                                            className="view-critique-button"
-                                            onClick={() => onViewSubStrategyCritique(directSub.id)}
-                                        >
+                                    <div className="critique-history-preview">
+                                        <MathHTML
+                                            content={critiqueDisplay(critique) || 'Critique is still processing.'}
+                                            className="critique-content"
+                                        />
+                                    </div>
+                                    {critique.critiqueResponse || critique.critiqueResponseDisplay ? (
+                                        <button className="view-critique-button" onClick={() => onViewCritique(critique.id)}>
                                             <MIcon name="rate_review" /> View Full Critique
                                         </button>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            ) : null}
-
-            {/* Synthesis Section */}
-            {!evolvingDfsEnabled && process.dissectedSynthesisStatus && (
-                <div className="synthesis-section">
-                    <div className="synthesis-header">
-                        <div className="synthesis-title"><MIcon name="integration_instructions" /><span>Dissected Observations Synthesis:</span></div>
-                        <div className="synthesis-actions">
-                            <StatusBadge
-                                status={process.dissectedSynthesisStatus}
-                                label={process.dissectedSynthesisStatus === 'completed' ? 'Synthesis Complete' : process.dissectedSynthesisStatus === 'processing' ? 'Synthesizing...' : 'Pending'}
-                            />
-                            {process.dissectedObservationsSynthesis && (
-                                <ActionButton
-                                    type="download"
-                                    icon="download"
-                                    text="Download"
-                                    title="Download dissected observations synthesis"
-                                    content={process.dissectedObservationsSynthesis}
-                                    filename="dissected_observations_synthesis.md"
-                                />
-                            )}
-                        </div>
+                                    ) : critique.status === 'error' ? (
+                                        <div className="error-message">{critique.error || 'Critique failed'}</div>
+                                    ) : null}
+                                </article>
+                            );
+                        })}
                     </div>
-                    {process.dissectedObservationsSynthesis && (
-                        <div className="synthesis-content"><MathHTML content={process.dissectedObservationsSynthesis} className="synthesis-card" /></div>
-                    )}
-                    {process.dissectedSynthesisStatus === 'error' && (
-                        <div className="error-message">{process.dissectedSynthesisError || 'Synthesis failed'}</div>
-                    )}
-                </div>
-            )}
+                </section>
+            </div>
         </div>
     );
 };

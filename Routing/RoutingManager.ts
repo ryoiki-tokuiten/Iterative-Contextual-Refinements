@@ -139,10 +139,6 @@ export class RoutingManager {
         return this.modelConfigManager.getStrategiesCount();
     }
 
-    public getSubStrategiesCount(): number {
-        return this.modelConfigManager.getSubStrategiesCount();
-    }
-
     public getStrategyProximityLoops(): number {
         return this.modelConfigManager.getStrategyProximityLoops();
     }
@@ -159,28 +155,8 @@ export class RoutingManager {
         return this.modelConfigManager.getPqfAggressiveness();
     }
 
-    public isRefinementEnabled(): boolean {
-        return this.modelConfigManager.isRefinementEnabled();
-    }
-
-    public isSkipSubStrategies(): boolean {
-        return this.modelConfigManager.isSkipSubStrategies();
-    }
-
-    public isDissectedObservationsEnabled(): boolean {
-        return this.modelConfigManager.isDissectedObservationsEnabled();
-    }
-
-    public isShareHypothesesToDissected(): boolean {
-        return this.modelConfigManager.isShareHypothesesToDissected();
-    }
-
-    public isEvolvingDfsEnabled(): boolean {
-        return this.modelConfigManager.isEvolvingDfsEnabled();
-    }
-
-    public getEvolvingDfsDepth(): number {
-        return this.modelConfigManager.getEvolvingDfsDepth();
+    public getDeepthinkDepth(): number {
+        return this.modelConfigManager.getDeepthinkDepth();
     }
 
     public isIsolateBranchesEnabled(): boolean {
@@ -189,18 +165,6 @@ export class RoutingManager {
 
     public isSolutionPoolDisabled(): boolean {
         return this.modelConfigManager.isSolutionPoolDisabled();
-    }
-
-    public isProvideAllSolutionsToCorrectors(): boolean {
-        return this.modelConfigManager.isProvideAllSolutionsToCorrectors();
-    }
-
-    public isPostQualityFilterEnabled(): boolean {
-        return this.modelConfigManager.isPostQualityFilterEnabled();
-    }
-
-    public getHypothesisInjectionMode(): 'parallel' | 'strategy_aware' | 'selective_injection' {
-        return this.modelConfigManager.getHypothesisInjectionMode();
     }
 
     public hasValidApiKey(): boolean {

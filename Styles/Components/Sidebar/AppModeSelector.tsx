@@ -19,7 +19,7 @@ const MODE_DETAILS: Record<ApplicationMode, {
         title: 'Adaptive Deepthink',
         buttonLabel: 'Adaptive Deepthink',
         tags: ['High Quality', 'Medium Compute', 'Orchestrator-Guided-Search'],
-        description: 'Deepthink mode given to an agent. Uses quality filtering to evolve strategies. Does not support Evolving DFS or solution pools.'
+        description: 'An orchestrator-directed Deepthink workflow with dynamic strategy generation, hypothesis testing, and branch execution.'
     },
     'contextual': {
         title: 'Contextual (Solution Pool + Memory)',

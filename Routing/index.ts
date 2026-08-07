@@ -46,10 +46,6 @@ export function getSelectedStrategiesCount(): number {
     return getRoutingManager().getStrategiesCount();
 }
 
-export function getSelectedSubStrategiesCount(): number {
-    return getRoutingManager().getSubStrategiesCount();
-}
-
 export function getStrategyProximityLoops(): number {
     return getRoutingManager().getStrategyProximityLoops();
 }
@@ -66,28 +62,8 @@ export function getSelectedPqfAggressiveness(): string {
     return getRoutingManager().getPqfAggressiveness();
 }
 
-export function getRefinementEnabled(): boolean {
-    return getRoutingManager().isRefinementEnabled();
-}
-
-export function getSkipSubStrategies(): boolean {
-    return getRoutingManager().isSkipSubStrategies();
-}
-
-export function getDissectedObservationsEnabled(): boolean {
-    return getRoutingManager().isDissectedObservationsEnabled();
-}
-
-export function getShareHypothesesToDissected(): boolean {
-    return getRoutingManager().isShareHypothesesToDissected();
-}
-
-export function getEvolvingDfsEnabled(): boolean {
-    return getRoutingManager().isEvolvingDfsEnabled();
-}
-
-export function getEvolvingDfsDepth(): number {
-    return getRoutingManager().getEvolvingDfsDepth();
+export function getDeepthinkDepth(): number {
+    return getRoutingManager().getDeepthinkDepth();
 }
 
 export function getIsolateBranchesEnabled(): boolean {
@@ -96,18 +72,6 @@ export function getIsolateBranchesEnabled(): boolean {
 
 export function getSolutionPoolDisabled(): boolean {
     return getRoutingManager().isSolutionPoolDisabled();
-}
-
-export function getProvideAllSolutionsToCorrectors(): boolean {
-    return getRoutingManager().isProvideAllSolutionsToCorrectors();
-}
-
-export function getPostQualityFilterEnabled(): boolean {
-    return getRoutingManager().isPostQualityFilterEnabled();
-}
-
-export function getHypothesisInjectionMode(): 'parallel' | 'strategy_aware' | 'selective_injection' {
-    return getRoutingManager().getHypothesisInjectionMode();
 }
 
 export function hasValidApiKey(): boolean {

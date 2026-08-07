@@ -1,199 +1,111 @@
 # Iterative Studio
 
-The system integrates with major AI providers (Google AI, OpenAI, Anthropic) and employs multi-agent-based architectures.  The system is capable of running with local models in fully offline mode.
+Iterative Studio is a multi-agent reasoning application with Google AI, OpenAI, Anthropic, OpenAI-compatible, and local-model support.
 
-## Operational Modes
+## Application workflows
 
-The system operates in three distinct modes, each optimized for specific use cases.
+### Deepthink
 
+Deepthink is a fixed high-depth search pipeline. Every run uses the same lifecycle:
 
-### 1. Deepthink Mode
+1. Generate one to five independent strategies and run strategy-proximity review.
+2. Optionally generate, review, and independently test hypotheses.
+3. Route each completed hypothesis test to its declared strategy branches.
+4. Produce an initial solution and critique for every branch.
+5. Advance branches through the configured correction depth, with optional structured solution-pool exploration.
+6. Refresh hypotheses every two completed global iterations when hypothesis testing is enabled.
+7. Condense branch memory and run the evolution filter after each five-entry branch-history window.
+8. Replace structurally failed branches in stable, versioned strategy slots.
+9. Ask an isolated final judge to select from the active branch solutions.
 
-**Purpose**: High-depth problem solving through independent strategic branches, targeted hypothesis testing, parallel execution, critique, correction, and explicit final selection.
+Each strategy is one direct, persistent branch. The configured depth includes its initial solution attempt. A branch replacement archives the complete prior version under `Pruned_Strategies` and starts a clean version in the same slot.
 
-Deepthink supports two execution families:
+The structured solution pool is optional. When enabled, it explores five executed alternatives for each branch and correction iteration. Branch isolation controls whether correction and pool agents receive limited peer-branch context. Hypothesis routing is always branch-mapped: testers receive only the challenge and one self-contained hypothesis, while completed testing results are delivered only to their declared branches.
 
-1. **Single-pass strategic search**: Generates up to ten main strategies, optionally expands each into sub-strategies, tests hypotheses, executes all branches, and optionally performs critique synthesis, full-solution context correction, or both.
-2. **Evolving Depth First Search**: Runs up to five direct strategy branches through repeated correction and critique. Each branch has a structured breadth-first solution pool, recursive memory bank, selective hypothesis packet, and periodic Post Quality Filter evaluation.
+The final judge receives active candidate strategy IDs, strategy text, and final solution text. It does not receive critiques, memory, solution pools, evolution-filter decisions, or archived branches.
 
-In Evolving DFS, the original execution is iteration 1. Subsequent iterations correct and critique the active solution, refresh strategy-specific hypotheses every two global iterations, and run memory/PQF maintenance after each branch accumulates five new history entries. PQF can keep a branch or replace its strategy in the same stable slot with a clean, versioned branch.
+See [Deepthink architecture and context flow](Deepthink/DeepthinkDocs.md) for the complete contracts.
 
-The Structured Solution Pool is the BFS companion to the depth-first correction loop. It creates five substantively executed alternatives per strategy and iteration, while correctors receive deep local history and only limited cross-strategy context. Replaced branches remain archived for inspection but are excluded from active prompts and final judging.
+### Adaptive Deepthink
 
-Hypothesis routing supports Blind Trust, Strategy-Aware, and Selective modes. Evolving DFS always uses Selective mode and injects each strategy's tested packet into its execution, correction, and solution-pool agents.
+Adaptive Deepthink is an orchestrator-directed workflow. Its LangGraph orchestrator decides when to generate strategies, generate and test hypotheses, execute branch chains, save candidates, compact a pass, inspect files, and submit the final answer.
 
-The Final Judge sees only active candidate solution texts. It does not receive critiques, memory banks, solution pools, PQF decisions, or replaced branches.
+Worker topology:
 
-**Sandbox Environment and Artifact Submission**:
-Deepthink integrates a secure sandbox virtual environment for execution and verification.
-- **Repository Visibility**: Every Deepthink role receives `sandbox_exec` and `final_output` when the Sandbox Terminal Environment is enabled. Active branches use `Strategy-N/{Critique,SolutionPool}`: execution and correction write direct branch files, critique owns `Critique`, and the pool owns `SolutionPool`. PQF replacements archive the complete old branch under `Pruned_Strategies/Strategy-N_First_PQF` (then ordinal successors) before recreating fresh active slot directories. Hypothesis tests are organized by `Hypothesis-vN`, while only current selectively routed tests are mounted to branch workers.
-- **Submit Final Artifact**: Sandbox-enabled agents use `sandbox_exec` for iterative exploration and testing, then use `final_output` to submit their completed work. JSON-producing roles submit their existing role-specific JSON object directly through `final_output`; the environment validates that contract in the tool loop and returns a correction error without discarding the agent's research. Downstream agents and the central system receive only the submitted artifact, filtering out intermediate command transcripts and scratchpad data.
-
-![Current Deepthink Architecture](Deepthink/SystemArchitecture.png)
-
-See [Deepthink architecture and context flow](Deepthink/DeepthinkDocs.md) for the complete agent contracts, repository schemas, mode behavior, iteration synchronization, and failure policy. The previous diagram remains archived at `Deepthink/OldSystemArchitecture.png`.
-
-
-
-### 2. Adaptive Deepthink Mode
-
-**Purpose**: An orchestrator-directed, pass-based Deepthink workflow for divergent strategic search without a separate final judge.
-
-**Worker topology**:
 - Strategy Generator ↔ Strategies Proximity
 - Hypothesis Generator ↔ Hypothesis Proximity
-- Test Hypothesis
-- Execution → Critique → Correction for each selected strategy
+- Hypothesis Tester
+- Execution → Critique → Correction
 
-Each generation/proximity pair runs a bounded three-round internal revision loop. The orchestrator remains responsible for judging evidence, selectively routing tested hypotheses, saving successful strategies, replacing failed unsaved slots, and submitting the final answer.
+The orchestrator owns candidate selection and final submission. Completed passes are compacted into repository files, and unsaved branch corrections use checkpoint-and-restore semantics so discarded work cannot leak into later passes.
 
-**Tool system**:
-- `generate_strategies` — generates or updates up to five unsaved strategies.
-- `generate_hypothesis` and `test_hypothesis` — create critique-driven, non-strategy-aware hypotheses and test them independently.
-- `execute` — parallel per-strategy Execution → Critique → Correction, with optional per-branch `specialContext`.
-- `save` — permanently reserves a strategy and its corrected branch state.
-- `finalize_pass_and_execute` — compacts the completed pass into Markdown/trace files, advances the pass, then executes the requested next branches.
-- `read_files`, `virtual_environment`, and `submit_final_output` — restore compacted evidence, use the shared sandbox repository, and let the orchestrator submit the final answer.
+### Contextual
 
-**Filesystem and UI**:
-Adaptive runs project directly into the Deepthink Live and Filesystem tabs. When the Sandbox Terminal Environment is enabled, every worker receives the corresponding Deepthink role permissions and `final_output`; the orchestrator receives an explicit root read/write virtual-environment tool. Full agent outputs and JSON traces are written to the Results repository. Before an unsaved branch's correction runs, its strategy directory is checkpointed; the checkpoint is restored before a later pass reuses that strategy, so discarded corrections cannot leak into future executions.
+Contextual is a long-running iterative collaboration between a Main Generator, Iterative Agent, Solution Pool Agent, and Memory Agent. It condenses history as context grows and exposes the evolving interaction in real time.
 
+## Deepthink configuration
 
-### 3. Contextual Mode
+Deepthink exposes only controls used by its fixed pipeline:
 
-**Purpose**: Iterative refinement through specialized agent collaboration.
+- Strategy count and strategy-proximity loops
+- Hypothesis enablement, count, and hypothesis-proximity loops
+- Search depth
+- Branch isolation
+- Solution-pool enablement
+- Evolution-filter aggressiveness
+- Sandbox code execution
+- Per-agent models, prompts, and thinking levels
 
-This can work stable upto 2 Hours without human intervention for difficult problems and actually yield high quality insights and results.
+## Sandbox and artifacts
 
-**Architecture**:
-- Three-agent system with distinct responsibilities:
-  1. **Main Generator**: Produces content based on user requirements
-  2. **Iterative Agent**: Suggests improvements and corrections
-  3. **Memory Agent**: Works like a long term memory.
+When sandbox execution is enabled, agents can inspect and modify their role-scoped repository view, run commands, and submit a validated artifact through `final_output`.
 
-**Key Components**:
-- `ContextualCore.ts`: State management and history tracking
-- Separate history managers for each agent type
-- Automated context window management
+Deepthink uses the following active layout:
 
-**Agent Interaction**:
-```
-User Request → Main Generator → Generated Content
-                      ↓
-              Iterative Agent → Suggestions
-                      ↓
-              Main Generator → Refined Content
-                      ↓
-              [Repeat until complete]
-                      ↓
-              Memory Agent → History Compression
+```text
+Results/
+├── Hypothesis-vN/
+│   └── Hypothesis-X/
+├── Strategy-N/
+│   ├── Critique/
+│   └── SolutionPool/
+└── Pruned_Strategies/
 ```
 
-**Key Features**:
-- Automatic history condensation when context limits approached
-- Iterative refinement through suggestion-response cycles
-- Clean separation of concerns between agents
-- Real-time visualization of agent interactions
+Execution and correction write direct files in `Strategy-N`; critique writes under `Critique`; pool exploration writes under `SolutionPool`. Hypothesis tests are stored by hypothesis round. Role-scoped mounts prevent accidental access to protected or unrelated agent directories.
 
-**Workflow**:
-1. Main generator creates initial content
-2. Iterative agent analyzes and suggests improvements
-3. Main generator applies suggestions
-4. Memory agent compresses history when needed
-5. Cycle continues until completion criteria met
+## Configuration and persistence
 
+- Select a global model or override individual agent models.
+- Configure provider credentials for Google AI, OpenAI, Anthropic, or an OpenAI-compatible endpoint.
+- Local servers such as `http://127.0.0.1:1234` can run fully offline.
+- Exported state is gzip-compressed and version validated on import.
+- Deepthink configuration exports only the fixed-pipeline fields understood by the current state schema.
 
+## Retry behavior
 
-## Configuration
-
-### Model Selection
-
-Supports configuration of:
-- AI provider (Google, OpenAI, Anthropic)
-- Model selection per provider
-- Mode-specific parameters (iteration depth, agent counts)
-- Local Models
-
-
-###  Fully Offline Mode:
-Use your lookback IP: http://127.0.0.1:1234 or http://localhost:1234 when you turn off your wifi or unplug the ethernet cable.
-
-### Mode-Specific Settings
-
-**Deepthink**:
-- Strategy and sub-strategy counts
-- Hypothesis count and injection mode
-- Single-pass refinement, critique synthesis, and full-solution context
-- Evolving DFS depth
-- PQF aggressiveness
-- Optional sandbox terminal execution for every Deepthink agent
-
-**Adaptive Deepthink**:
-- Agent-directed access to Deepthink tools and model settings
-
-
-## Data Flow
-
-### Request Flow
-```
-User Input → Routing Layer → AI Provider → Response Parser → Mode Handler → UI Update
-```
-
-### State Management
-```
-Global State (index.tsx) → Mode-Specific State → Component State → UI Rendering
-```
-
-### Agent Communication (Contextual/Adaptive)
-```
-User → Main Agent → [Tools/Sub-Agents] → Response Integration → History Management
-```
-
-## Retry and Error Handling
-
-Retry behavior is mode-specific. Deepthink allows four total attempts per agent call, with 20, 40, and 80 second retry delays. Agents with a configured 15-minute timeout share that budget across all attempts and delays. Missing non-critical work is recorded on the affected branch; exhausted initial strategy, PQF, or strategy-update calls stop the Deepthink pipeline.
-
-Error states are tracked per pipeline, branch, agent, and iteration for UI inspection.
-
-## Import/Export
-
-Supported operations:
-- State export (.gz)
-- State import with validation
-- Cross-session persistence
-- Mode-specific state serialization
-
-## Build System
-
-- **Build Tool**: Vite
-- **Language**: TypeScript
-- **UI Framework**: React 19
-- **Styling**: Custom CSS with modern design patterns
+Deepthink permits four total attempts per agent call, with delays of 30 seconds, 60 seconds, and 5 minutes. Calls with a 15-minute timeout share that budget across attempts and delays. Failure of required strategy-generation, evolution-filter, or strategy-update work stops the pipeline; non-critical branch failures remain visible on the affected branch.
 
 ## Development
 
-### Project Structure
-```
-/AdaptiveDeepthink - Adaptive Deepthink mode
-/Components       - Shared UI components
-/Contextual       - Contextual mode implementation
-/Deepthink        - Deepthink mode implementation
-/Routing          - AI provider routing
-/Core          - Config management and parsing utilities
-index.tsx         - Main application entry
-prompts.ts        - Prompt templates
+```bash
+npm install
+npm run dev
+npm run typecheck
+npm test
+npm run build
 ```
 
-### Key Dependencies
-```json
-{
-  "@anthropic-ai/sdk": "AI provider",
-  "@google/genai": "AI provider",
-  "openai": "AI provider",
-  "@langchain/core": "Agent framework",
-  "diff2html": "Diff visualization",
-  "katex": "Math rendering",
-}
+The project uses TypeScript, React 19, and Vite.
+
+```text
+AdaptiveDeepthink/  Orchestrator-directed workflow
+Backend/            Sandbox and provider backends
+Contextual/         Contextual workflow
+Core/               Application state, loading, and persistence
+Deepthink/          Fixed Deepthink pipeline and UI
+Routing/            Provider, model, prompt, and configuration routing
+Styles/             Shared UI components and styles
 ```
 
 ## License

@@ -13,8 +13,6 @@ function paneSlug(agentKind: DeepthinkAgentKind): string {
 
 export const DEEPTHINK_PROMPT_PANES: readonly PromptPaneConfig<CustomizablePromptsDeepthink>[] =
     (Object.keys(DEEPTHINK_AGENT_REGISTRY) as DeepthinkAgentKind[])
-        // Evolving correction intentionally shares the Self-Improvement prompt/model.
-        .filter(agentKind => agentKind !== 'solutionCorrection')
         .map(agentKind => {
             const metadata = DEEPTHINK_AGENT_REGISTRY[agentKind];
             const slug = paneSlug(agentKind);

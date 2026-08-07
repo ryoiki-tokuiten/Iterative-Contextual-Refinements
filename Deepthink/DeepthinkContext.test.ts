@@ -136,11 +136,11 @@ test('ID validation rejects duplicates, missing IDs, extras, and unknown routes'
     assert.throws(() => validateAllowedUniqueIds(['main2'], ['main1'], 'targets', { allowEmpty: true }), /unknown/);
 });
 
-test('freshness and selective routing use one selector for packets and mounts', () => {
+test('freshness and branch routing use one selector for packets and mounts', () => {
     const hypotheses = [
-        { id: 'global', targetStrategyIds: [] },
-        { id: 'main1', targetStrategyIds: ['main1'] },
-        { id: 'main2', targetStrategyIds: ['main2'] },
+        { id: 'global', targetBranchIds: [] },
+        { id: 'main1', targetBranchIds: ['main1'] },
+        { id: 'main2', targetBranchIds: ['main2'] },
     ];
     assert.deepEqual(
         selectRoutedHypotheses(hypotheses, 'main1').map(hypothesis => hypothesis.id),
@@ -151,14 +151,14 @@ test('freshness and selective routing use one selector for packets and mounts', 
 
 test('the typed registry selects models independently of display labels', () => {
     const prompts = {
-        model_selfImprovement: 'correction-model',
+        model_solutionCorrection: 'correction-model',
     } as never;
     assert.equal(
         deepthinkAgentModel('solutionCorrection', prompts, 'fallback-model'),
         'correction-model',
     );
     assert.equal(DEEPTHINK_AGENT_REGISTRY.solutionCorrection.sandboxRole, 'Solution Correction');
-    assert.equal(DEEPTHINK_AGENT_REGISTRY.solutionCorrection.systemPromptKey, 'sys_deepthink_selfImprovement');
+    assert.equal(DEEPTHINK_AGENT_REGISTRY.solutionCorrection.systemPromptKey, 'sys_deepthink_solutionCorrection');
     Object.values(DEEPTHINK_AGENT_REGISTRY).forEach(metadata => {
         assert.match(metadata.systemPromptKey, /^sys_deepthink_/);
         assert.match(metadata.modelKey, /^model_/);
@@ -175,28 +175,6 @@ test('repository policy applies feature flags and preserves the pinned revision'
         repositoryRevision: revision,
     });
     assert.deepEqual(hypothesisTester.readableDirectories, []);
-
-    const selfWithoutPeers = buildDeepthinkSandboxRepositoryAccess({
-        repositoryId: 'deepthink-test',
-        role: 'Self-Improvement',
-        strategySlotIndex: 0,
-        peerStrategySlotIndexes: [],
-        repositoryRevision: revision,
-    });
-    assert.deepEqual(selfWithoutPeers.readableDirectories, ['Strategy-1/Critique']);
-
-    const selfWithPeers = buildDeepthinkSandboxRepositoryAccess({
-        repositoryId: 'deepthink-test',
-        role: 'Self-Improvement',
-        strategySlotIndex: 0,
-        peerStrategySlotIndexes: [1, 2],
-        repositoryRevision: revision,
-    });
-    assert.deepEqual(selfWithPeers.readableDirectories, [
-        'Strategy-2',
-        'Strategy-3',
-        'Strategy-1/Critique',
-    ]);
 
     const isolatedCorrection = buildDeepthinkSandboxRepositoryAccess({
         repositoryId: 'deepthink-test',
@@ -274,7 +252,7 @@ test('heartbeat and strategy-update prompts include the exact new evidence block
         previousTestingOutputs: [{
             hypothesisId: 'hyp2-1',
             hypothesisText: 'Full previous hypothesis',
-            targetStrategyIds: ['main1'],
+            targetBranchIds: ['main1'],
             testerOutput: 'Complete tester evidence without summarization.',
             testerStatus: 'completed',
         }],

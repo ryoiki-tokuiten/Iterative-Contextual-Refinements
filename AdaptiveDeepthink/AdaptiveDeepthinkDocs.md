@@ -1,6 +1,6 @@
 # Adaptive Deepthink Architecture
 
-Adaptive Deepthink is an orchestrator-directed, pass-based strategic search and refinement system. Unlike standard Deepthink's fixed-pipeline executions (Single-Pass Strategic Search or Evolving DFS), Adaptive Deepthink uses an LLM-driven **Orchestrator** running inside a LangGraph `StateGraph` runtime to dynamically coordinate task execution.
+Adaptive Deepthink is an orchestrator-directed, pass-based strategic search and refinement system. Unlike standard Deepthink's fixed pipeline, Adaptive Deepthink uses an LLM-driven **Orchestrator** running inside a LangGraph `StateGraph` runtime to dynamically coordinate task execution.
 
 The Orchestrator interacts with the environment and a suite of independent, domain-adapted worker agents via structured tool calls. It decides when to generate strategic options, formulate hypotheses, test assumptions, execute parallel solution branches, save promising results, and perform final synthesis.
 
@@ -39,7 +39,7 @@ When the Sandbox Terminal Environment is enabled, worker agents operate under st
 
 | Feature | Standard Deepthink Mode | Adaptive Deepthink Mode |
 |---|---|---|
-| **Control Flow** | Fixed, linear pipeline (Single-Pass or EDFS) | LLM Orchestrator-directed LangGraph state loop |
+| **Control Flow** | Fixed branch-search pipeline | LLM Orchestrator-directed LangGraph state loop |
 | **Branch Management** | Hardcoded strategy slot/branch versions | Dynamic saving, replacement, and pass finalization |
 | **Final Judge** | Separate, isolated `Final Judge` agent | Main Orchestrator via `submit_final_output` |
 | **Context Window** | Maintained throughout execution | Compacted at pass boundaries to minimize token bloat |
@@ -55,7 +55,7 @@ The Orchestrator directs execution by calling exactly one of the following tools
 | Tool Name | Zod Schema | Description | Downstream Behavior |
 |---|---|---|---|
 | `generate_strategies` | `count: 1-5`<br>`proximityLoops?: 1-5` (default `2`)<br>`specialContext?: string`<br>`replaceStrategyIds?: string[]` | Generates or updates up to five strategies in slots `S1` to `S5`. `proximityLoops` steers how diverse the strategies should be by controlling the number of proximity revision rounds. | Replaces unsaved strategies. Replaced strategy slots are cleared, while saved slots remain untouched. |
-| `generate_hypothesis` | `count: 1-5`<br>`proximityLoops?: 1-5` (default `2`)<br>`specialContext?: string` | Creates critique-driven, non-strategy-aware hypotheses. `proximityLoops` steers how diverse the hypotheses should be by controlling the number of proximity revision rounds. | Deletes all previous hypotheses and test records, starting a clean testing iteration. |
+| `generate_hypothesis` | `count: 1-5`<br>`proximityLoops?: 1-5` (default `2`)<br>`specialContext?: string` | Creates critique-driven, independent hypotheses. `proximityLoops` steers how diverse the hypotheses should be by controlling the number of proximity revision rounds. | Deletes all previous hypotheses and test records, starting a clean testing iteration. |
 | `test_hypothesis` | `hypothesisIds: string[]` | Evaluates selected hypotheses in parallel using isolated Hypothesis Testers. | Updates the active tested hypothesis list with `VALIDATED`, `REFUTED`, or `INCONCLUSIVE` classifications. |
 | `execute` | `executions: ExecRequest[]`<br>`specialContext?: string` | Executes selected strategies in parallel through the Execution → Critique → Correction chain. | Records execution records, critiques, and corrected solutions for the active pass. |
 | `save` | `strategyIds: string[]` | Permanently saves selected strategies and their currently corrected branch state. | Marks slots as saved/immutable. Saved slots cannot be executed, updated, or replaced again. |
@@ -208,7 +208,6 @@ Adaptive Deepthink maps its state transitions to the shared Deepthink UI, making
 | **Live** | Displays real-time orchestrator decisions, thought segments, tool calls, and execution logs. | Always visible. |
 | **Strategic Solver** | Shows active strategies, execution attempts, critiques, corrections, and saved states. | Always visible. |
 | **Hypothesis Explorer** | Displays the current round of hypotheses, test details, and validations. | Appears when `hypotheses` exist. |
-| **Dissected Observations** | Compares active solution critiques and lists recent execution summaries. | Appears when critiques are available. |
 | **Final Result** | Displays the final answer submitted by the orchestrator. | Appears upon completion. |
 
 In addition, the **Agent Activity** side panel streams every orchestrator decision, tool input, and execution state.

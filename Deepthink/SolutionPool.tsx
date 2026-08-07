@@ -236,7 +236,7 @@ const MemoryBankStrip: React.FC<{ branches: BranchCard[]; process: DeepthinkPipe
 // ═══════════════════════════════════════════════════════════════════════
 
 export const SolutionPoolTabContent: React.FC<{ process: DeepthinkPipelineState }> = ({ process }) => {
-    if (!process.structuredSolutionPoolEnabled) {
+    if (process.runConfig?.solutionPoolDisabled === true) {
         return (
             <div className="solution-pool-container">
                 <SolutionPoolHeader processId={process.id} />
@@ -244,7 +244,7 @@ export const SolutionPoolTabContent: React.FC<{ process: DeepthinkPipelineState 
                     <Icon name="block" className="disabled-icon" />
                     <h4>Structured Solution Pool Disabled</h4>
                     <p>This feature is currently disabled for this session.</p>
-                    <p className="disabled-hint">Enable "Evolving Depth First Search" in settings to use this feature.</p>
+                    <p className="disabled-hint">Enable Solution Pool in Deepthink settings to use this feature.</p>
                 </div>
             </div>
         );

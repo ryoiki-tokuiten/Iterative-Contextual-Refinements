@@ -226,15 +226,15 @@ export class PromptsModal {
             deepthink: [
                 {
                     groupTitle: "1. STRATEGY GENERATION",
-                    prompts: ["deepthink-initial-strategy", "deepthink-sub-strategy"]
+                    prompts: ["deepthink-initial-strategy", "deepthink-strategy-proximity"]
                 },
                 {
                     groupTitle: "2. SOLUTION DEVELOPMENT",
-                    prompts: ["deepthink-solution-attempt", "deepthink-solution-critique", "deepthink-dissected-synthesis", "deepthink-self-improvement", "deepthink-structured-solution-pool"]
+                    prompts: ["deepthink-solution-attempt", "deepthink-solution-critique", "deepthink-solution-correction", "deepthink-structured-solution-pool"]
                 },
                 {
                     groupTitle: "3. HYPOTHESIS EXPLORATION",
-                    prompts: ["deepthink-hypothesis-generation", "deepthink-hypothesis-tester"]
+                    prompts: ["deepthink-hypothesis-generation", "deepthink-hypothesis-proximity", "deepthink-hypothesis-tester"]
                 },
                 {
                     groupTitle: "4. EVALUATION & JUDGMENT",
@@ -251,7 +251,7 @@ export class PromptsModal {
                     prompts: ["adaptive-strategy-gen", "adaptive-hypothesis-gen", "adaptive-hypothesis-test"]
                 },
                 {
-                    groupTitle: "3. EXECUTION & REFINEMENT",
+                    groupTitle: "3. EXECUTION & CORRECTION",
                     prompts: ["adaptive-execution", "adaptive-critique", "adaptive-corrector"]
                 }
             ],

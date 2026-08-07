@@ -13,27 +13,16 @@ import type { FileData } from '../Core/Types';
 import type { CustomizablePromptsDeepthink } from './DeepthinkPrompts';
 import type { DeepthinkAgentKind } from './DeepthinkAgentRegistry';
 
-export type HypothesisInjectionMode = 'parallel' | 'strategy_aware' | 'selective_injection';
-
 export interface DeepthinkRunConfig {
     selectedModel: string;
     thinkingLevel: 'minimal' | 'low' | 'medium' | 'high';
     strategyCount: number;
-    subStrategyCount: number;
     strategyProximityLoops: number;
-    refinementEnabled: boolean;
     hypothesisCount: number;
     hypothesisProximityLoops: number;
-    hypothesisInjectionMode: HypothesisInjectionMode;
-    skipSubStrategies: boolean;
-    dissectedObservationsEnabled: boolean;
-    shareHypothesesToDissected: boolean;
-    evolvingDfsEnabled: boolean;
-    evolvingDfsDepth: number;
+    depth: number;
     isolateBranches: boolean;
     solutionPoolDisabled: boolean;
-    provideAllSolutionsToCorrectors: boolean;
-    postQualityFilterEnabled: boolean;
     pqfAggressiveness: string;
     codeExecutionEnabled: boolean;
     prompts: CustomizablePromptsDeepthink;
@@ -231,13 +220,13 @@ export function validateAllowedUniqueIds(
     }
 }
 
-export function selectRoutedHypotheses<T extends { targetStrategyIds?: string[] }>(
+export function selectRoutedHypotheses<T extends { targetBranchIds?: string[] }>(
     hypotheses: readonly T[],
     strategyId: string,
     awaitingFreshHypotheses = false,
 ): T[] {
     if (awaitingFreshHypotheses) return [];
     return hypotheses.filter(hypothesis =>
-        !hypothesis.targetStrategyIds?.length
-        || hypothesis.targetStrategyIds.includes(strategyId));
+        !hypothesis.targetBranchIds?.length
+        || hypothesis.targetBranchIds.includes(strategyId));
 }

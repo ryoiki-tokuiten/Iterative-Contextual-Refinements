@@ -550,8 +550,7 @@ body.light-mode .agent-card {
 }
 
 /* Light Mode Override for Text Containers */
-body.light-mode .hypothesis-text-container,
-body.light-mode .sub-strategy-text-container {
+body.light-mode .hypothesis-text-container {
     border-color: rgba(0, 0, 0, 0.1);
     background: rgba(255, 255, 255, 0.5);
 }

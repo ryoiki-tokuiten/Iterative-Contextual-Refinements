@@ -21,12 +21,6 @@ export const DEEPTHINK_AGENT_REGISTRY = {
         systemPromptKey: 'sys_deepthink_strategyProximity',
         modelKey: 'model_strategyProximity',
     },
-    subStrategy: {
-        label: 'Sub-Strategy Generation',
-        sandboxRole: 'Sub-Strategy Generation',
-        systemPromptKey: 'sys_deepthink_subStrategy',
-        modelKey: 'model_subStrategy',
-    },
     hypothesisGeneration: {
         label: 'Hypothesis Generation',
         sandboxRole: 'Hypothesis Generation',
@@ -57,23 +51,11 @@ export const DEEPTHINK_AGENT_REGISTRY = {
         systemPromptKey: 'sys_deepthink_solutionCritique',
         modelKey: 'model_solutionCritique',
     },
-    dissectedSynthesis: {
-        label: 'Dissected Observations Synthesis',
-        sandboxRole: 'Dissected Observations Synthesis',
-        systemPromptKey: 'sys_deepthink_dissectedSynthesis',
-        modelKey: 'model_dissectedSynthesis',
-    },
-    selfImprovement: {
-        label: 'Self-Improvement',
-        sandboxRole: 'Self-Improvement',
-        systemPromptKey: 'sys_deepthink_selfImprovement',
-        modelKey: 'model_selfImprovement',
-    },
     solutionCorrection: {
         label: 'Solution Correction',
         sandboxRole: 'Solution Correction',
-        systemPromptKey: 'sys_deepthink_selfImprovement',
-        modelKey: 'model_selfImprovement',
+        systemPromptKey: 'sys_deepthink_solutionCorrection',
+        modelKey: 'model_solutionCorrection',
     },
     structuredSolutionPool: {
         label: 'Structured Solution Pool',
