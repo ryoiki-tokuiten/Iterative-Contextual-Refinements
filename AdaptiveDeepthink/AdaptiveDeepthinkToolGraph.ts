@@ -18,6 +18,7 @@ import {
     type AdaptiveDeepthinkToolExecutionContext,
     type AdaptiveDeepthinkToolPrompts,
 } from './AdaptiveDeepthinkCore';
+import { normalizeOpenAICompatibleProviderError } from '../Core/ProviderError';
 
 const boundedCount = z.number().int().min(1).max(5);
 const optionalProximityLoops = z.number().int().min(1).max(5).optional();
@@ -235,16 +236,27 @@ function shouldRunTools(state: AdaptiveDeepthinkGraphState) {
 }
 
 export function createAdaptiveDeepthinkGraph(options: AdaptiveDeepthinkGraphOptions) {
-    const { providerName, providerConfig } = resolveProviderForModel(options.modelName);
-    if (!providerConfig?.isConfigured || !providerConfig.apiKey) throw new Error(`No configured provider found for model: ${options.modelName}`);
-    const model = providerName === 'gemini' ? null : createToolCallingAgentModel(providerName, providerConfig, options).bindTools(tools);
+    const { providerName, providerConfig, modelName } = resolveProviderForModel(options.modelName);
+    if (!providerConfig?.isConfigured || (providerName === 'openai-compatible' ? !providerConfig.baseURL : !providerConfig.apiKey)) {
+        throw new Error(`No configured provider found for model: ${options.modelName}`);
+    }
+    const model = providerName === 'gemini'
+        ? null
+        : createToolCallingAgentModel(providerName, providerConfig, { ...options, modelName }).bindTools(tools);
     const agentNode = async (state: AdaptiveDeepthinkGraphState) => {
         const systemPrompt = buildAdaptiveDeepthinkSystemPrompt(state, options.systemPrompt);
         const messages = messagesForOrchestrator(state);
-        const response = providerName === 'gemini'
-            ? await invokeGeminiToolAgentTurn(providerConfig, messages, systemPrompt, tools, options)
-            : await model!.invoke([new SystemMessage(systemPrompt), ...messages]);
-        return { messages: [response] };
+        try {
+            const response = providerName === 'gemini'
+                ? await invokeGeminiToolAgentTurn(providerConfig, messages, systemPrompt, tools, { ...options, modelName })
+                : await model!.invoke([new SystemMessage(systemPrompt), ...messages]);
+            return { messages: [response] };
+        } catch (error) {
+            if (providerName === 'openai-compatible' && providerConfig.baseURL) {
+                throw normalizeOpenAICompatibleProviderError(error, providerConfig.baseURL, modelName);
+            }
+            throw error;
+        }
     };
     const afterTools = (state: AdaptiveDeepthinkGraphState) => state.shouldExit ? END : 'agent';
     return new StateGraph(AdaptiveDeepthinkGraphAnnotation)

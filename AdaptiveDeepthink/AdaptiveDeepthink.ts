@@ -3,7 +3,7 @@
 import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import { nanoid } from 'nanoid';
 import { AdaptiveMessage, ResponseSegment, SystemBlock } from './AdaptiveTypes';
-import { messageContentToText } from '../Core/LangGraphToolRuntime';
+import { messageContentToText, resolveProviderForModel } from '../Core/LangGraphToolRuntime';
 import { describeProviderError } from '../Core/ProviderError';
 import { globalState } from '../Core/State';
 import type { DeepthinkPipelineState } from '../Deepthink/DeepthinkCore';
@@ -293,15 +293,26 @@ async function runAdaptiveDeepthinkGraph(question: string, customPrompts: Custom
             createExecutionContext: () => createToolExecutionContext(pipeline, customPrompts),
         });
         const directTextContext = getDirectTextContext();
-        const stream = await graph.stream({
-            messages: [
-                new HumanMessage({
-                    content: [
-                        ...images.map(img => ({ inlineData: { mimeType: img.mimeType, data: img.base64 } })),
-                        { text: `Core Challenge:\n${question}${directTextContext}` }
+        const challengeText = `Core Challenge:\n${question}${directTextContext}`;
+        const { providerName } = resolveProviderForModel(customPrompts.model_main || getSelectedModel());
+        const initialMessage = images.length === 0
+            ? new HumanMessage(challengeText)
+            : new HumanMessage({
+                content: providerName === 'openai-compatible'
+                    ? [
+                        ...images.map(img => ({
+                            type: 'image_url',
+                            image_url: { url: `data:${img.mimeType};base64,${img.base64}` }
+                        })),
+                        { type: 'text', text: challengeText }
                     ]
-                })
-            ],
+                    : [
+                        ...images.map(img => ({ inlineData: { mimeType: img.mimeType, data: img.base64 } })),
+                        { text: challengeText }
+                    ]
+            });
+        const stream = await graph.stream({
+            messages: [initialMessage],
             coreState: activeAdaptiveDeepthinkState.coreState,
             shouldExit: false,
         }, {

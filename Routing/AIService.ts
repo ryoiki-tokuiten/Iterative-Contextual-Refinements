@@ -38,10 +38,12 @@ export async function callAI(
     if (!aiProvider) {
         throw new Error(`No configured provider found for model: ${modelToUse}`);
     }
+
+    const actualModelId = providerManager.getModelIdForSelection(modelToUse);
     
     return await aiProvider.generateContent(
         promptOrParts, 
-        modelToUse, 
+        actualModelId,
         systemInstruction, 
         isJsonOutput, 
         thinkingConfig

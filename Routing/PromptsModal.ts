@@ -544,7 +544,6 @@ export class PromptsModal {
             'anthropic': { class: 'anthropic' },
             'google': { class: 'google' },
             'gemini': { class: 'google' },
-            'openrouter': { class: 'openrouter' },
             'meta': { class: 'meta' },
             'mistral': { class: 'mistral' }
         };
@@ -563,7 +562,9 @@ export class PromptsModal {
         // Add provider groups (same structure as ModelSelectionUI)
         sortedProviders.forEach(provider => {
             const models = modelsByProvider[provider];
-            const config = providerConfig[provider.toLowerCase()] || { class: 'default' };
+            const config = providerConfig[provider.toLowerCase()] || {
+                class: provider.toLowerCase().startsWith('openai-compatible:') ? 'openai-compatible' : 'default'
+            };
 
             // Create provider section container
             const providerSection = document.createElement('div');
@@ -573,7 +574,7 @@ export class PromptsModal {
             const providerHeader = document.createElement('div');
             providerHeader.className = `custom-model-select-provider-header ${config.class}`;
             providerHeader.innerHTML = `
-                <span>${provider.charAt(0).toUpperCase() + provider.slice(1)}</span>
+                <span>${models[0]?.providerLabel || provider.charAt(0).toUpperCase() + provider.slice(1)}</span>
             `;
             providerSection.appendChild(providerHeader);
 
@@ -590,12 +591,12 @@ export class PromptsModal {
                 }
 
                 option.innerHTML = `
-                    <span class="custom-model-select-option-text">${model.value}</span>
+                    <span class="custom-model-select-option-text">${model.label || model.value}</span>
                     ${renderIconMarkup('CircleCheck', 'option-check')}
                 `;
 
                 option.addEventListener('click', () => {
-                    this.selectCustomOption(agentName, model.value, model.value);
+                    this.selectCustomOption(agentName, model.value, model.label || model.value);
                 });
 
                 providerSection.appendChild(option);

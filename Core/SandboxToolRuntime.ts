@@ -15,6 +15,7 @@ import {
     resolveProviderForModel,
     type ResolvedProvider
 } from './LangGraphToolRuntime';
+import { normalizeOpenAICompatibleProviderError } from './ProviderError';
 
 interface SandboxToolAgentOptions {
     agentName: string;
@@ -714,7 +715,7 @@ async function invokeAgentTurn(
             systemPrompt,
             tools,
             {
-                modelName: options.modelName
+                modelName: provider.modelName
             }
         );
     }
@@ -723,14 +724,21 @@ async function invokeAgentTurn(
         provider.providerName,
         provider.providerConfig,
         {
-            modelName: options.modelName
+            modelName: provider.modelName
         }
     ).bindTools(tools);
 
-    return model.invoke([
-        new SystemMessage(systemPrompt),
-        ...messages
-    ]);
+    try {
+        return await model.invoke([
+            new SystemMessage(systemPrompt),
+            ...messages
+        ]);
+    } catch (error) {
+        if (provider.providerName === 'openai-compatible' && provider.providerConfig.baseURL) {
+            throw normalizeOpenAICompatibleProviderError(error, provider.providerConfig.baseURL, provider.modelName);
+        }
+        throw error;
+    }
 }
 
 async function executeSandboxTool(
@@ -1185,7 +1193,7 @@ function buildExecutionTrace(args: {
         agent: {
             name: args.options.agentName,
             provider: args.provider.providerName,
-            model: args.options.modelName,
+            model: args.provider.modelName,
             session_id: args.sessionId,
         },
         final_text: args.finalText,
@@ -1205,7 +1213,9 @@ export async function runSandboxToolAgent(
     options: SandboxToolAgentOptions
 ): Promise<SandboxToolAgentResult> {
     const provider = resolveProviderForModel(options.modelName);
-    if (!provider.providerConfig?.isConfigured || !provider.providerConfig.apiKey) {
+    if (!provider.providerConfig?.isConfigured || (provider.providerName === 'openai-compatible'
+        ? !provider.providerConfig.baseURL
+        : !provider.providerConfig.apiKey)) {
         throw new Error(`No configured provider found for model: ${options.modelName}`);
     }
 

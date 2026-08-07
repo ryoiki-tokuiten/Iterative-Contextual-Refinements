@@ -6,7 +6,15 @@
 import { GoogleGenAI, GenerateContentResponse, Part, ThinkingLevel } from "@google/genai";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { generateText, Output } from "ai";
 import { globalState } from "../Core/State";
+import { normalizeOpenAICompatibleProviderError } from "../Core/ProviderError";
+import { getModelsDevModels } from "./ModelsDevCatalog";
+import {
+    getOpenAICompatibleProxyBaseURL,
+    OPENAI_COMPATIBLE_ENDPOINT_HEADER,
+} from './OpenAICompatibleProxy';
 
 // ============================================================================
 // Types & Interfaces
@@ -27,10 +35,15 @@ export interface ThinkingConfig {
     tools?: any[];  // Function declarations to enable thought signatures
 }
 
-interface DiscoveredModel {
+export interface DiscoveredModel {
     id: string;
+    displayName?: string;
     /** Undefined means the provider did not publish a reliable vision capability. */
     supportsImageInput?: boolean;
+    /** Undefined means the provider did not publish a reliable tool capability. */
+    supportsTools?: boolean;
+    /** Undefined means the provider did not publish a reliable JSON capability. */
+    supportsStructuredOutputs?: boolean;
 }
 
 type ListedModel = string | DiscoveredModel;
@@ -68,7 +81,13 @@ function getThinkingEffort(level: string, fallback: string): string {
 }
 
 export function getModelThinkingType(modelId: string): ThinkingType {
-    const name = modelId.toLowerCase();
+    // Generic endpoints use a provider-qualified selection key when two
+    // configured endpoints expose the same model ID. Thinking behavior still
+    // belongs to the real model ID after the separator.
+    const modelName = modelId.includes('::')
+        ? modelId.slice(modelId.indexOf('::') + 2)
+        : modelId;
+    const name = modelName.toLowerCase();
 
     if (name.startsWith('gpt-')) {
         const match = name.match(/gpt-(\d+)/);
@@ -139,7 +158,7 @@ function wrapAsGeminiResponse(text: string): any {
 
 /**
  * Builds an OpenAI-compatible messages array from our unified input types.
- * Shared by OpenAI, OpenRouter, and Local providers.
+ * Shared by OpenAI and Local providers.
  * When visionSupport is true, Part[] with inlineData is converted to image_url format.
  */
 function buildChatMessages(
@@ -182,23 +201,62 @@ function buildChatMessages(
     return messages;
 }
 
-async function generateOpenAICompatibleContent(
-    client: OpenAI | null,
-    providerName: string,
+/**
+ * Converts the application's provider-neutral input into AI SDK model
+ * messages. The AI SDK uses `image` parts while the legacy OpenAI client path
+ * uses `image_url`; keeping this conversion local prevents either path from
+ * changing the other providers' request shapes. System content is returned as
+ * `instructions` because the AI SDK does not allow system messages in the
+ * `messages` field.
+ */
+function buildLanguageModelPrompt(
     promptOrParts: string | Part[] | StructuredMessage[],
-    modelToUse: string,
-    systemInstruction?: string,
-    isJsonOutput: boolean = false,
-): Promise<GenerateContentResponse> {
-    if (!client) throw new Error(`${providerName} client not initialized.`);
+    systemInstruction?: string
+): { messages: any[]; instructions?: string } {
+    const instructions: string[] = systemInstruction ? [systemInstruction] : [];
 
-    const messages = buildChatMessages(promptOrParts, systemInstruction, true);
-    const requestOptions: any = { model: modelToUse, messages };
+    if (isStructuredMessages(promptOrParts)) {
+        const messages = promptOrParts.flatMap(message => {
+            if (message.role === 'system') {
+                instructions.push(message.content);
+                return [];
+            }
 
-    if (isJsonOutput) requestOptions.response_format = { type: "json_object" };
+            return [{
+                role: message.role,
+                content: message.content,
+            }];
+        });
 
-    const response = await client.chat.completions.create(requestOptions);
-    return wrapAsGeminiResponse(response.choices[0]?.message?.content || '');
+        return {
+            messages,
+            ...(instructions.length > 0 ? { instructions: instructions.join('\n\n') } : {}),
+        };
+    }
+
+    if (Array.isArray(promptOrParts) && promptOrParts.length > 0) {
+        const content: any[] = [];
+        for (const part of promptOrParts) {
+            if (hasText(part)) {
+                content.push({ type: 'text', text: part.text });
+            } else if (hasInlineData(part) && part.inlineData.mimeType.startsWith('image/')) {
+                content.push({
+                    type: 'image',
+                    image: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`,
+                });
+            }
+        }
+
+        return {
+            messages: [{ role: 'user', content: content.length > 0 ? content : '' }],
+            ...(instructions.length > 0 ? { instructions: instructions.join('\n\n') } : {}),
+        };
+    }
+
+    return {
+        messages: [{ role: 'user', content: typeof promptOrParts === 'string' ? promptOrParts : String(promptOrParts) }],
+        ...(instructions.length > 0 ? { instructions: instructions.join('\n\n') } : {}),
+    };
 }
 
 /**
@@ -623,48 +681,149 @@ class OpenAIProvider implements AIProvider {
 }
 
 // ============================================================================
-// OpenRouter Provider
+// OpenAI-Compatible Provider
 // ============================================================================
 
-class OpenRouterProvider implements AIProvider {
-    private client: OpenAI | null = null;
+interface OpenAICompatibleInitialization {
+    baseURL: string;
+    apiKey?: string;
+    headers?: Record<string, string>;
+    capabilities?: {
+        supportsTools?: boolean;
+        supportsImageInput?: boolean;
+        supportsStructuredOutputs?: boolean;
+    };
+}
 
-    initialize(apiKey: string): boolean {
+function normalizeOpenAICompatibleEndpoint(endpoint: string): string {
+    const normalized = endpoint.trim().replace(/\/+$/, '');
+    const parsed = new URL(normalized);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error('Endpoint URL must use http:// or https://.');
+    }
+    return normalized;
+}
+
+function parseOpenAICompatibleModel(model: any): DiscoveredModel | null {
+    if (!model || typeof model.id !== 'string' || !model.id.trim()) return null;
+
+    const inputModalities = model.architecture?.input_modalities ?? model.modalities?.input;
+    const supportsImageInput = Array.isArray(inputModalities)
+        ? inputModalities.includes('image')
+        : undefined;
+    const supportsTools = typeof model.supports_tools === 'boolean'
+        ? model.supports_tools
+        : typeof model.tool_call === 'boolean'
+            ? model.tool_call
+            : typeof model.capabilities?.tools === 'boolean'
+                ? model.capabilities.tools
+                : undefined;
+    const supportsStructuredOutputs = typeof model.supports_structured_outputs === 'boolean'
+        ? model.supports_structured_outputs
+        : typeof model.structured_output === 'boolean'
+            ? model.structured_output
+            : typeof model.capabilities?.structured_outputs === 'boolean'
+                ? model.capabilities.structured_outputs
+                : undefined;
+
+    return {
+        id: model.id.trim(),
+        displayName: typeof model.name === 'string' ? model.name : undefined,
+        supportsImageInput,
+        supportsTools,
+        supportsStructuredOutputs,
+    };
+}
+
+class OpenAICompatibleProvider implements AIProvider {
+    private client: ReturnType<typeof createOpenAICompatible> | null = null;
+    private endpointUrl = '';
+    private apiKey = '';
+    private requestHeaders: Record<string, string> = {};
+    private capabilities: OpenAICompatibleInitialization['capabilities'] = {};
+
+    initialize(configString: string): boolean {
         try {
-            this.client = new OpenAI({
-                apiKey,
-                baseURL: "https://openrouter.ai/api/v1",
-                dangerouslyAllowBrowser: true,
-                defaultHeaders: {
-                    "HTTP-Referer": window.location.origin || "http://localhost:5173",
-                    "X-Title": "Iterative Studio"
-                }
+            const config = JSON.parse(configString) as OpenAICompatibleInitialization;
+            this.endpointUrl = normalizeOpenAICompatibleEndpoint(config.baseURL);
+            this.apiKey = config.apiKey?.trim() || '';
+            this.requestHeaders = config.headers ?? {};
+            this.capabilities = config.capabilities ?? {};
+            this.client = createOpenAICompatible({
+                name: 'openaiCompatible',
+                baseURL: getOpenAICompatibleProxyBaseURL(),
+                ...(this.apiKey ? { apiKey: this.apiKey } : {}),
+                headers: {
+                    ...this.requestHeaders,
+                    [OPENAI_COMPATIBLE_ENDPOINT_HEADER]: this.endpointUrl,
+                },
+                ...(typeof this.capabilities.supportsStructuredOutputs === 'boolean'
+                    ? { supportsStructuredOutputs: this.capabilities.supportsStructuredOutputs }
+                    : {}),
             });
             return true;
-        } catch (e) {
-            console.error("Failed to initialize OpenRouter:", e);
+        } catch (error) {
+            console.error('Failed to initialize OpenAI-compatible provider:', error);
+            this.client = null;
             return false;
         }
     }
 
+    private getModelsRequestHeaders(): HeadersInit {
+        return {
+            Accept: 'application/json',
+            ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
+            ...this.requestHeaders,
+            [OPENAI_COMPATIBLE_ENDPOINT_HEADER]: this.endpointUrl,
+        };
+    }
+
     async listModels(): Promise<DiscoveredModel[]> {
-        if (!this.client) return [];
+        if (!this.endpointUrl) return [];
+
         try {
-            const response = await this.client.models.list();
-            if (!response || !response.data) return [];
-            return response.data.map((model: any) => {
-                const inputModalities = model.architecture?.input_modalities;
-                return {
-                    id: model.id,
-                    supportsImageInput: Array.isArray(inputModalities)
-                        ? inputModalities.includes('image')
-                        : undefined,
-                };
+            const response = await fetch(`${getOpenAICompatibleProxyBaseURL()}/models`, {
+                headers: this.getModelsRequestHeaders(),
             });
-        } catch (e) {
-            console.error("Failed to fetch OpenRouter models:", e);
-            return [];
+            if (!response.ok) {
+                throw new Error(`Model discovery returned HTTP ${response.status}.`);
+            }
+
+            const payload = await response.json();
+            const models = Array.isArray(payload?.data)
+                ? payload.data.map(parseOpenAICompatibleModel).filter(Boolean) as DiscoveredModel[]
+                : [];
+            if (models.length > 0) {
+                const advisoryModels = await getModelsDevModels(this.endpointUrl);
+                const advisoryById = new Map(advisoryModels.map(model => [model.id, model]));
+                return models.map(model => {
+                    const advisory = advisoryById.get(model.id);
+                    return {
+                        ...model,
+                        displayName: model.displayName || advisory?.name,
+                        supportsImageInput: model.supportsImageInput ?? advisory?.modalities?.input?.includes('image'),
+                        supportsTools: model.supportsTools ?? advisory?.tool_call,
+                        supportsStructuredOutputs: model.supportsStructuredOutputs ?? advisory?.structured_output,
+                    };
+                });
+            }
+        } catch (error) {
+            console.warn('OpenAI-compatible endpoint model discovery failed:', error);
         }
+
+        // A known provider may still have useful metadata when its /models
+        // endpoint is unavailable or blocked by browser CORS. Unknown custom
+        // endpoints simply fall back to the model IDs entered by the user.
+        const advisoryModels = await getModelsDevModels(this.endpointUrl);
+        return advisoryModels.map(model => ({
+            id: model.id,
+            displayName: model.name,
+            supportsImageInput: model.modalities?.input?.includes('image'),
+            supportsTools: typeof model.tool_call === 'boolean' ? model.tool_call : undefined,
+            supportsStructuredOutputs: typeof model.structured_output === 'boolean'
+                ? model.structured_output
+                : undefined,
+        }));
     }
 
     async generateContent(
@@ -672,16 +831,41 @@ class OpenRouterProvider implements AIProvider {
         modelToUse: string,
         systemInstruction?: string,
         isJsonOutput: boolean = false,
-        _thinkingConfig?: any
+        thinkingConfig?: ThinkingConfig
     ): Promise<GenerateContentResponse> {
-        return generateOpenAICompatibleContent(
-            this.client,
-            'OpenRouter',
-            promptOrParts,
-            modelToUse,
-            systemInstruction,
-            isJsonOutput,
-        );
+        if (!this.client) {
+            throw new Error('Error: OpenAI-compatible endpoint is not initialized. Check the endpoint URL or API compatibility.');
+        }
+
+        try {
+            const { messages, instructions } = buildLanguageModelPrompt(promptOrParts, systemInstruction);
+            const request: any = {
+                model: this.client.chatModel(modelToUse),
+                messages,
+            };
+
+            if (instructions) request.instructions = instructions;
+
+            if (isJsonOutput) {
+                request.output = Output.json();
+            }
+
+            if (getModelThinkingType(modelToUse) === 'openai_effort') {
+                request.providerOptions = {
+                    openaiCompatible: {
+                        reasoningEffort: getThinkingEffort(thinkingConfig?.thinkingLevel || 'high', 'medium'),
+                    },
+                };
+            }
+
+            const result = await generateText(request);
+            const text = result.text || (isJsonOutput && result.output !== undefined
+                ? JSON.stringify(result.output)
+                : '');
+            return wrapAsGeminiResponse(text);
+        } catch (error) {
+            throw normalizeOpenAICompatibleProviderError(error, this.endpointUrl, modelToUse);
+        }
     }
 
     isInitialized(): boolean {
@@ -689,7 +873,7 @@ class OpenRouterProvider implements AIProvider {
     }
 
     getProviderName(): string {
-        return 'openrouter';
+        return 'openai-compatible';
     }
 }
 
@@ -844,8 +1028,8 @@ export function createAIProvider(provider: string): AIProvider {
             return new GoogleAIProvider();
         case 'openai':
             return new OpenAIProvider();
-        case 'openrouter':
-            return new OpenRouterProvider();
+        case 'openai-compatible':
+            return new OpenAICompatibleProvider();
         case 'anthropic':
             return new AnthropicProvider();
         case 'local':

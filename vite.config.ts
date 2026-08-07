@@ -1,6 +1,30 @@
 import path from 'path';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, type PreviewServer, type ViteDevServer } from 'vite';
+import { handleOpenAICompatibleProxyRequest } from './Backend/openAICompatibleProxy';
 import { handleSandboxBackendRequest } from './Backend/sandboxToolBackend';
+
+function installBackendMiddleware(server: ViteDevServer | PreviewServer): void {
+  server.middlewares.use(async (req, res, next) => {
+    const pathname = new URL(req.url || '/', 'http://localhost').pathname;
+    const basePath = server.config.base.replace(/\/$/, '');
+    const isOpenAICompatibleRequest = pathname.startsWith('/api/openai-compatible/')
+      || (basePath && pathname.startsWith(`${basePath}/api/openai-compatible/`));
+    const isSandboxBackendRequest = pathname.startsWith('/api/sandbox/')
+      || (basePath && pathname.startsWith(`${basePath}/api/sandbox/`));
+
+    if (isOpenAICompatibleRequest) {
+      const handled = await handleOpenAICompatibleProxyRequest(req, res, basePath);
+      if (handled) return;
+    }
+
+    if (isSandboxBackendRequest) {
+      const handled = await handleSandboxBackendRequest(req, res);
+      if (handled) return;
+    }
+
+    next();
+  });
+}
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
@@ -8,21 +32,11 @@ export default defineConfig(({ mode }) => {
     plugins: [{
       name: 'iterative-studio-sandbox-backend',
       configureServer(server) {
-        server.middlewares.use(async (req, res, next) => {
-          const pathname = new URL(req.url || '/', 'http://localhost').pathname;
-          const basePath = server.config.base.replace(/\/$/, '');
-          const isSandboxBackendRequest = pathname.startsWith('/api/sandbox/')
-            || (basePath && pathname.startsWith(`${basePath}/api/sandbox/`));
-
-          if (!isSandboxBackendRequest) {
-            next();
-            return;
-          }
-
-          const handled = await handleSandboxBackendRequest(req, res);
-          if (!handled) next();
-        });
-      }
+        installBackendMiddleware(server);
+      },
+      configurePreviewServer(server) {
+        installBackendMiddleware(server);
+      },
     }],
     define: {
       'process.env.AI_API_KEY': JSON.stringify(env.AI_API_KEY || env.GEMINI_API_KEY),
@@ -30,7 +44,6 @@ export default defineConfig(({ mode }) => {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
       'process.env.OPENAI_API_KEY': JSON.stringify(env.OPENAI_API_KEY),
       'process.env.ANTHROPIC_API_KEY': JSON.stringify(env.ANTHROPIC_API_KEY),
-      'process.env.OPENROUTER_API_KEY': JSON.stringify(env.OPENROUTER_API_KEY)
     },
     resolve: {
       alias: {
@@ -58,8 +71,9 @@ export default defineConfig(({ mode }) => {
 
 
             // AI Provider SDKs
-            if (id.includes('@anthropic-ai') || id.includes('@google/genai') || id.includes('node_modules/openai')) {
-              return 'vendor-ai';
+            if (id.includes('@anthropic-ai') || id.includes('@google/genai') || id.includes('node_modules/openai')
+              || id.includes('@ai-sdk') || id.includes('node_modules/ai')) {
+                return 'vendor-ai';
             }
             // LangChain ecosystem
             if (id.includes('langchain') || id.includes('langsmith')) {

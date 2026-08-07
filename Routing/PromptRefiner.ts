@@ -112,7 +112,7 @@ export class PromptRefiner {
         availableModels.forEach((model: any) => {
             const option = document.createElement('option');
             option.value = model.value;
-            option.textContent = model.value;
+            option.textContent = model.label || model.value;
             select.appendChild(option);
         });
 
@@ -168,7 +168,6 @@ export class PromptRefiner {
             'anthropic': { class: 'anthropic' },
             'google': { class: 'google' },
             'gemini': { class: 'google' },
-            'openrouter': { class: 'openrouter' },
             'meta': { class: 'meta' },
             'mistral': { class: 'mistral' }
         };
@@ -177,14 +176,16 @@ export class PromptRefiner {
 
         sortedProviders.forEach(provider => {
             const models = modelsByProvider[provider];
-            const config = providerConfig[provider.toLowerCase()] || { class: 'default' };
+            const config = providerConfig[provider.toLowerCase()] || {
+                class: provider.toLowerCase().startsWith('openai-compatible:') ? 'openai-compatible' : 'default'
+            };
 
             const providerSection = document.createElement('div');
             providerSection.className = `custom-model-select-provider-section ${config.class}`;
 
             const providerHeader = document.createElement('div');
             providerHeader.className = `custom-model-select-provider-header ${config.class}`;
-            providerHeader.innerHTML = `<span>${provider.charAt(0).toUpperCase() + provider.slice(1)}</span>`;
+            providerHeader.innerHTML = `<span>${models[0]?.providerLabel || provider.charAt(0).toUpperCase() + provider.slice(1)}</span>`;
             providerSection.appendChild(providerHeader);
 
             const sortedModels = models.sort((a: any, b: any) => a.value.localeCompare(b.value));
@@ -194,11 +195,11 @@ export class PromptRefiner {
                 option.className = 'custom-model-select-option';
                 option.dataset.value = model.value;
                 option.innerHTML = `
-                    <span class="custom-model-select-option-text">${model.value}</span>
+                    <span class="custom-model-select-option-text">${model.label || model.value}</span>
                     ${renderIconMarkup('check', 'option-check')}
                 `;
                 option.addEventListener('click', () => {
-                    this.selectModel(model.value, model.value, select);
+                this.selectModel(model.value, model.label || model.value, select);
                 });
                 providerSection.appendChild(option);
             });

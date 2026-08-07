@@ -31,14 +31,13 @@ type ImageCapabilityNotice = {
 
 function getImageCapabilityNotice(): ImageCapabilityNotice | null {
     const provider = getProviderForCurrentModel();
-    if (provider !== 'openrouter' && provider !== 'local') return null;
+    if (provider !== 'local' && provider !== 'openai-compatible') return null;
 
     const model = getSelectedModel();
-    const support = getRoutingManager()
-        .getApiKeyManager()
-        .getProviderManager()
-        .getImageInputSupportForModel(model);
-    const providerLabel = provider === 'openrouter' ? 'OpenRouter' : 'Local model';
+    const providerManager = getRoutingManager().getApiKeyManager().getProviderManager();
+    const support = providerManager.getImageInputSupportForModel(model);
+    const providerLabel = providerManager.getProviderDisplayNameForModel(model)
+        || (provider === 'local' ? 'Local model' : 'OpenAI-compatible endpoint');
 
     if (support === true) {
         return {

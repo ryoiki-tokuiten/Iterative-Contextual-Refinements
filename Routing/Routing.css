@@ -62,11 +62,6 @@
     color: rgb(204, 85, 68);
 }
 
-.provider-tab.openrouter.active {
-    background: rgba(255, 165, 0, 0.12);
-    color: rgb(255, 140, 0);
-}
-
 .provider-tab.meta.active {
     background: rgba(24, 119, 242, 0.12);
     color: rgb(24, 119, 242);
@@ -80,6 +75,11 @@
 .provider-tab.local.active {
     background: rgba(var(--accent-purple-rgb), 0.12);
     color: var(--accent-purple);
+}
+
+.provider-tab.openai-compatible.active {
+    background: rgba(var(--accent-blue-rgb), 0.12);
+    color: var(--accent-blue);
 }
 
 .provider-logo {

@@ -10,15 +10,21 @@ import { type Content as GeminiContent, type Part as GeminiPart } from '@google/
 import { ChatOpenAI } from '@langchain/openai';
 import { nanoid } from 'nanoid';
 import { getRoutingManager, callAI } from '../Routing';
-import type { ProviderConfig } from '../Routing/ProviderManager';
+import { getProviderType, type ProviderConfig, type ProviderType } from '../Routing/ProviderManager';
+import {
+    getOpenAICompatibleProxyBaseURL,
+    OPENAI_COMPATIBLE_ENDPOINT_HEADER,
+} from '../Routing/OpenAICompatibleProxy';
 
 interface ToolCallingAgentOptions {
     modelName: string;
 }
 
 export type ResolvedProvider = {
-    providerName: 'gemini' | 'openai' | 'openrouter' | 'local' | 'anthropic';
+    providerName: ProviderType;
     providerConfig: ProviderConfig;
+    modelName: string;
+    modelSelectionId: string;
 };
 
 type ToolCallingChatModel = ChatAnthropic | ChatOpenAI;
@@ -30,9 +36,17 @@ export function resolveProviderForModel(modelName: string): ResolvedProvider {
         throw new Error(`No configured provider found for model: ${modelName}`);
     }
 
+    const providerType = getProviderType(providerConfig);
+    if (providerType === 'openai-compatible'
+        && providerManager.getToolCallingSupportForModel(modelName) === false) {
+        throw new Error(`Error: OpenAI-compatible model ${providerManager.getModelIdForSelection(modelName)} does not support tool calling.`);
+    }
+
     return {
-        providerName: (providerConfig.name === 'google' ? 'gemini' : providerConfig.name) as ResolvedProvider['providerName'],
-        providerConfig
+        providerName: providerType,
+        providerConfig,
+        modelName: providerManager.getModelIdForSelection(modelName),
+        modelSelectionId: modelName,
     };
 }
 
@@ -80,20 +94,22 @@ export function createToolCallingAgentModel(
         case 'openai':
             return createOpenAICompatibleAgentModel(options, providerConfig.apiKey!, browserSafeConfig);
 
-        case 'openrouter':
-            return createOpenAICompatibleAgentModel(options, providerConfig.apiKey!, {
-                ...browserSafeConfig,
-                baseURL: 'https://openrouter.ai/api/v1',
-                defaultHeaders: {
-                    'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'https://iterative.studio',
-                    'X-Title': 'Iterative Studio'
-                }
-            });
-
         case 'local':
             return createOpenAICompatibleAgentModel(options, 'not-needed', {
                 ...browserSafeConfig,
                 baseURL: normalizeLocalEndpoint(providerConfig.apiKey!)
+            });
+
+        case 'openai-compatible':
+            if (!providerConfig.baseURL) {
+                throw new Error('Error: OpenAI-compatible endpoint URL is missing.');
+            }
+            return createOpenAICompatibleAgentModel(options, providerConfig.apiKey || 'not-needed', {
+                ...browserSafeConfig,
+                baseURL: getOpenAICompatibleProxyBaseURL(),
+                defaultHeaders: {
+                    [OPENAI_COMPATIBLE_ENDPOINT_HEADER]: providerConfig.baseURL,
+                },
             });
 
         case 'anthropic':

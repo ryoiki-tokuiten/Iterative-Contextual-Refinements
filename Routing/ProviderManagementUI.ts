@@ -3,8 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ProviderManager, ProviderConfig } from './ProviderManager';
+import { isOpenAICompatibleProvider, ProviderManager, ProviderConfig } from './ProviderManager';
 import { renderIconMarkup } from '../UI/Icons';
+
+const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1';
+
+function isOpenRouterEndpoint(endpoint?: string): boolean {
+    return endpoint?.trim().replace(/\/+$/, '') === OPENROUTER_ENDPOINT;
+}
+
+function escapeHtml(value: string): string {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 export class ProviderManagementUI {
     private providerManager: ProviderManager;
@@ -164,11 +179,13 @@ export class ProviderManagementUI {
     private renderProviderCards(): void {
         if (!this.elements.content) return;
 
-        const providers = this.providerManager.getAllProviders();
+        const providers = this.providerManager.getAllProviders().filter(provider => !isOpenAICompatibleProvider(provider));
+        const openAICompatibleProviders = this.providerManager.getOpenAICompatibleProviders();
 
         this.elements.content.innerHTML = `
             <div class="provider-cards-grid">
                 ${providers.map(provider => this.renderProviderCard(provider)).join('')}
+                ${this.renderOpenAICompatibleCard(openAICompatibleProviders)}
             </div>
         `;
 
@@ -176,6 +193,112 @@ export class ProviderManagementUI {
         providers.forEach(provider => {
             this.attachProviderCardListeners(provider);
         });
+        openAICompatibleProviders.forEach(provider => {
+            this.attachProviderCardListeners(provider);
+        });
+        this.attachOpenAICompatibleCardListeners();
+    }
+
+    private renderOpenAICompatibleCard(providers: ProviderConfig[]): string {
+        const configuredCount = providers.length;
+        const hasOpenRouter = providers.some(provider => isOpenRouterEndpoint(provider.baseURL));
+        return `
+            <div class="provider-card openai-compatible-card" data-provider-id="openai-compatible">
+                <div class="provider-card-header">
+                    <div class="provider-info">
+                        <h3 class="provider-name">OpenAI Compatible APIs</h3>
+                        <div class="provider-status ${configuredCount > 0 ? 'configured' : 'not-configured'}">
+                            ${configuredCount > 0 ? `${configuredCount} Configured` : 'Add Endpoint'}
+                        </div>
+                    </div>
+                    <div class="provider-icon">${renderIconMarkup('api')}</div>
+                </div>
+                <div class="provider-card-body openai-compatible-card-body">
+                    <div class="openai-compatible-content">
+                        <div class="openai-compatible-instances">
+                            ${providers.length > 0
+                                ? providers.map(provider => this.renderOpenAICompatibleInstance(provider)).join('')
+                                : '<div class="openai-compatible-empty">No compatible endpoints configured yet.</div>'}
+                        </div>
+                        <div class="openai-compatible-add-form">
+                            <div class="openai-compatible-form-title-row">
+                                <div class="openai-compatible-form-title">Add endpoint</div>
+                                ${hasOpenRouter ? '' : '<button type="button" class="openai-compatible-preset-btn">Use OpenRouter</button>'}
+                            </div>
+                            <div class="openai-compatible-form-fields">
+                                <div class="input-group">
+                                    <input type="text" class="openai-compatible-name-input" placeholder="Name (optional)">
+                                </div>
+                                <div class="input-group">
+                                    <input type="url" class="openai-compatible-endpoint-input" placeholder="Endpoint URL (e.g., https://api.example.com/v1)">
+                                    <small class="input-help">Use the API base URL that exposes /chat/completions.</small>
+                                </div>
+                                <div class="input-group">
+                                    <input type="password" class="openai-compatible-api-key-input" placeholder="API key (optional)">
+                                </div>
+                                <div class="input-group">
+                                    <input type="text" class="openai-compatible-models-input" placeholder="Model IDs (comma-separated)">
+                                    <small class="input-help">Leave empty only when the endpoint exposes /models or is listed in Models.dev.</small>
+                                </div>
+                            </div>
+                            <button class="configure-provider-btn add-openai-compatible-btn">
+                                ${renderIconMarkup('plus')} Add OpenAI Compatible Endpoint
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    private renderOpenAICompatibleInstance(provider: ProviderConfig): string {
+        const modelItems = provider.models.length > 0
+            ? provider.models.map(model => `
+                <div class="model-item custom-model">
+                    <span class="model-name">${escapeHtml(model)}</span>
+                    <button class="remove-model-btn" data-provider="${escapeHtml(provider.name)}" data-model="${escapeHtml(model)}" aria-label="Remove ${escapeHtml(model)}">
+                        ${renderIconMarkup('close')}
+                    </button>
+                </div>
+            `).join('')
+            : '<div class="openai-compatible-empty">No models configured yet.</div>';
+        const maskedKey = provider.apiKey
+            ? `••••${provider.apiKey.slice(-4)}`
+            : 'No API key';
+
+        return `
+            <div class="openai-compatible-instance" data-provider-id="${escapeHtml(provider.name)}">
+                <div class="openai-compatible-instance-header">
+                    <div>
+                        <div class="openai-compatible-instance-name">${escapeHtml(provider.displayName)}</div>
+                        <div class="openai-compatible-instance-endpoint">${escapeHtml(provider.baseURL || 'Endpoint URL missing')}</div>
+                    </div>
+                    <span class="provider-status configured">Configured</span>
+                </div>
+                <div class="openai-compatible-instance-key">${escapeHtml(maskedKey)}</div>
+                <div class="models-section">
+                    <h4>Available Models</h4>
+                    <div class="models-list">${modelItems}</div>
+                </div>
+                <div class="add-model-section">
+                    <div class="add-model-and-actions">
+                        <div class="input-group">
+                            <input type="text" class="add-model-input" placeholder="Add model ID" data-provider="${escapeHtml(provider.name)}">
+                            <button class="add-model-btn" data-provider="${escapeHtml(provider.name)}">Add</button>
+                        </div>
+                        <div class="provider-actions">
+                            <button class="remove-provider-btn" data-provider="${escapeHtml(provider.name)}">Remove</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    private getProviderElement(providerName: string): Element | null {
+        if (!this.elements.content) return null;
+        const elements = this.elements.content.querySelectorAll('[data-provider-id]');
+        return Array.from(elements).find(element => element.getAttribute('data-provider-id') === providerName) ?? null;
     }
 
     private renderProviderCard(provider: ProviderConfig): string {
@@ -183,7 +306,7 @@ export class ProviderManagementUI {
         const isEnvironmentKey = this.isEnvironmentKey(provider.name);
 
         return `
-            <div class="provider-card" data-provider="${provider.name}">
+            <div class="provider-card" data-provider-id="${provider.name}">
                 <div class="provider-card-header">
                     <div class="provider-info">
                         <h3 class="provider-name">${provider.displayName}</h3>
@@ -316,7 +439,7 @@ export class ProviderManagementUI {
 
     private attachProviderCardListeners(provider: ProviderConfig): void {
         if (!this.elements.content) return;
-        const card = this.elements.content.querySelector(`.provider-card[data-provider="${provider.name}"]`);
+        const card = this.getProviderElement(provider.name);
         if (!card) return;
 
         // Configure provider button
@@ -359,9 +482,30 @@ export class ProviderManagementUI {
         });
     }
 
+    private attachOpenAICompatibleCardListeners(): void {
+        if (!this.elements.content) return;
+        const addButton = this.elements.content.querySelector('.add-openai-compatible-btn');
+        addButton?.addEventListener('click', () => this.handleAddOpenAICompatibleProvider());
+
+        const form = this.elements.content.querySelector('.openai-compatible-add-form');
+        const endpointInput = form?.querySelector('.openai-compatible-endpoint-input') as HTMLInputElement | null;
+        const openRouterPreset = form?.querySelector('.openai-compatible-preset-btn');
+        openRouterPreset?.addEventListener('click', () => {
+            if (endpointInput) {
+                endpointInput.value = OPENROUTER_ENDPOINT;
+                endpointInput.focus();
+            }
+        });
+        form?.querySelectorAll('input').forEach(input => {
+            input.addEventListener('keypress', event => {
+                if (event.key === 'Enter') this.handleAddOpenAICompatibleProvider();
+            });
+        });
+    }
+
     private handleConfigureProvider(providerName: string): void {
         if (!this.elements.content) return;
-        const card = this.elements.content.querySelector(`.provider-card[data-provider="${providerName}"]`);
+        const card = this.getProviderElement(providerName);
         if (!card) return;
 
         const apiKeyInput = card.querySelector('.api-key-input') as HTMLInputElement;
@@ -421,8 +565,61 @@ export class ProviderManagementUI {
         }
     }
 
+    private handleAddOpenAICompatibleProvider(): void {
+        if (!this.elements.content) return;
+        const card = this.elements.content.querySelector('.openai-compatible-card');
+        if (!card) return;
+
+        const nameInput = card.querySelector('.openai-compatible-name-input') as HTMLInputElement;
+        const endpointInput = card.querySelector('.openai-compatible-endpoint-input') as HTMLInputElement;
+        const apiKeyInput = card.querySelector('.openai-compatible-api-key-input') as HTMLInputElement;
+        const modelsInput = card.querySelector('.openai-compatible-models-input') as HTMLInputElement;
+        const endpoint = endpointInput.value.trim();
+        const models = modelsInput.value.split(',').map(model => model.trim()).filter(Boolean);
+
+        if (!endpoint) {
+            this.showError(card, 'Error: Endpoint URL is required.');
+            return;
+        }
+
+        if (isOpenRouterEndpoint(endpoint) && !apiKeyInput.value.trim()) {
+            this.showError(card, 'Error: OpenRouter API key is required.');
+            return;
+        }
+
+        if (models.length === 0) {
+            try {
+                const parsedEndpoint = new URL(endpoint);
+                if (!parsedEndpoint.hostname) throw new Error('Invalid URL');
+            } catch {
+                this.showError(card, 'Error: Endpoint URL is invalid.');
+                return;
+            }
+        }
+
+        const result = this.providerManager.configureOpenAICompatibleProvider(
+            endpoint,
+            apiKeyInput.value,
+            models,
+            nameInput.value
+        );
+        if (!result.success) {
+            this.showError(card, result.error || 'Error: Endpoint URL or API compatibility could not be initialized.');
+            return;
+        }
+
+        nameInput.value = '';
+        endpointInput.value = '';
+        apiKeyInput.value = '';
+        modelsInput.value = '';
+        this.updateTriggerState();
+        this.renderProviderCards();
+        this.notifyModelsChanged();
+    }
+
     private handleRemoveProvider(providerName: string): void {
-        if (confirm(`Are you sure you want to remove the ${providerName} provider?`)) {
+        const provider = this.providerManager.getProviderConfig(providerName);
+        if (confirm(`Are you sure you want to remove the ${provider?.displayName || providerName} provider?`)) {
             this.providerManager.removeProvider(providerName);
             this.updateTriggerState();
             this.renderProviderCards();
@@ -434,7 +631,7 @@ export class ProviderManagementUI {
 
     private handleAddModel(providerName: string): void {
         if (!this.elements.content) return;
-        const card = this.elements.content.querySelector(`.provider-card[data-provider="${providerName}"]`);
+        const card = this.getProviderElement(providerName);
         if (!card) return;
 
         const input = card.querySelector('.add-model-input') as HTMLInputElement;
@@ -489,7 +686,6 @@ export class ProviderManagementUI {
             gemini: '<img src="./Logos/Google.png" alt="Google Gemini" class="provider-logo">',
             openai: '<img src="./Logos/OpenAI.png" alt="OpenAI" class="provider-logo">',
             anthropic: '<img src="./Logos/Anthropic.png" alt="Anthropic" class="provider-logo">',
-            openrouter: '<img src="./Logos/Openrouter.png" alt="OpenRouter" class="provider-logo">',
             local: '<img src="./Logos/Local.png" alt="Local Models" class="provider-logo">'
         };
         return icons[providerName] || renderIconMarkup('api');
@@ -507,8 +703,6 @@ export class ProviderManagementUI {
                 return provider.apiKey === process.env.OPENAI_API_KEY;
             case 'anthropic':
                 return provider.apiKey === process.env.ANTHROPIC_API_KEY;
-            case 'openrouter':
-                return provider.apiKey === process.env.OPENROUTER_API_KEY;
             default:
                 return false;
         }

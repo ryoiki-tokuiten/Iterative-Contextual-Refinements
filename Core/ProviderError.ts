@@ -86,7 +86,7 @@ function getProviderErrorStatus(error: unknown): number | null {
 
 /**
  * Extracts the provider's actionable error text without exposing request
- * payloads. OpenRouter, for example, nests its upstream failure under
+ * payloads. Some gateways nest their upstream failure under
  * `error.metadata.raw` while the top-level message is only "Provider returned
  * error".
  */
@@ -110,4 +110,23 @@ export function describeProviderError(error: unknown): string {
         providerName ? `${providerName}:` : '',
         detail,
     ].filter(Boolean).join(' ');
+}
+
+/**
+ * Gives every OpenAI-compatible runtime a stable, actionable error prefix.
+ * Provider SDKs use different error classes and nesting, but the user-facing
+ * checks are the same: endpoint URL, API compatibility, credentials, or model.
+ */
+export function normalizeOpenAICompatibleProviderError(
+    error: unknown,
+    endpoint: string,
+    modelId?: string
+): Error {
+    const modelSuffix = modelId ? ` Model: ${modelId}.` : '';
+    const normalized = new Error(
+        `Error: OpenAI-compatible endpoint request failed. Check the endpoint URL, API compatibility, API key, and model ID.${modelSuffix} ${describeProviderError(error)}`
+    );
+    (normalized as any).cause = error;
+    (normalized as any).endpoint = endpoint;
+    return normalized;
 }

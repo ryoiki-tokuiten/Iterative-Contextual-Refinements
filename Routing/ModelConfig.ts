@@ -8,6 +8,7 @@ export interface ModelOption {
     label: string;
     description?: string;
     provider?: string;
+    providerLabel?: string;
 }
 
 export const MAX_HYPOTHESIS_COUNT = 10;

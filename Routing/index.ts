@@ -119,6 +119,12 @@ export function getProviderForCurrentModel(): string {
     const modelConfigManager = manager.getModelConfigManager();
     const selectedModel = modelConfigManager.getSelectedModel();
 
+    const configuredProviderType = manager
+        .getApiKeyManager()
+        .getProviderManager()
+        .getProviderTypeForModel(selectedModel);
+    if (configuredProviderType) return configuredProviderType;
+
     // Get provider from the model's configuration
     // getModelProvider returns the provider string (e.g., 'gemini', 'openai', 'anthropic')
     const provider = modelConfigManager.getModelProvider(selectedModel);

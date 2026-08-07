@@ -169,15 +169,15 @@ export class ModelSelectionUI {
                 class: 'anthropic',
                 label: 'Anthropic'
             },
-            'openrouter': {
-                logo: `<svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>`,
-                class: 'openrouter',
-                label: 'Router'
-            },
             'local': {
                 logo: `<svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8h16v10zm-2-1h-6v-2h6v2zM7.5 17l-1.41-1.41L8.67 13l-2.59-2.59L7.5 9l4 4-4 4z"/></svg>`,
                 class: 'local',
                 label: 'Local'
+            },
+            'openai-compatible': {
+                logo: renderIconMarkup('api'),
+                class: 'openai-compatible',
+                label: 'OpenAI Compatible API'
             },
             'meta': {
                 logo: `<svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M6.915 4.03c-1.968 0-3.683 1.28-4.871 3.113C.704 9.208 0 11.883 0 14.449c0 .706.07 1.369.21 1.973a4.14 4.14 0 0 0 1.756 2.494c.893.593 2.123.893 3.912.893 1.738 0 3.075-.373 3.948-1.166.878-.798 1.317-1.96 1.317-3.439 0-.543-.032-1.089-.095-1.636a44.09 44.09 0 0 0-.26-1.636l-1.353.233c.095.606.171 1.214.228 1.822.057.606.085 1.145.085 1.616 0 1.073-.26 1.86-.778 2.363-.518.504-1.405.756-2.66.756-1.43 0-2.42-.23-2.968-.69-.548-.462-.822-1.158-.822-2.088 0-2.346.6-4.48 1.8-6.404 1.2-1.92 2.53-2.881 3.99-2.881.886 0 1.594.302 2.125.907.532.606.797 1.408.797 2.408 0 .315-.012.63-.036.945-.024.315-.06.63-.107.945l1.353-.233c.054-.315.093-.63.117-.945.024-.315.036-.63.036-.945 0-1.315-.373-2.36-1.12-3.134-.747-.775-1.756-1.162-3.026-1.162zM14.69 4.03c-1.269 0-2.278.388-3.026 1.162-.746.774-1.12 1.82-1.12 3.134 0 .315.012.63.037.945.024.315.063.63.116.945l1.353-.233a12.6 12.6 0 0 1-.107-.945 12.6 12.6 0 0 1-.036-.945c0-1 .265-1.802.797-2.408.531-.605 1.24-.907 2.126-.907 1.46 0 2.79.961 3.99 2.881 1.2 1.924 1.8 4.058 1.8 6.404 0 .93-.275 1.626-.823 2.088-.548.46-1.538.69-2.967.69-1.256 0-2.143-.252-2.66-.756-.52-.503-.78-1.29-.78-2.363 0-.47.029-1.01.086-1.616a44.09 44.09 0 0 1 .228-1.822l-1.353-.233a44.09 44.09 0 0 0-.26 1.636c-.063.547-.095 1.093-.095 1.636 0 1.479.439 2.64 1.317 3.44.873.792 2.21 1.165 3.948 1.165 1.789 0 3.019-.3 3.912-.893a4.14 4.14 0 0 0 1.756-2.494c.14-.604.21-1.267.21-1.973 0-2.566-.704-5.24-2.044-7.306-1.188-1.834-2.903-3.113-4.871-3.113z"/></svg>`,
@@ -192,7 +192,7 @@ export class ModelSelectionUI {
         };
 
         // Ensure all core providers are present
-        const coreProviders = ['gemini', 'openai', 'anthropic', 'openrouter', 'local'];
+        const coreProviders = ['gemini', 'openai', 'anthropic', 'local'];
         const modelsProviders = Object.keys(modelsByProvider).map(p => p.toLowerCase());
         const allProvidersSet = new Set([
             ...coreProviders,
@@ -201,7 +201,7 @@ export class ModelSelectionUI {
 
         // Sort providers - Google/Gemini first, then others
         const sortedProviders = Array.from(allProvidersSet).sort((a, b) => {
-            const order = ['google', 'gemini', 'openai', 'anthropic', 'openrouter', 'meta', 'mistral', 'local'];
+            const order = ['google', 'gemini', 'openai', 'anthropic', 'meta', 'mistral', 'local'];
             const aIndex = order.indexOf(a.toLowerCase());
             const bIndex = order.indexOf(b.toLowerCase());
             if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
@@ -225,10 +225,13 @@ export class ModelSelectionUI {
         // Build provider tabs
         providersContainer.innerHTML = '';
         sortedProviders.forEach(provider => {
+            const configuredProvider = this.providerManager?.getProviderConfig(provider);
             const config = providerConfig[provider.toLowerCase()] || {
-                logo: `<span class="provider-letter">${provider.charAt(0).toUpperCase()}</span>`,
-                class: 'default',
-                label: provider.charAt(0).toUpperCase() + provider.slice(1)
+                logo: configuredProvider?.providerType === 'openai-compatible'
+                    ? renderIconMarkup('api')
+                    : `<span class="provider-letter">${provider.charAt(0).toUpperCase()}</span>`,
+                class: configuredProvider?.providerType === 'openai-compatible' ? 'openai-compatible' : 'default',
+                label: configuredProvider?.displayName || provider.charAt(0).toUpperCase() + provider.slice(1)
             };
 
             const providerTab = document.createElement('button');
@@ -398,7 +401,7 @@ export class ModelSelectionUI {
                 ? renderIconMarkup('CircleCheck', 'model-check-icon', {}, 14)
                 : '';
 
-            modelBtn.innerHTML = `<span class="model-name">${model.value}</span>${checkIcon}`;
+            modelBtn.innerHTML = `<span class="model-name">${model.label || model.value}</span>${checkIcon}`;
 
             modelBtn.addEventListener('click', () => {
                 this.selectModel(model.value);
@@ -474,7 +477,7 @@ export class ModelSelectionUI {
     private updateThinkingLevelVisibility(): void {
         if (!this.elements.thinkingLevelContainer) return;
         const selectedModel = this.modelConfig.getSelectedModel();
-        const excludedProviders = ['openrouter', 'local'];
+        const excludedProviders = ['local'];
         const show = !excludedProviders.includes(this.activeProvider) && getModelThinkingType(selectedModel) !== 'none';
         this.elements.thinkingLevelContainer.style.display = show ? '' : 'none';
         

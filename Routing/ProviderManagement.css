@@ -197,6 +197,156 @@
     flex-direction: column;
 }
 
+.openai-compatible-card {
+    grid-column: 1 / -1;
+    height: auto;
+    min-height: 450px;
+}
+
+.openai-compatible-card-body {
+    overflow: visible;
+}
+
+.openai-compatible-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-height: 100%;
+}
+
+.openai-compatible-instances {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 0.75rem;
+}
+
+.openai-compatible-instance {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+    padding: 0.9rem;
+    background-color: rgba(var(--card-bg-base-rgb), 0.32);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+}
+
+.openai-compatible-instance:hover {
+    border-color: var(--border-hover-color);
+}
+
+.openai-compatible-instance-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.openai-compatible-instance-name {
+    color: var(--text-color);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+}
+
+.openai-compatible-instance-endpoint {
+    margin-top: 0.25rem;
+    color: var(--text-tertiary-color);
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+    overflow-wrap: anywhere;
+}
+
+.openai-compatible-instance-key {
+    color: var(--text-tertiary-color);
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-xs);
+}
+
+.openai-compatible-instance .models-section {
+    min-height: 90px;
+}
+
+.openai-compatible-instance .models-list {
+    max-height: 145px;
+}
+
+.openai-compatible-instance .add-model-section {
+    margin-top: 0;
+}
+
+.openai-compatible-instance .add-model-and-actions {
+    gap: 0.5rem;
+}
+
+.openai-compatible-instance .provider-actions .remove-provider-btn {
+    min-width: auto;
+    padding: 0.75rem !important;
+}
+
+.openai-compatible-add-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    padding: 0.9rem;
+    background-color: rgba(var(--card-bg-base-rgb), 0.16);
+    border: 1px dashed var(--border-color);
+    border-radius: var(--border-radius-md);
+}
+
+.openai-compatible-form-title {
+    color: var(--text-color);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+}
+
+.openai-compatible-form-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.openai-compatible-preset-btn {
+    border: 1px solid rgba(var(--accent-blue-rgb), 0.35);
+    border-radius: var(--border-radius-md);
+    background: rgba(var(--accent-blue-rgb), 0.08);
+    color: var(--accent-blue);
+    cursor: pointer;
+    font-family: var(--font-family);
+    font-size: var(--font-size-xs);
+    padding: 0.4rem 0.65rem;
+    transition: all var(--transition-speed);
+}
+
+.openai-compatible-preset-btn:hover {
+    background: rgba(var(--accent-blue-rgb), 0.18);
+    border-color: var(--accent-blue);
+}
+
+.openai-compatible-form-fields {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    width: 100%;
+}
+
+.openai-compatible-form-fields .input-group {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.openai-compatible-add-form .configure-provider-btn {
+    width: 100%;
+    white-space: nowrap;
+}
+
+.openai-compatible-empty {
+    align-self: center;
+    color: var(--text-tertiary-color);
+    font-size: var(--font-size-xs);
+    padding: 0.5rem;
+}
+
 .provider-card:hover {
     border-color: var(--border-hover-color);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -573,6 +723,10 @@
     .provider-cards-grid {
         grid-template-columns: repeat(2, 1fr);
     }
+
+    .openai-compatible-card {
+        grid-column: 1 / -1;
+    }
 }
 
 @media (max-width: 900px) {
@@ -580,6 +734,14 @@
         grid-template-columns: 1fr;
         max-width: 500px;
         margin: 0 auto;
+    }
+
+    .openai-compatible-card {
+        grid-column: auto;
+    }
+
+    .openai-compatible-form-fields {
+        flex-direction: column;
     }
 }
 
@@ -608,5 +770,13 @@
     .provider-card {
         height: auto;
         min-height: 350px;
+    }
+
+    .openai-compatible-card {
+        min-height: 0;
+    }
+
+    .openai-compatible-add-form .configure-provider-btn {
+        width: 100%;
     }
 }

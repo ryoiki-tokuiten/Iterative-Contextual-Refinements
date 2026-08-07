@@ -75,9 +75,10 @@ export class RoutingManager {
         const allModels = this.providerManager.getAllModels();
         const modelOptions: ModelOption[] = allModels.map(model => ({
             value: model.id,
-            label: `${model.id} (${model.provider})`,
-            description: `${model.provider} model`,
-            provider: model.provider
+            label: model.displayName || model.modelId || model.id,
+            description: `${model.providerDisplayName || model.provider} model`,
+            provider: model.provider,
+            providerLabel: model.providerDisplayName || model.provider,
         }));
 
         this.modelConfigManager.setAvailableModels(modelOptions);
