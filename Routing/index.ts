@@ -38,7 +38,7 @@ export function getSelectedModel(): string {
     return getRoutingManager().getSelectedModel();
 }
 
-export function getSelectedThinkingLevel(): 'low' | 'medium' | 'high' | 'minimal' {
+export function getSelectedThinkingLevel(): 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' | string {
     return getRoutingManager().getThinkingLevel();
 }
 

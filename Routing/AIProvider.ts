@@ -10,7 +10,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { generateText, Output } from "ai";
 import { globalState } from "../Core/State";
 import { normalizeOpenAICompatibleProviderError } from "../Core/ProviderError";
-import { getModelsDevModels } from "./ModelsDevCatalog";
+import { getModelsDevModels, extractReasoningEffortOptions } from "./ModelsDevCatalog";
 import {
     getOpenAICompatibleProxyBaseURL,
     OPENAI_COMPATIBLE_ENDPOINT_HEADER,
@@ -30,8 +30,8 @@ interface StructuredMessage {
 }
 
 export interface ThinkingConfig {
-    thinkingBudget?: number;  // -1 for dynamic, 0 to disable, or specific token count
-    thinkingLevel?: 'low' | 'medium' | 'high' | 'minimal';  // Gemini 3 thinking level control
+    thinkingBudget?: number;  // Optional token count if needed
+    thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' | string;
     tools?: any[];  // Function declarations to enable thought signatures
 }
 
@@ -44,72 +44,13 @@ export interface DiscoveredModel {
     supportsTools?: boolean;
     /** Undefined means the provider did not publish a reliable JSON capability. */
     supportsStructuredOutputs?: boolean;
+    /** Undefined means the provider did not publish a reliable reasoning capability. */
+    supportsReasoning?: boolean;
+    /** Optional specific reasoning effort options supported by this model. */
+    reasoningOptions?: string[];
 }
 
 type ListedModel = string | DiscoveredModel;
-
-
-// ============================================================================
-// Thinking Config
-// ============================================================================
-
-/*
- * Thinking config may change for providers and models over the time. Current config are according
- * to May 2026. For updating the thinking config in the future, tag this file to your AI Agent and
- * ask it to search the web and figure out exactly what updates are needed. Because this is
- * literally the best we can do for something that changes so fast every month. Like I configured
- * Gemini 2.5 models and 3 models differently because of different thinking budget rules Google has
- * set for these different model families. I had to hardcode a specific rule for the Sonnet 3.7
- * because Anthropic changed their approach after that. Another hurdle is keeping track of
- * Model-IDs. OpenAI o series models were the thinking models for a long time and are detected
- * dynamically as soon as you enter the api key, but I can't just go about adding cases for
- * everything. That's the purpose of this comment. If your use case is specifically a given specific
- * model, then tag your agent in this file, let it read the docs and search the web for that model
- * and change the config.
- */
-type ThinkingType = 'level' | 'budget' | 'openai_effort' | 'anthropic_effort' | 'none';
-
-const THINKING_EFFORT_MAP: Record<string, string> = {
-    minimal: 'low',
-    low: 'low',
-    medium: 'medium',
-    high: 'high',
-};
-
-function getThinkingEffort(level: string, fallback: string): string {
-    return THINKING_EFFORT_MAP[level] || fallback;
-}
-
-export function getModelThinkingType(modelId: string): ThinkingType {
-    // Generic endpoints use a provider-qualified selection key when two
-    // configured endpoints expose the same model ID. Thinking behavior still
-    // belongs to the real model ID after the separator.
-    const modelName = modelId.includes('::')
-        ? modelId.slice(modelId.indexOf('::') + 2)
-        : modelId;
-    const name = modelName.toLowerCase();
-
-    if (name.startsWith('gpt-')) {
-        const match = name.match(/gpt-(\d+)/);
-        if (match && parseInt(match[1]) >= 5) return 'openai_effort';
-        return 'none';
-    }
-    if (/^o[1-9]/.test(name)) return 'openai_effort';
-
-    if (name.startsWith('claude-') || name.includes('claude')) return 'anthropic_effort';
-
-    if (name.includes('gemma-')) return 'level';
-    if (name.includes('gemini-')) {
-        const match = name.match(/gemini-(\d+(?:\.\d+)?)/);
-        if (match) {
-            const version = parseFloat(match[1]);
-            if (version >= 3.0) return 'level';
-            if (version >= 2.0) return 'budget';
-        }
-    }
-
-    return 'none';
-}
 
 
 
@@ -550,36 +491,19 @@ class GoogleAIProvider implements AIProvider {
         if (systemInstruction) config.systemInstruction = systemInstruction;
         if (isJsonOutput) config.responseMimeType = "application/json";
 
-        const thinkingType = getModelThinkingType(modelToUse);
+        const selectedLevel = (thinkingConfig?.thinkingLevel || globalState.thinkingLevel || 'high').toLowerCase();
+        let level = ThinkingLevel.HIGH;
+        if (selectedLevel === 'low') level = ThinkingLevel.LOW;
+        else if (selectedLevel === 'medium') level = ThinkingLevel.MEDIUM;
+        else if (selectedLevel === 'minimal') level = ThinkingLevel.MINIMAL;
+        else if (selectedLevel === 'high') level = ThinkingLevel.HIGH;
 
-        if (thinkingType === 'level') {
-            const selectedLevel = thinkingConfig?.thinkingLevel || globalState.thinkingLevel;
-            let level = ThinkingLevel.HIGH;
-            if (selectedLevel === 'low') level = ThinkingLevel.LOW;
-            if (selectedLevel === 'medium') level = ThinkingLevel.MEDIUM;
-            if (selectedLevel === 'minimal') level = ThinkingLevel.MINIMAL;
-            if (selectedLevel === 'high') level = ThinkingLevel.HIGH;
-            
-            config.thinkingConfig = { thinkingLevel: level };
-            console.log(`[Gemini] Thinking level model (${modelToUse}): thinkingLevel=${config.thinkingConfig.thinkingLevel}`);
-        } else if (thinkingType === 'budget') {
-            const selectedLevel = thinkingConfig?.thinkingLevel || globalState.thinkingLevel;
-            const budgetMap: Record<string, number> = { 'minimal': 1024, 'low': 2048, 'medium': 4096, 'high': -1 };
-            config.thinkingConfig = { thinkingBudget: budgetMap[selectedLevel] ?? -1 };
-            console.log(`[Gemini] Thinking budget model (${modelToUse}): level=${selectedLevel}, budget=${config.thinkingConfig.thinkingBudget}`);
-        } else if (thinkingType !== 'none' && thinkingConfig?.thinkingBudget !== undefined) {
-            config.thinkingBudget = thinkingConfig.thinkingBudget;
-        }
+        config.thinkingConfig = { thinkingLevel: level };
 
         if (thinkingConfig?.tools && thinkingConfig.tools.length > 0) {
-            let toolsToPass = thinkingConfig.tools;
-
-            // Strip dummy reasoning tool that conflicts with native thinking on Gemini 2.0+
-            if (thinkingType !== 'none') {
-                toolsToPass = toolsToPass.filter(
-                    (t: any) => !(t.functionDeclarations?.length === 1 && t.functionDeclarations[0].name === "internal_reasoning_continuation")
-                );
-            }
+            const toolsToPass = thinkingConfig.tools.filter(
+                (t: any) => !(t.functionDeclarations?.length === 1 && t.functionDeclarations[0].name === "internal_reasoning_continuation")
+            );
 
             if (toolsToPass.length > 0) {
                 config.tools = [...toolsToPass];
@@ -591,8 +515,6 @@ class GoogleAIProvider implements AIProvider {
             contents: sanitizeContentsForApi(contents),
             config: config
         };
-
-
 
         try {
             const result = await this.client.models.generateContent(requestOptions);
@@ -651,19 +573,15 @@ class OpenAIProvider implements AIProvider {
         modelToUse: string,
         systemInstruction?: string,
         isJsonOutput: boolean = false,
-        _thinkingConfig?: any  // Not used by OpenAI but maintained for interface consistency
+        _thinkingConfig?: any
     ): Promise<GenerateContentResponse> {
         if (!this.client) throw new Error("OpenAI client not initialized.");
 
         const messages = buildChatMessages(promptOrParts, systemInstruction, true);
-        const thinkingType = getModelThinkingType(modelToUse);
+        const effortLevel = (_thinkingConfig?.thinkingLevel || globalState.thinkingLevel || 'high').toLowerCase();
 
         const requestOptions: any = { model: modelToUse, messages };
-
-        if (thinkingType === 'openai_effort') {
-            const level = _thinkingConfig?.thinkingLevel || 'high';
-            requestOptions.reasoning_effort = getThinkingEffort(level, 'medium');
-        }
+        requestOptions.reasoning_effort = effortLevel;
 
         if (isJsonOutput) requestOptions.response_format = { type: "json_object" };
 
@@ -692,6 +610,7 @@ interface OpenAICompatibleInitialization {
         supportsTools?: boolean;
         supportsImageInput?: boolean;
         supportsStructuredOutputs?: boolean;
+        supportsReasoning?: boolean;
     };
 }
 
@@ -725,6 +644,16 @@ function parseOpenAICompatibleModel(model: any): DiscoveredModel | null {
             : typeof model.capabilities?.structured_outputs === 'boolean'
                 ? model.capabilities.structured_outputs
                 : undefined;
+    const supportsReasoning = typeof model.reasoning === 'boolean'
+        ? model.reasoning
+        : typeof model.capabilities?.reasoning === 'boolean'
+            ? model.capabilities.reasoning
+            : typeof model.supports_reasoning === 'boolean'
+                ? model.supports_reasoning
+                : undefined;
+    const reasoningOptions = Array.isArray(model.reasoning_options)
+        ? model.reasoning_options.find((opt: any) => Array.isArray(opt.options))?.options
+        : undefined;
 
     return {
         id: model.id.trim(),
@@ -732,6 +661,8 @@ function parseOpenAICompatibleModel(model: any): DiscoveredModel | null {
         supportsImageInput,
         supportsTools,
         supportsStructuredOutputs,
+        supportsReasoning,
+        reasoningOptions,
     };
 }
 
@@ -790,9 +721,17 @@ class OpenAICompatibleProvider implements AIProvider {
             }
 
             const payload = await response.json();
-            const models = Array.isArray(payload?.data)
-                ? payload.data.map(parseOpenAICompatibleModel).filter(Boolean) as DiscoveredModel[]
-                : [];
+            const rawList = Array.isArray(payload)
+                ? payload
+                : Array.isArray(payload?.data)
+                    ? payload.data
+                    : Array.isArray(payload?.models)
+                        ? payload.models
+                        : [];
+            const models = rawList
+                .map(parseOpenAICompatibleModel)
+                .filter(Boolean) as DiscoveredModel[];
+
             if (models.length > 0) {
                 const advisoryModels = await getModelsDevModels(this.endpointUrl);
                 const advisoryById = new Map(advisoryModels.map(model => [model.id, model]));
@@ -804,6 +743,8 @@ class OpenAICompatibleProvider implements AIProvider {
                         supportsImageInput: model.supportsImageInput ?? advisory?.modalities?.input?.includes('image'),
                         supportsTools: model.supportsTools ?? advisory?.tool_call,
                         supportsStructuredOutputs: model.supportsStructuredOutputs ?? advisory?.structured_output,
+                        supportsReasoning: model.supportsReasoning ?? advisory?.reasoning,
+                        reasoningOptions: model.reasoningOptions ?? (advisory ? extractReasoningEffortOptions(advisory) ?? undefined : undefined),
                     };
                 });
             }
@@ -811,9 +752,8 @@ class OpenAICompatibleProvider implements AIProvider {
             console.warn('OpenAI-compatible endpoint model discovery failed:', error);
         }
 
-        // A known provider may still have useful metadata when its /models
-        // endpoint is unavailable or blocked by browser CORS. Unknown custom
-        // endpoints simply fall back to the model IDs entered by the user.
+        // A known provider in Models.dev may still have useful metadata when its live /models
+        // endpoint is unavailable. Unknown custom endpoints return [] so they use only user models.
         const advisoryModels = await getModelsDevModels(this.endpointUrl);
         return advisoryModels.map(model => ({
             id: model.id,
@@ -823,6 +763,8 @@ class OpenAICompatibleProvider implements AIProvider {
             supportsStructuredOutputs: typeof model.structured_output === 'boolean'
                 ? model.structured_output
                 : undefined,
+            supportsReasoning: typeof model.reasoning === 'boolean' ? model.reasoning : undefined,
+            reasoningOptions: extractReasoningEffortOptions(model) ?? undefined,
         }));
     }
 
@@ -850,13 +792,12 @@ class OpenAICompatibleProvider implements AIProvider {
                 request.output = Output.json();
             }
 
-            if (getModelThinkingType(modelToUse) === 'openai_effort') {
-                request.providerOptions = {
-                    openaiCompatible: {
-                        reasoningEffort: getThinkingEffort(thinkingConfig?.thinkingLevel || 'high', 'medium'),
-                    },
-                };
-            }
+            const effortLevel = (thinkingConfig?.thinkingLevel || globalState.thinkingLevel || 'high').toLowerCase();
+            request.providerOptions = {
+                openaiCompatible: {
+                    reasoningEffort: effortLevel,
+                },
+            };
 
             const result = await generateText(request);
             const text = result.text || (isJsonOutput && result.output !== undefined
@@ -918,15 +859,15 @@ class AnthropicProvider implements AIProvider {
         if (!this.client) throw new Error("Anthropic client not initialized.");
 
         const { messages, systemPrompt } = buildAnthropicMessages(promptOrParts, systemInstruction);
-        const thinkingType = getModelThinkingType(modelToUse);
+        const level = (_thinkingConfig?.thinkingLevel || globalState.thinkingLevel || 'high').toLowerCase();
 
-        const requestOptions: any = { model: modelToUse, max_tokens: 16384, messages };
-
-        if (thinkingType === 'anthropic_effort') {
-            const level = _thinkingConfig?.thinkingLevel || 'high';
-            requestOptions.thinking = { type: 'adaptive' };
-            requestOptions.effort = getThinkingEffort(level, 'high');
-        }
+        const requestOptions: any = {
+            model: modelToUse,
+            max_tokens: 16384,
+            messages,
+            thinking: { type: 'adaptive' },
+            effort: level,
+        };
 
         if (systemPrompt) requestOptions.system = systemPrompt;
 

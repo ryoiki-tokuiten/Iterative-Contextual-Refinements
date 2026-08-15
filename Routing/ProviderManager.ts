@@ -5,6 +5,7 @@
 
 import { nanoid } from 'nanoid';
 import { AIProvider, createAIProvider, DiscoveredModel } from './AIProvider';
+import { getModelsDevModel, extractReasoningEffortOptions } from './ModelsDevCatalog';
 
 export type ProviderType = 'gemini' | 'openai' | 'anthropic' | 'local' | 'openai-compatible';
 
@@ -12,6 +13,7 @@ export interface ProviderCapabilityOverrides {
     supportsTools?: boolean;
     supportsImageInput?: boolean;
     supportsStructuredOutputs?: boolean;
+    supportsReasoning?: boolean;
 }
 
 export interface ProviderConfig {
@@ -123,6 +125,8 @@ export class ProviderManager {
     private imageInputSupportByModel: Map<string, boolean> = new Map();
     private toolSupportByModel: Map<string, boolean> = new Map();
     private structuredOutputSupportByModel: Map<string, boolean> = new Map();
+    private reasoningSupportByModel: Map<string, boolean> = new Map();
+    private reasoningOptionsByModel: Map<string, string[]> = new Map();
     private modelUpdateListeners: (() => void)[] = [];
 
     constructor() {
@@ -476,6 +480,25 @@ export class ProviderManager {
         return this.structuredOutputSupportByModel.get(`${config.name}:${modelId}`) ?? null;
     }
 
+    public getReasoningSupportForModel(modelSelectionId: string): boolean | null {
+        const config = this.getProviderConfigForModel(modelSelectionId);
+        if (!config) return null;
+        if (typeof config.capabilityOverrides?.supportsReasoning === 'boolean') {
+            return config.capabilityOverrides.supportsReasoning;
+        }
+
+        const modelId = this.getModelIdForSelection(modelSelectionId);
+        return this.reasoningSupportByModel.get(`${config.name}:${modelId}`) ?? null;
+    }
+
+    public getReasoningOptionsForModel(modelSelectionId: string): string[] | null {
+        const config = this.getProviderConfigForModel(modelSelectionId);
+        if (!config) return null;
+
+        const modelId = this.getModelIdForSelection(modelSelectionId);
+        return this.reasoningOptionsByModel.get(`${config.name}:${modelId}`) ?? null;
+    }
+
     public getAllProviders(): ProviderConfig[] {
         return Array.from(this.providers.values());
     }
@@ -545,19 +568,36 @@ export class ProviderManager {
             this.clearModelCapabilities(storedProviderName);
             const discoveredIds: string[] = [];
             for (const model of models) {
-                const normalized = typeof model === 'string'
+                const normalized: DiscoveredModel = typeof model === 'string'
                     ? { id: model }
-                    : model;
+                    : { ...model };
                 if (!normalized?.id) continue;
+
+                const advisory = await getModelsDevModel(config.baseURL || providerName, normalized.id);
+                if (advisory) {
+                    if (typeof normalized.supportsReasoning !== 'boolean' && typeof advisory.reasoning === 'boolean') {
+                        normalized.supportsReasoning = advisory.reasoning;
+                    }
+                    if (!normalized.reasoningOptions) {
+                        normalized.reasoningOptions = extractReasoningEffortOptions(advisory) ?? undefined;
+                    }
+                    if (typeof normalized.supportsImageInput !== 'boolean' && advisory.modalities?.input?.includes('image')) {
+                        normalized.supportsImageInput = true;
+                    }
+                    if (typeof normalized.supportsTools !== 'boolean' && typeof advisory.tool_call === 'boolean') {
+                        normalized.supportsTools = advisory.tool_call;
+                    }
+                    if (typeof normalized.supportsStructuredOutputs !== 'boolean' && typeof advisory.structured_output === 'boolean') {
+                        normalized.supportsStructuredOutputs = advisory.structured_output;
+                    }
+                }
 
                 discoveredIds.push(normalized.id);
                 this.recordModelCapabilities(storedProviderName, normalized);
             }
 
             if (discoveredIds.length > 0) {
-                config.models = getProviderType(config) === 'openai-compatible'
-                    ? uniqueModels([...config.models, ...discoveredIds])
-                    : uniqueModels(discoveredIds);
+                config.models = uniqueModels(discoveredIds);
                 this.saveToStorage();
                 this.notifyModelUpdateListeners();
             }
@@ -593,6 +633,12 @@ export class ProviderManager {
         if (typeof model.supportsStructuredOutputs === 'boolean') {
             this.structuredOutputSupportByModel.set(`${providerName}:${model.id}`, model.supportsStructuredOutputs);
         }
+        if (typeof model.supportsReasoning === 'boolean') {
+            this.reasoningSupportByModel.set(`${providerName}:${model.id}`, model.supportsReasoning);
+        }
+        if (Array.isArray(model.reasoningOptions) && model.reasoningOptions.length > 0) {
+            this.reasoningOptionsByModel.set(`${providerName}:${model.id}`, model.reasoningOptions);
+        }
     }
 
     private clearModelCapabilities(providerName: string, modelId?: string): void {
@@ -601,6 +647,8 @@ export class ProviderManager {
             this.imageInputSupportByModel,
             this.toolSupportByModel,
             this.structuredOutputSupportByModel,
+            this.reasoningSupportByModel,
+            this.reasoningOptionsByModel,
         ]) {
             for (const key of map.keys()) {
                 if (modelId ? key === prefix : key.startsWith(prefix)) map.delete(key);

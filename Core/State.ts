@@ -17,8 +17,8 @@ class GlobalStateManager {
 
     virtualEnvironmentEnabled: boolean = false;
 
-    // Gemini Thinking Level
-    thinkingLevel: 'low' | 'medium' | 'high' | 'minimal' = 'high';
+    // Thinking / Reasoning Level
+    thinkingLevel: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' | string = 'high';
 
     customPromptsDeepthinkState = createDefaultCustomPromptsDeepthink();
     customPromptsAdaptiveDeepthinkState = createDefaultCustomPromptsAdaptiveDeepthink();

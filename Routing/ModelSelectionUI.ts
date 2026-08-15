@@ -8,7 +8,6 @@ import { DeepthinkConfigController } from './DeepthinkConfigController';
 import { ApiCallEstimator } from './ApiCallEstimator';
 import { globalState } from '../Core/State';
 import { updateCodeExecutionToggleVisibility } from '../UI/setupCodeExecutionToggle';
-import { getModelThinkingType } from './AIProvider';
 import { renderIconMarkup } from '../UI/Icons';
 
 import { ProviderManager } from './ProviderManager';
@@ -478,12 +477,84 @@ export class ModelSelectionUI {
         if (!this.elements.thinkingLevelContainer) return;
         const selectedModel = this.modelConfig.getSelectedModel();
         const excludedProviders = ['local'];
-        const show = !excludedProviders.includes(this.activeProvider) && getModelThinkingType(selectedModel) !== 'none';
+        if (excludedProviders.includes(this.activeProvider)) {
+            this.elements.thinkingLevelContainer.style.display = 'none';
+            return;
+        }
+
+        const supportsReasoning = this.providerManager?.getReasoningSupportForModel(selectedModel);
+        // If explicitly false, hide; otherwise show (if true or undefined for remote providers)
+        const show = supportsReasoning !== false;
         this.elements.thinkingLevelContainer.style.display = show ? '' : 'none';
-        
-        // Also update the select element value to match globalState
-        if (this.elements.thinkingLevelSelect) {
+
+        if (show && this.elements.thinkingLevelSelect) {
+            const specificOptions = this.providerManager?.getReasoningOptionsForModel(selectedModel);
+            this.updateThinkingSelectOptions(specificOptions);
             this.elements.thinkingLevelSelect.value = globalState.thinkingLevel;
+        }
+    }
+
+    private getProviderDefaultThinkingLevels(provider: string): { value: string; label: string }[] {
+        const norm = provider.toLowerCase();
+        if (norm === 'google' || norm === 'gemini') {
+            return [
+                { value: 'minimal', label: 'Minimal' },
+                { value: 'low', label: 'Low' },
+                { value: 'medium', label: 'Medium' },
+                { value: 'high', label: 'High' },
+            ];
+        }
+        if (norm === 'openai') {
+            return [
+                { value: 'low', label: 'Low' },
+                { value: 'medium', label: 'Medium' },
+                { value: 'high', label: 'High' },
+            ];
+        }
+        if (norm === 'anthropic') {
+            return [
+                { value: 'low', label: 'Low' },
+                { value: 'medium', label: 'Medium' },
+                { value: 'high', label: 'High' },
+            ];
+        }
+        return [
+            { value: 'low', label: 'Low' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'high', label: 'High' },
+        ];
+    }
+
+    private updateThinkingSelectOptions(customOptions?: string[] | null): void {
+        const select = this.elements.thinkingLevelSelect;
+        if (!select) return;
+
+        const optionsToRender = (customOptions && customOptions.length > 0)
+            ? customOptions.map(opt => ({
+                value: opt.toLowerCase(),
+                label: opt.toLowerCase() === 'xhigh'
+                    ? 'xHigh'
+                    : opt.charAt(0).toUpperCase() + opt.slice(1)
+            }))
+            : this.getProviderDefaultThinkingLevels(this.activeProvider);
+
+        const currentVal = (globalState.thinkingLevel || 'high').toLowerCase();
+        select.innerHTML = '';
+        optionsToRender.forEach(opt => {
+            const el = document.createElement('option');
+            el.value = opt.value;
+            el.textContent = opt.label;
+            select.appendChild(el);
+        });
+
+        if (optionsToRender.some(opt => opt.value === currentVal)) {
+            select.value = currentVal;
+        } else if (optionsToRender.length > 0) {
+            // Default to high if present, otherwise the last available tier
+            const highOption = optionsToRender.find(opt => opt.value === 'high');
+            select.value = highOption ? highOption.value : optionsToRender[optionsToRender.length - 1].value;
+            globalState.thinkingLevel = select.value as any;
+            this.modelConfig.updateParameter('thinkingLevel', select.value as any);
         }
     }
 }

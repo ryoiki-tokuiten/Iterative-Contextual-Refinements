@@ -84,7 +84,7 @@ Execution and correction write direct files in `Strategy-N`; critique writes und
 
 ## Retry behavior
 
-Deepthink permits four total attempts per agent call, with delays of 30 seconds, 60 seconds, and 5 minutes. Calls with a 15-minute timeout share that budget across attempts and delays. Failure of required strategy-generation, evolution-filter, or strategy-update work stops the pipeline; non-critical branch failures remain visible on the affected branch.
+Deepthink permits four total attempts per agent call, with delays of 30 seconds, 60 seconds, and 5 minutes. Calls with a 30-minute timeout share that budget across attempts and delays. Failure of required strategy-generation, evolution-filter, or strategy-update work stops the pipeline; non-critical branch failures remain visible on the affected branch.
 
 ## Development
 

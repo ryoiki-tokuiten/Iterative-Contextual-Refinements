@@ -184,7 +184,7 @@ function getContextualSandboxRepositoryAccess(agentName: string): SandboxReposit
 
 const RETRY_DELAYS_MS = [30_000, 60_000, 5 * 60_000] as const;
 const MAX_RETRIES = RETRY_DELAYS_MS.length;
-const STANDARD_AGENT_TIMEOUT_MS = 15 * 60_000;
+const STANDARD_AGENT_TIMEOUT_MS = 30 * 60_000;
 const SANDBOX_AGENT_TIMEOUT_MS = 30 * 60_000;
 
 let mainGeneratorMessages: BaseMessage[] = [];

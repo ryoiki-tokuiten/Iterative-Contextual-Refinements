@@ -277,7 +277,7 @@ export interface DeepthinkCoreDeps {
     getSolutionPoolDisabled: () => boolean;
     getDeepthinkCodeExecutionEnabled: () => boolean;
     updateControlsState: (newState: any) => void;
-    getSelectedThinkingLevel?: () => 'low' | 'medium' | 'high' | 'minimal';
+    getSelectedThinkingLevel?: () => 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' | string;
     getCustomPromptsDeepthinkState: () => CustomizablePromptsDeepthink;
 }
 
@@ -286,7 +286,7 @@ const runAttachments = new Map<string, DeepthinkAttachmentRoute[]>();
 
 const RETRY_DELAYS_MS = [30_000, 60_000, 5 * 60_000] as const;
 const MAX_API_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
-const AGENT_TIMEOUT_MS = 15 * 60 * 1000;
+const AGENT_TIMEOUT_MS = 30 * 60 * 1000;
 const SANDBOX_AGENT_TIMEOUT_MS = 30 * 60 * 1000;
 const POOL_HISTORY_WINDOW = 5;
 const CORRECTION_HISTORY_WINDOW = 5;

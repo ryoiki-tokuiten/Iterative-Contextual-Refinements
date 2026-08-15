@@ -65,7 +65,7 @@ export class RoutingManager {
         this.modelSelectionUI.initialize();
     }
 
-    public getThinkingLevel(): 'low' | 'medium' | 'high' | 'minimal' {
+    public getThinkingLevel(): 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' | string {
         return this.modelConfigManager.getThinkingLevel();
     }
 

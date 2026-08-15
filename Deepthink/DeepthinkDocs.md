@@ -161,7 +161,7 @@ All sandbox-enabled roles receive `sandbox_exec` and `final_output`. Intermediat
 
 ## Failure policy
 
-Agent calls permit four total attempts with delays of 30 seconds, 60 seconds, and 5 minutes. A configured 15-minute timeout is shared by attempts and delays. Required strategy generation, filter decisions, and replacement generation fail the run when exhausted. Non-critical branch work records its error on that branch so the UI exposes the incomplete state.
+Agent calls permit four total attempts with delays of 30 seconds, 60 seconds, and 5 minutes. A configured 30-minute timeout is shared by attempts and delays. Required strategy generation, filter decisions, and replacement generation fail the run when exhausted. Non-critical branch work records its error on that branch so the UI exposes the incomplete state.
 
 Parser boundaries enforce exact IDs, unique routes, complete filter decision vectors, and complete replacement vectors. Invalid structured output is retried rather than partially applied.
 

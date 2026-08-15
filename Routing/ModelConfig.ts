@@ -15,6 +15,8 @@ export const MAX_DEEPTHINK_STRATEGIES = 5;
 export const MAX_HYPOTHESIS_COUNT = 10;
 export const MAX_DEEPTHINK_DEPTH = 10;
 
+export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' | string;
+
 export interface ModelParameters {
     strategiesCount: number;
     strategyProximityLoops: number;
@@ -25,7 +27,7 @@ export interface ModelParameters {
     isolateBranches: boolean;
     disableSolutionPool: boolean;
     deepthinkCodeExecutionEnabled: boolean;
-    thinkingLevel: 'low' | 'medium' | 'high' | 'minimal';
+    thinkingLevel: ThinkingLevel;
 }
 
 const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
@@ -104,7 +106,7 @@ export class ModelConfigManager {
         return this.parameters.deepthinkCodeExecutionEnabled;
     }
 
-    public getThinkingLevel(): 'low' | 'medium' | 'high' | 'minimal' {
+    public getThinkingLevel(): ThinkingLevel {
         return this.parameters.thinkingLevel || 'high';
     }
 

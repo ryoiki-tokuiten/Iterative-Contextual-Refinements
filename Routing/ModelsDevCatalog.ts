@@ -9,12 +9,22 @@
  * only used when an endpoint publishes no usable model list.
  */
 
+export interface ModelsDevReasoningOption {
+    type?: string;
+    options?: string[];
+    min?: number;
+    max?: number;
+    default?: string | number;
+}
+
 export interface ModelsDevModel {
     id: string;
     name?: string;
     description?: string;
     tool_call?: boolean;
     structured_output?: boolean;
+    reasoning?: boolean;
+    reasoning_options?: ModelsDevReasoningOption[];
     modalities?: {
         input?: string[];
         output?: string[];
@@ -97,7 +107,7 @@ async function fetchCatalog(): Promise<ModelsDevCatalog | null> {
     }
 }
 
-async function loadCatalog(): Promise<ModelsDevCatalog | null> {
+export async function loadCatalog(): Promise<ModelsDevCatalog | null> {
     const now = Date.now();
     const cached = memoryCache ?? readStoredCatalog();
 
@@ -137,18 +147,77 @@ function modelFromCatalog(id: string, model: ModelsDevModel): ModelsDevModel {
  * Returns catalog models for a known API base URL. Unknown endpoints return
  * an empty list and remain fully usable with manually entered model IDs.
  */
-export async function getModelsDevModels(endpoint: string): Promise<ModelsDevModel[]> {
+export function findModelsDevProvider(
+    catalog: ModelsDevCatalog,
+    providerOrEndpoint: string
+): ModelsDevProvider | null {
+    if (!providerOrEndpoint) return null;
+    const target = providerOrEndpoint.trim().toLowerCase();
+    const normalizedEndpoint = normalizeEndpoint(providerOrEndpoint);
+
+    // 1. Direct match by catalog dictionary key or provider ID
+    if (catalog[target]) return catalog[target];
+    const matchById = Object.values(catalog).find(entry =>
+        typeof entry.id === 'string' && entry.id.toLowerCase() === target
+    );
+    if (matchById) return matchById;
+
+    // 2. Exact match by provider API URL
+    const matchByApi = Object.values(catalog).find(entry =>
+        typeof entry.api === 'string' && normalizeEndpoint(entry.api) === normalizedEndpoint
+    );
+    if (matchByApi) return matchByApi;
+
+    return null;
+}
+
+/**
+ * Returns catalog models for a known API base URL or provider key.
+ * Unknown endpoints return an empty list and do not leak models from other providers.
+ */
+export async function getModelsDevModels(endpointOrProvider: string): Promise<ModelsDevModel[]> {
     const catalog = await loadCatalog();
     if (!catalog) return [];
 
-    const normalizedEndpoint = normalizeEndpoint(endpoint);
-    const provider = Object.values(catalog).find(entry =>
-        typeof entry.api === 'string' && normalizeEndpoint(entry.api) === normalizedEndpoint
-    );
-
+    const provider = findModelsDevProvider(catalog, endpointOrProvider);
     if (!provider?.models || typeof provider.models !== 'object') return [];
 
     return Object.entries(provider.models).map(([id, model]) => modelFromCatalog(id, model));
+}
+
+/**
+ * Looks up a single model's metadata in Models.dev strictly within the target provider.
+ */
+export async function getModelsDevModel(
+    providerOrEndpoint: string,
+    modelId: string
+): Promise<ModelsDevModel | null> {
+    const catalog = await loadCatalog();
+    if (!catalog) return null;
+
+    const cleanModelId = modelId.includes('::') ? modelId.slice(modelId.indexOf('::') + 2) : modelId;
+    const targetProvider = findModelsDevProvider(catalog, providerOrEndpoint);
+
+    if (targetProvider?.models) {
+        const found = targetProvider.models[cleanModelId]
+            || Object.values(targetProvider.models).find(m => m.id === cleanModelId);
+        if (found) return modelFromCatalog(found.id || cleanModelId, found);
+    }
+
+    return null;
+}
+
+export function extractReasoningEffortOptions(model: ModelsDevModel): string[] | null {
+    if (!model.reasoning_options || !Array.isArray(model.reasoning_options)) return null;
+    for (const opt of model.reasoning_options) {
+        if (Array.isArray(opt.values) && opt.values.length > 0) {
+            return opt.values;
+        }
+        if (Array.isArray(opt.options) && opt.options.length > 0) {
+            return opt.options;
+        }
+    }
+    return null;
 }
 
 export function clearModelsDevCatalogCache(): void {

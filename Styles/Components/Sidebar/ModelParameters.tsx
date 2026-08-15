@@ -29,12 +29,15 @@ const ModelParameters: React.FC = () => {
                 </div>
 
                 <div id="thinking-level-container" className="input-group-tight" style={{ display: 'none' }}>
-                    <label htmlFor="thinking-level-select" className="input-label">Thinking Level</label>
-                    <select id="thinking-level-select" className="input-base" aria-label="Select Gemini Thinking Level">
+                    <label htmlFor="thinking-level-select" className="input-label">Thinking / Reasoning Level</label>
+                    <select id="thinking-level-select" className="input-base" aria-label="Select Thinking / Reasoning Level">
                         <option value="minimal">Minimal</option>
                         <option value="low">Low</option>
                         <option value="medium">Medium</option>
                         <option value="high">High</option>
+                        <option value="xhigh">xHigh</option>
+                        <option value="max">Max</option>
+                        <option value="ultra">Ultra</option>
                     </select>
                 </div>
 

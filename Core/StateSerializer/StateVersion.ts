@@ -62,7 +62,7 @@ export interface ExportedConfig {
         isolateBranches: boolean;
         disableSolutionPool: boolean;
         deepthinkCodeExecutionEnabled: boolean;
-        thinkingLevel: 'low' | 'medium' | 'high' | 'minimal';
+        thinkingLevel: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' | string;
     };
 
 }
