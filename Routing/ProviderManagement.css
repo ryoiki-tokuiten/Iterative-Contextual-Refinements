@@ -306,6 +306,13 @@
     gap: 0.75rem;
 }
 
+.openai-compatible-preset-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
 .openai-compatible-preset-btn {
     border: 1px solid rgba(var(--accent-blue-rgb), 0.35);
     border-radius: var(--border-radius-md);

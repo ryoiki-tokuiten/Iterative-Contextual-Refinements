@@ -7,9 +7,15 @@ import { isOpenAICompatibleProvider, ProviderManager, ProviderConfig } from './P
 import { renderIconMarkup } from '../UI/Icons';
 
 const OPENROUTER_ENDPOINT = 'https://openrouter.ai/api/v1';
+const ATLAS_CLOUD_ENDPOINT = 'https://api.atlascloud.ai/v1';
+const ATLAS_CLOUD_DEFAULT_MODEL = 'deepseek-ai/deepseek-v4-flash';
 
 function isOpenRouterEndpoint(endpoint?: string): boolean {
     return endpoint?.trim().replace(/\/+$/, '') === OPENROUTER_ENDPOINT;
+}
+
+function isAtlasCloudEndpoint(endpoint?: string): boolean {
+    return endpoint?.trim().replace(/\/+$/, '') === ATLAS_CLOUD_ENDPOINT;
 }
 
 function escapeHtml(value: string): string {
@@ -202,6 +208,7 @@ export class ProviderManagementUI {
     private renderOpenAICompatibleCard(providers: ProviderConfig[]): string {
         const configuredCount = providers.length;
         const hasOpenRouter = providers.some(provider => isOpenRouterEndpoint(provider.baseURL));
+        const hasAtlasCloud = providers.some(provider => isAtlasCloudEndpoint(provider.baseURL));
         return `
             <div class="provider-card openai-compatible-card" data-provider-id="openai-compatible">
                 <div class="provider-card-header">
@@ -223,7 +230,10 @@ export class ProviderManagementUI {
                         <div class="openai-compatible-add-form">
                             <div class="openai-compatible-form-title-row">
                                 <div class="openai-compatible-form-title">Add endpoint</div>
-                                ${hasOpenRouter ? '' : '<button type="button" class="openai-compatible-preset-btn">Use OpenRouter</button>'}
+                                <div class="openai-compatible-preset-actions">
+                                    ${hasAtlasCloud ? '' : '<button type="button" class="openai-compatible-preset-btn" data-preset="atlas-cloud">Use Atlas Cloud</button>'}
+                                    ${hasOpenRouter ? '' : '<button type="button" class="openai-compatible-preset-btn" data-preset="openrouter">Use OpenRouter</button>'}
+                                </div>
                             </div>
                             <div class="openai-compatible-form-fields">
                                 <div class="input-group">
@@ -488,13 +498,26 @@ export class ProviderManagementUI {
         addButton?.addEventListener('click', () => this.handleAddOpenAICompatibleProvider());
 
         const form = this.elements.content.querySelector('.openai-compatible-add-form');
+        const nameInput = form?.querySelector('.openai-compatible-name-input') as HTMLInputElement | null;
         const endpointInput = form?.querySelector('.openai-compatible-endpoint-input') as HTMLInputElement | null;
-        const openRouterPreset = form?.querySelector('.openai-compatible-preset-btn');
-        openRouterPreset?.addEventListener('click', () => {
-            if (endpointInput) {
+        const apiKeyInput = form?.querySelector('.openai-compatible-api-key-input') as HTMLInputElement | null;
+        const modelsInput = form?.querySelector('.openai-compatible-models-input') as HTMLInputElement | null;
+        form?.querySelectorAll('.openai-compatible-preset-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                const preset = (button as HTMLElement).dataset.preset;
+                if (!endpointInput) return;
+
+                if (preset === 'atlas-cloud') {
+                    if (nameInput) nameInput.value = 'Atlas Cloud';
+                    endpointInput.value = ATLAS_CLOUD_ENDPOINT;
+                    if (modelsInput) modelsInput.value = ATLAS_CLOUD_DEFAULT_MODEL;
+                    apiKeyInput?.focus();
+                    return;
+                }
+
                 endpointInput.value = OPENROUTER_ENDPOINT;
                 endpointInput.focus();
-            }
+            });
         });
         form?.querySelectorAll('input').forEach(input => {
             input.addEventListener('keypress', event => {
