@@ -19,7 +19,7 @@ const IMAGE_START = '<!-- EXECUTION_IMAGE_START -->';
 const IMAGE_END = '<!-- EXECUTION_IMAGE_END -->';
 const CODE_EXECUTION_PATTERN = /^<!-- CODE_EXECUTION_START -->\s*\n?<!-- LANGUAGE: ([^\n]+?) -->\s*\n?```[^\n]*\n([\s\S]*?)\n```\s*\n?<!-- CODE_EXECUTION_END -->$/;
 const EXECUTION_OUTPUT_PATTERN = /^<!-- EXECUTION_OUTPUT_START -->\s*\n?```\n?([\s\S]*?)\n?```\s*\n?<!-- EXECUTION_OUTPUT_END -->$/;
-const EXECUTION_IMAGE_PATTERN = /^<!-- EXECUTION_IMAGE_START -->\s*\n?<!-- MIME_TYPE: ([^\s]+) -->\s*\n?([\s\S]*?)\n?<!-- EXECUTION_IMAGE_END -->$/;
+const EXECUTION_IMAGE_PATTERN = /^<!-- EXECUTION_IMAGE_START -->\s*<!-- MIME_TYPE:\s*([^\s]+)\s*-->\s*([\s\S]*?)\s*<!-- EXECUTION_IMAGE_END -->$/;
 const EXECUTION_COMMENT_MARKERS = new Set([
     'CODE_EXECUTION_START', 'CODE_EXECUTION_END',
     'EXECUTION_OUTPUT_START', 'EXECUTION_OUTPUT_END',
@@ -53,6 +53,7 @@ interface ExecutionBlock { kind: ExecutionKind; start: number; end: number }
 interface RenderMathMarkdownProps {
     content: string;
     className?: string;
+    disableSandboxArtifactExpansion?: boolean;
 }
 
 interface ImagePreviewData { src: string; alt: string; format: string }
@@ -526,7 +527,7 @@ const PreviewableImage: React.FC<PreviewableImageProps> = function PreviewableIm
 const ExecutionImagesBlock: React.FC<{ images: ExecutionImageItem[]; onPreview: (data: ImagePreviewData) => void }> = function ExecutionImagesBlock({ images, onPreview }) {
         return (
             <div className="code-block-container exec-image-block">
-                <div className="code-block-header"><span className="code-block-title">FIGURE</span></div>
+                <div className="code-block-header"><span className="code-block-title">ACTUAL MULTI-MODAL INPUT</span></div>
                 <div className="exec-image-grid">
                     {images.map((image, index) => image.kind === 'error' ? (
                         <div key={`execution-image-${index}`} className="exec-image-item exec-image-error-item">
@@ -613,7 +614,8 @@ const MarkdownSegmentContent: React.FC<{
     content: string;
     highlightingVersion: number;
     onPreview: (data: ImagePreviewData) => void;
-}> = function MarkdownSegmentContent({ content, highlightingVersion, onPreview }) {
+    disableSandboxArtifactExpansion?: boolean;
+}> = function MarkdownSegmentContent({ content, highlightingVersion, onPreview, disableSandboxArtifactExpansion }) {
     const components = useMemo(() => ({
         ...headingComponents,
         strong: (props: React.HTMLAttributes<HTMLElement>) => <strong {...props} className={classes('token-critical', props.className)} />,
@@ -626,13 +628,13 @@ const MarkdownSegmentContent: React.FC<{
         img: ({ src, alt }: { src?: string; alt?: string }) => src ? (
             <PreviewableImage src={src} alt={alt || 'Image'} format="IMAGE" wrapperTag="span" imageClassName="markdown-image" onPreview={onPreview} />
         ) : null,
-        a: ({ href, children }: { href?: string; children?: React.ReactNode }) => isSandboxArtifactHref(href) ? (
+        a: ({ href, children }: { href?: string; children?: React.ReactNode }) => (!disableSandboxArtifactExpansion && isSandboxArtifactHref(href)) ? (
             <SandboxFileViewer key={href} href={href!} />
         ) : (
             <a href={href} target="_blank" rel="noreferrer">{children}</a>
         ),
         code: ({ className, children }: { className?: string; children?: React.ReactNode }) => <code className={className}>{children}</code>,
-    }), [highlightingVersion, onPreview]);
+    }), [highlightingVersion, onPreview, disableSandboxArtifactExpansion]);
 
     return (
         <ReactMarkdown remarkPlugins={REMARK_PLUGINS} rehypePlugins={REHYPE_PLUGINS} components={components as any}>
@@ -645,14 +647,15 @@ const RenderedContent = React.memo<{
     segments: RenderSegment[];
     highlightingVersion: number;
     onPreview: (data: ImagePreviewData) => void;
-}>(function RenderedContent({ segments, highlightingVersion, onPreview }) {
+    disableSandboxArtifactExpansion?: boolean;
+}>(function RenderedContent({ segments, highlightingVersion, onPreview, disableSandboxArtifactExpansion }) {
     return (
         <div className="rich-content-display">
             <div className="latex-content-wrapper">
                 {segments.map((segment, index) => {
                     switch (segment.kind) {
                         case 'markdown':
-                            return <MarkdownSegmentContent key={`segment-${index}`} content={segment.content} highlightingVersion={highlightingVersion} onPreview={onPreview} />;
+                            return <MarkdownSegmentContent key={`segment-${index}`} content={segment.content} highlightingVersion={highlightingVersion} onPreview={onPreview} disableSandboxArtifactExpansion={disableSandboxArtifactExpansion} />;
                         case 'execution_code':
                             return <CodeBlock key={`segment-${index}`} code={segment.code} language={segment.language || 'python'} highlightingVersion={highlightingVersion} />;
                         case 'execution_output':
@@ -666,7 +669,7 @@ const RenderedContent = React.memo<{
     );
 });
 
-const RenderMathMarkdown: React.FC<RenderMathMarkdownProps> = React.memo(function RenderMathMarkdown({ content, className = '' }) {
+const RenderMathMarkdown: React.FC<RenderMathMarkdownProps> = React.memo(function RenderMathMarkdown({ content, className = '', disableSandboxArtifactExpansion }) {
     const [highlightingVersion, setHighlightingVersion] = useState(isHighlighterReady() ? 1 : 0);
     const [previewData, setPreviewData] = useState<ImagePreviewData | null>(null);
 
@@ -675,7 +678,7 @@ const RenderMathMarkdown: React.FC<RenderMathMarkdownProps> = React.memo(functio
 
     return (
         <div className={classes('render-math-markdown', className)}>
-            <RenderedContent segments={segments} highlightingVersion={highlightingVersion} onPreview={setPreviewData} />
+            <RenderedContent segments={segments} highlightingVersion={highlightingVersion} onPreview={setPreviewData} disableSandboxArtifactExpansion={disableSandboxArtifactExpansion} />
             <ImagePreviewModal data={previewData} onClose={() => setPreviewData(null)} />
         </div>
     );

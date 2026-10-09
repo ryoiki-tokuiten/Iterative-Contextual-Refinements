@@ -443,6 +443,9 @@ export function renderActiveDeepthinkPipeline() {
         btn.innerHTML = `${renderIconMarkup(tab.icon)}${tab.label}`;
         btn.addEventListener('click', () => {
             deepthinkProcess.activeTabId = tab.id;
+            if (tab.id === 'live') {
+                window.dispatchEvent(new CustomEvent('deepthinkLiveTabOpened'));
+            }
             renderActiveDeepthinkPipeline();
         });
         moduleState.tabsNavContainer!.appendChild(btn);

@@ -3,7 +3,7 @@ import { DeepthinkPipelineState, DeepthinkLiveEvent } from '../core/deepthinkCor
 import { Icon as MIcon } from '../../UI/Icons';
 import { ActionButton } from '../../Styles/Components/ActionButton';
 import RenderMathMarkdown from '../../Styles/Components/RenderMathMarkdown';
-import { PromptStylingEditor } from '../../Styles/Components/PromptStyling';
+
 import { updateControlsState } from '../../UI/Controls';
 import { SandboxAgentActivity } from './SandboxAgentActivity';
 import '../styles/DeepthinkLiveTab.css';
@@ -21,6 +21,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
     const [timeElapsed, setTimeElapsed] = useState('00:00');
     const [isSystemInstructionExpanded, setIsSystemInstructionExpanded] = useState(false);
     const [responseViewMode, setResponseViewMode] = useState<'submitted' | 'activity'>('submitted');
+    const [isUserSelected, setIsUserSelected] = useState(false);
     const [, setForceUpdate] = useState(0);
 
     const terminalEndRef = useRef<HTMLDivElement>(null);
@@ -32,6 +33,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
     useEffect(() => {
         setSelectedEventId(null);
         setSelectedAgentName(null);
+        setIsUserSelected(false);
     }, [process.id]);
 
     // Timer logic for execution duration
@@ -73,6 +75,15 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
         };
     }, [process.status, process.liveEvents?.length]);
 
+    // Global reset to auto-follow latest agent when Live tab is opened
+    useEffect(() => {
+        const handleLiveTabOpened = () => {
+            setIsUserSelected(false);
+        };
+        window.addEventListener('deepthinkLiveTabOpened', handleLiveTabOpened);
+        return () => window.removeEventListener('deepthinkLiveTabOpened', handleLiveTabOpened);
+    }, []);
+
     // Auto scroll logic (always auto-scroll to bottom of terminal console on new event)
     useEffect(() => {
         if (terminalEndRef.current) {
@@ -82,17 +93,16 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
 
     const events = process.liveEvents || [];
 
-    // The first displayed agent is a selection as well. Without persisting it,
-    // each pipeline update falls back to the newest event and steals focus.
+    // Follow the latest agent unless the user has explicitly selected one
     useEffect(() => {
-        if (selectedEventId || selectedAgentName) return;
+        if (isUserSelected) return;
         const lastAgentEvent = [...events].reverse().find(event => (
-            !!event.agentName && (event.eventType === 'agent_start' || event.eventType === 'agent_complete')
+            !!event.agentName && (event.eventType === 'agent_start' || event.eventType === 'agent_complete' || event.eventType === 'agent_retry' || event.eventType === 'agent_error')
         ));
         if (!lastAgentEvent) return;
         setSelectedEventId(lastAgentEvent.id);
-        setSelectedAgentName(lastAgentEvent.agentName);
-    }, [process.id, process.liveEvents?.length, selectedEventId, selectedAgentName]);
+        setSelectedAgentName(lastAgentEvent.executionId || lastAgentEvent.agentName);
+    }, [process.id, process.liveEvents?.length, isUserSelected]);
 
     // Helper to determine agent category for color mapping
     const getAgentCategory = (agentName: string, stepDescription: string): string => {
@@ -206,6 +216,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
     const selectEvent = (event: DeepthinkLiveEvent) => {
         setSelectedEventId(event.id);
         setSelectedAgentName(event.executionId || event.agentName || null);
+        setIsUserSelected(true);
     };
 
     useEffect(() => {
@@ -487,10 +498,9 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                                     </div>
                                                     {isSystemInstructionExpanded && (
                                                         <div className="system-prompt-wrapper custom-scrollbar">
-                                                            <PromptStylingEditor 
-                                                                value={selectedPromptEvent.systemInstruction}
-                                                                readOnly={true} 
-                                                                className="inspector-prompt-display"
+                                                            <RenderMathMarkdown 
+                                                                content={selectedPromptEvent.systemInstruction} 
+                                                                disableSandboxArtifactExpansion={true} 
                                                             />
                                                         </div>
                                                     )}
@@ -505,10 +515,9 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                                         </span>
                                                     </div>
                                                     <div className="prompt-editor-wrapper custom-scrollbar user-prompt-wrapper">
-                                                        <PromptStylingEditor 
-                                                            value={selectedPromptEvent.prompt}
-                                                            readOnly={true} 
-                                                            className="inspector-prompt-display"
+                                                        <RenderMathMarkdown 
+                                                            content={selectedPromptEvent.prompt} 
+                                                            disableSandboxArtifactExpansion={true} 
                                                         />
                                                     </div>
                                                     <div className="full-prompt-action" style={{ paddingTop: '0.5rem', marginTop: '0.5rem', borderTop: '1px solid var(--border-color)', display: 'flex' }}>

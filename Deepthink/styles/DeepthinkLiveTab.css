@@ -227,7 +227,6 @@
 .live-workspace {
     display: flex;
     flex: 1;
-    gap: 1rem;
     overflow: hidden;
     height: 100%;
 }
@@ -239,6 +238,7 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    border-left: 1px solid var(--border-color);
 }
 
 .agent-timeline {
@@ -262,28 +262,31 @@
     display: flex;
     gap: 1rem;
     cursor: pointer;
-    padding: 0.5rem;
-    border-radius: var(--border-radius-sm, 14px);
-    border: 1px solid transparent;
+    padding: 0.75rem;
+    border-radius: var(--border-radius-md, 14px);
+    border: 1px solid var(--border-color);
+    background: rgba(var(--card-bg-base-rgb), 0.4);
     transition: all 0.2s ease;
 }
 
 .timeline-node:hover {
-    background: rgba(var(--border-color-rgb), 0.03);
+    background: rgba(var(--card-bg-base-rgb), 0.7);
+    border-color: rgba(var(--text-secondary-rgb), 0.4);
 }
 
 .timeline-node.active {
     background: rgba(var(--agent-color-rgb), 0.08);
-    border: 1px solid rgba(var(--agent-color-rgb), 0.25);
+    border: 1px solid rgba(var(--agent-color-rgb), 0.4);
+    box-shadow: 0 4px 12px rgba(var(--agent-color-rgb), 0.15);
 }
 
 .node-connector-line {
     position: absolute;
-    left: 17px;
-    top: 30px;
-    bottom: -30px;
+    left: 23px;
+    top: 36px;
+    bottom: -36px;
     width: 2px;
-    background: rgba(var(--border-color-rgb), 0.08);
+    background: rgba(var(--border-color-rgb), 0.25);
     z-index: 1;
 }
 
@@ -854,22 +857,26 @@
 
 .console-tab-button {
     position: relative;
-    padding: 0.15rem 0.5rem;
-    border-radius: 12px;
-    border: 1px solid transparent;
-    font-size: 0.65rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: var(--button-height-sm, 32px);
+    padding: 0 0.85rem;
+    border-radius: var(--border-radius-md, 8px);
+    border: 1px solid var(--border-color);
+    font-size: 0.75rem;
     font-weight: 600;
     letter-spacing: 0.03em;
     text-transform: none;
-    background: transparent;
+    background: rgba(var(--card-bg-base-rgb), 0.4);
+    color: var(--text-secondary-color);
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.console-tab-button.active {
-    background: rgba(var(--accent-blue-rgb, 0, 210, 255), 0.14);
-    color: var(--accent-blue, #00d2ff);
-    border-color: rgba(var(--accent-blue-rgb, 0, 210, 255), 0.45);
+.console-tab-button:hover:not(.active) {
+    background: rgba(var(--card-bg-base-rgb), 0.7);
+    color: var(--text-color);
 }
 
 /* Variant tokens keep the base, active, and hover states in one place. */
@@ -893,30 +900,14 @@
     --console-tab-color: var(--accent-pink, #ff1744);
 }
 
-.console-tab-button.tab-all,
-.console-tab-button.tab-agents,
-.console-tab-button.tab-info,
-.console-tab-button.tab-errors {
-    background: rgba(var(--console-tab-rgb), 0.08);
-    color: var(--console-tab-color);
-    border-color: rgba(var(--console-tab-rgb), 0.1);
-}
-
 .console-tab-button.tab-all.active,
 .console-tab-button.tab-agents.active,
 .console-tab-button.tab-info.active,
 .console-tab-button.tab-errors.active {
-    border-color: rgba(var(--console-tab-rgb), 0.5);
-    box-shadow: 0 0 6px rgba(var(--console-tab-rgb), 0.2),
-        0 0 2px rgba(var(--console-tab-rgb), 0.3) inset;
-}
-
-.console-tab-button.tab-all:hover:not(.active),
-.console-tab-button.tab-agents:hover:not(.active),
-.console-tab-button.tab-info:hover:not(.active),
-.console-tab-button.tab-errors:hover:not(.active) {
-    background: rgba(var(--console-tab-rgb), 0.18);
-    border-color: rgba(var(--console-tab-rgb), 0.35);
+    background: rgba(var(--console-tab-rgb), 0.1);
+    color: var(--console-tab-color);
+    border-color: var(--console-tab-color);
+    box-shadow: 0 0 12px rgba(var(--console-tab-rgb), 0.15);
 }
 
 .search-box {
@@ -933,20 +924,23 @@
 }
 
 .search-input {
-    background: rgba(var(--border-color-rgb), 0.04);
+    background: rgba(var(--card-bg-base-rgb), 0.3);
     border: 1px solid var(--border-color);
-    border-radius: var(--border-radius-sm, 14px);
+    border-radius: var(--border-radius-md, 8px);
     color: var(--text-color, #e0e0e0);
     font-size: 0.75rem;
-    padding: 0.2rem 0.5rem 0.2rem 1.8rem;
-    width: 130px;
+    padding: 0 0.5rem 0 2rem;
+    height: var(--button-height-sm, 32px);
+    width: 150px;
+    box-sizing: border-box;
     transition: all 0.2s ease;
 }
 
 .search-input:focus {
-    width: 170px;
+    width: 200px;
     border-color: var(--accent-blue, #00d2ff);
     outline: none;
+    background: rgba(var(--card-bg-base-rgb), 0.6);
 }
 
 .terminal-body {

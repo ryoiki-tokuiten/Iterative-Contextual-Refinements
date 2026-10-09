@@ -1,61 +1,46 @@
 :root {
-    /* Core Palette - Futuristic Dark Theme ("Aurora") */
-    --bg-color: #050608;
-    /* Rich, near-black for depth */
-    --bg-color-rgb: 5, 6, 8;
-    --card-bg-base-rgb: 15, 17, 32;
-    /* Deep blue/purple base for cards */
-    --app-background-gradient: linear-gradient(180deg,
-            rgb(4, 5, 7) 0%,
-            rgb(2, 3, 4) 50%,
-            rgb(1, 1, 2) 100%);
+    /* Core Palette - Professional Clean Theme */
+    --bg-color: #090909;
+    --bg-color-rgb: 9, 9, 9;
+    --card-bg-base-rgb: 9, 9, 9;
 
-    /* Unified Glassmorphism Card Style */
-    --card-bg-color: rgba(var(--card-bg-base-rgb), 0.3);
-    --card-bg-hover-color: rgba(var(--card-bg-base-rgb), 0.4);
-    --card-blur-effect: blur(25px) saturate(1.5);
-    /* Exact blur effect — matched from design reference */
+    /* Unified Card Style */
+    --card-bg-color: #090909;
+    --card-bg-hover-color: #121212;
+    --card-blur-effect: none;
 
-    /* Borders & Outlines - Glow-based */
-    --border-color: rgba(100, 110, 220, 0.25);
-    /* Subtle, cool border - Increased visibility */
-    --border-color-rgb: 100, 110, 220;
-    --border-hover-color: rgba(120, 130, 240, 0.45);
-    /* Brighter on hover */
-    --glow-color: rgba(160, 170, 255, 0.5);
-    /* For subtle glows */
-    --glow-color-rgb: 160, 170, 255;
+    /* Borders & Outlines - Prominent Contrast */
+    --border-color: rgba(255, 255, 255, 0.18);
+    --border-color-rgb: 255, 255, 255;
+    --border-hover-color: rgba(255, 255, 255, 0.28);
+    --glow-color: transparent;
+    --glow-color-rgb: 0, 0, 0;
 
     /* Typography */
-    --text-color: #EAEBF5;
-    /* Off-white for readability */
-    --text-secondary-color: #A0A8C8;
-    /* For subtitles and secondary info */
-    --text-tertiary-color: #707A95;
-    /* For less important details */
+    --text-color: #fcfcfc;
+    --text-secondary-color: #a0a0a0;
+    --text-tertiary-color: #707070;
 
-    /* Accents - Vibrant & Purposeful */
-    --accent-pink: #FF4081;
-    --accent-pink-rgb: 255, 64, 129;
-    --accent-green: #00E676;
-    --accent-green-rgb: 0, 230, 118;
-    /* silent version */
-    --accent-yellow: #FFC400;
-    --accent-yellow-rgb: 255, 196, 0;
-    --accent-purple: #AE52F5;
-    --accent-purple-rgb: 174, 82, 245;
-    --accent-blue: #2979FF;
-    --accent-blue-rgb: 41, 100, 205;
-    --accent-silent-blue-rgb: 41, 110, 200;
-    --accent-silent-green: #58B386;
-    --accent-silent-green-rgb: 0, 100, 118;
+    /* Accents - Exact Palette */
+    --accent-pink: #e02e2a;
+    --accent-pink-rgb: 224, 46, 42;
+    --accent-green: #00a240;
+    --accent-green-rgb: 0, 162, 64;
+    --accent-yellow: #d9a000;
+    --accent-yellow-rgb: 217, 160, 0;
+    --accent-purple: #b06dff;
+    --accent-purple-rgb: 176, 109, 255;
+    --accent-blue: #0169cc;
+    --accent-blue-rgb: 1, 105, 204;
+    --accent-silent-blue-rgb: 1, 105, 204;
+    --accent-silent-green: #008f39;
+    --accent-silent-green-rgb: 0, 143, 57;
 
     /* Semantic States & Focus */
-    --focus-ring-color: rgba(var(--accent-blue-rgb), 0.5);
+    --focus-ring-color: rgba(1, 105, 204, 0.5);
 
     /* UI Elements */
-    --slider-track-color: rgba(255, 255, 255, 0.1);
-
+    --slider-track-color: rgba(255, 255, 255, 0.15);
 
     /* === PROFESSIONAL SPACING SYSTEM === */
     /* 8pt/4pt Grid System - Base spacing unit: 4px (0.25rem) */
@@ -103,8 +88,8 @@
 
     /* === TYPOGRAPHY SYSTEM === */
     /* Font Family */
-    --font-family: 'Google Sans', 'Google Sans Flex', sans-serif;
-    --font-family-mono: 'JetBrains Mono', monospace;
+    --font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-family-mono: 'SFMono Nerd Font Bold', 'SF Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     --font-mono: var(--font-family-mono);
 
     /* Type Scale - Perfect Fourth (1.333) ratio for harmony */
@@ -153,14 +138,12 @@
     --border-radius-sm: 14px;
     --border-radius-md: 24px;
     --border-radius-lg: 32px;
-    --shadow-sm: 0 3px 6px rgba(var(--bg-color-rgb), 0.12);
-    --shadow-md: 0 6px 12px rgba(var(--bg-color-rgb), 0.15);
-    --shadow-lg: 0 10px 20px rgba(var(--bg-color-rgb), 0.18),
-        0 3px 6px rgba(var(--bg-color-rgb), 0.1);
-    --shadow-xl: 0 20px 40px rgba(var(--bg-color-rgb), 0.22),
-        0 5px 15px rgba(var(--bg-color-rgb), 0.12);
-    --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.1);
-    --shadow-inset-strong: inset 0 2px 5px rgba(0, 0, 0, 0.15);
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.2);
+    --shadow-xl: 0 16px 32px rgba(0, 0, 0, 0.3);
+    --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.2);
+    --shadow-inset-strong: inset 0 2px 5px rgba(0, 0, 0, 0.3);
 
     /* === COMPONENT SIZING SYSTEM === */
     /* Button Heights - Consistent across all button types */
@@ -206,98 +189,74 @@
     /* Fully rounded */
 
     /* Sub-panel specific aesthetics for internal elements */
-    --sub-panel-bg-color: rgba(8, 10, 14, 0.3);
-    --sub-panel-border-color: rgba(var(--border-color-rgb), 0.25);
+    --sub-panel-bg-color: #090909;
+    --sub-panel-border-color: rgba(255, 255, 255, 0.18);
     /* === Z-INDEX LAYERS === */
     --z-index-dropdown: 1000;
     --z-index-modal: 10000;
 }
 
-/* Light Mode Theme - Anthropic-inspired minimal aesthetic */
-/* Light Mode Theme - Premium "Lumina" Aesthetic */
+/* Light Mode Theme - Professional Clean */
 body.light-mode {
-    /* Core Palette - Sophisticated Warm/Cool Balance */
-    --bg-color: #FAFAF9;
-    /* Warm Gray 50 - Premium Paper feel */
-    --bg-color-rgb: 250, 250, 249;
+    /* Core Palette */
+    --bg-color: #ffffff;
+    --bg-color-rgb: 255, 255, 255;
     --card-bg-base-rgb: 255, 255, 255;
 
-    /* Ambient Lighting Gradient - Dynamic and Alive */
-    --app-background-gradient: radial-gradient(circle at 50% 0%,
-            rgba(255, 255, 255, 0.8) 0%,
-            rgba(250, 250, 249, 1) 100%);
+    /* Glassmorphism Card Style */
+    --card-bg-color: #ffffff;
+    --card-bg-hover-color: #f5f5f5;
+    --card-blur-effect: none;
 
-    /* Glassmorphism Card Style - High-End Frost */
-    --card-bg-color: rgba(255, 255, 255, 0.65);
-    --card-bg-hover-color: rgba(255, 255, 255, 0.85);
-    --card-blur-effect: blur(25px) saturate(1.5);
-    /* Exact blur effect — matched from design reference */
-
-    /* Borders & Outlines - Delicate and Refined */
+    /* Borders & Outlines */
     --border-color: rgba(0, 0, 0, 0.15);
-    /* Warm Gray 900 at 15% - Significantly increased visibility */
     --border-color-rgb: 0, 0, 0;
     --border-hover-color: rgba(0, 0, 0, 0.25);
-    --glow-color: rgba(14, 165, 233, 0.15);
-    /* Sky Blue Glow */
-    --glow-color-rgb: 14, 165, 233;
+    --glow-color: transparent;
+    --glow-color-rgb: 0, 0, 0;
 
-    /* Typography - Authoritative & Elegant */
-    --text-color: #1C1917;
-    /* Warm Gray 900 - Soft Black */
-    --text-secondary-color: #57534E;
-    /* Warm Gray 600 */
-    --text-tertiary-color: #A8A29E;
-    /* Warm Gray 400 */
+    /* Typography */
+    --text-color: #0d0d0d;
+    --text-secondary-color: #555555;
+    --text-tertiary-color: #888888;
 
-    /* Accents - Vibrant, Jewel-like Tones */
-    --accent-pink: #EC4899;
-    /* Pink 500 */
-    --accent-pink-rgb: 236, 72, 153;
-    --accent-green: #10B981;
-    /* Emerald 500 */
-    --accent-green-rgb: 16, 185, 129;
-    --accent-yellow: #F59E0B;
-    /* Amber 500 */
-    --accent-yellow-rgb: 245, 158, 11;
-    --accent-purple: #8B5CF6;
-    /* Violet 500 */
-    --accent-purple-rgb: 139, 92, 246;
-    --accent-blue: #3B82F6;
-    /* Blue 500 */
-    --accent-blue-rgb: 59, 130, 246;
-    --accent-silent-blue-rgb: 59, 130, 246;
-    --accent-silent-green: #059669;
-    /* Emerald 600 */
-    --accent-silent-green-rgb: 5, 150, 105;
+    /* Accents - Exact Palette */
+    --accent-pink: #e02e2a;
+    --accent-pink-rgb: 224, 46, 42;
+    --accent-green: #00a240;
+    --accent-green-rgb: 0, 162, 64;
+    --accent-yellow: #d9a000;
+    --accent-yellow-rgb: 217, 160, 0;
+    --accent-purple: #751ed9;
+    --accent-purple-rgb: 117, 30, 217;
+    --accent-blue: #0169cc;
+    --accent-blue-rgb: 1, 105, 204;
+    --accent-silent-blue-rgb: 1, 105, 204;
+    --accent-silent-green: #008f39;
+    --accent-silent-green-rgb: 0, 143, 57;
 
-    /* Semantic States - Clear & Modern */
-    --focus-ring-color: rgba(59, 130, 246, 0.4);
+    /* Semantic States */
+    --focus-ring-color: rgba(1, 105, 204, 0.4);
     /* UI Elements */
-    --slider-track-color: rgba(0, 0, 0, 0.1);
+    --slider-track-color: rgba(0, 0, 0, 0.12);
 
-    /* Shadows - Luxurious Depth */
-    --shadow-sm: 0 2px 4px rgba(28, 25, 23, 0.04);
-    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    --shadow-inset: inset 0 2px 4px rgba(0, 0, 0, 0.02);
-    --shadow-inset-strong: inset 0 2px 6px rgba(0, 0, 0, 0.06);
+    /* Shadows */
+    --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08);
+    --shadow-inset: inset 0 2px 4px rgba(0, 0, 0, 0.04);
+    --shadow-inset-strong: inset 0 2px 6px rgba(0, 0, 0, 0.08);
 
-    /* Sub-panel specific - Layered Glass */
-    --sub-panel-bg-color: rgba(255, 255, 255, 0.5);
-    --sub-panel-border-color: rgba(0, 0, 0, 0.2);
+    /* Sub-panel specific */
+    --sub-panel-bg-color: #ffffff;
+    --sub-panel-border-color: rgba(0, 0, 0, 0.15);
 }
 
 /* Light mode gradient background adjustments - Subtle and clean */
-/* Light mode gradient background - Premium Ambient Light */
 body.light-mode .background-gradient {
-    background:
-        radial-gradient(circle at 15% 50%, rgba(139, 92, 246, 0.08) 0%, transparent 50%),
-        radial-gradient(circle at 85% 30%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
-        radial-gradient(circle at 50% 0%, rgba(236, 72, 153, 0.05) 0%, transparent 50%),
-        linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.8) 100%);
-    filter: blur(60px);
+    background: none;
+    filter: none;
     opacity: 1;
 }
 
@@ -372,10 +331,6 @@ body {
 
 body {
     background-color: var(--bg-color);
-    background-image: var(--app-background-gradient);
-    background-repeat: no-repeat;
-    background-attachment: fixed;
-    background-size: cover;
     color: var(--text-color);
     font-family: var(--font-family);
     line-height: var(--line-height-base);
@@ -408,7 +363,7 @@ select {
     left: 0;
     width: 100%;
     height: 100%;
-    background: var(--app-background-gradient);
+    background-color: var(--bg-color);
     z-index: 10000;
     display: flex;
     justify-content: center;
@@ -439,35 +394,15 @@ select {
 }
 
 .background-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: -1;
-    overflow: hidden;
-    background: var(--app-background-gradient);
+    display: none;
 }
 
 .background-gradient {
-    /* Subtle ambient gradient overlay */
-    position: fixed;
-    inset: 0;
-    background: radial-gradient(ellipse 120% 100% at 50% 0%,
-            rgba(10, 12, 20, 0.3) 0%,
-            rgba(2, 3, 4, 0) 50%,
-            rgba(1, 1, 2, 0.15) 100%);
-    pointer-events: none;
-    z-index: -2;
+    display: none;
 }
 
 .background-noise {
-    position: fixed;
-    inset: 0;
-    background: transparent url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(%23n)"/></svg>') 0% 0% / 400px 400px;
-    opacity: 0.015;
-    pointer-events: none;
-    z-index: -1;
+    display: none;
 }
 
 /* Removed noise-pan animation for smoother, static appearance */

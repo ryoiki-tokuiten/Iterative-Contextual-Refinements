@@ -453,7 +453,7 @@ function getDirectContextSandboxFiles(seedFiles: SeedFile[]): SeedFile[] {
         return {
             ...file,
             name,
-            relativePath: `direct_context/${name}`,
+            relativePath: `user_uploaded/${name}`,
         };
     });
 }
@@ -630,7 +630,7 @@ function buildRepositoryFilesystemRules(access: SandboxRepositoryAccess): string
             : writableDirectory
             ? `- You may create, modify, and delete repository files only under /workspace/${writableDirectory}.`
             : '- You may not create, modify, or delete repository files or directories. Do not mistake /tmp scratch files for shared repository artifacts.',
-        '- Original direct-context files are mounted read-only at /workspace/direct_context; additional filesystem uploads are mounted read-only at /workspace/user_uploaded.',
+        '- All direct-context files and additional filesystem uploads are mounted read-only at /workspace/user_uploaded.',
         readableScope,
         hiddenScope,
         fullRepositoryWrite
@@ -654,7 +654,7 @@ function buildSystemPrompt(
     environmentProfile: SandboxEnvironmentProfile | null
 ): string {
     const directFileText = directFiles.length > 0
-        ? directFiles.map(file => `- /workspace/direct_context/${file.name} (${file.mimeType})`).join('\n')
+        ? directFiles.map(file => `- /workspace/user_uploaded/${file.name} (${file.mimeType})`).join('\n')
         : 'No direct-context files were uploaded.';
     const filesystemFileText = filesystemFiles.length > 0
         ? filesystemFiles.map(file => `- /workspace/${file.relativePath || file.name} (${file.mimeType})`).join('\n')
@@ -729,7 +729,7 @@ function buildSystemPrompt(
         '- Prefer relative paths or /workspace paths for persistent files.',
         '- The host filesystem outside your sandbox workspace is not mounted. Do not rely on files outside /workspace.',
         '- /tmp is also backed by your workspace for temporary command use.',
-        '- Direct-context files are supplied in the initial model message and are also mounted read-only under /workspace/direct_context for sandbox processing.',
+        '- Direct-context files are supplied in the initial model message and are also mounted read-only under /workspace/user_uploaded for sandbox processing.',
         '- Additional user uploads are mounted read-only under /workspace/user_uploaded.',
         '- Generated or modified image files with png, jpg, jpeg, gif, webp, bmp, tif, or tiff extensions are returned to you as native image inputs.',
         '- If you need to visually inspect an existing image file (e.g. from user_uploaded or generated in a previous turn), you can run the `view <filename>` or `open <filename>` command. This attaches the image natively to your next turn.',
@@ -748,7 +748,7 @@ function buildSystemPrompt(
         '',
         'Additional user-uploaded filesystem files:',
         filesystemFileText,
-        directFiles.length ? 'Direct-context files are relevant to the current task. Inspect /workspace/direct_context as needed when terminal processing would help.' : '',
+        directFiles.length ? 'Direct-context files are relevant to the current task. Inspect /workspace/user_uploaded as needed when terminal processing would help.' : '',
         filesystemFiles.length ? 'These additional user-uploaded files are relevant to the current task. Inspect /workspace/user_uploaded as needed before drawing conclusions.' : '',
         '',
         'The sandbox includes standard Linux shell utilities and whatever runtimes, packages, and command-line tools are available in the configured environment. If something is unavailable, report that directly and continue with available tools.',

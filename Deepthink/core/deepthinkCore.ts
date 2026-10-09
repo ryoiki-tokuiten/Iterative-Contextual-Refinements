@@ -15,6 +15,7 @@ import {
     PipelineStopRequestedError as OrchestratorStopRequestedError,
     extractJsonString,
 } from './pipelineOrchestrator';
+import { parsePromptToGeminiParts } from './contextBuilders';
 import type {
     DeepthinkRunConfig,
     BsrGlobalUpdateRecord,
@@ -274,13 +275,41 @@ export function setActiveDeepthinkPipelineForImport(pipeline: DeepthinkPipelineS
     if (setActiveDeepthinkPipeline) setActiveDeepthinkPipeline(pipeline);
 }
 
-export async function startDeepthinkAnalysisProcess(challengeText: string) {
+export async function startDeepthinkAnalysisProcess(challengeText: string, directContextFiles: any[] = []) {
     const runConfig = captureRunConfig();
     const customPrompts = deps.getCustomPromptsDeepthinkState();
 
+    let fullChallengeText = challengeText;
+
+    if (directContextFiles.length > 0) {
+        const textFiles = directContextFiles.filter(file => file.mimeType.startsWith('text/') || file.mimeType === 'application/json');
+        const imageFiles = directContextFiles.filter(file => file.mimeType.startsWith('image/'));
+
+        if (textFiles.length > 0) {
+            const decoder = new TextDecoder();
+            const contents = textFiles.map(file => {
+                try {
+                    const binary = atob(file.base64);
+                    const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
+                    return `\n\n--- ${file.name || 'uploaded text file'} ---\n${decoder.decode(bytes)}\n--- end file ---`;
+                } catch {
+                    return `\n\n--- ${file.name || 'uploaded text file'} ---\n[Unable to decode file]\n--- end file ---`;
+                }
+            });
+            fullChallengeText += `\n\nDirect context files:${contents.join('')}`;
+        }
+
+        if (imageFiles.length > 0) {
+            const imageBlocks = imageFiles.map(file =>
+                `<!-- EXECUTION_IMAGE_START -->\n<!-- MIME_TYPE: ${file.mimeType} -->\n${file.base64}\n<!-- EXECUTION_IMAGE_END -->`
+            );
+            fullChallengeText += `\n\n${imageBlocks.join('\n\n')}`;
+        }
+    }
+
     activeDeepthinkPipeline = {
         id: `deepthink-${nanoid(12)}`,
-        challenge: challengeText,
+        challenge: fullChallengeText,
         status: 'processing',
         activeTabId: 'live',
         activeStrategyTab: 0,
@@ -312,7 +341,7 @@ export async function startDeepthinkAnalysisProcess(challengeText: string) {
 
     const orchestrator = new DeepthinkPipelineOrchestrator(activeDeepthinkPipeline as any, {
         callAI: async (args) => {
-            const parts = [{ text: args.prompt }] as any;
+            const parts = parsePromptToGeminiParts(args.prompt) as any;
             const response = await deps.callAI(
                 parts,
                 args.model,
@@ -334,20 +363,19 @@ export async function startDeepthinkAnalysisProcess(challengeText: string) {
         },
     });
 
-    const pipeline = activeDeepthinkPipeline!;
-    try {
-        await orchestrator.run();
-        pipeline.status = 'completed';
-    } catch (error: any) {
-        if (error instanceof PipelineStopRequestedError || error instanceof OrchestratorStopRequestedError || error.name === 'PipelineStopRequestedError') {
-            pipeline.status = 'stopped';
-        } else {
-            pipeline.status = 'error';
-            pipeline.error = error.message || String(error);
-        }
-    } finally {
-        deps.updateControlsState({ isGenerating: false });
-        render();
+const pipeline = activeDeepthinkPipeline!;
+try {
+    await orchestrator.run();
+    pipeline.status = 'completed';
+} catch (error: any) {
+    if (error instanceof PipelineStopRequestedError || error instanceof OrchestratorStopRequestedError || error.name === 'PipelineStopRequestedError') {
+        pipeline.status = 'stopped';
+    } else {
+        pipeline.status = 'error';
+        pipeline.error = error.message || String(error);
     }
+} finally {
+    deps.updateControlsState({ isGenerating: false });
+    render();
 }
-
+}

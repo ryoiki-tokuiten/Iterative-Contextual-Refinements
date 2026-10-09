@@ -91,7 +91,7 @@ export class App {
         if (globalState.currentMode === 'deepthink') {
             console.log('Starting Deepthink process');
             const deepthink = await ensureDeepthinkInitialized();
-            await deepthink.startDeepthinkAnalysisProcess(initialIdea);
+            await deepthink.startDeepthinkAnalysisProcess(initialIdea, globalState.directContextFiles);
         } else if (globalState.currentMode === 'contextual') {
             const contextual = await ensureContextualInitialized();
             await contextual.startContextualProcess(initialIdea, globalState.customPromptsContextualState);

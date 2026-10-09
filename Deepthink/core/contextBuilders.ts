@@ -7,6 +7,7 @@
  * is the absolute source of truth (§4, §5, §6.7, §7).
  */
 
+import { Part } from "@google/genai";
 import type {
   BsrAction,
   BsrEvolveForm,
@@ -116,6 +117,7 @@ export function buildContextForStrategyGlobalUpdate(
 // ============================================================================
 
 export function buildContextForHypothesisGenerate(
+  challenge: string,
   heartbeatNo: number,
   activeStrategies: DeepthinkMainStrategyData[],
   dosOutput?: DosOutput,
@@ -124,6 +126,9 @@ export function buildContextForHypothesisGenerate(
   proximityHistoryText?: string
 ): string {
   const parts: string[] = [
+    `# Core Challenge`,
+    challenge,
+    '',
     `# Hypothesis Generation Context for Heartbeat ${heartbeatNo}`,
   ];
 
@@ -171,6 +176,7 @@ export function buildContextForHypothesisGenerate(
 // ============================================================================
 
 export function buildContextForDos(
+  challenge: string,
   kind: 'heartbeat' | 'step_i' | 'step_ii',
   activeBranches: Array<{
     branchId: string;
@@ -195,6 +201,9 @@ export function buildContextForDos(
 
   if (kind === 'step_i') {
     return [
+      `# Core Challenge`,
+      challenge,
+      '',
       `# Dissected Observations Synthesis - Global Update (Step-i)`,
       fence('HarnessNote', DOS_STEP_I_NOTE),
       '',
@@ -208,6 +217,9 @@ export function buildContextForDos(
     )).join('\n\n') || 'None.';
 
     return [
+      `# Core Challenge`,
+      challenge,
+      '',
       `# Dissected Observations Synthesis - Heartbeat DOS`,
       fence('HarnessNote', DOS_HEARTBEAT_NOTE),
       '',
@@ -224,6 +236,9 @@ export function buildContextForDos(
   )).join('\n\n') || 'None.';
 
   return [
+    `# Core Challenge`,
+    challenge,
+    '',
     `# Dissected Observations Synthesis - Global Update (Step-ii)`,
     fence('HarnessNote', note),
     '',
@@ -302,6 +317,7 @@ export function buildCrossStrategyLatestPools(
 }
 
 export function buildContextForCorrectionAgent(
+  challenge: string,
   branchId: string,
   strategyText: string,
   historyObject: string,
@@ -309,6 +325,9 @@ export function buildContextForCorrectionAgent(
   crossStrategyContext: string | null
 ): string {
   const parts: string[] = [
+    `# Core Challenge`,
+    challenge,
+    '',
     `Assigned Strategy ID: ${branchId}`,
     `Assigned Strategy Text: ${strategyText}`,
     '',
@@ -327,12 +346,16 @@ export function buildContextForCorrectionAgent(
 }
 
 export function buildContextForCritiqueAgent(
+  challenge: string,
   branchId: string,
   strategyText: string,
   historyObject: string,
   latestCorrectionContent: string
 ): string {
   return [
+    `# Core Challenge`,
+    challenge,
+    '',
     `Assigned Strategy ID: ${branchId}`,
     `Assigned Strategy Text: ${strategyText}`,
     '',
@@ -347,6 +370,7 @@ export function buildContextForCritiqueAgent(
 // ============================================================================
 
 export function buildContextForSolutionPool(
+  challenge: string,
   branchId: string,
   strategyText: string,
   latestCorrection: string,
@@ -356,6 +380,9 @@ export function buildContextForSolutionPool(
   mappedHypothesisPacket: string | null
 ): string {
   const parts: string[] = [
+    `# Core Challenge`,
+    challenge,
+    '',
     `Assigned Strategy ID: ${branchId}`,
     `Assigned Strategy Text: ${strategyText}`,
     '',
@@ -387,6 +414,7 @@ export function buildContextForSolutionPool(
 // ============================================================================
 
 export function buildContextForBsr(
+  challenge: string,
   branchId: string,
   strategyText: string,
   windowHistoryText: string,
@@ -408,6 +436,9 @@ export function buildContextForBsr(
     : 'No earlier predictions graded yet.';
 
   return [
+    `# Core Challenge`,
+    challenge,
+    '',
     `Branch ID: ${branchId}`,
     `Current Strategy: ${strategyText}`,
     '',
@@ -445,4 +476,22 @@ export function buildContextForFinalJudge(
     `# Competing Candidate Solutions`,
     formattedCandidates,
   ].join('\n\n');
+}
+
+export function parsePromptToGeminiParts(promptText: string): Part[] {
+    const parts: Part[] = [];
+    const regex = /<!-- EXECUTION_IMAGE_START -->\s*<!-- MIME_TYPE:\s*([^\s]+)\s*-->\s*([\s\S]*?)<!-- EXECUTION_IMAGE_END -->/g;
+    let lastIndex = 0;
+    let match;
+    while ((match = regex.exec(promptText)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push({ text: promptText.substring(lastIndex, match.index) });
+        }
+        parts.push({ inlineData: { mimeType: match[1], data: match[2].trim() } });
+        lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < promptText.length) {
+        parts.push({ text: promptText.substring(lastIndex) });
+    }
+    return parts;
 }

@@ -49,11 +49,12 @@
 /* Base Deepthink Tab Style - Normalized */
 .tab-button.deepthink-mode-tab {
     position: relative;
-    padding: var(--space-3) var(--spacing-section-sm);
+    padding: 0.5rem 0.85rem;
     border-radius: var(--border-radius-md);
     border: 1px solid transparent;
 
-    font-size: var(--font-size-sm);
+    font-size: 0.85rem;
+    gap: 0.45rem;
     font-weight: var(--font-weight-medium);
     letter-spacing: var(--letter-spacing-wide);
     text-transform: none;
@@ -73,8 +74,8 @@
 
 /* Deepthink Tab Icons */
 .tab-button.deepthink-mode-tab .icon-slot {
-    font-size: 1.2rem;
-    margin-right: 0.75rem;
+    font-size: 1.05rem;
+    margin-right: 0.15rem;
     opacity: 0.75;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
     transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),

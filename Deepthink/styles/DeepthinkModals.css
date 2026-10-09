@@ -58,13 +58,10 @@
     height: 100vh;
     padding: 0;
 
-    background: linear-gradient(145deg, rgba(var(--card-bg-base-rgb), 0.7), rgba(var(--bg-color-rgb), 0.6));
+    background: var(--bg-color);
     border: none;
     border-radius: 0;
     box-shadow: var(--shadow-xl);
-
-    backdrop-filter: var(--card-blur-effect);
-    -webkit-backdrop-filter: var(--card-blur-effect);
 
     transform: scale(0.98) translateY(10px);
     transition: transform var(--transition-speed-slow) cubic-bezier(0.16, 1.2, 0.3, 1),
@@ -83,7 +80,7 @@
     justify-content: space-between;
     align-items: center;
     padding: 1.5rem;
-    background: rgba(var(--bg-color-rgb), 0.5);
+    background: var(--bg-color);
     border-bottom: 1px solid var(--border-color);
 }
 
@@ -128,10 +125,7 @@
     z-index: 10000;
     display: flex;
 
-    background: rgba(var(--bg-color-rgb), 0.75);
-    backdrop-filter: var(--card-blur-effect);
-    -webkit-backdrop-filter: var(--card-blur-effect);
-
+    background: var(--bg-color);
     opacity: 0;
     transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -153,11 +147,8 @@
     width: 100% !important;
     padding: 1rem 2rem !important;
 
-    background: rgba(var(--bg-color-rgb), 0.85) !important;
-    backdrop-filter: var(--card-blur-effect);
-    -webkit-backdrop-filter: var(--card-blur-effect);
-
-    border-bottom: 1px solid rgba(var(--border-color-rgb), 0.15) !important;
+    background: var(--bg-color) !important;
+    border-bottom: 1px solid var(--border-color) !important;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
     z-index: 10;
     box-sizing: border-box !important;
@@ -216,13 +207,12 @@
     border: 1px solid var(--border-color);
     border-radius: 28px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    backdrop-filter: var(--card-blur-effect);
 
     animation: slideUp 0.3s ease;
 }
 
 .embedded-modal-content .modal-header {
-    background: rgba(var(--card-bg-base-rgb), 0.5);
+    background: var(--card-bg-color);
     padding: 1rem 1.5rem;
     display: flex !important;
 }
@@ -393,7 +383,7 @@
     width: 100%;
     min-width: 0;
     padding: 1rem;
-    border: 1px solid rgba(var(--border-color-rgb), 0.72);
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     background: rgba(var(--card-bg-base-rgb), 0.42);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);

@@ -4,28 +4,16 @@ import { ApplicationMode } from '../../../Core/Types';
 import { updateUIAfterModeChange } from '../../../Core/AppRouter';
 
 const MODE_DETAILS: Record<ApplicationMode, {
-    title: string;
     buttonLabel: string;
-    tags: string[];
-    description: string;
 }> = {
     'deepthink': {
-        title: 'Deepthink',
         buttonLabel: 'Deepthink',
-        tags: ['Highest Quality', 'Highest Compute', 'Parallel Branches', 'Curated Context'],
-        description: 'Parallel branches with lockstep iteration barriers, curated-context heartbeats, Branch State Representation (BSR), and Dissected Observations Synthesis (DOS).'
     },
     'adaptive-deepthink': {
-        title: 'Adaptive Deepthink',
         buttonLabel: 'Adaptive Deepthink',
-        tags: ['High Quality', 'Medium Compute', 'Orchestrator-Guided-Search'],
-        description: 'An orchestrator-directed Deepthink workflow with dynamic strategy generation, hypothesis testing, and branch execution.'
     },
     'contextual': {
-        title: 'Contextual (Structured Noise + Memory)',
         buttonLabel: 'Iterative Corrections',
-        tags: ['Highest Quality (might be biased sometimes)', 'Highest Compute Budget', 'Depth-First-Search', 'Memory Bank Support'],
-        description: 'Can work autonomously for hours.'
     }
 };
 
@@ -46,27 +34,6 @@ const AppModeSelector: React.FC = () => {
         updateUIAfterModeChange();
     };
 
-    const previewMode = currentMode;
-    const previewDetails = MODE_DETAILS[previewMode] || MODE_DETAILS['deepthink'];
-
-    // Helper to get tag class based on text
-    const getTagClass = (tag: string) => {
-        const lower = tag.toLowerCase();
-        if (lower.includes('highest quality')) return 'tag-quality-highest';
-        if (lower.includes('high quality')) return 'tag-quality-high';
-        if (lower.includes('medium quality')) return 'tag-quality-medium';
-        if (lower.includes('low quality')) return 'tag-quality-low';
-
-        if (lower.includes('highest compute') || lower.includes('highest compute budget')) return 'tag-compute-highest';
-        if (lower.includes('medium compute')) return 'tag-compute-medium';
-        if (lower.includes('low compute')) return 'tag-compute-low';
-
-        if (lower.includes('search')) return 'tag-search';
-        if (lower.includes('memory bank')) return 'tag-feature-memory';
-        if (lower.includes('no critique')) return 'tag-feature-nocritique';
-
-        return 'tag-default';
-    };
 
     const renderGridItem = (mode: ApplicationMode) => {
         const details = MODE_DETAILS[mode];
@@ -96,23 +63,6 @@ const AppModeSelector: React.FC = () => {
                     <div className="app-mode-section-label">Application Mode</div>
                     <div className="mode-grid">
                         {(['deepthink', 'adaptive-deepthink', 'contextual'] as ApplicationMode[]).map(renderGridItem)}
-                    </div>
-                </div>
-
-                {/* Unified Premium Detail Card */}
-                <div className="mode-details-card">
-                    <div className="mode-details-header">
-                        <div className="mode-details-title">{previewDetails.title}</div>
-                    </div>
-                    <div className="mode-details-tags">
-                        {previewDetails.tags.map((tag) => (
-                            <span key={tag} className={`mode-detail-tag ${getTagClass(tag)}`}>
-                                {tag}
-                            </span>
-                        ))}
-                    </div>
-                    <div className="mode-details-description">
-                        {previewDetails.description}
                     </div>
                 </div>
             </div>

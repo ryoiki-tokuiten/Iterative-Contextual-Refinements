@@ -93,7 +93,12 @@ const DeepthinkEmbeddedPanel: React.FC<{ state: AdaptiveDeepthinkStoreState }> =
                             key={tab.id}
                             id={`deepthink-tab-${tab.id}`}
                             className={`tab-button deepthink-mode-tab ${currentTab === tab.id ? 'active' : ''} ${tab.statusClass} ${tab.alignRight ? 'align-right' : ''}`}
-                            onClick={() => updateAdaptiveDeepthinkTab(tab.id)}
+                            onClick={() => {
+                                updateAdaptiveDeepthinkTab(tab.id);
+                                if (tab.id === 'live') {
+                                    window.dispatchEvent(new CustomEvent('deepthinkLiveTabOpened'));
+                                }
+                            }}
                         >
                             <Icon name={tab.icon} />
                             {tab.label}

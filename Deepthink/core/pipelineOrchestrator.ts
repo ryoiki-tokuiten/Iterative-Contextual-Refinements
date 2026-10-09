@@ -53,6 +53,7 @@ import {
   buildCritiqueCorrectionMemoryBankHistory,
   buildCrossStrategyLatestCorrectionCritique,
   buildCrossStrategyLatestPools,
+  parsePromptToGeminiParts,
 } from './contextBuilders.ts';
 import {
   DEEPTHINK_AGENT_REGISTRY,
@@ -379,7 +380,10 @@ export class DeepthinkPipelineOrchestrator {
 
       if (reviewIndex < targetProximityReviews) {
         // Proximity review turn
-        const proxPrompt = `Review the current strategy candidates for orthogonality and independence:\n\n${JSON.stringify(currentStrategies, null, 2)}`;
+        const proxPrompt = [
+          `# Core Challenge\n${this.state.challenge}`,
+          `Review the current strategy candidates for orthogonality and independence:\n\n${JSON.stringify(currentStrategies, null, 2)}`
+        ].join('\n\n');
         const proxOutput = await this.callAgentModelWithRetry({
           kind: 'strategyProximity',
           promptText: proxPrompt,
@@ -476,6 +480,7 @@ export class DeepthinkPipelineOrchestrator {
 
       const historyContext = buildCritiqueCorrectionMemoryBankHistory(branch.memoryBank, []);
       const critiquePrompt = buildContextForCritiqueAgent(
+        this.state.challenge,
         branch.id,
         branch.strategyText,
         historyContext,
@@ -562,7 +567,7 @@ export class DeepthinkPipelineOrchestrator {
             .join('\n\n')
         : null;
 
-      const correctionPrompt = buildContextForCorrectionAgent(
+      const correctionPrompt = buildContextForCorrectionAgent(this.state.challenge, 
         branch.id,
         branch.strategyText,
         historyContext,
@@ -601,7 +606,7 @@ export class DeepthinkPipelineOrchestrator {
       );
       const historyContext = buildCritiqueCorrectionMemoryBankHistory(branch.memoryBank, windowIterations);
 
-      const critiquePrompt = buildContextForCritiqueAgent(
+      const critiquePrompt = buildContextForCritiqueAgent(this.state.challenge, 
         branch.id,
         branch.strategyText,
         historyContext,
@@ -677,7 +682,7 @@ export class DeepthinkPipelineOrchestrator {
         config.isolateBranches
       );
 
-      const correctionPrompt = buildContextForCorrectionAgent(
+      const correctionPrompt = buildContextForCorrectionAgent(this.state.challenge, 
         branch.id,
         branch.strategyText,
         historyContext,
@@ -751,7 +756,7 @@ export class DeepthinkPipelineOrchestrator {
         },
       };
 
-      const dosPrompt = buildContextForDos('heartbeat', activeState, { previousHeartbeat });
+      const dosPrompt = buildContextForDos(this.state.challenge, 'heartbeat', activeState, { previousHeartbeat });
       const rawDos = await this.callAgentModelWithRetry({
         kind: 'dos',
         promptText: dosPrompt,
@@ -833,7 +838,7 @@ export class DeepthinkPipelineOrchestrator {
           ? hypHistory.map(h => `### ${h.role.toUpperCase()} (Turn ${h.turnNumber ?? reviewIndex})\n${h.content}`).join('\n\n')
           : undefined;
 
-        const hypContext = buildContextForHypothesisGenerate(
+        const hypContext = buildContextForHypothesisGenerate(this.state.challenge, 
           heartbeatNo,
           this.state.initialStrategies,
           dosOutput,
@@ -874,6 +879,7 @@ export class DeepthinkPipelineOrchestrator {
 
         if (reviewIndex < targetHypProximityReviews) {
           const proxPrompt = [
+            `# Core Challenge\n${this.state.challenge}`,
             `# Review Generated Hypotheses for Heartbeat ${heartbeatNo}`,
             `Review candidate hypotheses for falsifiability, orthogonality, testability in isolation, and challenge relevance:\n\n${rawHypGen}`,
           ].join('\n\n');
@@ -1001,7 +1007,7 @@ export class DeepthinkPipelineOrchestrator {
           config.isolateBranches
         );
 
-        const poolPrompt = buildContextForSolutionPool(
+        const poolPrompt = buildContextForSolutionPool(this.state.challenge, 
           branch.id,
           branch.strategyText,
           branch.refinedSolution || branch.solutionAttempt || 'None',
@@ -1104,7 +1110,7 @@ export class DeepthinkPipelineOrchestrator {
       },
     };
 
-    const stepIDosPrompt = buildContextForDos('step_i', activeBranchesState);
+    const stepIDosPrompt = buildContextForDos(this.state.challenge, 'step_i', activeBranchesState);
     const stepIDosPromise = this.callAgentModelWithRetry({
       kind: 'dos',
       promptText: stepIDosPrompt,
@@ -1135,7 +1141,7 @@ export class DeepthinkPipelineOrchestrator {
 
       // NOTE: Hidden-prediction rule (§6.7): context_bsr never receives the prediction
       // for the window being judged.
-      const bsrPrompt = buildContextForBsr(
+      const bsrPrompt = buildContextForBsr(this.state.challenge, 
         branch.id,
         branch.strategyText,
         formattedWindow,
@@ -1331,6 +1337,7 @@ export class DeepthinkPipelineOrchestrator {
 
         if (reviewIndex < targetGuProximityReviews) {
           const proxPrompt = [
+            `# Core Challenge\n${this.state.challenge}`,
             `# Review Surgical Strategy Updates for Global Update ${updateNumber}`,
             `Review the proposed strategy changes for EVOLVE and PRUNE slots for orthogonality, independence from other branches, and alignment with BSR event reasons:`,
             '',
@@ -1486,6 +1493,7 @@ export class DeepthinkPipelineOrchestrator {
       ) || [];
 
       const memContext = [
+        `# Core Challenge\n${this.state.challenge}`,
         `Branch ID: ${branch.id}`,
         `Strategy Text: ${branch.strategyText}`,
         branch.memoryBank ? `Previous Memory Bank:\n${branch.memoryBank}` : 'No previous memory bank.',
@@ -1539,7 +1547,7 @@ export class DeepthinkPipelineOrchestrator {
       branch.refinedSolution = attemptOutput;
 
       // Critique
-      const critiquePrompt = buildContextForCritiqueAgent(
+      const critiquePrompt = buildContextForCritiqueAgent(this.state.challenge, 
         branch.id,
         branch.strategyText,
         'First execution of new branch.',
@@ -1606,7 +1614,7 @@ export class DeepthinkPipelineOrchestrator {
         latestCritique: s.solutionCritique || 'None',
       }));
 
-      const stepIiPrompt = buildContextForDos('step_ii', postUpdateState, {
+      const stepIiPrompt = buildContextForDos(this.state.challenge, 'step_ii', postUpdateState, {
         previousHeartbeat: this.state.heartbeats[this.state.heartbeats.length - 1],
         slotStatuses: consolidatedDecisions.map(d => ({
           slotId: d.slotId,
@@ -1909,7 +1917,7 @@ export class DeepthinkPipelineOrchestrator {
           const result = await runAgent({
             agentName: args.kind,
             sessionId,
-            messages: [new HumanMessage(args.promptText)],
+            messages: [new HumanMessage({ content: parsePromptToGeminiParts(args.promptText) })],
             systemPrompt: systemInstruction,
             modelName: model,
             repositoryAccess,
