@@ -204,7 +204,7 @@ You are an intelligent orchestrator who:
 </Adaptive Mindset>
 `;
 
-import { createDefaultCustomPromptsDeepthink } from '../Deepthink/DeepthinkPrompts';
+import { createDefaultCustomPromptsDeepthink } from '../Deepthink/prompts';
 
 export function createDefaultCustomPromptsAdaptiveDeepthink(): CustomizablePromptsAdaptiveDeepthink {
   const deepthinkPrompts = createDefaultCustomPromptsDeepthink();

@@ -35,6 +35,10 @@ interface SandboxToolAgentOptions {
      * rather than discarding the agent's completed sandbox work.
      */
     finalOutputContract?: SandboxFinalOutputContract;
+    /**
+     * Optional handler for real-time shared_workspace tool calls (§8.4).
+     */
+    sharedWorkspaceHandler?: (input: { action: 'read' | 'write' | 'append'; content?: string }) => Promise<string>;
 }
 
 type ContextualSandboxToolAgentOptions = SandboxToolAgentOptions;
@@ -87,6 +91,11 @@ export async function snapshotSandboxRepositoryById(repositoryId: string, commit
     if (typeof payload?.commit !== 'string' || !payload.commit) {
         throw new Error('Sandbox snapshot did not return a repository revision.');
     }
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('deepthinkResultsSnapshot', {
+            detail: { repositoryId, commit: payload.commit },
+        }));
+    }
     return payload.commit;
 }
 
@@ -110,6 +119,11 @@ export async function restoreSandboxRepositoryStrategy(
             // Keep the useful HTTP-level error when the response is not JSON.
         }
         throw new Error(message);
+    }
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('deepthinkResultsSnapshot', {
+            detail: { repositoryId },
+        }));
     }
 }
 
@@ -169,7 +183,7 @@ interface SandboxArchivedStrategy {
 }
 
 /**
- * Archive one active Deepthink strategy directory before a PQF replacement.
+ * Archive one active Deepthink strategy directory before a PRUNE replacement.
  * The backend performs this repository mutation atomically so a new branch can
  * safely reuse the stable Strategy-N directory name.
  */
@@ -184,6 +198,11 @@ export async function archiveSandboxRepositoryStrategy(
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload?.error || 'Failed to archive the replaced strategy repository directory.');
+    if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('deepthinkResultsSnapshot', {
+            detail: { repositoryId },
+        }));
+    }
     return payload as SandboxArchivedStrategy;
 }
 
@@ -286,6 +305,41 @@ const finalOutputToolSchema = z.object({
 
 const SANDBOX_TOOL_NAME = 'sandbox_exec';
 const FINAL_OUTPUT_TOOL_NAME = 'final_output';
+export const SHARED_WORKSPACE_TOOL_NAME = 'shared_workspace';
+
+export const sharedWorkspaceToolSchema = z.object({
+    action: z.enum(['read', 'write', 'append']).describe('Operation to perform: "read", "write", or "append".'),
+    content: z.string().optional().describe('Text content to write or append. Ignored when action is "read".'),
+});
+
+export const sharedWorkspaceToolDefinition: ToolDefinition = {
+    type: 'function',
+    function: {
+        name: SHARED_WORKSPACE_TOOL_NAME,
+        description: [
+            'Read or edit the shared workspace document (shared_workspace.md) in real time.',
+            'All agents across the system (except isolated hypothesis testers) share this document.',
+            'Use this to share valuable discoveries, invariants, equations, verified lemmas, or coordinates with other agents in real time.',
+            'Actions: "read" returns the full document; "write" replaces the document; "append" adds text to the end.'
+        ].join(' '),
+        parameters: {
+            type: 'object',
+            properties: {
+                action: {
+                    type: 'string',
+                    enum: ['read', 'write', 'append'],
+                    description: 'The operation to perform: "read", "write", or "append".'
+                },
+                content: {
+                    type: 'string',
+                    description: 'Markdown content to write or append. Ignored when action is "read".'
+                }
+            },
+            required: ['action'],
+            additionalProperties: false,
+        },
+    },
+};
 const MAX_TOOL_TURNS = 64;
 const OMIT_TRACE_VALUE = Symbol('omitTraceValue');
 const REDACTED_THOUGHT_TRACE = '[thought content omitted from shared execution trace]';
@@ -630,7 +684,9 @@ function buildSystemPrompt(
         systemPrompt,
         '',
         '<Virtual Sandbox Tool>',
-        `You have two tools: ${SANDBOX_TOOL_NAME} for private terminal work and ${FINAL_OUTPUT_TOOL_NAME} for the submitted answer.`,
+        options.sharedWorkspaceHandler
+            ? `You have three tools: ${SANDBOX_TOOL_NAME} for private terminal work, ${SHARED_WORKSPACE_TOOL_NAME} for real-time collaboration with peer agents via shared_workspace.md, and ${FINAL_OUTPUT_TOOL_NAME} for the submitted answer.`
+            : `You have two tools: ${SANDBOX_TOOL_NAME} for private terminal work and ${FINAL_OUTPUT_TOOL_NAME} for the submitted answer.`,
         `${SANDBOX_TOOL_NAME} runs one non-interactive bash command inside your sandboxed Linux workspace.`,
         'Treat this as a real terminal in a real but sandboxed project directory. You can create directories and files, write scripts or source code, run programs, inspect outputs, read files with cat/sed, search with grep/find, edit or delete workspace files, install dependencies into the workspace when possible, and generate data, plots, images, or other artifacts.',
         `${commandStartRule} Files and directories you create persist across your own tool calls and future iterations in the ${runScopeDescription}. Process memory, shell variables, and language REPL variables do not persist between separate commands; write durable state to files.`,
@@ -707,7 +763,10 @@ async function invokeAgentTurn(
     options: SandboxToolAgentOptions
 ): Promise<AIMessage> {
     const finalOutputToolDefinition = createFinalOutputToolDefinition(options.finalOutputContract);
-    const tools = [sandboxToolDefinition, finalOutputToolDefinition];
+    const tools: ToolDefinition[] = [sandboxToolDefinition, finalOutputToolDefinition];
+    if (options.sharedWorkspaceHandler) {
+        tools.push(sharedWorkspaceToolDefinition);
+    }
     if (provider.providerName === 'gemini') {
         return invokeGeminiToolAgentTurn(
             provider.providerConfig,
@@ -950,7 +1009,7 @@ function normalizeWorkspaceReferencePath(rawPath: string, access?: SandboxReposi
             'direct_context',
             'user_uploaded',
         ]);
-        if (!access.fullRepositoryRead && !visibleDirectories.has(parts[0])) {
+        if (!visibleDirectories.has(parts[0]) && (!access.fullRepositoryRead || parts.length === 1)) {
             parts.unshift(access.agentDirectory);
         }
     }
@@ -1016,6 +1075,10 @@ function getSandboxToolCalls(message: AIMessage) {
 
 function getFinalOutputToolCalls(message: AIMessage) {
     return (message.tool_calls ?? []).filter(toolCall => toolCall.name === FINAL_OUTPUT_TOOL_NAME);
+}
+
+function getSharedWorkspaceToolCalls(message: AIMessage) {
+    return (message.tool_calls ?? []).filter(toolCall => toolCall.name === SHARED_WORKSPACE_TOOL_NAME);
 }
 
 function structuredFinalOutputText(
@@ -1246,7 +1309,8 @@ export async function runSandboxToolAgent(
         const modelText = getFinalText(response);
         const sandboxToolCalls = getSandboxToolCalls(response);
         const finalOutputToolCalls = getFinalOutputToolCalls(response);
-        const hasToolCalls = sandboxToolCalls.length > 0 || finalOutputToolCalls.length > 0;
+        const sharedWorkspaceToolCalls = getSharedWorkspaceToolCalls(response);
+        const hasToolCalls = sandboxToolCalls.length > 0 || finalOutputToolCalls.length > 0 || sharedWorkspaceToolCalls.length > 0;
 
         if (modelText) {
             transcriptParts.push(
@@ -1279,7 +1343,31 @@ export async function runSandboxToolAgent(
             }
         }
 
-        if (sandboxToolCalls.length === 0) {
+        if (sharedWorkspaceToolCalls.length > 0) {
+            for (const toolCall of sharedWorkspaceToolCalls) {
+                let toolContent = '';
+                let isOk = true;
+                try {
+                    const parsed = sharedWorkspaceToolSchema.parse(toolCall.args ?? {});
+                    if (!options.sharedWorkspaceHandler) {
+                        throw new Error('shared_workspace tool is not available for this role.');
+                    }
+                    toolContent = await options.sharedWorkspaceHandler(parsed);
+                } catch (error) {
+                    isOk = false;
+                    toolContent = `shared_workspace call failed: ${error instanceof Error ? error.message : 'Invalid parameters.'}`;
+                }
+                messages.push(new ToolMessage({
+                    name: SHARED_WORKSPACE_TOOL_NAME,
+                    content: toolContent,
+                    tool_call_id: toolCall.id ?? nanoid(8),
+                    status: isOk ? 'success' : 'error',
+                }));
+                transcriptParts.push(`[shared_workspace ${toolCall.args?.action ?? 'call'}]:\n${toolContent}`);
+            }
+        }
+
+        if (sandboxToolCalls.length === 0 && sharedWorkspaceToolCalls.length === 0) {
             messages.push(new HumanMessage(
                 modelText
                     ? `Your previous response was ordinary prose, so it was not submitted. Submit the complete role-specific answer now by calling ${FINAL_OUTPUT_TOOL_NAME}.`

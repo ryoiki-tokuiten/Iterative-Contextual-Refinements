@@ -21,13 +21,9 @@ interface ContextualUIProps {
 }
 
 function ContextualUI({ state, onStop }: ContextualUIProps) {
-    // Update evolution viewer when content history changes
+    // Update evolution viewer when content history changes (REMOVED)
     useEffect(() => {
-        const updateViewer = async () => {
-            const { updateEvolutionViewerIfOpen } = await import('../Styles/Components/DiffModal/EvolutionViewer');
-            updateEvolutionViewerIfOpen(state.id, state.contentHistory);
-        };
-        updateViewer();
+        // Evolution Viewer functionality completely removed.
     }, [state.contentHistory.length, state.id]);
 
     return (
@@ -148,17 +144,6 @@ const CurrentBestGenerationPanel: React.FC<{ content: string; state: ContextualS
                     <h3 style={{ margin: 0, lineHeight: 1, display: 'flex', alignItems: 'center' }}>Current Artifact</h3>
                 </div>
                 <div className="text-panel-actions">
-                    <button
-                        className="action-btn"
-                        onClick={async () => {
-                            const { openEvolutionViewerFromHistory } = await import('../Styles/Components/DiffModal/EvolutionViewer');
-                            openEvolutionViewerFromHistory(state.contentHistory, state.id);
-                        }}
-                        title="View content evolution timeline (updates live)"
-                    >
-                        <Icon name="movie" />
-                        Evolutions
-                    </button>
                     {state.id !== 'deepthink-branch-history' && (
                         <>
                             <button
@@ -172,12 +157,12 @@ const CurrentBestGenerationPanel: React.FC<{ content: string; state: ContextualS
                             </button>
                             <button
                                 className="action-btn"
-                                onClick={() => openEmbeddedModal('Solution Pool', state.currentStrategicPool)}
-                                title="View current solution pool"
+                                onClick={() => openEmbeddedModal('Structured Noise', state.currentStrategicPool)}
+                                title="View current structured noise"
                                 disabled={!state.currentStrategicPool}
                             >
                                 <Icon name="database" />
-                                Solution Pool
+                                Structured Noise
                             </button>
                             <button
                                 className="action-btn"
@@ -262,10 +247,13 @@ const AgentActivityPanel: React.FC<{ state: ContextualState; onStop: () => void 
 const MinimalMessageCard: React.FC<{ message: ContextualMessage; allMessages: ContextualMessage[] }> = ({ message, allMessages }) => {
     const getRoleLabel = (role: string) => {
         switch (role) {
-            case 'main_generator': return 'Execution';
+            case 'main_generator': {
+                const firstExecutionId = allMessages.find(m => m.role === 'main_generator')?.id;
+                return message.id === firstExecutionId ? 'Execution' : 'Correction';
+            }
             case 'iterative_agent': return 'Solution Critique';
             case 'memory_agent': return 'Memory';
-            case 'strategic_pool_agent': return 'Solution Pool';
+            case 'strategic_pool_agent': return 'Structured Noise';
             case 'system': return 'System';
             default: return role;
         }
@@ -377,25 +365,29 @@ export function renderBranchHistoryUI(
     safeIterations.forEach((iter, index) => {
         const baseTimestamp = iter.timestamp || (Date.now() + index * 1000);
 
-        // Add critique message
-        messages.push({
-            id: `critique-iter-${iter.iterationNumber}`,
-            role: 'iterative_agent',
-            content: iter.critique,
-            timestamp: baseTimestamp,
-            iterationNumber: iter.iterationNumber,
-            executionTraceText: iter.critiqueExecutionTraceText,
-        });
+        // Add execution (correction/solution) message FIRST
+        if (iter.correctedSolution) {
+            messages.push({
+                id: `correction-iter-${iter.iterationNumber}`,
+                role: 'main_generator',
+                content: iter.correctedSolution,
+                timestamp: baseTimestamp,
+                iterationNumber: iter.iterationNumber,
+                executionTraceText: iter.correctedSolutionExecutionTraceText,
+            });
+        }
 
-        // Add correction message
-        messages.push({
-            id: `correction-iter-${iter.iterationNumber}`,
-            role: 'main_generator',
-            content: iter.correctedSolution,
-            timestamp: baseTimestamp + 500, // 500ms after critique
-            iterationNumber: iter.iterationNumber,
-            executionTraceText: iter.correctedSolutionExecutionTraceText,
-        });
+        // Add critique message SECOND
+        if (iter.critique) {
+            messages.push({
+                id: `critique-iter-${iter.iterationNumber}`,
+                role: 'iterative_agent',
+                content: iter.critique,
+                timestamp: baseTimestamp + 500, // 500ms after execution to ensure ordering
+                iterationNumber: iter.iterationNumber,
+                executionTraceText: iter.critiqueExecutionTraceText,
+            });
+        }
     });
 
     // Build content history from iterations for the evolution viewer
@@ -430,7 +422,7 @@ export function renderBranchHistoryUI(
     const mockState: ContextualState = {
         id: 'deepthink-branch-history',
         initialUserRequest: '',
-        initialMainGeneration: originalSolution || 'Processing...',
+        initialMainGeneration: safeIterations[0]?.correctedSolution || originalSolution || 'Processing...',
         currentBestGeneration: finalSolution || 'Processing branch corrections...',
         currentBestSuggestions: '',
         allIterativeSuggestions: [],

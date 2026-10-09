@@ -7,7 +7,3 @@ export interface ContentState {
     isBugFix: boolean;
 }
 
-export interface EvolutionViewerState {
-    scrollContainer: HTMLElement;
-    lastCount: number;
-}

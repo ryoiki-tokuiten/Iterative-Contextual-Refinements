@@ -57,7 +57,6 @@ export interface ExportedConfig {
         strategyProximityLoops: number;
         hypothesisCount: number;
         hypothesisProximityLoops: number;
-        pqfAggressiveness: string;
         deepthinkDepth: number;
         isolateBranches: boolean;
         disableSolutionPool: boolean;

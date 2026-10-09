@@ -12,7 +12,6 @@ import {
     getStrategyProximityLoops,
     getSelectedHypothesisCount,
     getHypothesisProximityLoops,
-    getSelectedPqfAggressiveness,
     getDeepthinkDepth,
     getIsolateBranchesEnabled,
     getSolutionPoolDisabled,
@@ -24,7 +23,7 @@ import { globalState } from './State';
 import { updateControlsState } from '../UI/Controls';
 import { setupCodeExecutionToggle } from '../UI/setupCodeExecutionToggle';
 
-type DeepthinkModule = typeof import('../Deepthink/Deepthink');
+type DeepthinkModule = typeof import('../Deepthink/ui/Deepthink');
 type ContextualModule = typeof import('../Contextual/Contextual');
 type AdaptiveDeepthinkModule = typeof import('../AdaptiveDeepthink/AdaptiveDeepthinkMode');
 
@@ -41,7 +40,7 @@ let adaptiveDeepthinkModulePromise: Promise<AdaptiveDeepthinkModule> | null = nu
 
 async function loadDeepthinkModule(): Promise<DeepthinkModule> {
     if (!deepthinkModulePromise) {
-        deepthinkModulePromise = import('../Deepthink/Deepthink').then((mod) => {
+        deepthinkModulePromise = import('../Deepthink/ui/Deepthink').then((mod) => {
             deepthinkModule = mod;
             return mod;
         });
@@ -82,7 +81,6 @@ export async function ensureDeepthinkInitialized(): Promise<DeepthinkModule> {
             getStrategyProximityLoops,
             getSelectedHypothesisCount,
             getHypothesisProximityLoops,
-            getSelectedPqfAggressiveness,
             getDeepthinkDepth,
             getIsolateBranchesEnabled,
             getSolutionPoolDisabled,

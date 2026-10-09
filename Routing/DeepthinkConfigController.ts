@@ -1,9 +1,10 @@
 /** Centralized configuration for the single Deepthink pipeline. */
 
 import {
-    MAX_DEEPTHINK_DEPTH,
     MAX_DEEPTHINK_STRATEGIES,
     MAX_HYPOTHESIS_COUNT,
+    MAX_STRATEGY_PROXIMITY_LOOPS,
+    MAX_HYPOTHESIS_PROXIMITY_LOOPS,
     ModelConfigManager,
 } from './ModelConfig';
 
@@ -13,8 +14,10 @@ export interface DeepthinkConfigState {
     hypothesisCount: number;
     hypothesisProximityLoops: number;
     hypothesisEnabled: boolean;
-    pqfMode: string;
     deepthinkDepth: number;
+    i: number;
+    j: number;
+    k: number;
     isolateBranches: boolean;
     disableSolutionPool: boolean;
     codeExecutionEnabled: boolean;
@@ -37,8 +40,10 @@ export class DeepthinkConfigController extends EventTarget {
             hypothesisCount: this.modelConfig.getHypothesisCount(),
             hypothesisProximityLoops: this.modelConfig.getHypothesisProximityLoops(),
             hypothesisEnabled: this.modelConfig.getHypothesisCount() > 0,
-            pqfMode: this.modelConfig.getPqfAggressiveness(),
             deepthinkDepth: this.modelConfig.getDeepthinkDepth(),
+            i: this.modelConfig.getI(),
+            j: this.modelConfig.getJ(),
+            k: this.modelConfig.getK(),
             isolateBranches: this.modelConfig.isIsolateBranchesEnabled(),
             disableSolutionPool: this.modelConfig.isSolutionPoolDisabled(),
             codeExecutionEnabled: this.modelConfig.isDeepthinkCodeExecutionEnabled(),
@@ -50,8 +55,10 @@ export class DeepthinkConfigController extends EventTarget {
     public getHypothesisCount(): number { return this.modelConfig.getHypothesisCount(); }
     public getHypothesisProximityLoops(): number { return this.modelConfig.getHypothesisProximityLoops(); }
     public isHypothesisEnabled(): boolean { return this.getHypothesisCount() > 0; }
-    public getPqfMode(): string { return this.modelConfig.getPqfAggressiveness(); }
     public getDeepthinkDepth(): number { return this.modelConfig.getDeepthinkDepth(); }
+    public getI(): number { return this.modelConfig.getI(); }
+    public getJ(): number { return this.modelConfig.getJ(); }
+    public getK(): number { return this.modelConfig.getK(); }
     public getMaxStrategies(): number { return MAX_DEEPTHINK_STRATEGIES; }
     public isIsolateBranchesEnabled(): boolean { return this.modelConfig.isIsolateBranchesEnabled(); }
     public isSolutionPoolDisabled(): boolean { return this.modelConfig.isSolutionPoolDisabled(); }
@@ -63,7 +70,7 @@ export class DeepthinkConfigController extends EventTarget {
     }
 
     public setStrategyProximityLoops(count: number): void {
-        this.modelConfig.updateParameter('strategyProximityLoops', Math.max(1, Math.min(5, Math.round(count))));
+        this.modelConfig.updateParameter('strategyProximityLoops', Math.max(1, Math.min(MAX_STRATEGY_PROXIMITY_LOOPS, Math.round(count))));
         this.emitChange('strategyProximityLoops');
     }
 
@@ -73,7 +80,7 @@ export class DeepthinkConfigController extends EventTarget {
     }
 
     public setHypothesisProximityLoops(count: number): void {
-        this.modelConfig.updateParameter('hypothesisProximityLoops', Math.max(1, Math.min(5, Math.round(count))));
+        this.modelConfig.updateParameter('hypothesisProximityLoops', Math.max(1, Math.min(MAX_HYPOTHESIS_PROXIMITY_LOOPS, Math.round(count))));
         this.emitChange('hypothesisProximityLoops');
     }
 
@@ -82,14 +89,24 @@ export class DeepthinkConfigController extends EventTarget {
         this.emitChange('hypothesisEnabled');
     }
 
-    public setPqfMode(mode: string): void {
-        this.modelConfig.updateParameter('pqfAggressiveness', mode === 'off' ? 'balanced' : mode);
-        this.emitChange('pqfMode');
+    public setDeepthinkDepth(depth: number): void {
+        this.setI(depth);
     }
 
-    public setDeepthinkDepth(depth: number): void {
-        this.modelConfig.updateParameter('deepthinkDepth', Math.max(1, Math.min(Math.round(depth), MAX_DEEPTHINK_DEPTH)));
+    public setI(i: number): void {
+        this.modelConfig.setI(i);
+        this.emitChange('i');
         this.emitChange('deepthinkDepth');
+    }
+
+    public setJ(j: number): void {
+        this.modelConfig.setJ(j);
+        this.emitChange('j');
+    }
+
+    public setK(k: number): void {
+        this.modelConfig.setK(k);
+        this.emitChange('k');
     }
 
     public setIsolateBranchesEnabled(enabled: boolean): void {

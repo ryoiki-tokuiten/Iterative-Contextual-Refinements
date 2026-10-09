@@ -206,8 +206,8 @@ Adaptive Deepthink maps its state transitions to the shared Deepthink UI, making
 | Tab | Purpose in Adaptive Mode | Condition |
 |---|---|---|
 | **Live** | Displays real-time orchestrator decisions, thought segments, tool calls, and execution logs. | Always visible. |
-| **Strategic Solver** | Shows active strategies, execution attempts, critiques, corrections, and saved states. | Always visible. |
-| **Hypothesis Explorer** | Displays the current round of hypotheses, test details, and validations. | Appears when `hypotheses` exist. |
+| **Branches** | Shows active strategies, execution attempts, critiques, corrections, and saved states. | Always visible. |
+| **Hypotheses** | Displays the current round of hypotheses, test details, and validations. | Appears when `hypotheses` exist. |
 | **Final Result** | Displays the final answer submitted by the orchestrator. | Appears upon completion. |
 
 In addition, the **Agent Activity** side panel streams every orchestrator decision, tool input, and execution state.

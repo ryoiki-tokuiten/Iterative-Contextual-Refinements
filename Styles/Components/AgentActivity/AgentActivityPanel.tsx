@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, memo } from 'react';
 import { Icon } from '../../../UI/Icons';
 import './AgentActivityPanel.css';
 
-interface AgentActivityPanelProps {
+export interface AgentActivityPanelProps {
     title?: string;
     isProcessing?: boolean;
     error?: string | null;
@@ -18,7 +18,30 @@ interface AgentActivityPanelProps {
     children?: React.ReactNode;
 }
 
-export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({
+// Module-level immutable subtrees: eliminates allocations during renders
+// and enables O(1) reconciler bailouts via reference equality.
+const STOP_ICON = <Icon name="stop_circle" />;
+const WARNING_ICON = <Icon name="warning" />;
+const PROCESSING_INDICATOR = (
+    <div className="processing-indicator">
+        <div className="spinner" />
+        <span>Processing agent response...</span>
+    </div>
+);
+
+/**
+ * Production-grade Agent Activity Panel.
+ *
+ * Key architectural improvements:
+ * 1. Zero-Reactivity Scroll Tracking: Replaces `useState` with an unrendered ref,
+ *    eliminating component re-renders during high-frequency scroll events.
+ * 2. Unified Auto-Scroll Pipeline: Combines redundant effect hooks into a single
+ *    mutation cycle and eliminates layout-thrashing `requestAnimationFrame` cascades.
+ * 3. Programmatic Scroll Guard: Distinguishes between programmatic auto-scrolling
+ *    and user-initiated interaction to prevent synchronous layout reflows.
+ * 4. Pure Component Memoization: Protects the component tree from parent re-render churn.
+ */
+const AgentActivityPanelComponent: React.FC<AgentActivityPanelProps> = ({
     title = 'Agent Activity',
     isProcessing = false,
     error = null,
@@ -28,72 +51,71 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({
     style,
     children
 }) => {
-    const messagesContainerRef = useRef<HTMLDivElement>(null);
-    const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
+    const listRef = useRef<HTMLDivElement>(null);
+    const autoScrollRef = useRef(true);
+    const isProgrammaticScrollRef = useRef(false);
 
-    const handleScroll = useCallback(() => {
-        const el = messagesContainerRef.current;
-        if (el) {
-            const { scrollTop, scrollHeight, clientHeight } = el;
-            const isAtBottom = Math.abs(scrollHeight - clientHeight - scrollTop) <= 2;
-            setIsUserScrolledUp(!isAtBottom);
+    // Event listener attached with a stable identity to prevent listener thrashing
+    const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+        if (isProgrammaticScrollRef.current) {
+            isProgrammaticScrollRef.current = false;
+            return;
         }
+        const el = e.currentTarget;
+        autoScrollRef.current = (el.scrollHeight - el.scrollTop - el.clientHeight) <= 2;
     }, []);
 
     useEffect(() => {
-        if (!isUserScrolledUp && messagesContainerRef.current) {
-            const el = messagesContainerRef.current;
-            el.scrollTop = el.scrollHeight;
-            requestAnimationFrame(() => {
-                if (!isUserScrolledUp && messagesContainerRef.current) {
-                    const el2 = messagesContainerRef.current;
-                    el2.scrollTop = el2.scrollHeight;
-                }
-            });
-        }
-    }, [children, isUserScrolledUp]);
+        const el = listRef.current;
+        if (!el) return;
 
-    useEffect(() => {
-        if (isProcessing && messagesContainerRef.current) {
-            const el = messagesContainerRef.current;
-            el.scrollTop = el.scrollHeight;
-            setIsUserScrolledUp(false);
+        if (isProcessing) {
+            autoScrollRef.current = true;
         }
-    }, [isProcessing]);
+
+        if (autoScrollRef.current) {
+            const target = el.scrollHeight;
+            if (el.scrollTop !== target) {
+                isProgrammaticScrollRef.current = true;
+                el.scrollTop = target;
+            }
+        }
+    }, [children, isProcessing]);
+
+    const containerClassName = className
+        ? `agent-activity-panel-container ${className}`
+        : 'agent-activity-panel-container';
 
     return (
-        <div className={`agent-activity-panel-container ${className}`} style={style}>
+        <div className={containerClassName} style={style}>
             <div className="agent-panel-header">
                 <h3>{title}</h3>
                 <div className="header-info">
                     {headerExtra}
                     {isProcessing && onStop && (
                         <button className="stop-button" onClick={onStop}>
-                            <Icon name="stop_circle" />
+                            {STOP_ICON}
                             Stop
                         </button>
                     )}
                 </div>
             </div>
-            <div 
-                className="agent-messages-container custom-scrollbar" 
-                ref={messagesContainerRef} 
+            <div
+                className="agent-messages-container custom-scrollbar"
+                ref={listRef}
                 onScroll={handleScroll}
             >
                 {children}
-                {isProcessing && (
-                    <div className="processing-indicator">
-                        <div className="spinner"></div>
-                        <span>Processing agent response...</span>
-                    </div>
-                )}
+                {isProcessing && PROCESSING_INDICATOR}
             </div>
             {error && (
                 <div className="error-message">
-                    <Icon name="warning" />
+                    {WARNING_ICON}
                     {error}
                 </div>
             )}
         </div>
     );
 };
+
+export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = memo(AgentActivityPanelComponent);

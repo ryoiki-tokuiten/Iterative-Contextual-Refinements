@@ -6,7 +6,7 @@
  */
 
 import type { ModeStateHandler } from '../ModeStateHandler';
-import type { DeepthinkPipelineState } from '../../../Deepthink/DeepthinkCore';
+import type { DeepthinkPipelineState } from '../../../Deepthink/core/deepthinkCore';
 import { activateTab } from '../../AppRouter';
 import { ensureDeepthinkInitialized, getLoadedDeepthinkModule } from '../../ModeLoader';
 

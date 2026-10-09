@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CustomizablePromptsDeepthink } from '../Deepthink/DeepthinkPrompts';
+import { CustomizablePromptsDeepthink } from '../Deepthink/prompts';
 import { CustomizablePromptsContextual } from '../Contextual/ContextualPrompts';
 import { ContextualPromptsManager } from '../Contextual/ContextualPromptsManager';
-import { DeepthinkPromptsManager } from '../Deepthink/DeepthinkPromptsManager';
+import { DeepthinkPromptsManager } from '../Deepthink/prompts/promptsManager';
 
 export class PromptsManager {
     private deepthinkPromptsManager: DeepthinkPromptsManager;

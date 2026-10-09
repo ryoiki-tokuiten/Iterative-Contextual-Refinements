@@ -1,0 +1,2496 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * DeepthinkConfigPanel.css
+ *
+ * Drop-in architectural refactor.
+ * Public selector API remains frozen.
+ */
+
+/* ==========================================================================
+   Design Tokens & Panel Initialization
+   ========================================================================== */
+
+.deepthink-config-react-root {
+    /* Color Channels */
+    --dt-red-rgb: 232, 107, 107;
+    --dt-blue-rgb: 66, 133, 244;
+    --dt-purple-rgb: 139, 92, 246;
+    --dt-pink-rgb: 236, 72, 153;
+    --dt-green-rgb: 34, 197, 94;
+    --dt-yellow-rgb: 245, 158, 11;
+    --accent-silent-blue-rgb: 79, 110, 138;
+    --accent-silent-green-rgb: 16, 185, 129;
+
+    /* Semantic Mapped Colors */
+    --dt-red: rgb(var(--dt-red-rgb));
+    --accent-blue: rgb(var(--dt-blue-rgb));
+    --accent-purple: rgb(var(--dt-purple-rgb));
+    --accent-pink: rgb(var(--dt-pink-rgb));
+    --accent-green: rgb(var(--dt-green-rgb));
+    --accent-yellow: rgb(var(--dt-yellow-rgb));
+    --accent-silent-green: rgb(var(--accent-silent-green-rgb));
+
+    /* Layout System Tokens */
+    --gap-sm: 12px;
+    --gap-xs: 8px;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 16px;
+    --border-radius-md: 12px;
+    --border-radius-sm: 8px;
+    --card-padding-sm: 16px;
+    --card-padding-xs: 12px;
+    --slider-track-color: rgba(255, 255, 255, 0.08);
+
+    /* Animation Curve Properties */
+    --transition-speed: 0.2s;
+    --transition-speed-fast: 0.12s;
+    --easing-curve: cubic-bezier(0.4, 0, 0.2, 1);
+    --card-blur-effect: blur(8px);
+
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+}
+
+#pipelines-content-container:has(.deepthink-config-react-root) {
+    padding: 0;
+    overflow: hidden;
+}
+
+.deepthink-config-panel {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    overflow: hidden;
+    flex-direction: column;
+}
+
+.deepthink-config-scroll-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 10px 14px;
+}
+
+.config-top-row {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    width: 100%;
+    flex: 0 0 auto;
+}
+
+.config-top-row > .evolution-filter-options-container {
+    flex: 1;
+    min-width: 0;
+}
+
+.config-top-row > .code-execution-toggle-container {
+    flex: 0 0 auto;
+}
+
+.config-bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+}
+
+.config-left-col,
+.config-right-col {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 10px;
+}
+
+/* ==========================================================================
+   Section Frames & Structural Containers
+   ========================================================================== */
+
+.deepthink-config-scroll-container {
+    & :is(
+        .evolution-filter-options-container,
+        .information-packet-window,
+        .deepthink-options-container
+    ) {
+        flex: 1;
+        margin: 0;
+    }
+
+    & .strategy-execution-container {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        padding: 8px 12px;
+        border: 1px solid rgba(var(--dt-red-rgb), 0.15);
+        border-radius: var(--border-radius-md);
+        background: rgba(var(--dt-red-rgb), 0.04);
+        margin: 0;
+    }
+
+    & .evolution-filter-options-container {
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        padding: 8px 12px;
+        border: 1px solid rgba(var(--dt-pink-rgb), 0.2);
+        border-radius: var(--border-radius-md);
+        background: rgba(var(--dt-pink-rgb), 0.04);
+        transition: border-color var(--transition-speed) var(--easing-curve),
+                    background var(--transition-speed) var(--easing-curve);
+
+        &:hover {
+            border-color: rgba(var(--dt-pink-rgb), 0.35);
+            background: rgba(var(--dt-pink-rgb), 0.06);
+        }
+
+        &.disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+
+            & * {
+                pointer-events: none;
+            }
+        }
+    }
+
+
+
+    & .deepthink-options-container {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid rgba(var(--dt-purple-rgb), 0.2);
+        border-radius: var(--border-radius-md);
+        background: rgba(var(--dt-purple-rgb), 0.04);
+        padding: 0;
+        transition: all 0.3s var(--easing-curve);
+
+        &.collapsed {
+            flex: 0 0 auto;
+
+            & .window-content {
+                display: none;
+            }
+        }
+
+        & .window-header {
+            border-bottom-color: rgba(var(--dt-purple-rgb), 0.08);
+            background: rgba(var(--dt-purple-rgb), 0.02);
+        }
+    }
+}
+
+/* ==========================================================================
+   Interactive Sliders & Range Controls
+   ========================================================================== */
+
+.deepthink-config-scroll-container .slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 10px;
+    outline: none;
+    cursor: pointer;
+    background: var(--slider-track-color);
+    transition: border-color var(--transition-speed) var(--easing-curve);
+
+    &:hover {
+        border-color: var(--border-hover-color, rgba(255, 255, 255, 0.16));
+    }
+}
+
+.deepthink-config-scroll-container {
+    & .strategy-execution-card {
+        flex: 0 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        margin: 0;
+        padding: 0;
+    }
+
+    & .strategy-execution-section {
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+        margin: 0;
+
+        &.dimmed {
+            opacity: 0.45;
+        }
+    }
+
+    & .strategy-execution-container .slider {
+        &::-webkit-slider-thumb,
+        &::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--dt-red, #e86b6b);
+            box-shadow: 0 2px 8px rgba(var(--dt-red-rgb, 232, 107, 107), 0.4);
+        }
+    }
+}
+
+/* ==========================================================================
+   Dotted Scale Configurations
+   ========================================================================== */
+
+.deepthink-config-scroll-container .strategy-execution-container .slider::-webkit-slider-thumb,
+.deepthink-config-scroll-container .strategy-execution-container .slider::-moz-range-thumb,
+.deepthink-depth-container .slider::-webkit-slider-thumb,
+.deepthink-depth-container .slider::-moz-range-thumb {
+    border-radius: 50%;
+    background: var(--card-bg-color, #1e1e24);
+    cursor: pointer;
+    transition: transform var(--transition-speed-fast) var(--easing-curve);
+}
+
+.deepthink-config-scroll-container .strategy-execution-container .slider::-webkit-slider-thumb,
+.deepthink-depth-container .slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.deepthink-config-scroll-container .strategy-execution-container .slider::-webkit-slider-thumb:hover,
+.deepthink-config-scroll-container .strategy-execution-container .slider::-moz-range-thumb:hover,
+.deepthink-depth-container .slider::-webkit-slider-thumb:hover,
+.deepthink-depth-container .slider::-moz-range-thumb:hover {
+    transform: scale(1.1);
+}
+
+.slider-with-dots {
+    position: relative;
+    padding-bottom: 30px;
+}
+
+.slider-dots {
+    position: absolute;
+    bottom: 0;
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    pointer-events: none;
+}
+
+.slider-dot {
+    position: relative;
+    flex: 0 0 auto;
+    color: var(--text-secondary-color, #a0a0b0);
+    font-size: 11px;
+    font-weight: 500;
+    text-align: center;
+
+    &::before {
+        content: "";
+        position: absolute;
+        top: -20px;
+        left: 50%;
+        width: 3px;
+        height: 10px;
+        background: rgba(255, 255, 255, 0.15);
+        transform: translateX(-50%);
+        transition: background var(--transition-speed) var(--easing-curve);
+    }
+
+    &.active {
+        color: var(--dt-red);
+        font-weight: 600;
+
+        &::before {
+            width: 4px;
+            height: 12px;
+            background: var(--dt-red);
+        }
+    }
+}
+
+.dots-slider {
+    &::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        position: relative;
+        z-index: 2;
+    }
+
+    &::-webkit-slider-thumb,
+    &::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        border: 3px solid var(--dt-red);
+        border-radius: 50%;
+        background: var(--card-bg-color, #1e1e24);
+        box-shadow: 0 2px 8px rgba(var(--dt-red-rgb), 0.4);
+        cursor: pointer;
+    }
+}
+
+/* ==========================================================================
+   Shared Action Disable Classes
+   ========================================================================== */
+
+.deepthink-config-scroll-container {
+    & .disabled-label {
+        margin-left: 6px;
+        color: var(--text-secondary-color, #a0a0b0);
+        font-size: 11px;
+        font-style: italic;
+        opacity: 0.7;
+    }
+
+    & .deepthink-method-card {
+        &.disabled {
+            opacity: 0.38;
+            cursor: not-allowed;
+
+            & input[disabled] {
+                pointer-events: none;
+            }
+        }
+    }
+}
+
+/* ==========================================================================
+   Evolution Filter Mechanisms
+   ========================================================================== */
+
+.pqf-toggle-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: auto;
+}
+
+.pqf-buttons {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+}
+
+.pqf-button {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.02);
+    color: var(--text-secondary-color, #a0a0b0);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    backdrop-filter: var(--card-blur-effect);
+    transition: all var(--transition-speed) var(--easing-curve);
+}
+
+.pqf-button {
+    border: 1px solid rgba(var(--dt-pink-rgb), 0.3);
+
+    &:hover {
+        border-color: rgba(var(--dt-pink-rgb), 0.5);
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--text-color, #ffffff);
+    }
+
+    &.active {
+        border-color: var(--accent-pink);
+        background: rgba(var(--dt-pink-rgb), 0.15);
+        color: var(--accent-pink);
+        font-weight: 600;
+        box-shadow: 0 0 12px rgba(var(--dt-pink-rgb), 0.25);
+    }
+
+}
+
+.pqf-description {
+    margin-top: 4px;
+    color: var(--text-tertiary-color, #808090);
+    font-size: 0.75rem;
+    text-align: center;
+}
+
+/* ==========================================================================
+   deepthink Methods Base Configuration
+   ========================================================================== */
+
+.deepthink-config-scroll-container {
+    & .deepthink-methods {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    & .deepthink-methods-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--gap-xs);
+        margin-bottom: var(--space-2);
+    }
+
+    & .deepthink-method-card {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: var(--card-padding-xs);
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+        border-radius: var(--border-radius-md);
+        background: rgba(255, 255, 255, 0.015);
+        margin-bottom: var(--space-2);
+    }
+
+}
+
+/* ==========================================================================
+   Information Packet Window System
+   ========================================================================== */
+
+.information-packet-window {
+    overflow: hidden;
+    margin-top: 16px;
+    border: 1px solid rgba(var(--dt-blue-rgb), 0.15);
+    border-radius: 16px;
+    background: rgba(var(--dt-blue-rgb), 0.01);
+    backdrop-filter: var(--card-blur-effect);
+    -webkit-backdrop-filter: var(--card-blur-effect);
+    transition: all 0.3s var(--easing-curve);
+
+    &.collapsed .window-content {
+        display: none;
+    }
+}
+
+.deepthink-config-scroll-container {
+    & .information-packet-window {
+        flex: 0 0 auto;
+        display: flex;
+        min-height: 0;
+        flex-direction: column;
+
+        &.collapsed {
+            flex: 0 0 auto;
+
+            & .window-content {
+                display: none;
+            }
+        }
+    }
+
+    & .window-content {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+        box-sizing: border-box;
+        padding: var(--card-padding-xs);
+        flex-direction: column;
+        gap: var(--space-2);
+    }
+
+    & .loading-info {
+        flex: 1;
+        display: flex;
+        gap: var(--gap-xs);
+        padding: var(--space-1) 0;
+        flex-direction: column;
+        justify-content: space-evenly;
+    }
+
+    & .execution-agents-visualization {
+        flex: 0 0 auto;
+        display: flex;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        min-height: 0;
+        margin: 0;
+        flex-direction: column;
+        justify-content: flex-end;
+        box-sizing: border-box;
+    }
+
+    & .connection-nodes {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        height: 38px;
+        min-height: 38px;
+        overflow: hidden;
+    }
+
+    & .connection-svg {
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        height: 100%;
+    }
+}
+
+.window-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(var(--dt-blue-rgb), 0.05);
+    background: rgba(var(--dt-blue-rgb), 0.02);
+}
+
+.window-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.window-right {
+    display: flex;
+    align-items: center;
+}
+
+.window-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.window-button {
+    width: 12px;
+    height: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 50%;
+
+    &.close { background: #ff5f56; }
+    &.minimize { background: #ffbd2e; }
+    &.maximize { background: #27ca3f; }
+}
+
+.window-title {
+    color: var(--text-secondary-color, #a0a0b0);
+    font-size: 0.75rem;
+    font-weight: 500;
+    opacity: 0.8;
+}
+
+.loading-line {
+    height: 8px;
+    border-radius: 10px;
+    background: rgba(var(--dt-blue-rgb), 0.35);
+}
+
+/* ==========================================================================
+   Hypothesis Controls System
+   ========================================================================== */
+
+.deepthink-config-scroll-container {
+    & .hypothesis-controls {
+        flex: 0 0 auto;
+        padding: var(--card-padding-xs);
+        margin-top: var(--space-1);
+        border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+        border-radius: var(--border-radius-md);
+        background-color: rgba(var(--dt-blue-rgb), 0.015);
+
+        & .slider {
+            border-color: rgba(var(--dt-blue-rgb), 0.15);
+
+            &::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                appearance: none;
+                width: 20px;
+                height: 20px;
+                border: 3px solid var(--accent-blue);
+                border-radius: 50%;
+                background: var(--card-bg-color, #1e1e24);
+                box-shadow: 0 2px 8px rgba(var(--dt-blue-rgb), 0.4);
+                cursor: pointer;
+            }
+
+            &::-moz-range-thumb {
+                width: 20px;
+                height: 20px;
+                border: 3px solid var(--accent-blue);
+                border-radius: 50%;
+                background: var(--card-bg-color, #1e1e24);
+                box-shadow: 0 2px 8px rgba(var(--dt-blue-rgb), 0.4);
+                cursor: pointer;
+            }
+        }
+
+        & #dt-hypothesis-value {
+            color: var(--accent-blue);
+            font-weight: 600;
+        }
+    }
+}
+
+.hypothesis-slider-container {
+    padding-top: 0;
+    margin-top: 0;
+    border-top: 1px solid rgba(var(--dt-blue-rgb), 0.08);
+
+    & + & {
+        padding-top: 14px;
+        margin-top: 14px;
+    }
+
+    &:first-child {
+        border-top: 0;
+    }
+}
+
+.slider-pair-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: end;
+    width: 100%;
+}
+
+.slider-pair-row.proximity-pair {
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+}
+
+.slider-pair-row > .input-group-tight {
+    min-width: 0;
+}
+
+.slider-pair-row .input-label {
+    white-space: nowrap;
+}
+
+/* ==========================================================================
+   Sandbox Terminal Environment Panel
+   ========================================================================== */
+
+.deepthink-depth-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.code-execution-toggle-container,
+.deepthink-behavior-controls {
+    border: 1px solid rgba(var(--dt-purple-rgb), 0.15);
+    border-radius: var(--border-radius-md);
+    background: rgba(var(--dt-purple-rgb), 0.04);
+    transition: all var(--transition-speed) var(--easing-curve);
+
+    &:hover {
+        border-color: rgba(var(--dt-purple-rgb), 0.3);
+        background: rgba(var(--dt-purple-rgb), 0.07);
+    }
+}
+
+.code-execution-toggle-container {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    margin-bottom: 0;
+}
+.code-execution-toggle-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.code-execution-toggle-title {
+    color: var(--accent-purple);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.code-execution-toggle-subtitle {
+    color: var(--text-tertiary-color, #808090);
+    font-size: 0.7rem;
+}
+
+/* ==========================================================================
+   Token Volume Graph & Estimation Components
+   ========================================================================== */
+
+.token-volume-estimator {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding-top: 8px;
+    margin-top: 8px;
+    border-top: 1px solid rgba(var(--dt-purple-rgb), 0.14);
+
+    &.focus-input {
+        & :is(.token-summary-item.output, .token-summary-item.total) {
+            opacity: 0.45;
+        }
+    }
+
+    &.focus-output {
+        & :is(.token-summary-item.input, .token-summary-item.total) {
+            opacity: 0.45;
+        }
+    }
+}
+
+.token-estimator-layout {
+    flex: 1;
+    display: flex;
+    gap: 16px;
+    align-items: stretch;
+    min-height: 0;
+}
+
+.token-chart-column {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.token-summary-column {
+    flex: 0 0 120px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    & button.token-summary-item {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        margin: 0;
+    }
+}
+
+.token-summary-item {
+    min-width: 0;
+    padding: 7px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.015);
+    color: inherit;
+    font-family: inherit;
+    text-align: left;
+
+    &.filterable.active {
+        box-shadow: 0 0 0 1.5px currentColor inset;
+    }
+
+    &.input {
+        border-color: rgba(var(--dt-purple-rgb), 0.15);
+        background: rgba(var(--dt-purple-rgb), 0.03);
+        color: var(--accent-purple);
+    }
+
+    &.output {
+        border-color: rgba(var(--dt-green-rgb), 0.15);
+        background: rgba(var(--dt-green-rgb), 0.03);
+        color: var(--accent-green);
+    }
+
+    &.total {
+        border-color: rgba(var(--dt-blue-rgb), 0.15);
+        background: rgba(var(--dt-blue-rgb), 0.03);
+        color: var(--accent-blue);
+    }
+
+    &.calls {
+        border-color: rgba(var(--dt-yellow-rgb), 0.15);
+        background: rgba(var(--dt-yellow-rgb), 0.03);
+        color: var(--accent-yellow);
+    }
+}
+
+button.token-summary-item {
+    appearance: none;
+    cursor: pointer;
+    transition: all var(--transition-speed-fast) var(--easing-curve);
+
+    &:hover {
+        transform: translateY(-1px);
+        background: rgba(255, 255, 255, 0.04);
+    }
+}
+
+.token-summary-label,
+.token-summary-value {
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.token-summary-label {
+    margin-bottom: 2px;
+    color: var(--text-tertiary-color, #808090);
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.token-summary-value {
+    color: inherit;
+    font-size: 0.78rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.token-chart-shell {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px;
+    background: linear-gradient(180deg, rgba(var(--dt-purple-rgb), 0.03) 0%, rgba(0, 0, 0, 0.1) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.token-chart-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 240px;
+    cursor: crosshair;
+}
+
+.token-chart-backdrop,
+.token-area-fill {
+    stroke: none;
+}
+
+.token-chart-backdrop {
+    fill: transparent;
+}
+
+.token-area-fill {
+    &.input { fill: rgba(var(--dt-purple-rgb), 0.08); }
+    &.output { fill: rgba(var(--dt-green-rgb), 0.08); }
+}
+
+.token-grid-line {
+    stroke: rgba(255, 255, 255, 0.05);
+    stroke-width: 1;
+}
+
+.token-x-tick {
+    stroke: rgba(255, 255, 255, 0.15);
+    stroke-width: 1;
+}
+
+.token-axis-label,
+.token-axis-caption {
+    fill: var(--text-tertiary-color, #808090);
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.token-axis-caption {
+    opacity: 0.7;
+}
+
+.token-selected-depth-line {
+    stroke: rgba(var(--dt-yellow-rgb), 0.6);
+    stroke-width: 1.5;
+    stroke-dasharray: 4 4;
+}
+
+.token-series-line {
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+
+    &.input-worst { stroke: var(--accent-purple); }
+    &.input-average {
+        stroke: rgba(var(--dt-purple-rgb), 0.6);
+        stroke-dasharray: 5 4;
+    }
+    &.output-worst { stroke: var(--accent-green); }
+    &.output-average {
+        stroke: rgba(var(--dt-green-rgb), 0.6);
+        stroke-dasharray: 5 4;
+    }
+}
+
+.token-selected-point,
+.token-hover-point {
+    stroke: var(--card-bg-color, #1e1e24);
+    stroke-width: 2;
+
+    &.input-worst { fill: var(--accent-purple); }
+    &.input-average { fill: rgba(var(--dt-purple-rgb), 0.7); }
+    &.output-worst { fill: var(--accent-green); }
+    &.output-average { fill: rgba(var(--dt-green-rgb), 0.7); }
+}
+
+.token-hover-line {
+    stroke: rgba(var(--dt-yellow-rgb), 0.6);
+    stroke-width: 1.2;
+    stroke-dasharray: 3 3;
+}
+
+.token-hover-tooltip {
+    fill: rgba(30, 30, 36, 0.95);
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-width: 1;
+}
+
+.token-hover-title,
+.token-hover-label {
+    font-size: 11px;
+    font-weight: 500;
+    pointer-events: none;
+}
+
+.token-hover-title {
+    fill: var(--text-color);
+}
+
+.token-hover-label {
+    &.input-worst, &.input-average { fill: var(--accent-purple); }
+    &.output-worst, &.output-average { fill: var(--accent-green); }
+}
+
+.token-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin-top: 8px;
+}
+
+.token-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-tertiary-color, #808090);
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.token-legend-swatch {
+    width: 16px;
+    height: 0;
+    border-top: 2px solid currentColor;
+
+    &.input-worst { color: var(--accent-purple); }
+    &.input-average {
+        color: rgba(var(--dt-purple-rgb), 0.6);
+        border-top-style: dashed;
+    }
+    &.output-worst { color: var(--accent-green); }
+    &.output-average {
+        color: rgba(var(--dt-green-rgb), 0.6);
+        border-top-style: dashed;
+    }
+}
+
+/* ==========================================================================
+   Deepthink Controls & Sub-Options
+   ========================================================================== */
+
+.deepthink-depth-container .slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+
+    &::-webkit-slider-thumb,
+    &::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+        border: 2.5px solid var(--accent-purple);
+        box-shadow: 0 2px 8px rgba(var(--dt-purple-rgb), 0.4);
+    }
+}
+
+.deepthink-behavior-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+    padding: 4px;
+    margin-top: var(--gap-sm);
+}
+
+.isolate-branches-option,
+.disable-solution-pool-option {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+    min-height: 40px;
+    padding: 6px 10px;
+    margin: 0;
+    border: 0;
+    background: transparent;
+}
+
+.isolate-branches-option {
+    border-right: 1px solid rgba(var(--dt-purple-rgb), 0.1);
+}
+
+.deepthink-behavior-label {
+    min-width: 0;
+    color: var(--text-color);
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    line-height: 1.2;
+}
+
+/* ==========================================================================
+   Hypothesis Mode Switching Buttons
+   ========================================================================== */
+
+
+.pqf-button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* ==========================================================================
+   Visualizer Architecture & Graph Nodes
+   ========================================================================== */
+
+.deepthink-card-vis {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    height: 40px;
+    overflow: hidden;
+    padding: 0 10px;
+    margin: 8px 0;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: var(--border-radius-sm);
+    background: rgba(255, 255, 255, 0.01);
+}
+
+
+.vis-inputs,
+.vis-solutions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.vis-node,
+.vis-doc-node {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 5px;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.critique-node {
+    border: 1px solid rgba(var(--dt-red-rgb), 0.2);
+    background: rgba(var(--dt-red-rgb), 0.1);
+    color: var(--dt-red);
+}
+
+.corrector-node {
+    border: 1px solid rgba(var(--dt-green-rgb), 0.2);
+    background: rgba(var(--dt-green-rgb), 0.1);
+    color: var(--accent-green);
+}
+
+.memory-bank-node {
+    border: 1px solid rgba(var(--dt-yellow-rgb), 0.25);
+    background: rgba(var(--dt-yellow-rgb), 0.1);
+    color: var(--accent-yellow);
+}
+
+.vis-doc-node {
+    border: 1px solid rgba(var(--dt-purple-rgb), 0.2);
+    background: rgba(var(--dt-purple-rgb), 0.1);
+    color: rgb(var(--dt-purple-rgb));
+}
+
+.vis-plus-operator {
+    color: var(--text-secondary-color, #a0a0b0);
+    font-size: 9px;
+    font-weight: 600;
+}
+
+.vis-arrow-flow {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0 6px;
+}
+
+.flow-arrow-svg {
+    width: 100%;
+    max-width: 48px;
+    height: 12px;
+}
+
+.vis-agent {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: 1px solid rgba(var(--dt-purple-rgb), 0.25);
+    border-radius: 50%;
+    background: rgba(var(--dt-purple-rgb), 0.12);
+    color: var(--accent-purple);
+    box-shadow: 0 0 6px rgba(var(--dt-purple-rgb), 0.15);
+}
+
+.vis-agent-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.vis-label-small {
+    overflow: hidden;
+    padding: 3px 6px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: var(--border-radius-sm);
+    background: rgba(255, 255, 255, 0.02);
+    font-family: monospace;
+    font-size: 8.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+:is(.code-concat-text, .code-concat-operator, .code-concat-bracket) {
+    color: var(--text-secondary-color, #a0a0b0);
+}
+
+.code-concat-method {
+    color: var(--accent-blue);
+    font-weight: 700;
+}
+
+.vis-pool-node {
+    position: relative;
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-yellow);
+
+    &.disabled {
+        opacity: 0.32;
+
+        &::after {
+            content: "";
+            position: absolute;
+            width: 20px;
+            height: 1.5px;
+            border-radius: 2px;
+            background: currentColor;
+            transform: rotate(-42deg);
+        }
+    }
+}
+
+.deepthink-process-vis {
+    justify-content: center;
+    gap: 12px;
+    max-width: 100%;
+    height: 48px;
+    padding: 0 14px;
+    margin: 4px 0 6px;
+}
+
+.deepthink-process-vis .vis-pool-node {
+    width: 28px;
+    height: 28px;
+}
+
+.deepthink-process-vis .vis-node {
+    width: 26px;
+    height: 26px;
+    font-size: 11px;
+}
+
+.deepthink-process-vis .vis-critique-loop-pill {
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 14px;
+}
+
+.deepthink-process-vis .flow-arrow-svg {
+    height: 20px;
+}
+
+.deepthink-process-vis .vis-memory-connector {
+    flex-basis: 56px;
+    width: 56px;
+    height: 32px;
+}
+
+.deepthink-process-vis .vis-memory-connector .flow-arrow-svg {
+    width: 56px;
+    height: 28px;
+}
+
+.deepthink-process-vis .vis-memory-interval {
+    font-size: 8px;
+}
+
+.vis-pool-connector {
+    flex: 0 0 auto;
+
+    &.disabled {
+        opacity: 0.2;
+    }
+}
+
+.vis-critique-loop-pill {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 6px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.vis-memory-connector {
+    position: relative;
+    display: flex;
+    flex: 0 0 48px;
+    align-items: center;
+    width: 48px;
+    height: 26px;
+
+    & .flow-arrow-svg {
+        width: 48px;
+        height: 24px;
+    }
+}
+
+.vis-memory-interval {
+    position: absolute;
+    top: -1px;
+    left: 50%;
+    z-index: 1;
+    padding: 0 2px;
+    background: var(--card-bg-color, #1e1e24);
+    color: var(--text-tertiary-color, #808090);
+    font-size: 7px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    transform: translateX(-50%);
+}
+
+/* ==========================================================================
+   Hypothesis Routing Previews
+   ========================================================================== */
+
+.hypothesis-visual-stack {
+    display: grid;
+    flex: 1 1 auto;
+    grid-template-rows: auto auto;
+    align-content: start;
+    gap: 8px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    height: auto;
+    min-height: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+
+    &.mode-parallel {
+        grid-template-rows: minmax(100px, 1.1fr) minmax(80px, 0.65fr);
+        align-content: stretch;
+
+        & .loading-info {
+            min-height: 100px;
+        }
+    }
+}
+
+.hypothesis-routing-preview {
+    display: grid;
+    grid-template-rows: auto 24px auto;
+    align-items: stretch;
+    gap: 6px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    padding: 2px 0 0;
+    box-sizing: border-box;
+    overflow: hidden;
+
+    &.branch-routing .vis-strategies-row {
+        gap: 4px;
+    }
+
+    & .loading-info {
+        flex: 0 0 auto;
+    }
+}
+
+.vis-strategies-row {
+    display: flex;
+    justify-content: space-around;
+    gap: 6px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.vis-strategy-card-mini {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    padding: 4px 6px;
+    border: 1px solid rgba(var(--dt-purple-rgb), 0.25);
+    border-radius: 6px;
+    background: rgba(var(--dt-purple-rgb), 0.08);
+    color: var(--accent-purple);
+    font-size: 9px;
+    font-weight: 600;
+    text-align: center;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    box-sizing: border-box;
+}
+
+.vis-descending-arrows {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: 24px;
+    min-height: 0;
+    overflow: hidden;
+    margin: 0;
+}
+
+.vis-branch-packets-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.vis-branch-packet {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    min-height: 48px;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 6px;
+    border: 1.5px dashed rgba(var(--dt-blue-rgb), 0.35);
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(var(--dt-blue-rgb), 0.08) 0%, rgba(var(--dt-blue-rgb), 0.03) 100%);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.vis-branch-packet-title {
+    margin-bottom: 2px;
+    color: var(--accent-blue);
+    font-size: 8.5px;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.branch-agents {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    width: 100%;
+    max-width: 100%;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.agent-pill {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 4px;
+    border: 1px solid rgba(var(--dt-blue-rgb), 0.25);
+    border-radius: 8px;
+    background: rgba(var(--dt-blue-rgb), 0.08);
+    color: var(--text-secondary-color, #a0a0b0);
+    font-size: 9px;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ==========================================================================
+   Post Quality Filter Node Graph Details
+   ========================================================================== */
+
+.post-quality-filter-vis {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: calc(100% - 16px);
+    max-width: 100% !important;
+    height: 72px;
+    padding: 6px 14px;
+    margin: 12px auto 4px auto;
+}
+
+.evolution-filter-options-container:not(.disabled) .post-quality-filter-vis {
+    border-color: rgba(var(--dt-pink-rgb), 0.35);
+    background: rgba(var(--dt-pink-rgb), 0.04);
+}
+
+.vis-stage-column {
+    display: flex;
+    flex-shrink: 0;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 4px;
+    height: 100%;
+}
+
+.vis-connector-column {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    max-width: 48px;
+    height: 100%;
+}
+
+:is(.converging-arrows-svg, .evolving-arrow-svg) {
+    width: 100%;
+    height: 100%;
+}
+
+.vis-agent-column {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+}
+
+.vis-strategy-node,
+.vis-critique-node-small,
+.vis-final-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-family: monospace;
+    font-size: 8px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.vis-strategy-node {
+    gap: 3px;
+
+    &.initial-node {
+        border: 1px solid rgba(var(--dt-blue-rgb), 0.2);
+        background: rgba(var(--dt-blue-rgb), 0.1);
+        color: var(--accent-blue);
+    }
+
+    &.evolved-node {
+        border: 1px solid rgba(var(--dt-purple-rgb), 0.2);
+        background: rgba(var(--dt-purple-rgb), 0.1);
+        color: var(--accent-purple);
+    }
+}
+
+.vis-critique-node-small {
+    gap: 3px;
+    border: 1px solid rgba(239, 68, 68, 0.18);
+    background: rgba(239, 68, 68, 0.08);
+    color: #f87171;
+}
+
+.vis-final-badge {
+    gap: 2px;
+    border: 1px solid rgba(var(--dt-green-rgb), 0.2);
+    background: rgba(var(--dt-green-rgb), 0.1);
+    color: #4ade80;
+}
+
+.vis-evaluator-node {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border: 1px solid rgba(var(--dt-pink-rgb), 0.25);
+    border-radius: 50%;
+    background: rgba(var(--dt-pink-rgb), 0.12);
+    color: var(--accent-pink);
+    box-shadow: 0 0 6px rgba(var(--dt-pink-rgb), 0.15);
+}
+
+/* ==========================================================================
+   Deepthink Sub-Options
+   ========================================================================== */
+
+
+
+
+/* ==========================================================================
+   Loop Schedule Timeline & Sequencer
+   ========================================================================== */
+
+.loop-schedule-vis {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.loop-timeline-overview {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.loop-timeline-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.timeline-step {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 28px;
+    padding: 1px 4px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(var(--dt-pink-rgb), 0.18);
+    border-radius: var(--border-radius-sm);
+    font-family: monospace;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary-color, #a0a0b0);
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.timeline-step:hover {
+    background: rgba(var(--dt-pink-rgb), 0.08);
+    color: var(--text-color, #ffffff);
+    border-color: rgba(var(--dt-pink-rgb), 0.4);
+}
+
+.timeline-step.update-step {
+    background: rgba(var(--dt-pink-rgb), 0.14);
+    border-color: var(--accent-pink);
+    color: var(--accent-pink);
+    font-weight: 700;
+    box-shadow: 0 0 10px rgba(var(--dt-pink-rgb), 0.25);
+}
+
+.timeline-step.update-step.with-heartbeat {
+    background: linear-gradient(135deg, rgba(var(--dt-pink-rgb), 0.16) 0%, rgba(var(--dt-blue-rgb), 0.14) 100%);
+    box-shadow: 0 0 10px rgba(var(--dt-pink-rgb), 0.22), 0 0 8px rgba(var(--dt-blue-rgb), 0.18);
+}
+
+.timeline-step.final-step {
+    background: rgba(var(--dt-green-rgb), 0.14);
+    border-color: var(--accent-green);
+    color: #4ade80;
+    font-weight: 700;
+    box-shadow: 0 0 10px rgba(var(--dt-green-rgb), 0.25);
+}
+
+.step-num {
+    font-size: 11px;
+    line-height: 1;
+}
+
+.step-dots-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    margin-top: 3px;
+}
+
+.step-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent-pink);
+    margin-top: 3px;
+    box-shadow: 0 0 6px var(--accent-pink);
+}
+
+.step-dots-row .step-dot,
+.step-dots-row .step-final-dot {
+    margin-top: 0;
+}
+
+.step-final-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent-green);
+    margin-top: 3px;
+    box-shadow: 0 0 6px var(--accent-green);
+}
+
+.timeline-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--text-tertiary-color, #808090);
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.legend-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.legend-dot.update-dot {
+    background: var(--accent-pink);
+    box-shadow: 0 0 6px rgba(var(--dt-pink-rgb), 0.4);
+}
+
+.legend-dot.final-dot {
+    background: var(--accent-green);
+    box-shadow: 0 0 6px rgba(var(--dt-green-rgb), 0.4);
+}
+
+.loop-controls-inputs {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.deepthink-config-scroll-container .evolution-filter-options-container .slider {
+    &::-webkit-slider-thumb,
+    &::-moz-range-thumb {
+        width: 20px;
+        height: 20px;
+        border: 3px solid var(--accent-pink);
+        border-radius: 50%;
+        background: var(--card-bg-color, #1e1e24);
+        box-shadow: 0 2px 8px rgba(var(--dt-pink-rgb), 0.4);
+        cursor: pointer;
+        transition: transform var(--transition-speed-fast) var(--easing-curve);
+    }
+
+    &::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+    }
+
+    &::-webkit-slider-thumb:hover,
+    &::-moz-range-thumb:hover {
+        transform: scale(1.1);
+    }
+}
+
+#dt-i-value,
+#dt-j-value {
+    color: var(--accent-pink);
+    font-weight: 600;
+}
+
+#dt-k-value {
+    color: var(--accent-blue);
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   Curated Context Controls & Sub-Toggles
+   ========================================================================== */
+
+.curated-context-sub-toggles {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 14px;
+    margin-top: 10px;
+    margin-bottom: 8px;
+    border: 1px solid rgba(var(--dt-blue-rgb), 0.15);
+    border-radius: var(--border-radius-sm);
+    background: rgba(var(--dt-blue-rgb), 0.02);
+}
+
+.curated-toggle-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.curated-toggle-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-color, #ffffff);
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s ease;
+}
+
+.curated-toggle-label:hover {
+    color: var(--accent-blue);
+}
+
+
+.input-caption {
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-tertiary-color, #808090);
+    margin-top: 4px;
+}
+
+.config-error-text {
+    font-size: 11px;
+    color: var(--dt-red);
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+.behavior-control-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.behavior-subtext {
+    display: block;
+    font-size: 11px;
+    color: var(--text-tertiary-color, #808090);
+    line-height: 1.35;
+    margin-top: 2px;
+}
+
+/* ==========================================================================
+   Light Theme Adaptations
+   ========================================================================== */
+
+body.light-mode {
+    & .deepthink-config-scroll-container {
+        & .strategy-execution-container {
+            border-color: rgba(var(--dt-red-rgb), 0.4);
+            background: rgba(var(--dt-red-rgb), 0.06);
+        }
+
+        & .hypothesis-controls {
+            border-color: rgba(0, 0, 0, 0.08);
+            background-color: rgba(var(--dt-blue-rgb), 0.05);
+        }
+
+        & .deepthink-options-container {
+            border-color: rgba(var(--dt-purple-rgb), 0.35);
+            background: rgba(var(--dt-purple-rgb), 0.05);
+        }
+
+        & .evolution-filter-options-container {
+            border-color: rgba(var(--dt-pink-rgb), 0.35);
+            background: rgba(var(--dt-pink-rgb), 0.04);
+        }
+
+        & :is(
+            .deepthink-method-card,
+            .strategy-execution-card,
+            .hypothesis-controls,
+            .information-packet-window,
+            .evolution-filter-options-container,
+            .window-content,
+            .execution-agents-visualization
+        ) {
+            border-color: rgba(0, 0, 0, 0.12) !important;
+            box-shadow: 0 1px 6px rgba(0, 0, 0, 0.02);
+        }
+
+        & .deepthink-method-card {
+            background: rgba(255, 255, 255, 0.85);
+        }
+    }
+
+    & :is(
+        .input-label,
+        .window-title,
+        .evolution-filter-options-header
+    ) {
+        color: #1a1a24;
+    }
+
+    & .code-execution-toggle-container {
+        border-color: rgba(var(--dt-purple-rgb), 0.25);
+        background: rgba(var(--dt-purple-rgb), 0.05);
+    }
+
+
+
+    & .token-volume-estimator {
+        border-top-color: rgba(var(--dt-purple-rgb), 0.18);
+    }
+
+    & .token-chart-shell {
+        background: linear-gradient(180deg, rgba(var(--dt-purple-rgb), 0.06) 0%, rgba(255, 255, 255, 0.9) 100%);
+        border-color: rgba(0, 0, 0, 0.08);
+    }
+
+    & .token-summary-item {
+        border-color: rgba(0, 0, 0, 0.06);
+        background-color: rgba(255, 255, 255, 0.9);
+    }
+
+    & .token-hover-tooltip {
+        fill: rgba(255, 255, 255, 0.98);
+        stroke: rgba(0, 0, 0, 0.12);
+    }
+
+    & .deepthink-card-vis {
+        border-color: rgba(0, 0, 0, 0.08);
+        background: rgba(0, 0, 0, 0.015);
+    }
+
+
+
+    & .critique-node {
+        border-color: rgba(220, 38, 38, 0.15);
+        background: rgba(220, 38, 38, 0.05);
+        color: #dc2626;
+    }
+
+    & .corrector-node {
+        border-color: rgba(21, 128, 61, 0.15);
+        background: rgba(21, 128, 61, 0.05);
+        color: #15803d;
+    }
+
+    & .memory-bank-node {
+        border-color: rgba(202, 138, 4, 0.18);
+        background: rgba(202, 138, 4, 0.05);
+        color: #ca8a04;
+    }
+
+    & .vis-doc-node {
+        border-color: rgba(13, 148, 136, 0.15);
+        background: rgba(13, 148, 136, 0.05);
+        color: #0d9488;
+    }
+
+    & .vis-agent {
+        border-color: rgba(124, 58, 237, 0.2);
+        background: rgba(124, 58, 237, 0.06);
+    }
+
+    & .vis-label-small {
+        border-color: rgba(0, 0, 0, 0.1);
+        background: rgba(255, 255, 255, 0.95);
+    }
+
+    & :is(.code-concat-text, .code-concat-operator, .code-concat-bracket) {
+        color: #4b5563;
+    }
+
+    & .code-concat-method {
+        color: #2563eb;
+    }
+
+    & .vis-pool-node {
+        color: #d97706;
+    }
+
+    & .vis-critique-loop-pill {
+        border-color: rgba(0, 0, 0, 0.06);
+        background: rgba(0, 0, 0, 0.01);
+    }
+
+    & .vis-memory-interval {
+        background: rgba(255, 255, 255, 0.95);
+        color: #64748b;
+    }
+
+    & .vis-strategy-card-mini {
+        border-color: rgba(109, 40, 217, 0.15);
+        background: rgba(109, 40, 217, 0.04);
+        color: #6d28d9;
+    }
+
+    & .vis-branch-packet {
+        border-color: rgba(37, 99, 235, 0.18);
+        background: rgba(37, 99, 235, 0.02);
+    }
+
+    & :is(.vis-branch-packet-title, .agent-pill) {
+        color: #1d4ed8;
+    }
+
+    & .agent-pill {
+        border-color: rgba(37, 99, 235, 0.15);
+        background: rgba(37, 99, 235, 0.04);
+    }
+
+    & .vis-strategy-node {
+        &.initial-node {
+            border-color: rgba(59, 130, 246, 0.18);
+            background: rgba(59, 130, 246, 0.05);
+            color: var(--accent-blue);
+        }
+
+        &.evolved-node {
+            border-color: rgba(124, 58, 237, 0.15);
+            background: rgba(124, 58, 237, 0.05);
+            color: var(--accent-purple);
+        }
+    }
+
+    & .vis-critique-node-small {
+        border-color: rgba(220, 38, 38, 0.15);
+        background: rgba(220, 38, 38, 0.05);
+        color: #dc2626;
+    }
+
+    & .vis-final-badge {
+        border-color: rgba(21, 128, 61, 0.15);
+        background: rgba(21, 128, 61, 0.05);
+        color: #16a34a;
+    }
+
+    & .vis-evaluator-node {
+        border-color: rgba(236, 72, 153, 0.25);
+        background: rgba(236, 72, 153, 0.06);
+    }
+}
+
+/* ==========================================================================
+   Responsive Adaptations
+   ========================================================================== */
+
+@media (max-width: 1400px) {
+    .deepthink-config-scroll-container {
+        grid-template-columns: 1fr !important;
+    }
+
+    .deepthink-config-scroll-container .deepthink-methods-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .deepthink-config-scroll-container {
+        padding: 12px;
+        gap: 10px;
+    }
+
+    .token-estimator-layout {
+        flex-direction: column-reverse;
+        gap: 12px;
+    }
+
+    .token-summary-column {
+        flex: auto;
+        flex-direction: row;
+        width: 100%;
+        gap: 6px;
+
+        & button.token-summary-item {
+            flex: 1;
+            min-width: 0;
+            padding: 7px 8px;
+        }
+    }
+
+    .token-chart-svg {
+        height: 280px;
+    }
+}
+
+/* ==========================================================================
+   Sidebar model controls
+   ========================================================================== */
+
+#controls-sidebar {
+    & #model-parameters-container {
+        display: flex !important;
+    }
+
+}
+
+
+.window-header,
+.evolution-filter-options-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.window-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.window-left svg,
+.window-left .icon {
+    flex-shrink: 0;
+}
+
+
+/* Universal Slider Consistency across all sections */
+.deepthink-config-scroll-container .slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border-radius: 10px;
+    outline: none;
+    cursor: pointer;
+    background: var(--slider-track-color);
+    transition: border-color var(--transition-speed) var(--easing-curve);
+    margin: 6px 0;
+}
+
+.deepthink-config-scroll-container .strategy-execution-container .slider::-webkit-slider-thumb,
+.deepthink-config-scroll-container .strategy-execution-container .slider::-moz-range-thumb {
+    width: 20px !important;
+    height: 20px !important;
+    border: 3px solid var(--dt-red) !important;
+    border-radius: 50% !important;
+    background: var(--card-bg-color, #1e1e24) !important;
+    box-shadow: 0 2px 8px rgba(var(--dt-red-rgb), 0.4) !important;
+    cursor: pointer;
+    transition: transform var(--transition-speed-fast) var(--easing-curve);
+}
+
+.deepthink-config-scroll-container .evolution-filter-options-container .slider::-webkit-slider-thumb,
+.deepthink-config-scroll-container .evolution-filter-options-container .slider::-moz-range-thumb {
+    width: 20px !important;
+    height: 20px !important;
+    border: 3px solid var(--accent-pink) !important;
+    border-radius: 50% !important;
+    background: var(--card-bg-color, #1e1e24) !important;
+    box-shadow: 0 2px 8px rgba(var(--dt-pink-rgb), 0.4) !important;
+    cursor: pointer;
+    transition: transform var(--transition-speed-fast) var(--easing-curve);
+}
+
+.deepthink-config-scroll-container .information-packet-window .slider::-webkit-slider-thumb,
+.deepthink-config-scroll-container .information-packet-window .slider::-moz-range-thumb {
+    width: 20px !important;
+    height: 20px !important;
+    border: 3px solid var(--accent-blue) !important;
+    border-radius: 50% !important;
+    background: var(--card-bg-color, #1e1e24) !important;
+    box-shadow: 0 2px 8px rgba(var(--dt-blue-rgb), 0.4) !important;
+    cursor: pointer;
+    transition: transform var(--transition-speed-fast) var(--easing-curve);
+}
+
+.deepthink-config-scroll-container .slider::-webkit-slider-thumb:hover,
+.deepthink-config-scroll-container .slider::-moz-range-thumb:hover {
+    transform: scale(1.1) !important;
+}
+
+
+/* ==========================================================================
+   Structured Structured Noise Visualization
+   ========================================================================== */
+
+.vis-section-label {
+    font-size: 8.5px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--accent-blue);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.vis-section-label.solution-pool-label {
+    color: var(--accent-yellow);
+    margin-top: 10px;
+}
+
+.solution-pool-visual-block {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.solution-pool-visualization {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    border: 1.5px dashed rgba(var(--dt-yellow-rgb), 0.35);
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(var(--dt-yellow-rgb), 0.06) 0%, rgba(var(--dt-yellow-rgb), 0.02) 100%);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+}
+
+.vis-pool-sources {
+    display: flex;
+    justify-content: space-around;
+    width: 100%;
+}
+
+.vis-pool-source-branch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.vis-pool-source-branch .source-label {
+    font-size: 8.5px;
+    font-weight: 700;
+    color: var(--accent-blue);
+    text-transform: uppercase;
+}
+
+.vis-pool-source-branch .source-arrow {
+    font-size: 10px;
+    color: var(--accent-yellow);
+    line-height: 1;
+}
+
+.vis-pool-central-box {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    border: 1px solid rgba(var(--dt-yellow-rgb), 0.25);
+    border-radius: 8px;
+    background: rgba(var(--dt-yellow-rgb), 0.05);
+}
+
+.vis-pool-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.vis-pool-title-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 8.5px;
+    font-weight: 700;
+    color: var(--accent-yellow);
+    letter-spacing: 0.4px;
+}
+
+.vis-pool-badge {
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: rgba(var(--dt-yellow-rgb), 0.15);
+    border: 1px solid rgba(var(--dt-yellow-rgb), 0.3);
+    font-size: 7.5px;
+    font-weight: 700;
+    color: var(--accent-yellow);
+    text-transform: uppercase;
+}
+
+.vis-pool-clusters {
+    display: flex;
+    gap: 6px;
+    width: 100%;
+}
+
+.vis-pool-cluster {
+    flex: 1;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(var(--dt-yellow-rgb), 0.2);
+    background: rgba(var(--dt-yellow-rgb), 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.vis-pool-cluster .cluster-tag {
+    font-size: 8.5px;
+    font-weight: 700;
+    color: var(--accent-yellow);
+    font-family: monospace;
+}
+
+.vis-pool-cluster .cluster-desc {
+    font-size: 7.5px;
+    color: var(--text-secondary-color, #a0a0b0);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.vis-pool-dispatch {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    align-items: center;
+}
+
+.pool-dispatch-svg {
+    width: 100%;
+    height: 20px;
+}
+
+.vis-pool-consumers {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    width: 100%;
+}
+
+.consumer-pill {
+    flex: 1;
+    padding: 6px 0;
+    border: 1px solid rgba(var(--dt-yellow-rgb), 0.25);
+    border-radius: 6px;
+    background: rgba(var(--dt-yellow-rgb), 0.06);
+    color: var(--text-secondary-color, #a0a0b0);
+    font-size: 8.5px;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+
+/* ==========================================================================
+   Section Headers & Icon Gap Fix (No Mac exit buttons)
+   ========================================================================== */
+
+.section-header,
+.evolution-filter-options-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(var(--dt-pink-rgb), 0.08);
+    background: rgba(var(--dt-pink-rgb), 0.02);
+}
+
+.section-title-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-title-wrapper svg,
+.evolution-filter-options-header svg {
+    color: var(--accent-pink);
+    flex-shrink: 0;
+}
+
+.section-title,
+.evolution-filter-options-header span {
+    color: var(--text-secondary-color, #a0a0b0);
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.section-body {
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ==========================================================================
+   Heartbeat visualization on Loop Schedule Timeline
+   ========================================================================== */
+
+.timeline-step.heartbeat-step {
+    background: rgba(var(--dt-blue-rgb), 0.14) !important;
+    border-color: var(--accent-blue) !important;
+    color: var(--accent-blue) !important;
+    font-weight: 700;
+    box-shadow: 0 0 10px rgba(var(--dt-blue-rgb), 0.25) !important;
+}
+
+.step-dot.heartbeat-dot-indicator {
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--accent-blue);
+    margin-top: 3px;
+    box-shadow: 0 0 6px var(--accent-blue);
+}
+
+.legend-dot.heartbeat-dot {
+    background: var(--accent-blue);
+    box-shadow: 0 0 6px rgba(var(--dt-blue-rgb), 0.4);
+}
+
+/* ==========================================================================
+   In-Sync Curated Context Sub-Feature Cards
+   ========================================================================== */
+
+.k-interval-control {
+    padding-bottom: 6px;
+    margin-top: 2px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid rgba(var(--dt-blue-rgb), 0.1);
+}
+
+.curated-subfeature-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid rgba(var(--dt-blue-rgb), 0.18);
+    border-radius: var(--border-radius-md);
+    background: rgba(var(--dt-blue-rgb), 0.02);
+    margin-top: 6px;
+    transition: all 0.2s ease;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.curated-subfeature-card.solution-pool-card {
+    border-color: rgba(var(--dt-yellow-rgb), 0.2);
+    background: rgba(var(--dt-yellow-rgb), 0.02);
+}
+
+.curated-subfeature-card.collapsed {
+    background: rgba(255, 255, 255, 0.015);
+    border-color: rgba(255, 255, 255, 0.06);
+    padding: 8px 12px;
+}
+
+.curated-subfeature-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.curated-subfeature-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 2px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+.curated-toggle-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-color, #ffffff);
+    cursor: pointer;
+    user-select: none;
+    transition: color 0.15s ease;
+}
+
+.curated-toggle-label:hover {
+    color: var(--accent-blue);
+}
+
+.curated-subfeature-card.solution-pool-card .curated-toggle-label:hover {
+    color: var(--accent-yellow);
+}
+
+/* ==========================================================================
+   Clean Single-Row Isolate Branches Toggle (No Empty Void)
+   ========================================================================== */
+
+.deepthink-behavior-controls {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: none !important;
+    gap: 0 !important;
+    padding: 2px 6px !important;
+    margin-top: 6px !important;
+    border: 1px solid rgba(var(--dt-purple-rgb), 0.15) !important;
+    border-radius: var(--border-radius-md) !important;
+    background: rgba(var(--dt-purple-rgb), 0.04) !important;
+}
+
+.isolate-branches-option {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 10px !important;
+    width: 100% !important;
+    min-height: 32px !important;
+    padding: 4px 10px !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-right: none !important;
+    background: transparent !important;
+}
+
+.deepthink-behavior-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-color, #ffffff);
+    cursor: pointer;
+}

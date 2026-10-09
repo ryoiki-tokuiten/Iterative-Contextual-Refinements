@@ -58,10 +58,6 @@ export function getHypothesisProximityLoops(): number {
     return getRoutingManager().getHypothesisProximityLoops();
 }
 
-export function getSelectedPqfAggressiveness(): string {
-    return getRoutingManager().getPqfAggressiveness();
-}
-
 export function getDeepthinkDepth(): number {
     return getRoutingManager().getDeepthinkDepth();
 }

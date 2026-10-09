@@ -29,7 +29,7 @@ import {
 } from './StateSerializer';
 
 import { updateUIAfterModeChange } from './AppRouter';
-import { createDefaultCustomPromptsDeepthink } from '../Deepthink/DeepthinkPrompts';
+import { createDefaultCustomPromptsDeepthink } from '../Deepthink/prompts';
 import { createDefaultCustomPromptsContextual } from '../Contextual/ContextualPrompts';
 import { createDefaultCustomPromptsAdaptiveDeepthink } from '../AdaptiveDeepthink/AdaptiveDeepthinkPrompt';
 import {
@@ -39,7 +39,6 @@ import {
     getStrategyProximityLoops,
     getSelectedHypothesisCount,
     getHypothesisProximityLoops,
-    getSelectedPqfAggressiveness,
     getDeepthinkDepth,
     getIsolateBranchesEnabled,
     getSolutionPoolDisabled,
@@ -102,7 +101,6 @@ export async function exportConfiguration(format: ExportFormat = 'auto'): Promis
                 strategyProximityLoops: getStrategyProximityLoops(),
                 hypothesisCount: getSelectedHypothesisCount(),
                 hypothesisProximityLoops: getHypothesisProximityLoops(),
-                pqfAggressiveness: getSelectedPqfAggressiveness(),
                 deepthinkDepth: getDeepthinkDepth(),
                 isolateBranches: getIsolateBranchesEnabled(),
                 disableSolutionPool: getSolutionPoolDisabled(),
@@ -283,7 +281,6 @@ function restoreModelParameters(params: ExportedConfig['modelParameters']): void
         'strategyProximityLoops',
         'hypothesisCount',
         'hypothesisProximityLoops',
-        'pqfAggressiveness',
         'deepthinkDepth',
         'isolateBranches',
         'disableSolutionPool',

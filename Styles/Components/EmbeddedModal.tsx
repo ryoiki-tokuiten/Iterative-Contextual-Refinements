@@ -7,7 +7,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import { createRoot, Root } from 'react-dom/client';
 import { Icon } from '../../UI/Icons';
 import RenderMathMarkdown from './RenderMathMarkdown';
-import { SandboxAgentActivity } from '../../Deepthink/SandboxAgentActivity';
+import { SandboxAgentActivity } from '../../Deepthink/ui/SandboxAgentActivity';
 
 interface ModalMessage {
     id: string;

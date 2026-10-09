@@ -6,8 +6,8 @@ import { AdaptiveMessage, ResponseSegment, SystemBlock } from './AdaptiveTypes';
 import { messageContentToText, resolveProviderForModel } from '../Core/LangGraphToolRuntime';
 import { describeProviderError } from '../Core/ProviderError';
 import { globalState } from '../Core/State';
-import type { DeepthinkPipelineState } from '../Deepthink/DeepthinkCore';
-import { setActiveDeepthinkPipelineForImport } from '../Deepthink/Deepthink';
+import type { DeepthinkPipelineState } from '../Deepthink/core/deepthinkCore';
+import { setActiveDeepthinkPipelineForImport } from '../Deepthink/ui/Deepthink';
 import {
     callAI,
     getSelectedModel,
@@ -157,7 +157,6 @@ function createInitialDeepthinkPipelineState(id: string, question: string): Deep
         initialStrategies: [],
         hypotheses: [],
         solutionCritiques: [],
-        postQualityFilterAgents: [],
         structuredSolutionPoolAgents: [],
         hypothesisExplorerComplete: false,
         knowledgePacket: '',

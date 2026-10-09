@@ -3,14 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { MAX_HYPOTHESIS_COUNT, ModelConfigManager, type ModelParameters } from './ModelConfig';
+import {
+    MAX_HYPOTHESIS_COUNT,
+    MAX_STRATEGY_PROXIMITY_LOOPS,
+    MAX_HYPOTHESIS_PROXIMITY_LOOPS,
+    ModelConfigManager,
+    type ModelParameters,
+} from './ModelConfig';
 
 function calculateDeepthinkApiCallsFromParams(params: ModelParameters): { min: number; max: number } {
     const strategiesCount = Math.max(1, Math.min(params.strategiesCount, 5));
     const depth = Math.max(1, Math.min(params.deepthinkDepth, 10));
-    const strategyGenerationCalls = 1 + (2 * Math.max(1, Math.min(5, params.strategyProximityLoops || 2)));
+    const strategyGenerationCalls = 1 + (2 * Math.max(1, Math.min(MAX_STRATEGY_PROXIMITY_LOOPS, params.strategyProximityLoops || 1)));
     const hypothesisCount = Math.max(0, Math.min(MAX_HYPOTHESIS_COUNT, params.hypothesisCount));
-    const hypothesisGenerationCalls = 1 + (2 * Math.max(1, Math.min(5, params.hypothesisProximityLoops || 2)));
+    const hypothesisGenerationCalls = 1 + (2 * Math.max(1, Math.min(MAX_HYPOTHESIS_PROXIMITY_LOOPS, params.hypothesisProximityLoops || 1)));
 
     let minCalls = strategyGenerationCalls;
     let maxCalls = strategyGenerationCalls;
@@ -26,9 +32,9 @@ function calculateDeepthinkApiCallsFromParams(params: ModelParameters): { min: n
     maxCalls += strategiesCount * depth * branchCallsPerDepth;
 
     const maintenancePasses = Math.floor(depth / 5);
-    const pqfAgentCount = Math.ceil(strategiesCount / 2);
-    minCalls += maintenancePasses * (strategiesCount + pqfAgentCount);
-    maxCalls += maintenancePasses * (strategiesCount + pqfAgentCount + strategyGenerationCalls + (strategiesCount * 2));
+    const bsrAgentCount = strategiesCount;
+    minCalls += maintenancePasses * (strategiesCount + bsrAgentCount);
+    maxCalls += maintenancePasses * (strategiesCount + bsrAgentCount + strategyGenerationCalls + (strategiesCount * 2));
 
     minCalls += 1;
     maxCalls += 1;

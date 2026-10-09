@@ -12,8 +12,8 @@ const MODE_DETAILS: Record<ApplicationMode, {
     'deepthink': {
         title: 'Deepthink',
         buttonLabel: 'Deepthink',
-        tags: ['Highest Quality', 'Highest Compute', 'Breadth-First-Search', 'Depth-First-Search'],
-        description: 'Parallel strategies and hypothesis execution with Evolving Depth First Search, branch-local solution pools, memory banks, and PQF strategy evolution.'
+        tags: ['Highest Quality', 'Highest Compute', 'Parallel Branches', 'Curated Context'],
+        description: 'Parallel branches with lockstep iteration barriers, curated-context heartbeats, Branch State Representation (BSR), and Dissected Observations Synthesis (DOS).'
     },
     'adaptive-deepthink': {
         title: 'Adaptive Deepthink',
@@ -22,7 +22,7 @@ const MODE_DETAILS: Record<ApplicationMode, {
         description: 'An orchestrator-directed Deepthink workflow with dynamic strategy generation, hypothesis testing, and branch execution.'
     },
     'contextual': {
-        title: 'Contextual (Solution Pool + Memory)',
+        title: 'Contextual (Structured Noise + Memory)',
         buttonLabel: 'Iterative Corrections',
         tags: ['Highest Quality (might be biased sometimes)', 'Highest Compute Budget', 'Depth-First-Search', 'Memory Bank Support'],
         description: 'Can work autonomously for hours.'

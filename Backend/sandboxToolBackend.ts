@@ -491,10 +491,6 @@ function sanitizeRepositoryAccess(accessRequest: SandboxRepositoryAccessRequest 
     };
 }
 
-function ordinalPqfLabel(index: number): string {
-    const named = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth', 'Ninth', 'Tenth'];
-    return named[index - 1] || `${index}th`;
-}
 
 async function createActiveStrategyDirectory(repoRoot: string, strategyDirectory: string): Promise<void> {
     const activeDirectory = safeJoin(repoRoot, strategyDirectory);
@@ -521,9 +517,9 @@ async function archiveStrategyRepositoryDirectory(repositoryId: string, strategy
         await mkdir(prunedRoot, { recursive: true });
         const existing = await readdir(prunedRoot, { withFileTypes: true }).catch(() => []);
         const replacementCount = existing.filter(entry => (
-            entry.isDirectory() && new RegExp(`^${strategyDirectory}_.+_PQF$`).test(entry.name)
+            entry.isDirectory() && new RegExp(`^${strategyDirectory}_pruned_\\d+`).test(entry.name)
         )).length;
-        const archiveName = `${strategyDirectory}_${ordinalPqfLabel(replacementCount + 1)}_PQF`;
+        const archiveName = `${strategyDirectory}_pruned_${String(replacementCount + 1).padStart(2, '0')}`;
         await rename(activeDirectory, safeJoin(prunedRoot, archiveName));
         archivedDirectory = `Pruned_Strategies/${archiveName}`;
     }
@@ -2380,7 +2376,7 @@ async function copyPrunedRepositoryTree(source: string, destination: string): Pr
 function isSafeResultsContextPath(relativePath: string): boolean {
     if (!relativePath || relativePath.includes('\\') || relativePath.startsWith('/') || relativePath.endsWith('/')) return false;
     const segments = relativePath.split('/');
-    return /\.(md|json)$/i.test(relativePath)
+    return /\.(md|json|txt|py|js|ts|tsx|jsx|html|css|yaml|yml|sh)$/i.test(relativePath)
         && segments.every(segment => /^[a-zA-Z0-9][a-zA-Z0-9_.()+\-]{0,95}$/.test(segment));
 }
 
@@ -2391,27 +2387,34 @@ async function syncDeepthinkResultsSnapshot(payload: DeepthinkResultsSnapshotReq
 
     const sourceRepository = getRepositoryPath(payload.repositoryId);
     if (!(await fileExists(sourceRepository))) {
-        throw new Error('Deepthink sandbox repository was not found.');
+        await mkdir(sourceRepository, { recursive: true });
     }
-
-    const resultsRepository = await ensureDeepthinkResultsRepository(payload.repositoryId);
-    if (!resultsRepository) throw new Error('Could not create the Deepthink Results repository.');
-
-    await clearResultsWorkingTree(resultsRepository);
-    await copyPrunedRepositoryTree(sourceRepository, resultsRepository);
 
     const contextFiles = payload.contextFiles || [];
     for (const file of contextFiles) {
         if (!file || !isSafeResultsContextPath(file.path) || typeof file.content !== 'string') {
             throw new Error('Invalid Results context file.');
         }
-        const destination = safeJoin(resultsRepository, file.path);
-        await mkdir(path.dirname(destination), { recursive: true });
-        await writeFile(destination, file.content, 'utf8');
+        const sourceDestination = safeJoin(sourceRepository, file.path);
+        await mkdir(path.dirname(sourceDestination), { recursive: true });
+        await writeFile(sourceDestination, file.content, 'utf8');
     }
 
-    await initAndCommitWorkspace(resultsRepository, payload.commitMessage || 'Deepthink Results snapshot');
-    return resultsRepository;
+    await initAndCommitWorkspace(sourceRepository, payload.commitMessage || 'Deepthink Results snapshot');
+
+    const resultsRepository = await ensureDeepthinkResultsRepository(payload.repositoryId);
+    if (resultsRepository) {
+        await clearResultsWorkingTree(resultsRepository);
+        await copyPrunedRepositoryTree(sourceRepository, resultsRepository);
+        for (const file of contextFiles) {
+            const destination = safeJoin(resultsRepository, file.path);
+            await mkdir(path.dirname(destination), { recursive: true });
+            await writeFile(destination, file.content, 'utf8');
+        }
+        await initAndCommitWorkspace(resultsRepository, payload.commitMessage || 'Deepthink Results snapshot');
+    }
+
+    return sourceRepository;
 }
 
 async function handleExecute(req: IncomingMessage, res: ServerResponse) {
@@ -2583,7 +2586,9 @@ async function handleEnsureDeepthinkRepository(req: IncomingMessage, res: Server
             sendJson(res, 400, { ok: false, error: 'A valid Deepthink repository id is required.' });
             return;
         }
-        await mkdir(getRepositoryPath(payload.repositoryId), { recursive: true });
+        const repoPath = getRepositoryPath(payload.repositoryId);
+        await mkdir(repoPath, { recursive: true });
+        await initAndCommitWorkspace(repoPath, 'Deepthink repository initialized');
         const resultPath = await ensureDeepthinkResultsRepository(payload.repositoryId);
         sendJson(res, 200, { ok: true, resultPath });
     } catch (err: any) {
@@ -2652,6 +2657,15 @@ async function handleFileRequest(pathname: string, res: ServerResponse) {
         return;
     }
     const mimeType = getMimeType(absolutePath) || 'text/plain; charset=utf-8';
+
+    if (!(await fileExists(absolutePath))) {
+        if (workspace.repositoryAccess?.agentDirectory && !relativePath.startsWith(`${workspace.repositoryAccess.agentDirectory}/`)) {
+            const fallbackPath = safeJoin(workspace.visibleRootPath, `${workspace.repositoryAccess.agentDirectory}/${relativePath}`);
+            if (await fileExists(fallbackPath)) {
+                absolutePath = fallbackPath;
+            }
+        }
+    }
 
     if (!(await fileExists(absolutePath))) {
         sendText(res, 404, 'File not found.');
@@ -2806,15 +2820,15 @@ async function resolveExplorerRepositoryTarget(args: {
 }): Promise<ExplorerRepositoryTarget | null> {
     if (args.repositoryId) {
         if (!isSafeRepositoryId(args.repositoryId)) return null;
+        const repository = getRepositoryPath(args.repositoryId);
+        if (await fileExists(repository)) return { root: repository, isRepositoryView: true };
         if (isDeepthinkRepository(args.repositoryId)) {
             const resultsRepository = await getDeepthinkResultsRepositoryPath(args.repositoryId);
-            if (!resultsRepository || !(await fileExists(resultsRepository))) return null;
-            return { root: resultsRepository, isRepositoryView: true };
+            if (resultsRepository && (await fileExists(resultsRepository))) {
+                return { root: resultsRepository, isRepositoryView: true };
+            }
         }
-        if (!args.repositoryId.startsWith('contextual-')) return null;
-        const repository = getRepositoryPath(args.repositoryId);
-        if (!(await fileExists(repository))) return null;
-        return { root: repository, isRepositoryView: true };
+        return null;
     }
 
     if (!args.sessionId || !isSafeSessionId(args.sessionId)) return null;

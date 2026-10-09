@@ -4,7 +4,6 @@
  */
 
 import { updatePromptContent } from '../Styles/Components/PromptStyling';
-import { PromptRefiner } from './PromptRefiner';
 import { globalState } from '../Core/State';
 import { renderIconMarkup } from '../UI/Icons';
 import {
@@ -24,7 +23,6 @@ export class PromptsModal {
 
     private currentMode: string = 'deepthink';
     private modelConfig: any = null;
-    private activeRefiners: Map<string, PromptRefiner> = new Map();
 
     constructor() {
         this.elements = {
@@ -190,19 +188,12 @@ export class PromptsModal {
                     // Hide all content panes
                     activeModeContainer.querySelectorAll('.prompt-content-pane').forEach(pane => {
                         pane.classList.remove('active');
-                        pane.classList.remove('dual-panel');
                     });
 
                     // Show corresponding content pane
                     const targetPane = activeModeContainer.querySelector(`.prompt-content-pane[data-prompt-key="${promptKey}"]`);
                     if (targetPane) {
                         targetPane.classList.add('active');
-
-                        // Apply dual-panel class if there are 2 prompt cards
-                        const cardCount = targetPane.querySelectorAll('.prompt-card').length;
-                        if (cardCount === 2) {
-                            targetPane.classList.add('dual-panel');
-                        }
 
                         // Update prompt content when switching panes
                         setTimeout(() => updatePromptContent(), 50);
@@ -370,7 +361,7 @@ export class PromptsModal {
 
         const agentName = originalSelect.dataset.agent || 'unknown';
 
-        // Create custom dropdown structure with refine button
+        // Create custom dropdown structure
         const customSelect = document.createElement('div');
         customSelect.className = 'custom-model-select';
         customSelect.innerHTML = `
@@ -385,43 +376,6 @@ export class PromptsModal {
 
         // Insert custom select after the original select
         container.insertBefore(customSelect, originalSelect.nextSibling);
-
-        // Add refine button
-        const refineButton = document.createElement('button');
-        refineButton.className = 'prompt-model-refine-btn';
-        refineButton.type = 'button';
-        refineButton.innerHTML = `
-            ${renderIconMarkup('edit')}
-            <span>Refine</span>
-        `;
-        refineButton.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this.openPromptRefiner(agentName);
-        });
-        container.appendChild(refineButton);
-
-        // Add diff button (initially hidden)
-        const diffButton = document.createElement('button');
-        diffButton.className = 'prompt-model-diff-btn';
-        diffButton.type = 'button';
-        diffButton.style.display = 'none';
-        diffButton.dataset.agent = agentName;
-        diffButton.innerHTML = `
-            ${renderIconMarkup('difference')}
-            <span>Diff</span>
-        `;
-
-        // Use arrow function to preserve 'this' context
-        const clickHandler = (e: Event) => {
-            e.preventDefault();
-            e.stopPropagation();
-            this.openPromptDiff(agentName);
-        };
-
-        diffButton.addEventListener('click', clickHandler);
-
-        container.appendChild(diffButton);
 
         // Hide the original select
         originalSelect.style.display = 'none';
@@ -644,103 +598,13 @@ export class PromptsModal {
         return this.getPromptAgentMap()[agentName] || null;
     }
 
-    private openPromptRefiner(agentName: string): void {
-        if (!this.modelConfig) {
-            console.error('modelConfig is not set');
-            return;
-        }
-
-        // Use the proper mapping from agent name to textarea ID
-        const textareaId = this.getTextareaIdForAgent(agentName);
-        if (!textareaId) {
-            console.error('No textarea mapping found for agent:', agentName);
-            return;
-        }
-
-        const textarea = document.getElementById(textareaId) as HTMLTextAreaElement;
-        if (!textarea) {
-            console.error('Textarea not found with ID:', textareaId);
-            return;
-        }
-
-        const currentPrompt = textarea.value;
-
-        // Create or get existing refiner
-        let refiner = this.activeRefiners.get(agentName);
-        if (!refiner) {
-            refiner = new PromptRefiner({
-                agentName,
-                currentPrompt,
-                onPromptUpdated: (newPrompt: string) => {
-                    textarea.value = newPrompt;
-                    // Trigger input event to update the state
-                    const inputEvent = new Event('input', { bubbles: true });
-                    textarea.dispatchEvent(inputEvent);
-                    // Update syntax highlighting
-                    setTimeout(() => updatePromptContent(), 50);
-                    // Check for changes and show/hide diff button
-                    this.checkPromptChanges(agentName);
-                },
-                modelConfig: this.modelConfig
-            });
-            this.activeRefiners.set(agentName, refiner);
-        } else {
-            refiner.updateConfig({ currentPrompt });
-        }
-
-        // Find the refine button to position the overlay
-        const refineButton = document.querySelector('.prompt-model-refine-btn') as HTMLElement;
-        console.log('Showing refiner overlay');
-        refiner.show(refineButton || document.body);
-    }
-
     private checkPromptChanges(agentName: string): void {
         const textareaId = this.getTextareaIdForAgent(agentName);
         if (!textareaId) return;
-
-        const textarea = document.getElementById(textareaId) as HTMLTextAreaElement;
+        const textarea = document.getElementById(textareaId) as HTMLTextAreaElement | null;
         if (!textarea) return;
-
-        const currentPrompt = textarea.value;
-        const originalPrompt = textarea.dataset.originalValue || '';
-
-        // Find the diff button for this agent
-        const diffButton = document.querySelector(`.prompt-model-diff-btn[data-agent="${agentName}"]`) as HTMLElement;
-        if (!diffButton) {
-            // Button doesn't exist yet - might be called before button is created
-            return;
-        }
-
-        // Show diff button if content has changed
-        const hasChanges = currentPrompt.trim() !== originalPrompt.trim();
-        if (hasChanges) {
-            diffButton.style.display = 'inline-flex';
-            diffButton.style.visibility = 'visible';
-            diffButton.style.pointerEvents = 'auto';
-        } else {
-            diffButton.style.display = 'none';
-        }
-    }
-
-    private openPromptDiff(agentName: string): void {
-        const textareaId = this.getTextareaIdForAgent(agentName);
-        if (!textareaId) return;
-
-        const textarea = document.getElementById(textareaId) as HTMLTextAreaElement;
-        if (!textarea) return;
-
-        const currentPrompt = textarea.value;
-        const originalPrompt = textarea.dataset.originalValue || '';
-
-        if (!originalPrompt) return;
-
-        // Use the evolution viewer to display changes between original and current prompts
-        void import('../Styles/Components/DiffModal/EvolutionViewer').then((mod) => {
-            mod.openEvolutionViewerFromHistory([
-                { title: 'Original Prompt', content: originalPrompt, timestamp: Date.now() - 1000 },
-                { title: 'Current Prompt', content: currentPrompt, timestamp: Date.now() }
-            ], `prompt-changes-${agentName}`);
-        });
+        const isChanged = textarea.value !== (textarea.dataset.originalValue ?? '');
+        textarea.classList.toggle('has-changes', isChanged);
     }
 
     public updateTriggerState(isGenerating: boolean): void {

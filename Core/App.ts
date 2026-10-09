@@ -99,7 +99,7 @@ export class App {
             const adaptive = await ensureAdaptiveDeepthinkInitialized();
             await adaptive.startAdaptiveDeepthinkProcess(initialIdea, globalState.customPromptsAdaptiveDeepthinkState, globalState.directContextFiles);
         } else {
-            console.warn('Unknown or unsupported application mode:', globalState.currentMode);
+            throw new Error(`Unknown or unsupported application mode: ${globalState.currentMode}`);
         }
     }
 

@@ -19,24 +19,24 @@ import {
     strategiesProximityAgent,
     testHypothesesAgent,
     type AgentExecutionContext,
-} from '../Deepthink/DeepthinkAgents';
+} from '../Deepthink/core/agents';
 import {
     normalizeProximityHistory,
     refineWithProximity,
     type ProximityTurn,
-} from '../Deepthink/DeepthinkProximity';
+} from '../Deepthink/core/proximity';
 import type {
     DeepthinkHypothesisData,
     DeepthinkLiveEvent,
     DeepthinkMainStrategyData,
     DeepthinkPipelineState,
     DeepthinkSolutionCritiqueData,
-} from '../Deepthink/DeepthinkCore';
+} from '../Deepthink/core/deepthinkCore';
 import {
     buildDeepthinkSandboxRepositoryAccess,
     DEEPTHINK_SANDBOX_DIRECTORY_POLICY,
     type DeepthinkSandboxRole,
-} from '../Deepthink/DeepthinkSandboxAccess';
+} from '../Deepthink/core/sandboxAccess';
 import {
     ensureDeepthinkResultsRepository,
     expandInlineReferenceMarkers,

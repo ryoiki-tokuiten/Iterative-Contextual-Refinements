@@ -151,10 +151,6 @@ export class RoutingManager {
         return this.modelConfigManager.getHypothesisCount();
     }
 
-    public getPqfAggressiveness(): string {
-        return this.modelConfigManager.getPqfAggressiveness();
-    }
-
     public getDeepthinkDepth(): number {
         return this.modelConfigManager.getDeepthinkDepth();
     }

@@ -1,10 +1,10 @@
 import type { CustomizablePromptsAdaptiveDeepthink } from '../../AdaptiveDeepthink/AdaptiveDeepthinkPrompt';
 import type { CustomizablePromptsContextual } from '../../Contextual/ContextualPrompts';
-import type { CustomizablePromptsDeepthink } from '../../Deepthink/DeepthinkPrompts';
+import type { CustomizablePromptsDeepthink } from '../../Deepthink/prompts';
 import {
     DEEPTHINK_AGENT_REGISTRY,
     type DeepthinkAgentKind
-} from '../../Deepthink/DeepthinkAgentRegistry';
+} from '../../Deepthink/core/agentRegistry';
 import type { PromptPaneConfig } from '../../Styles/Components/PromptContent';
 
 function paneSlug(agentKind: DeepthinkAgentKind): string {
@@ -43,6 +43,6 @@ export const ADAPTIVE_PROMPT_PANES: readonly PromptPaneConfig<CustomizablePrompt
 export const CONTEXTUAL_PROMPT_PANES: readonly PromptPaneConfig<CustomizablePromptsContextual>[] = [
     { key: 'contextual-main-generator', title: 'Main Generation Agent', modelKey: 'model_mainGenerator', promptKey: 'sys_contextual_mainGenerator', textareaId: 'sys-contextual-main-generator', agentName: 'contextual-main-generator', rows: 12, placeholder: 'Main generation agent (self-corrector) system prompt...' },
     { key: 'contextual-iterative-agent', title: 'Iterative Agent', modelKey: 'model_iterativeAgent', promptKey: 'sys_contextual_iterativeAgent', textareaId: 'sys-contextual-iterative-agent', agentName: 'contextual-iterative-agent', rows: 12, placeholder: 'Iterative agent (solution critique) system prompt...' },
-    { key: 'contextual-solution-pool', title: 'Solution Pool Agent', modelKey: 'model_solutionPoolAgent', promptKey: 'sys_contextual_solutionPoolAgent', textareaId: 'sys-contextual-solution-pool', agentName: 'contextual-solution-pool', rows: 12, placeholder: 'Solution pool / strategy pool agent system prompt...' },
+    { key: 'contextual-solution-pool', title: 'Structured Noise Agent', modelKey: 'model_solutionPoolAgent', promptKey: 'sys_contextual_solutionPoolAgent', textareaId: 'sys-contextual-solution-pool', agentName: 'contextual-solution-pool', rows: 12, placeholder: 'Structured noise / strategy pool agent system prompt...' },
     { key: 'contextual-memory', title: 'Memory Agent', modelKey: 'model_memoryAgent', promptKey: 'sys_contextual_memoryAgent', textareaId: 'sys-contextual-memory', agentName: 'contextual-memory', rows: 12, placeholder: 'Memory agent system prompt...' }
 ];

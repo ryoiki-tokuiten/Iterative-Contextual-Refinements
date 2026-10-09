@@ -12,7 +12,9 @@ export interface ModelOption {
 }
 
 export const MAX_DEEPTHINK_STRATEGIES = 5;
-export const MAX_HYPOTHESIS_COUNT = 10;
+export const MAX_STRATEGY_PROXIMITY_LOOPS = 2;
+export const MAX_HYPOTHESIS_COUNT = 6;
+export const MAX_HYPOTHESIS_PROXIMITY_LOOPS = 2;
 export const MAX_DEEPTHINK_DEPTH = 10;
 
 export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' | string;
@@ -22,8 +24,10 @@ export interface ModelParameters {
     strategyProximityLoops: number;
     hypothesisCount: number;
     hypothesisProximityLoops: number;
-    pqfAggressiveness: string;
     deepthinkDepth: number;
+    i?: number;
+    j?: number;
+    k?: number;
     isolateBranches: boolean;
     disableSolutionPool: boolean;
     deepthinkCodeExecutionEnabled: boolean;
@@ -32,11 +36,13 @@ export interface ModelParameters {
 
 const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
     strategiesCount: 3,
-    strategyProximityLoops: 2,
-    hypothesisCount: 4,
-    hypothesisProximityLoops: 2,
-    pqfAggressiveness: 'balanced',
-    deepthinkDepth: 3,
+    strategyProximityLoops: 1,
+    hypothesisCount: 3,
+    hypothesisProximityLoops: 1,
+    deepthinkDepth: 10,
+    i: 10,
+    j: 5,
+    k: 3,
     isolateBranches: false,
     disableSolutionPool: false,
     deepthinkCodeExecutionEnabled: false,
@@ -75,7 +81,7 @@ export class ModelConfigManager {
     }
 
     public getStrategyProximityLoops(): number {
-        return Math.max(1, Math.min(5, Math.round(this.parameters.strategyProximityLoops || 2)));
+        return Math.max(1, Math.min(MAX_STRATEGY_PROXIMITY_LOOPS, Math.round(this.parameters.strategyProximityLoops || 1)));
     }
 
     public getHypothesisCount(): number {
@@ -83,15 +89,39 @@ export class ModelConfigManager {
     }
 
     public getHypothesisProximityLoops(): number {
-        return Math.max(1, Math.min(5, Math.round(this.parameters.hypothesisProximityLoops || 2)));
-    }
-
-    public getPqfAggressiveness(): string {
-        return this.parameters.pqfAggressiveness === 'off' ? 'balanced' : this.parameters.pqfAggressiveness;
+        return Math.max(1, Math.min(MAX_HYPOTHESIS_PROXIMITY_LOOPS, Math.round(this.parameters.hypothesisProximityLoops || 1)));
     }
 
     public getDeepthinkDepth(): number {
-        return Math.max(1, Math.min(MAX_DEEPTHINK_DEPTH, Math.round(this.parameters.deepthinkDepth)));
+        return this.getI();
+    }
+
+    public getI(): number {
+        return Math.max(5, Math.min(20, Math.round(this.parameters.i ?? this.parameters.deepthinkDepth ?? 10)));
+    }
+
+    public setI(i: number): void {
+        const val = Math.max(5, Math.min(20, Math.round(i)));
+        this.parameters.i = val;
+        this.parameters.deepthinkDepth = val;
+    }
+
+    public getJ(): number {
+        return Math.max(3, Math.min(8, Math.round(this.parameters.j ?? 5)));
+    }
+
+    public setJ(j: number): void {
+        this.parameters.j = Math.max(3, Math.min(8, Math.round(j)));
+    }
+
+    public getK(): number {
+        const j = this.getJ();
+        return Math.max(2, Math.min(j, Math.round(this.parameters.k ?? 3)));
+    }
+
+    public setK(k: number): void {
+        const j = this.getJ();
+        this.parameters.k = Math.max(2, Math.min(j, Math.round(k)));
     }
 
     public isIsolateBranchesEnabled(): boolean {

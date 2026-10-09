@@ -22,7 +22,7 @@ import {
     createDeepthinkTabContent,
     getVisibleDeepthinkTabs,
     setActiveDeepthinkPipelineForImport,
-} from '../Deepthink/Deepthink';
+} from '../Deepthink/ui/Deepthink';
 
 let adaptiveDeepthinkRoot: Root | null = null;
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { BaseModal } from '../Deepthink/Deepthink.tsx';
-import { DeepthinkFilesystemTab } from '../Deepthink/DeepthinkFilesystemTab';
+import { BaseModal } from '../Deepthink/ui/Deepthink.tsx';
+import { DeepthinkFilesystemTab } from '../Deepthink/ui/DeepthinkFilesystemTab';
 
 /**
  * Compatibility bridge for existing workspace launch controls. The explorer

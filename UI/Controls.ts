@@ -6,7 +6,6 @@ interface ControlsDisabledState {
     exportConfigButton: boolean;
     importConfigInput: boolean;
     initialIdeaInput: boolean;
-    pqfButtons: boolean;
     sliders: boolean;
     toggles: boolean;
     sidebarContent: boolean;
@@ -31,7 +30,6 @@ function computeControlsDisabledState(): ControlsDisabledState {
         exportConfigButton: isGenerating,
         importConfigInput: isGenerating,
         initialIdeaInput: isGenerating,
-        pqfButtons: isGenerating,
         sliders: isGenerating,
         toggles: isGenerating,
         sidebarContent: isGenerating,
@@ -60,11 +58,6 @@ export function updateControlsState(): void {
         importConfigButton.classList.toggle('disabled', disabledState.importConfigInput);
     }
     if (initialIdeaInput) initialIdeaInput.disabled = disabledState.initialIdeaInput;
-
-    const pqfButtons = document.querySelectorAll('.pqf-button');
-    pqfButtons.forEach(button => {
-        (button as HTMLButtonElement).disabled = disabledState.pqfButtons;
-    });
 
     const sliders = document.querySelectorAll('.slider');
     sliders.forEach(slider => {

@@ -1,0 +1,157 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * MANDATORY REFERENCE: Read Deepthink_Consolidated_Specification.md before modifying!
+ * The specification document (Deepthink/docs/Deepthink_Consolidated_Specification.md)
+ * is the absolute source of truth (§8.3, §9).
+ */
+
+import {
+  createDefaultCustomPromptsDeepthink,
+  type CustomizablePromptsDeepthink,
+} from '../prompts/index.ts';
+
+type DeepthinkSystemPromptKey = Extract<keyof CustomizablePromptsDeepthink, `sys_deepthink_${string}`>;
+type DeepthinkModelKey = Extract<keyof CustomizablePromptsDeepthink, `model_${string}`>;
+
+export const DEEPTHINK_AGENT_REGISTRY = {
+  initialStrategy: {
+    label: 'Strategy Generator',
+    sandboxRole: 'Main Strategy Generation',
+    systemPromptKey: 'sys_deepthink_initialStrategy',
+    modelKey: 'model_initialStrategy',
+  },
+  strategyGeneratorGlobalUpdate: {
+    label: 'Strategy Generator (Global Update)',
+    sandboxRole: 'Main Strategy Generation',
+    systemPromptKey: 'sys_deepthink_strategyGeneratorGlobalUpdate',
+    modelKey: 'model_strategyGeneratorGlobalUpdate',
+  },
+  strategyProximity: {
+    label: 'Strategies Proximity',
+    sandboxRole: 'Main Strategy Generation',
+    systemPromptKey: 'sys_deepthink_strategyProximity',
+    modelKey: 'model_strategyProximity',
+  },
+  hypothesisGeneration: {
+    label: 'Hypothesis Generation',
+    sandboxRole: 'Hypothesis Generation',
+    systemPromptKey: 'sys_deepthink_hypothesisGeneration',
+    modelKey: 'model_hypothesisGeneration',
+  },
+  hypothesisProximity: {
+    label: 'Hypothesis Proximity',
+    sandboxRole: 'Hypothesis Generation',
+    systemPromptKey: 'sys_deepthink_hypothesisProximity',
+    modelKey: 'model_hypothesisProximity',
+  },
+  hypothesisTester: {
+    label: 'Hypothesis Testing',
+    sandboxRole: 'Hypothesis Testing',
+    systemPromptKey: 'sys_deepthink_hypothesisTester',
+    modelKey: 'model_hypothesisTester',
+  },
+  solutionAttempt: {
+    label: 'Solution Attempt',
+    sandboxRole: 'Solution Attempt',
+    systemPromptKey: 'sys_deepthink_solutionAttempt',
+    modelKey: 'model_solutionAttempt',
+  },
+  solutionCritique: {
+    label: 'Solution Critique',
+    sandboxRole: 'Solution Critique',
+    systemPromptKey: 'sys_deepthink_solutionCritique',
+    modelKey: 'model_solutionCritique',
+  },
+  solutionCorrection: {
+    label: 'Solution Correction',
+    sandboxRole: 'Solution Correction',
+    systemPromptKey: 'sys_deepthink_solutionCorrection',
+    modelKey: 'model_solutionCorrection',
+  },
+  structuredSolutionPool: {
+    label: 'Structured Structured Noise',
+    sandboxRole: 'Structured Structured Noise',
+    systemPromptKey: 'sys_deepthink_structuredSolutionPool',
+    modelKey: 'model_structuredSolutionPool',
+  },
+  memoryBank: {
+    label: 'Memory Bank',
+    sandboxRole: 'Memory Bank',
+    systemPromptKey: 'sys_deepthink_memoryBank',
+    modelKey: 'model_memoryBank',
+  },
+  dos: {
+    label: 'Dissected Observations Synthesis',
+    sandboxRole: 'Dissected Observations Synthesis',
+    systemPromptKey: 'sys_deepthink_dos',
+    modelKey: 'model_dos',
+  },
+  bsr: {
+    label: 'Branch State Representation',
+    sandboxRole: 'Branch State Representation',
+    systemPromptKey: 'sys_deepthink_bsr',
+    modelKey: 'model_bsr',
+  },
+  finalJudge: {
+    label: 'Final Judge',
+    sandboxRole: 'Final Judge',
+    systemPromptKey: 'sys_deepthink_finalJudge',
+    modelKey: 'model_finalJudge',
+  },
+} as const satisfies Record<string, {
+  label: string;
+  sandboxRole: string;
+  systemPromptKey: DeepthinkSystemPromptKey;
+  modelKey: DeepthinkModelKey;
+}>;
+
+export type DeepthinkAgentKind = keyof typeof DEEPTHINK_AGENT_REGISTRY;
+export type DeepthinkSandboxRole =
+  typeof DEEPTHINK_AGENT_REGISTRY[DeepthinkAgentKind]['sandboxRole'];
+
+export function deepthinkAgentModel(
+  agentKind: DeepthinkAgentKind,
+  prompts?: CustomizablePromptsDeepthink,
+  configuredModel?: string
+): string {
+  const def = DEEPTHINK_AGENT_REGISTRY[agentKind];
+  if (!def) {
+    if (configuredModel && configuredModel.trim().length > 0) {
+      return configuredModel.trim();
+    }
+    throw new Error(`Unregistered agent kind '${agentKind}' and no model configured.`);
+  }
+  const promptModel = prompts?.[def.modelKey];
+  if (typeof promptModel === 'string' && promptModel.trim().length > 0) {
+    return promptModel.trim();
+  }
+  if (configuredModel && configuredModel.trim().length > 0) {
+    return configuredModel.trim();
+  }
+  throw new Error(
+    `No model configured for agent '${agentKind}' (${def.modelKey}) and no base pipeline model provided.`
+  );
+}
+
+export function deepthinkAgentSystemInstruction(
+  agentKind: DeepthinkAgentKind,
+  prompts?: CustomizablePromptsDeepthink
+): string {
+  const def = DEEPTHINK_AGENT_REGISTRY[agentKind];
+  if (!def) {
+    throw new Error(`Unregistered agent kind: ${agentKind}`);
+  }
+  const key = def.systemPromptKey;
+  const prompt = prompts?.[key];
+  if (typeof prompt === 'string' && prompt.trim().length > 0) {
+    return prompt.trim();
+  }
+  const defaultPrompts = createDefaultCustomPromptsDeepthink();
+  const defaultPrompt = defaultPrompts[key];
+  if (typeof defaultPrompt === 'string' && defaultPrompt.trim().length > 0) {
+    return defaultPrompt.trim();
+  }
+  throw new Error(`Missing system instruction for agent '${agentKind}' (${key}).`);
+}

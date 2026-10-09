@@ -1,0 +1,1593 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * Deepthink — React components for the Deepthink pipeline UI.
+ * All pure logic, state management, and event coordination lives in Deepthink.ts.
+ */
+
+import React, { useEffect, useState, useRef } from 'react';
+import {
+    DeepthinkPipelineState,
+    DeepthinkMainStrategyData,
+    DeepthinkHypothesisData,
+} from '../core/deepthinkCore';
+import MathHTML from '../../Styles/Components/RenderMathMarkdown';
+import { Icon as MIcon } from '../../UI/Icons';
+import type { BsrGlobalUpdateRecord } from '../core/types';
+import { BranchStateModal } from './BranchStateModal';
+import { DosSynthesisCard } from './DosSynthesisCard';
+
+// ═══════════════════════════════════════════════════════════════════════
+// Shared Primitives
+// ═══════════════════════════════════════════════════════════════════════
+
+const critiqueDisplay = (value: {
+    critiqueResponseDisplay?: string;
+    critiqueResponse?: string;
+    solutionCritiqueDisplay?: string;
+    solutionCritique?: string;
+    error?: string;
+}): string =>
+    value.critiqueResponseDisplay || value.critiqueResponse || value.solutionCritiqueDisplay || value.solutionCritique || value.error || '';
+
+const hypothesisTesterDisplay = (hypothesis: DeepthinkHypothesisData): string =>
+    hypothesis.testerAttemptDisplay || hypothesis.testerAttempt || '';
+
+const StatusBadge: React.FC<{ status: string; label?: string }> = ({ status, label }) => (
+    <span className={`status-badge status-${status}`}>{label || status}</span>
+);
+
+// ═══════════════════════════════════════════════════════════════════════
+// Show More / Show Less Toggle
+// ═══════════════════════════════════════════════════════════════════════
+
+const ExpandableText: React.FC<{
+    text: string;
+    maxLength: number;
+    containerClassName?: string;
+    textClassName?: string;
+}> = ({ text, maxLength, containerClassName, textClassName }) => {
+    const [expanded, setExpanded] = useState(false);
+    const isLong = text.length > maxLength;
+    const display = expanded || !isLong ? text : text.substring(0, maxLength) + '...';
+
+    return (
+        <div className={containerClassName}>
+            <MathHTML content={display} className={textClassName} />
+            {isLong && (
+                <div className="expandable-text-actions">
+                    <button className="show-more-btn" onClick={() => setExpanded(e => !e)}>
+                        {expanded ? 'Show Less' : 'Show More'}
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ═══════════════════════════════════════════════════════════════════════
+// Solution Modals (embedded + fullscreen)
+// ═══════════════════════════════════════════════════════════════════════
+
+export const BaseModal: React.FC<{
+    title: string;
+    isEmbedded?: boolean;
+    className?: string;
+    noPadding?: boolean;
+    onClose: () => void;
+    children: React.ReactNode;
+}> = ({ title, isEmbedded, className, noPadding, onClose, children }) => {
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', onKey);
+        return () => document.removeEventListener('keydown', onKey);
+    }, [onClose]);
+
+    const overlayClass = isEmbedded ? 'embedded-modal-overlay' : 'modal-overlay is-visible';
+    const contentClass = isEmbedded ? 'embedded-modal-content' : 'modal-content';
+
+    return (
+        <div
+            className={`${overlayClass}${className ? ` ${className}` : ''}`}
+            style={isEmbedded ? { position: 'fixed', zIndex: 1000, pointerEvents: 'auto' } : { display: 'flex' }}
+            onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+        >
+            <div className={contentClass} role={isEmbedded ? undefined : 'dialog'} aria-modal={isEmbedded ? undefined : true}>
+                <div className="modal-header">
+                    {title && (isEmbedded
+                        ? <h4>{title}</h4>
+                        : <h2 className="modal-title">{title}</h2>)}
+                    <div className="embedded-modal-header-actions">
+                        <button className={isEmbedded ? 'close-modal-btn' : 'modal-close-button'} onClick={onClose}>
+                            <MIcon name="close" />
+                        </button>
+                    </div>
+                </div>
+                <div className={`modal-body${isEmbedded ? ' custom-scrollbar' : ''}`} style={noPadding ? { padding: 0 } : undefined}>
+                    {children}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Default (non-iterative) solution modal body
+export const EmbeddedModalContent: React.FC<{
+    content: string;
+    contentClass?: string;
+}> = ({ content, contentClass = 'critique-content' }) => (
+    <div className="deepthink-embedded-response">
+        <div>
+            <MathHTML content={content} className={contentClass} />
+        </div>
+    </div>
+);
+
+interface StructuredReasoningEvaluation {
+    id: string;
+    decision: string;
+    reasoning: string;
+}
+
+interface StructuredReasoningViewModel {
+    challenge?: string;
+    analysisSummary?: string;
+    narrative?: string;
+    evaluations: StructuredReasoningEvaluation[];
+}
+
+function parseStructuredReasoning(reasoning: unknown): StructuredReasoningViewModel {
+    const fallbackText = typeof reasoning === 'string'
+        ? reasoning
+        : reasoning
+            ? JSON.stringify(reasoning, null, 2)
+            : '';
+
+    let parsed: Record<string, any> | null = null;
+    if (typeof reasoning === 'string') {
+        try {
+            parsed = JSON.parse(reasoning);
+        } catch {
+            parsed = null;
+        }
+    } else if (reasoning && typeof reasoning === 'object') {
+        parsed = reasoning as Record<string, any>;
+    }
+
+    const evaluationsSource = Array.isArray(parsed?.strategy_evaluations)
+        ? parsed?.strategy_evaluations
+        : Array.isArray(parsed?.strategies)
+            ? parsed?.strategies
+            : [];
+
+    return {
+        challenge: typeof parsed?.challenge === 'string' ? parsed.challenge : undefined,
+        analysisSummary: typeof parsed?.analysis_summary === 'string' ? parsed.analysis_summary : undefined,
+        narrative: typeof parsed?.reasoning === 'string'
+            ? parsed.reasoning
+            : typeof parsed?.explanation === 'string'
+                ? parsed.explanation
+                : typeof parsed?.analysis === 'string'
+                    ? parsed.analysis
+                    : fallbackText,
+        evaluations: evaluationsSource
+            .filter((evaluation: any) => evaluation && typeof evaluation === 'object')
+            .map((evaluation: any) => ({
+                id: String(evaluation.id || evaluation.strategy_id || 'Unknown ID'),
+                decision: String(evaluation.decision || evaluation.verdict || evaluation.action || 'unknown'),
+                reasoning: String(evaluation.reason || evaluation.reasoning || evaluation.explanation || 'No reasoning provided'),
+            })),
+    };
+}
+
+const StructuredReasoningContent: React.FC<{
+    reasoning: unknown;
+    wrapperClassName?: string;
+    resultsClassName?: string;
+    emptyMessage?: string;
+}> = ({
+    reasoning,
+    wrapperClassName = 'agent-reasoning-display',
+    resultsClassName = 'evaluation-results',
+    emptyMessage = 'No analysis available',
+}) => {
+    const parsed = React.useMemo(() => parseStructuredReasoning(reasoning), [reasoning]);
+
+    const body = parsed.evaluations.length > 0 || parsed.challenge || parsed.analysisSummary
+        ? (
+            <div className={resultsClassName}>
+                {parsed.challenge && <h4>Challenge Evaluation: {parsed.challenge}</h4>}
+                {parsed.analysisSummary && (
+                    <>
+                        <h4>Analysis Summary</h4>
+                        <div className="evaluation-reason">
+                            <MathHTML content={parsed.analysisSummary} />
+                        </div>
+                    </>
+                )}
+                {parsed.evaluations.map((evaluation, index) => (
+                    <div key={`${evaluation.id}-${index}`} className="strategy-evaluation-item">
+                        <div className="evaluation-header">
+                            <span className="strategy-id">{evaluation.id}</span>
+                            <span className={`decision-badge decision-${evaluation.decision.toLowerCase()}`}>{evaluation.decision}</span>
+                        </div>
+                        <div className="evaluation-reason">
+                            <MathHTML content={evaluation.reasoning} />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        )
+        : <MathHTML content={parsed.narrative || emptyMessage} className="agent-analysis" />;
+
+    if (!wrapperClassName) {
+        return <>{body}</>;
+    }
+
+    return <div className={wrapperClassName}>{body}</div>;
+};
+
+export const StructuredResponseModalContent: React.FC<{
+    reasoning: unknown;
+    resultsClassName?: string;
+    emptyMessage?: string;
+}> = ({ reasoning, resultsClassName, emptyMessage }) => (
+    <div className="deepthink-embedded-response">
+        <div>
+            <StructuredReasoningContent
+                reasoning={reasoning}
+                resultsClassName={resultsClassName}
+                emptyMessage={emptyMessage}
+            />
+        </div>
+    </div>
+);
+
+// ═══════════════════════════════════════════════════════════════════════
+// Tab Content Components
+// ═══════════════════════════════════════════════════════════════════════
+
+// Pruned Branch Switcher UI component
+const BranchVersionSwitcher: React.FC<{
+    activeStrategy: any;
+    prunedStrategies: any[];
+    selectedBranchId: string;
+    onSelect: (id: string) => void;
+}> = ({ activeStrategy, prunedStrategies, selectedBranchId, onSelect }) => {
+    if (prunedStrategies.length === 0) return null;
+    
+    return (
+        <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }} className="custom-scrollbar">
+            <button
+                type="button"
+                className={`action-btn ${selectedBranchId === activeStrategy.id ? 'active' : ''}`}
+                onClick={() => onSelect(activeStrategy.id)}
+                style={{ 
+                    background: selectedBranchId === activeStrategy.id ? 'var(--accent-color)' : 'rgba(var(--card-bg-base-rgb, 18, 18, 18), 0.5)',
+                    color: selectedBranchId === activeStrategy.id ? '#fff' : 'var(--text-color)',
+                    border: '1px solid rgba(var(--border-color-rgb, 255, 255, 255), 0.1)',
+                    padding: '6px 12px',
+                    borderRadius: 'var(--border-radius-sm)',
+                    fontSize: '0.85rem',
+                    fontWeight: 500,
+                    whiteSpace: 'nowrap'
+                }}
+            >
+                Current Active
+            </button>
+            {prunedStrategies.map(pb => (
+                <button
+                    key={pb.id}
+                    type="button"
+                    className={`action-btn ${selectedBranchId === pb.id ? 'active' : ''}`}
+                    onClick={() => onSelect(pb.id)}
+                    style={{ 
+                        background: selectedBranchId === pb.id ? 'var(--accent-red)' : 'rgba(var(--card-bg-base-rgb, 18, 18, 18), 0.5)',
+                        color: selectedBranchId === pb.id ? '#fff' : 'var(--text-secondary-color)',
+                        border: '1px solid rgba(var(--border-color-rgb, 255, 255, 255), 0.1)',
+                        padding: '6px 12px',
+                        borderRadius: 'var(--border-radius-sm)',
+                        fontSize: '0.85rem',
+                        whiteSpace: 'nowrap'
+                    }}
+                >
+                    {(() => {
+                        if (!pb.prunedAtIteration) return 'Pruned';
+                        const startIter = pb.strategyTextHistory?.[0]?.iteration ?? 0;
+                        const lifespan = Math.max(1, pb.prunedAtIteration - startIter);
+                        return `Pruned (After ${lifespan} Iterations)`;
+                    })()}
+                </button>
+            ))}
+        </div>
+    );
+};
+
+// StrategicSolverTab
+export const StrategicSolverTab: React.FC<{
+    process: DeepthinkPipelineState;
+    escapeHtml: (s: string) => string;
+    onStrategyTabClick: (idx: number) => void;
+    onViewSolution: (strategyId: string) => void;
+    onViewBsr?: (strategyId: string) => void;
+}> = ({ process, escapeHtml, onStrategyTabClick, onViewSolution, onViewBsr }) => {
+    const [bsrModalBranchId, setBsrModalBranchId] = useState<string | null>(null);
+
+    if (process.status === 'error' && process.error) {
+        return <div className="status-message error"><pre>{escapeHtml(process.error)}</pre></div>;
+    }
+    if (!process.initialStrategies?.length) {
+        return <div className="loading">Generating strategic approaches...</div>;
+    }
+
+    const activeIndex = process.activeStrategyTab || 0;
+    
+    // Track selected branch ID per slot so switching tabs remembers what version you were looking at
+    const [selectedVersions, setSelectedVersions] = useState<Record<number, string>>({});
+
+    const handleViewBsr = (strategyId: string) => {
+        if (onViewBsr) {
+            onViewBsr(strategyId);
+        } else {
+            setBsrModalBranchId(strategyId);
+        }
+    };
+
+    return (
+        <div className="deepthink-strategic-solver">
+            <div className="branch-tabs-container">
+                <div className="branch-tabs-content">
+                    {process.initialStrategies.map((strategy, index) => (
+                        <div key={strategy.id} className={`branch-tab-content${index === activeIndex ? ' active' : ''}`}>
+                            <div className="strategy-card">
+                                {/* Nav buttons: Only strategy number buttons (proximity buttons removed) */}
+                                <div className="branch-tabs-nav">
+                                    <div className="strategy-tab-number-grid">
+                                        {process.initialStrategies.map((s, idx) => (
+                                            <button
+                                                key={s.id}
+                                                className={`branch-tab-button${idx === activeIndex ? ' active' : ''}`}
+                                                title={`Strategy ${idx + 1}`}
+                                                onClick={() => onStrategyTabClick(idx)}
+                                            >
+                                                {idx + 1}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {(() => {
+                                    const slotPruned = (((process as any).prunedBranches || []) as any[]).filter(b => b.slotIndex === index);
+                                    const activeId = strategy.id;
+                                    const currentSelectedId = selectedVersions[index] || activeId;
+                                    const displayStrategy = currentSelectedId === activeId 
+                                        ? strategy 
+                                        : (slotPruned.find(p => p.id === currentSelectedId) || strategy);
+                                        
+                                    return (
+                                        <>
+                                            <BranchVersionSwitcher 
+                                                activeStrategy={strategy}
+                                                prunedStrategies={slotPruned}
+                                                selectedBranchId={currentSelectedId}
+                                                onSelect={(id) => setSelectedVersions(prev => ({ ...prev, [index]: id }))}
+                                            />
+                                            <StrategyContent
+                                                strategy={displayStrategy}
+                                                process={process}
+                                                escapeHtml={escapeHtml}
+                                                onViewSolution={onViewSolution}
+                                                onViewBsr={handleViewBsr}
+                                                isPruned={currentSelectedId !== activeId}
+                                            />
+                                        </>
+                                    );
+                                })()}
+
+                            </div>
+                            
+                        </div>
+                    ))}
+                </div>
+            </div>
+            {bsrModalBranchId !== null && (
+                <BranchStateModal
+                    branchId={bsrModalBranchId}
+                    process={process}
+                    onClose={() => setBsrModalBranchId(null)}
+                />
+            )}
+        </div>
+    );
+};
+
+const StrategyContent: React.FC<{
+    strategy: DeepthinkMainStrategyData;
+    process: DeepthinkPipelineState;
+    escapeHtml: (s: string) => string;
+    onViewSolution: (id: string) => void;
+    onViewBsr: (id: string) => void;
+    isPruned?: boolean;
+}> = ({ strategy, process, escapeHtml, onViewSolution, onViewBsr, isPruned }) => {
+    const branchRecords = (process.bsrRecords || []).filter(r => r.branch_id === strategy.id);
+    const hasBsr = branchRecords.length > 0;
+    
+    const history = strategy.strategyTextHistory || [{ iteration: 0, text: strategy.strategyText }];
+    const [historyIndex, setHistoryIndex] = useState(history.length - 1);
+    
+    // Make sure we select the latest if history grows and user hasn't explicitly navigated backwards
+    useEffect(() => {
+        setHistoryIndex(history.length - 1);
+    }, [history.length]);
+    
+    const activeIndex = Math.min(Math.max(0, historyIndex), history.length - 1);
+    const activeText = history[activeIndex].text;
+
+    return (
+        <div className="strategy-content" style={{ opacity: isPruned ? 0.8 : 1 }}>
+            {history.length > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', fontSize: '0.85rem', color: 'var(--text-secondary-color)' }}>
+                    <button 
+                        type="button"
+                        onClick={() => setHistoryIndex(prev => Math.max(0, prev - 1))}
+                        disabled={activeIndex === 0}
+                        style={{ background: 'transparent', border: 'none', cursor: activeIndex === 0 ? 'default' : 'pointer', color: activeIndex === 0 ? 'rgba(255, 255, 255, 0.1)' : 'var(--text-secondary-color)', display: 'flex', alignItems: 'center', padding: 0 }}
+                    >
+                        <MIcon name="chevron_left" style={{ fontSize: '1.2rem' }} />
+                    </button>
+                    <span style={{ fontWeight: 500 }}>
+                        {history[activeIndex].iteration === history[0].iteration ? `Original Baseline (Global Iter ${history[0].iteration})` : `Evolved (Global Iter ${history[activeIndex].iteration})`}
+                    </span>
+                    <button 
+                        type="button"
+                        onClick={() => setHistoryIndex(prev => Math.min(history.length - 1, prev + 1))}
+                        disabled={activeIndex === history.length - 1}
+                        style={{ background: 'transparent', border: 'none', cursor: activeIndex === history.length - 1 ? 'default' : 'pointer', color: activeIndex === history.length - 1 ? 'rgba(255, 255, 255, 0.1)' : 'var(--text-secondary-color)', display: 'flex', alignItems: 'center', padding: 0 }}
+                    >
+                        <MIcon name="chevron_right" style={{ fontSize: '1.2rem' }} />
+                    </button>
+                </div>
+            )}
+            <ExpandableText
+                text={activeText}
+                maxLength={200}
+                containerClassName="strategy-text-container"
+                textClassName="strategy-text"
+            />
+            {hasBsr && branchRecords[branchRecords.length - 1].computed?.decision === 'EVOLVE' && (
+                <div style={{ marginBottom: '1.2rem', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', color: 'var(--accent-yellow)', fontWeight: 600, padding: '0.35rem 0.75rem', background: 'rgba(var(--accent-yellow-rgb, 250, 204, 21), 0.1)', border: '1px solid rgba(var(--accent-yellow-rgb, 250, 204, 21), 0.25)', borderRadius: '100px' }}>
+                    <MIcon name="change_circle" style={{ fontSize: '1.1rem' }} />
+                    EVOLVE · {branchRecords[branchRecords.length - 1].computed?.form === 'rollback' ? 'Rollback' : 'In Place'}
+                </div>
+            )}
+            <div className="strategy-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {strategy.id && (
+                    <button
+                        type="button"
+                        className="view-solution-button"
+                        onClick={() => onViewSolution(strategy.id)}
+                    >
+                        <MIcon name="visibility" /> View Solution
+                    </button>
+                )}
+            </div>
+            {strategy.error && <div className="error-message">{escapeHtml(strategy.error)}</div>}
+
+            {/* Integrated Visual BSR Display (shown only when BSR output is ready for this branch) */}
+            {hasBsr && (
+                <BranchVisualBsr
+                    branchId={strategy.id}
+                    records={branchRecords}
+                    process={process}
+                    onInspectBsr={() => onViewBsr(strategy.id)}
+                />
+            )}
+        </div>
+    );
+};
+
+const SIZE_WEIGHTS: Record<string, number> = { small: 1, medium: 2, large: 4 };
+
+const BranchVisualBsr: React.FC<{
+    branchId: string;
+    records: BsrGlobalUpdateRecord[];
+    process: DeepthinkPipelineState;
+    onInspectBsr?: () => void;
+}> = ({ branchId, records, process }) => {
+    const [selectedIdx, setSelectedIdx] = useState(records.length - 1);
+    const activeIdx = Math.min(Math.max(0, selectedIdx), records.length - 1);
+    const activeRecord = records[activeIdx];
+    if (!activeRecord) return null;
+
+    const { computed, report } = activeRecord;
+
+    const formLabel = computed.form === 'rollback'
+        ? `Rollback to ${computed.rollback_to === 'window_start' ? 'Window Start' : `Iter ${computed.rollback_to}`}`
+        : computed.form === 'in_place'
+            ? 'In Place'
+            : null;
+
+    // Action Pressures: CONTINUE, EVOLVE, PRUNE
+    const pCont = computed.pressure.CONTINUE || 0;
+    const pEvol = computed.pressure.EVOLVE || 0;
+    const pPrun = computed.pressure.PRUNE || 0;
+
+    // Next-Window Forecast probabilities: PROGRESS, STALL, REGRESS
+    const nextPred = report.next_window_prediction;
+    const pProg = nextPred?.probabilities?.PROGRESS || 0;
+    const pStall = nextPred?.probabilities?.STALL || 0;
+    const pRegr = nextPred?.probabilities?.REGRESS || 0;
+
+    const forecastColors = React.useMemo(() => {
+        if (!nextPred) return [];
+        let prog = Math.round(pProg * 5);
+        let stall = Math.round(pStall * 5);
+        let regr = 5 - prog - stall;
+        if (regr < 0) {
+            if (stall > prog) stall += regr;
+            else prog += regr;
+            regr = 0;
+        }
+        const pool = [
+            ...Array(prog).fill({ fill: '#d1fae5', stroke: '#059669', gFill: '#047857' }),
+            ...Array(stall).fill({ fill: '#fef3c7', stroke: '#d97706', gFill: '#b45309' }),
+            ...Array(regr).fill({ fill: '#fee2e2', stroke: '#e11d48', gFill: '#be123c' })
+        ];
+        const seedBase = activeRecord?.updateNumber || 0;
+        for (let i = pool.length - 1; i > 0; i--) {
+            const seed = seedBase * 100 + i;
+            const rand = Math.sin(seed) * 10000;
+            const pseudo = rand - Math.floor(rand);
+            const j = Math.floor(pseudo * (i + 1));
+            [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        return pool;
+    }, [pProg, pStall, pRegr, activeRecord?.updateNumber, nextPred]);
+
+    // Determine continuous chain of surviving records up to activeIdx
+    // If a branch survived (CONTINUE or EVOLVE) in previous windows, chain them cleanly.
+    // If it was PRUNED, it reset, so the chain starts after the last PRUNE.
+    let chainStartIdx = 0;
+    for (let i = activeIdx - 1; i >= 0; i--) {
+        const prevDecision = records[i].computed?.decision;
+        if (prevDecision === 'PRUNE') {
+            chainStartIdx = i + 1;
+            break;
+        }
+    }
+    const chainedRecords = records.slice(chainStartIdx, activeIdx + 1);
+
+    const j = process.runConfig?.j ?? 5;
+    const seenIters = new Set<number>();
+    const iterOrder: number[] = [];
+    const iterProgMap = new Map<number, typeof report.confirmed_progress>();
+    const iterRegrMap = new Map<number, typeof report.confirmed_regression>();
+
+    chainedRecords.forEach(rec => {
+        const recEnd = rec.iteration;
+        const recStart = Math.max(1, recEnd - j + 1);
+        const pEvts = rec.report?.confirmed_progress || [];
+        const rEvts = rec.report?.confirmed_regression || [];
+
+        for (let it = recStart; it <= recEnd; it++) {
+            if (!seenIters.has(it)) {
+                seenIters.add(it);
+                iterOrder.push(it);
+                iterProgMap.set(it, []);
+                iterRegrMap.set(it, []);
+            }
+            const currentProg = iterProgMap.get(it)!;
+            const currentRegr = iterRegrMap.get(it)!;
+            pEvts.filter(e => e.iteration === it).forEach(e => {
+                if (!currentProg.some(ex => ex.iteration === e.iteration && ex.reason === e.reason)) {
+                    currentProg.push(e);
+                }
+            });
+            rEvts.filter(e => e.iteration === it).forEach(e => {
+                if (!currentRegr.some(ex => ex.iteration === e.iteration && ex.reason === e.reason)) {
+                    currentRegr.push(e);
+                }
+            });
+        }
+    });
+
+    iterOrder.sort((a, b) => a - b);
+
+    // Calculate iteration data points starting at 'start'
+    interface ChartPoint {
+        label: string;
+        iterVal: number | 'start';
+        change: number;
+        total: number;
+        progEvents: typeof report.confirmed_progress;
+        regrEvents: typeof report.confirmed_regression;
+    }
+
+    const points: ChartPoint[] = [
+        {
+            label: 'start',
+            iterVal: 'start',
+            change: 0,
+            total: 0,
+            progEvents: [],
+            regrEvents: [],
+        }
+    ];
+
+    let runningTotal = 0;
+    iterOrder.forEach(it => {
+        const pEvts = iterProgMap.get(it) || [];
+        const rEvts = iterRegrMap.get(it) || [];
+        const pScore = pEvts.reduce((sum, e) => sum + (SIZE_WEIGHTS[e.size] || 1), 0);
+        const rScore = rEvts.reduce((sum, e) => sum + (SIZE_WEIGHTS[e.size] || 1), 0);
+        const change = pScore - rScore;
+        runningTotal += change;
+        points.push({
+            label: String(it),
+            iterVal: it,
+            change,
+            total: runningTotal,
+            progEvents: pEvts,
+            regrEvents: rEvts,
+        });
+    });
+
+    const allTotals = points.map(p => p.total);
+    const bestTotal = Math.max(0, ...allTotals);
+    const finalTotal = points[points.length - 1].total;
+
+    // Find last good point index
+    let lastGoodIdx = 0;
+    const specLastGood = activeRecord.computed.last_good_iteration;
+    if (typeof specLastGood === 'number') {
+        const found = points.findIndex(p => p.iterVal === specLastGood);
+        if (found !== -1) {
+            lastGoodIdx = found;
+        } else {
+            lastGoodIdx = points.reduce((bestIdx, p, idx) => p.total > points[bestIdx].total ? idx : bestIdx, 0);
+        }
+    } else {
+        lastGoodIdx = points.reduce((bestIdx, p, idx) => p.total > points[bestIdx].total ? idx : bestIdx, 0);
+    }
+    const lastGoodVal = points[lastGoodIdx]?.iterVal;
+
+    const graphCardRef = useRef<HTMLDivElement>(null);
+    const [cardWidth, setCardWidth] = useState(900);
+
+    useEffect(() => {
+        if (!graphCardRef.current) return;
+        const update = () => {
+            if (graphCardRef.current) {
+                const w = graphCardRef.current.clientWidth;
+                if (w > 0) setCardWidth(w);
+            }
+        };
+        update();
+        const ro = new ResizeObserver(entries => {
+            if (entries[0]) {
+                const w = entries[0].contentRect.width;
+                if (w > 0) setCardWidth(w);
+            }
+        });
+        ro.observe(graphCardRef.current);
+        return () => ro.disconnect();
+    }, []);
+
+    // Full width responsive SVG coordinate calculations
+    const padLeft = 45;
+    const padRight = 75;
+    const padTop = 24;
+    const padBottom = 26;
+
+    const minStepWidth = 65; // Enforce minimum width per step
+    const numSteps = Math.max(1, points.length - 1);
+    const requiredGraphWidth = padLeft + padRight + (numSteps * minStepWidth);
+    
+    // svgWidth uses cardWidth if it fits, otherwise expands to requiredGraphWidth
+    const svgWidth = Math.max(Math.max(500, cardWidth - 28), requiredGraphWidth);
+    const svgHeight = 165;
+
+    const minVal = Math.min(-4, Math.floor(Math.min(...allTotals, finalTotal) / 2) * 2);
+    const maxVal = Math.max(6, Math.ceil(Math.max(...allTotals, bestTotal) / 2) * 2);
+    const valRange = Math.max(1, maxVal - minVal);
+
+    const getY = (val: number) => {
+        const norm = (val - minVal) / valRange;
+        return padTop + (1 - norm) * (svgHeight - padTop - padBottom);
+    };
+
+    const step = (svgWidth - padLeft - padRight) / numSteps;
+    const getX = (idx: number) => padLeft + idx * step;
+
+    // Y-axis tick marks (every 2 units)
+    const yTicks: number[] = [];
+    for (let t = minVal; t <= maxVal; t += 2) {
+        yTicks.push(t);
+    }
+
+    // Path d
+    const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getY(p.total)}`).join(' ');
+
+    const lastIdx = points.length - 1;
+    const bestTotalY = getY(bestTotal);
+    const finalTotalY = getY(finalTotal);
+    const arrowX = svgWidth - padRight + 18;
+
+    const allChainedEvents = [
+        ...chainedRecords.flatMap(r => (r.report?.confirmed_progress || []).map(e => ({ ...e, type: 'progress' as const }))),
+        ...chainedRecords.flatMap(r => (r.report?.confirmed_regression || []).map(e => ({ ...e, type: 'regression' as const })))
+    ].sort((a, b) => a.iteration - b.iteration);
+
+    return (
+        <div className="bsr-visual-container">
+            {/* Top row: 2 side panels side by side */}
+            <div className="bsr-side-by-side">
+                {/* Left Panel: Action Pressures (Horizontal bar track with telemetry strip below) */}
+                <div className="bsr-side-panel bsr-action-pressure-panel" style={{ border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '16px' }}>
+                    <div className="bsr-panel-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span className="bsr-panel-title">Previous Window (θ = 0.30)</span>
+                        <div className="bsr-visual-legend" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                            <span className="bsr-decision-label" style={{ fontSize: '0.8rem', color: 'var(--text-secondary-color)', fontWeight: 500 }}>Outcome:</span>
+                            <span className={`bsr-decision-chip action-${computed.decision.toLowerCase()}`} style={{ margin: 0, padding: '3px 10px', fontSize: '0.75rem', height: 'auto', borderRadius: '6px' }}>
+                                {computed.decision} {formLabel ? `· ${formLabel}` : ''}
+                            </span>
+                        </div>
+                    </div>
+
+                    {(() => {
+                        const sum = (pCont + pEvol + pPrun) || 1;
+                        const nCont = pCont / sum;
+                        const nEvol = pEvol / sum;
+                        const nPrun = pPrun / sum;
+                        
+                        return (
+                            <div className="bsr-visual-bar-track" style={{ height: '28px', display: 'flex', borderRadius: '6px', overflow: 'hidden', position: 'relative' }}>
+                                <div className="bar-fill continue" style={{ flex: nCont, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 'min-content', padding: '0 12px' }} title={`CONTINUE: ${(pCont * 100).toFixed(1)}%`}>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.95)', textShadow: '0 1px 4px rgba(0,0,0,0.9)', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>CONTINUE {(pCont * 100).toFixed(0)}%</span>
+                                </div>
+                                <div className="bar-fill evolve" style={{ flex: nEvol, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 'min-content', padding: '0 12px' }} title={`EVOLVE: ${(pEvol * 100).toFixed(1)}%`}>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.95)', textShadow: '0 1px 4px rgba(0,0,0,0.9)', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>EVOLVE {(pEvol * 100).toFixed(0)}%</span>
+                                </div>
+                                <div className="bar-fill prune" style={{ flex: nPrun, height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 'min-content', padding: '0 12px' }} title={`PRUNE: ${(pPrun * 100).toFixed(1)}%`}>
+                                    <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'rgba(255,255,255,0.95)', textShadow: '0 1px 4px rgba(0,0,0,0.9)', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>PRUNE {(pPrun * 100).toFixed(0)}%</span>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
+                    {/* Restored Telemetry Strip */}
+                    <div className="bsr-visual-telemetry-strip" style={{ marginTop: '20px' }}>
+                        <span className="telemetry-pill">
+                            <span className="telemetry-lbl">Net:</span>
+                            <span className={`telemetry-val ${computed.net >= 0 ? 'pos' : 'neg'}`}>
+                                {computed.net >= 0 ? `+${computed.net}` : computed.net}
+                            </span>
+                        </span>
+                        <span className="telemetry-pill">
+                            <span className="telemetry-lbl">Lost Ground:</span>
+                            <span className="telemetry-val">{computed.lost_ground.toFixed(3)}</span>
+                        </span>
+                        <span className="telemetry-pill">
+                            <span className="telemetry-lbl">Progress Kept:</span>
+                            <span className="telemetry-val">{computed.progress_kept.toFixed(3)}</span>
+                        </span>
+                        <span className="telemetry-pill">
+                            <span className="telemetry-lbl">Critique Alignment:</span>
+                            <span className="telemetry-val">{(report.critique_alignment.value * 100).toFixed(0)}%</span>
+                        </span>
+                    </div>
+                </div>
+
+                {/* Right Panel: Next-Window Forecast (Vertical bars type probabilities) */}
+                <div className="bsr-side-panel bsr-forecast-panel" style={{ border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '16px' }}>
+                    <div className="bsr-panel-header">
+                        <span className="bsr-panel-title">Next-Window Forecast</span>
+                        {records.length > 1 && (
+                            <div className="bsr-update-tabs">
+                                {records.map((r, idx) => (
+                                    <button
+                                        key={idx}
+                                        type="button"
+                                        className={`bsr-update-pill${idx === activeIdx ? ' active' : ''}`}
+                                        onClick={() => setSelectedIdx(idx)}
+                                    >
+                                        Update #{r.updateNumber}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {nextPred ? (
+                        <>
+                            {/* Simplified Probabilities Strip instead of vertical bars */}
+                            <div style={{ display: 'flex', gap: '16px', fontSize: '0.8rem', marginBottom: '8px', padding: '6px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: '4px', width: 'fit-content' }}>
+                                <span style={{ color: '#10b981', fontWeight: 600 }}>{(pProg * 100).toFixed(0)}% PROGRESS</span>
+                                <span style={{ color: '#f59e0b', fontWeight: 600 }}>{(pStall * 100).toFixed(0)}% STALL</span>
+                                <span style={{ color: '#ef4444', fontWeight: 600 }}>{(pRegr * 100).toFixed(0)}% REGRESS</span>
+                            </div>
+
+                            {/* Forecasting Visual Dynamic (lastEvaluatedIter + 1, ..., + 5, G) */}
+                            {(() => {
+                                const lastEvaluatedIter = iterOrder.length > 0 ? iterOrder[iterOrder.length - 1] : 0;
+                                return (
+                                    <div style={{ marginTop: '20px', marginBottom: '24px', padding: '0 8px', width: '100%' }}>
+                                        <svg width="100%" height="50" viewBox="0 0 400 50" preserveAspectRatio="xMidYMid meet" style={{ overflow: 'visible' }}>
+                                            <line x1="20" y1="16" x2="385" y2="16" stroke="#4b5563" strokeWidth="1.5" />
+                                            <path d="M 378 10 L 388 16 L 378 22" fill="none" stroke="#4b5563" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                                            {[1, 2, 3, 4, 5].map((step, i) => {
+                                                const globalIter = lastEvaluatedIter + step;
+                                                const color = forecastColors[i] || { fill: '#d1fae5', stroke: '#059669', gFill: '#047857' };
+                                                return (
+                                                    <g key={step} transform={`translate(${i * 62 + 20}, 16)`}>
+                                                        <circle cx="0" cy="0" r="10" fill={color.fill} stroke={color.stroke} strokeWidth="1.5" />
+                                                        <text x="0" y="28" fontSize="12" textAnchor="middle" fill="var(--text-secondary-color)">{globalIter}</text>
+                                                    </g>
+                                                );
+                                            })}
+                                            <g transform={`translate(${5 * 62 + 20}, 16)`}>
+                                                <circle cx="0" cy="0" r="10" fill="#047857" stroke="#047857" strokeWidth="1.5" />
+                                                <text x="0" y="28" fontSize="12" textAnchor="middle" fill="var(--text-secondary-color)">G</text>
+                                            </g>
+                                        </svg>
+                                    </div>
+                                );
+                            })()}
+                        </>
+                    ) : (
+                        <div className="bsr-forecast-empty">No probabilistic forecast issued for this window.</div>
+                    )}
+                </div>
+            </div>
+
+            {/* Running Total Window Graph & Overlayed Confirmed Events */}
+            <div className="bsr-window-graph-card">
+                <div className="bsr-graph-top-bar">
+                    <span className="bsr-graph-heading">
+                        {chainedRecords.length > 1
+                            ? `Running total across surviving windows (${formatStrategyId(branchId)})`
+                            : `Running total in the window (${formatStrategyId(branchId)})`}
+                    </span>
+                    {chainedRecords.length > 1 && (
+                        <span className="bsr-chain-badge">
+                            Updates #{chainedRecords[0].updateNumber}–#{activeRecord.updateNumber}
+                        </span>
+                    )}
+                </div>
+
+                <div className="bsr-graph-content-layout">
+                    <div className="bsr-graph-main-col" ref={graphCardRef}>
+                        <div className="bsr-graph-scroll-container">
+                            <div className="bsr-graph-scroll-content" style={{ width: `${svgWidth}px` }}>
+                                {/* SVG Graph stretching full horizontal space */}
+                                <div className="bsr-svg-graph-container">
+                    <svg className="bsr-window-svg" viewBox={`0 0 ${svgWidth} ${svgHeight}`} width="100%" height={svgHeight}>
+                        {/* Horizontal Gridlines & Y-Axis values */}
+                        {yTicks.map(t => {
+                            const yPos = getY(t);
+                            const isZero = t === 0;
+                            return (
+                                <g key={t}>
+                                    <line
+                                        x1={padLeft - 5}
+                                        y1={yPos}
+                                        x2={svgWidth - padRight + 28}
+                                        y2={yPos}
+                                        stroke={isZero ? 'rgba(255, 255, 255, 0.35)' : 'rgba(255, 255, 255, 0.07)'}
+                                        strokeWidth={isZero ? 1.2 : 0.8}
+                                    />
+                                    <text
+                                        x={padLeft - 10}
+                                        y={yPos + 3.5}
+                                        textAnchor="end"
+                                        fill={isZero ? 'var(--text-color)' : 'var(--text-secondary-color)'}
+                                        fontSize="10"
+                                        fontWeight={isZero ? '600' : '400'}
+                                    >
+                                        {t}
+                                    </text>
+                                </g>
+                            );
+                        })}
+
+                        {/* Best Total dashed reference line */}
+                        {bestTotal > 0 && (
+                            <line
+                                x1={getX(lastGoodIdx)}
+                                y1={bestTotalY}
+                                x2={arrowX + 10}
+                                y2={bestTotalY}
+                                stroke="#f59e0b"
+                                strokeDasharray="3 3"
+                                strokeWidth="1.2"
+                            />
+                        )}
+
+                        {/* Final total dashed reference line */}
+                        <line
+                            x1={getX(lastIdx)}
+                            y1={finalTotalY}
+                            x2={arrowX + 10}
+                            y2={finalTotalY}
+                            stroke="rgba(255, 255, 255, 0.45)"
+                            strokeDasharray="3 3"
+                            strokeWidth="1.2"
+                        />
+                        <text
+                            x={getX(lastIdx) - 8}
+                            y={finalTotalY + (finalTotal >= 0 ? 14 : -6)}
+                            textAnchor="end"
+                            fill="var(--text-secondary-color)"
+                            fontSize="10"
+                            fontFamily="monospace"
+                        >
+                            net = {finalTotal}
+                        </text>
+
+                        {/* Lost Ground Vertical Dimension Arrow */}
+                        {Math.abs(bestTotalY - finalTotalY) > 6 && (
+                            <g className="bsr-lost-ground-dimension">
+                                <line
+                                    x1={arrowX}
+                                    y1={bestTotalY}
+                                    x2={arrowX}
+                                    y2={finalTotalY}
+                                    stroke="var(--text-secondary-color)"
+                                    strokeWidth="1.2"
+                                />
+                                <text
+                                    x={arrowX + 8}
+                                    y={(bestTotalY + finalTotalY) / 2 + 4}
+                                    fill="var(--text-color)"
+                                    fontSize="11"
+                                    fontWeight="700"
+                                >
+                                    {bestTotal - finalTotal}
+                                </text>
+                            </g>
+                        )}
+
+                        {/* Running Total connecting line */}
+                        <path d={pathD} fill="none" stroke="#6366f1" strokeWidth="2.2" />
+
+                        {/* Data Points */}
+                        {points.map((pt, i) => {
+                            const cx = getX(i);
+                            const cy = getY(pt.total);
+                            const isStart = pt.iterVal === 'start';
+                            const isLastGood = i === lastGoodIdx && bestTotal > 0;
+
+                            return (
+                                <g key={i}>
+                                    {/* X-axis tick */}
+                                    <line
+                                        x1={cx}
+                                        y1={getY(minVal)}
+                                        x2={cx}
+                                        y2={getY(minVal) + 5}
+                                        stroke="rgba(255, 255, 255, 0.25)"
+                                        strokeWidth="1"
+                                    />
+                                    <text
+                                        x={cx}
+                                        y={getY(minVal) + 16}
+                                        textAnchor="middle"
+                                        fill="var(--text-secondary-color)"
+                                        fontSize="10.5"
+                                    >
+                                        {pt.label}
+                                    </text>
+
+                                    {/* Highlight circle ring around last good iteration */}
+                                    {isLastGood && (
+                                        <circle cx={cx} cy={cy} r="8" fill="none" stroke="#f59e0b" strokeWidth="1.5" />
+                                    )}
+
+                                    {/* Point marker */}
+                                    {isStart ? (
+                                        <circle cx={cx} cy={cy} r="4" fill="rgba(15, 23, 42, 0.9)" stroke="#6366f1" strokeWidth="2" />
+                                    ) : (
+                                        <circle cx={cx} cy={cy} r="4" fill="#6366f1" stroke="#818cf8" strokeWidth="1" />
+                                    )}
+                                </g>
+                            );
+                        })}
+                    </svg>
+                </div>
+
+                {/* Confirmed events change pills row aligned under columns */}
+                <div className="bsr-change-overlay-row" style={{ width: '100%', position: 'relative', minHeight: '38px' }}>
+                    <span
+                        className="bsr-change-tag-lead"
+                        style={{
+                            position: 'absolute',
+                            left: 0,
+                            width: `${padLeft}px`,
+                            textAlign: 'right',
+                            paddingRight: '10px',
+                            boxSizing: 'border-box'
+                        }}
+                    >
+                        change
+                    </span>
+                    {points.slice(1).map((pt, i) => {
+                        const colIdx = i + 1;
+                        const colCenterX = getX(colIdx);
+                        const colWidth = Math.max(44, step - 6);
+                        const hasEvents = pt.progEvents.length > 0 || pt.regrEvents.length > 0;
+                        const useMultiLine = colWidth < 80;
+
+                        return (
+                            <div
+                                key={i}
+                                className="bsr-change-col"
+                                style={{
+                                    position: 'absolute',
+                                    left: `${colCenterX - colWidth / 2}px`,
+                                    width: `${colWidth}px`,
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    alignItems: 'center'
+                                }}
+                            >
+                                {!hasEvents ? (
+                                    <span className="change-chip no-events">no events</span>
+                                ) : (
+                                    <div className="change-chips-cluster">
+                                        {pt.progEvents.map((pe, peIdx) => {
+                                            const weight = SIZE_WEIGHTS[pe.size] || 1;
+                                            return (
+                                                <span
+                                                    key={`p-${peIdx}`}
+                                                    className={`change-chip progress${useMultiLine ? ' multiline' : ''}`}
+                                                    title={pe.reason}
+                                                >
+                                                    {useMultiLine ? (
+                                                        <>
+                                                            <span className="chip-sign">+{weight}</span>
+                                                            <span className="chip-size">{pe.size}</span>
+                                                        </>
+                                                    ) : (
+                                                        `+${weight} ${pe.size}`
+                                                    )}
+                                                </span>
+                                            );
+                                        })}
+                                        {pt.regrEvents.map((re, reIdx) => {
+                                            const weight = SIZE_WEIGHTS[re.size] || 1;
+                                            return (
+                                                <span
+                                                    key={`r-${reIdx}`}
+                                                    className={`change-chip regression${useMultiLine ? ' multiline' : ''}`}
+                                                    title={re.reason}
+                                                >
+                                                    {useMultiLine ? (
+                                                        <>
+                                                            <span className="chip-sign">-{weight}</span>
+                                                            <span className="chip-size">{re.size}</span>
+                                                        </>
+                                                    ) : (
+                                                        `-${weight} ${re.size}`
+                                                    )}
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                {/* Evidence descriptions list below graph */}
+                {allChainedEvents.length > 0 && (
+                    <div className="bsr-event-evidence-right-pane">
+                        <div className="bsr-event-evidence-expand">
+                            {allChainedEvents.map((evt, idx) => {
+                                const cleanEvidence = evt.reason
+                                    ? evt.reason.replace(/^\[?\s*Evidence:\s*/i, '').replace(/\s*\]$/, '').trim()
+                                    : 'Confirmed event';
+                                return (
+                                    <div key={idx} className={`bsr-graph-evidence-row ${evt.type}`}>
+                                        <span className="evidence-iter-pill">Iter {evt.iteration}</span>
+                                        <span className={`evidence-dir-tag ${evt.type}`}>{evt.type === 'progress' ? '+PROG' : '-REGR'}</span>
+                                        <span className="evidence-size-pill">{evt.size}</span>
+                                        <span className="evidence-content">{cleanEvidence}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const formatStrategyId = (id: string): string => {
+    if (id.startsWith('main')) {
+        const num = id.slice(4);
+        return `Strategy ${num}`;
+    }
+    return id.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+};
+
+const formatStrategyCircleLabel = (id: string): string => {
+    if (id.startsWith('main')) return id.slice(4);
+    const match = id.match(/\d+/);
+    return match?.[0] || id.slice(0, 2).toUpperCase();
+};
+
+type HypothesisRoundView = {
+    key: string;
+    label: string;
+    roundNumber?: number;
+    hypotheses: DeepthinkHypothesisData[];
+    packet: string;
+};
+
+function hypothesisRoundLabel(roundNumber: number): string {
+    return `Heartbeat ${roundNumber}`;
+}
+
+function buildHypothesisRoundViews(process: DeepthinkPipelineState): HypothesisRoundView[] {
+    const roundNumberSet = new Set<number>();
+
+    // 1. Collect all round numbers from heartbeats
+    (process.heartbeats || []).forEach(h => {
+        if (h.heartbeat_no) roundNumberSet.add(h.heartbeat_no);
+    });
+
+    // 2. Collect from hypothesisRounds
+    (process.hypothesisRounds || []).forEach(r => {
+        if (r.roundNumber) roundNumberSet.add(r.roundNumber);
+    });
+
+    // 3. Collect from hypotheses
+    (process.hypotheses || []).forEach(h => {
+        if (h.roundNumber) roundNumberSet.add(h.roundNumber);
+    });
+
+    // 4. Collect from heartbeatNo
+    if (process.heartbeatNo && process.heartbeatNo > 0) {
+        for (let i = 1; i <= process.heartbeatNo; i++) {
+            roundNumberSet.add(i);
+        }
+    }
+
+    // 5. Collect from DOS outputs
+    (process.dosOutputs || []).forEach(d => {
+        if (d.callType === 'heartbeat') {
+            const matchingHb = (process.heartbeats || []).find(h => h.iteration === d.iteration);
+            if (matchingHb?.heartbeat_no) roundNumberSet.add(matchingHb.heartbeat_no);
+        }
+    });
+
+    if (roundNumberSet.size === 0) {
+        const roundNumber = process.hypotheses[0]?.roundNumber || 1;
+        return [{
+            key: `round-${roundNumber}`,
+            label: hypothesisRoundLabel(roundNumber),
+            roundNumber,
+            hypotheses: process.hypotheses || [],
+            packet: process.knowledgePacket || '',
+        }];
+    }
+
+    const sortedRounds = Array.from(roundNumberSet).sort((a, b) => a - b);
+    const history = process.hypothesisHistory || [];
+
+    return sortedRounds.map((roundNumber) => {
+        const hbBlock = (process.heartbeats || []).find(h => h.heartbeat_no === roundNumber);
+        const roundSnap = (process.hypothesisRounds || []).find(r => r.roundNumber === roundNumber);
+
+        let hypotheses: DeepthinkHypothesisData[] = [];
+        if (hbBlock?.hypotheses && hbBlock.hypotheses.length > 0) {
+            hypotheses = hbBlock.hypotheses;
+        } else if (roundSnap?.hypotheses && roundSnap.hypotheses.length > 0) {
+            hypotheses = roundSnap.hypotheses;
+        } else if (history[roundNumber - 1]?.length) {
+            hypotheses = history[roundNumber - 1];
+        } else {
+            const filteredLive = (process.hypotheses || []).filter(h => h.roundNumber === roundNumber);
+            if (filteredLive.length > 0) {
+                hypotheses = filteredLive;
+            } else if (roundNumber === (process.heartbeatNo || sortedRounds[sortedRounds.length - 1])) {
+                hypotheses = process.hypotheses || [];
+            }
+        }
+
+        const packet = roundSnap?.packet || process.knowledgePacket || '';
+
+        return {
+            key: `round-${roundNumber}`,
+            label: hypothesisRoundLabel(roundNumber),
+            roundNumber,
+            hypotheses,
+            packet,
+        };
+    });
+}
+
+// Hypotheses Tab
+export const HypothesisExplorerTab: React.FC<{
+    process: DeepthinkPipelineState;
+    onViewArgument: (hypothesisId: string) => void;
+}> = ({ process, onViewArgument }) => {
+    const roundViews = buildHypothesisRoundViews(process);
+    const [activeRoundIndex, setActiveRoundIndex] = useState(Math.max(0, roundViews.length - 1));
+    useEffect(() => {
+        setActiveRoundIndex(Math.max(0, roundViews.length - 1));
+    }, [roundViews.length]);
+    const activeRound = roundViews[Math.min(activeRoundIndex, roundViews.length - 1)] || roundViews[0];
+    const activeHypotheses = activeRound?.hypotheses || [];
+
+    if (process.hypothesisGenStatus === 'processing' && !roundViews.some(round => round.hypotheses.length)) return <div className="loading">Generating and testing hypotheses...</div>;
+    if (!roundViews.some(round => round.hypotheses.length))
+        return <div className="status-message">Hypothesis exploration not yet started.</div>;
+
+    const currentHeartbeatNo = activeRound?.roundNumber ?? (activeRoundIndex + 1);
+
+    // Resolve packet XML content for this heartbeat
+    const resolvedPacket = activeRound?.packet || (activeHypotheses.length > 0 ? (
+        `<Hypothesis-Testing-Packet>\n` +
+        activeHypotheses.map((h, i) =>
+            `  <Hypothesis ${i + 1}>\n` +
+            `    Hypothesis:\n      ${h.hypothesisText || 'None'}\n` +
+            `    Target Branches: ${h.targetBranchIds?.join(', ') || 'All Branches'}\n` +
+            `    Hypothesis Testing:\n      ${h.testerAttempt || (h.testerVerdict ? `Verdict: ${h.testerVerdict}` : 'Pending testing')}\n` +
+            `  </Hypothesis ${i + 1}>`
+        ).join('\n\n') +
+        `\n</Hypothesis-Testing-Packet>`
+    ) : (process.knowledgePacket || 'No information packet recorded for this heartbeat.'));
+
+    return (
+        <div className="deepthink-hypothesis-explorer">
+            <div className="hypothesis-round-layout">
+                <div className="hypothesis-round-pills" aria-label="Hypothesis heartbeat rounds">
+                    {roundViews.map((round, index) => (
+                        <button
+                            key={round.key}
+                            type="button"
+                            className={`hypothesis-round-pill${index === activeRoundIndex ? ' active' : ''}`}
+                            onClick={() => setActiveRoundIndex(index)}
+                        >
+                            {round.label}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="hypothesis-round-content">
+                    {/* Synchronized Heartbeat DOS (shown inside each heartbeat) */}
+                    <DosSynthesisCard
+                        process={process}
+                        heartbeatNo={currentHeartbeatNo}
+                    />
+
+                    {activeHypotheses.length === 0 ? (
+                        <div className="status-message">No hypotheses recorded for Heartbeat {currentHeartbeatNo}.</div>
+                    ) : (
+                        <div className="agent-grid hypothesis-agent-grid">
+                            {activeHypotheses.map((h, i) => (
+                                <div key={h.id} className="agent-card">
+                                    <div className="agent-header hypothesis-card-header">
+                                        <h4 className="agent-title">Hypothesis {i + 1}</h4>
+                                        <StatusBadge
+                                            status={h.testerStatus}
+                                            label={h.testerStatus === 'completed' ? 'Completed' : h.testerStatus === 'processing' ? 'Processing' : 'Pending'}
+                                        />
+                                    </div>
+                                    <div className="agent-results">
+                                        <div className="hypothesis-targets">
+                                            <span>Targeting:</span>
+                                            {h.targetBranchIds && h.targetBranchIds.length > 0 ? (
+                                                    h.targetBranchIds.map(id => (
+                                                        <span key={id} className="strategy-target-badge">
+                                                            {formatStrategyId(id)}
+                                                        </span>
+                                                    ))
+                                                ) : (
+                                                    <span className="strategy-target-badge fallback">All Branches</span>
+                                            )}
+                                        </div>
+                                        <ExpandableText
+                                            text={h.hypothesisText || 'No hypothesis text'}
+                                            maxLength={150}
+                                            containerClassName="hypothesis-text-container"
+                                            textClassName="hypothesis-text"
+                                        />
+                                        {hypothesisTesterDisplay(h) && (
+                                            <button
+                                                className="view-argument-button"
+                                                onClick={() => onViewArgument(h.id)}
+                                            >
+                                                <MIcon name="article" /> View The Argument
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+
+// Critique Tab
+export const CritiqueHistoryTab: React.FC<{
+    process: DeepthinkPipelineState;
+    onViewCritique: (critiqueId: string) => void;
+}> = ({ process, onViewCritique }) => {
+    const activeBranches = process.initialStrategies || [];
+    const prunedBranches = ((process as any).prunedBranches || []) as Array<{
+        id: string;
+        originalId?: string;
+        slotIndex?: number;
+        strategyText: string;
+        prunedAtIteration?: number;
+        reason?: string;
+        solutionCritique?: string;
+        solutionCritiqueDisplay?: string;
+        iterationHistory?: { iterations: any[]; status: string };
+    }>;
+
+    type UnifiedBranch = {
+        id: string;
+        displayName: string;
+        isPruned: boolean;
+        prunedAt?: number;
+        pruneReason?: string;
+        strategyText: string;
+        critiques: Array<{
+            id: string;
+            mainStrategyId: string;
+            globalIteration: number;
+            status: string;
+            critiqueResponse?: string;
+            critiqueResponseDisplay?: string;
+            error?: string;
+        }>;
+    };
+
+    const unifiedBranches: UnifiedBranch[] = [];
+
+    // Active branches
+    activeBranches.forEach((branch) => {
+        const critiques: UnifiedBranch['critiques'] = [];
+        if (branch.solutionCritique || branch.solutionCritiqueDisplay) {
+            critiques.push({
+                id: `${branch.id}-iter-1`,
+                mainStrategyId: branch.id,
+                globalIteration: 1,
+                status: branch.solutionCritiqueStatus || 'completed',
+                critiqueResponse: branch.solutionCritique,
+                critiqueResponseDisplay: branch.solutionCritiqueDisplay || branch.solutionCritique,
+            });
+        }
+        if (branch.iterationHistory?.iterations) {
+            branch.iterationHistory.iterations.forEach((it, index) => {
+                const iterNum = it.iterationNumber === 1 ? (index + 2) : (it.iterationNumber || (index + 2));
+                if (it.critique || it.critiqueDisplay) {
+                    critiques.push({
+                        id: `${branch.id}-iter-${iterNum}`,
+                        mainStrategyId: branch.id,
+                        globalIteration: iterNum,
+                        status: 'completed',
+                        critiqueResponse: it.critique,
+                        critiqueResponseDisplay: it.critiqueDisplay || it.critique,
+                    });
+                }
+            });
+        }
+        if (process.solutionCritiques) {
+            process.solutionCritiques
+                .filter(c => c.mainStrategyId === branch.id)
+                .forEach(c => {
+                    if (!critiques.some(existing => existing.globalIteration === (c.globalIteration || 1))) {
+                        critiques.push({
+                            id: c.id,
+                            mainStrategyId: c.mainStrategyId,
+                            globalIteration: c.globalIteration || 1,
+                            status: c.status || 'completed',
+                            critiqueResponse: c.critiqueResponse,
+                            critiqueResponseDisplay: c.critiqueResponseDisplay || c.critiqueResponse,
+                            error: c.error,
+                        });
+                    }
+                });
+        }
+
+        unifiedBranches.push({
+            id: branch.id,
+            displayName: formatStrategyId(branch.id),
+            isPruned: false,
+            strategyText: branch.strategyText,
+            critiques: critiques.sort((a, b) => a.globalIteration - b.globalIteration),
+        });
+    });
+
+    // Pruned branches
+    prunedBranches.forEach((pruned) => {
+        const critiques: UnifiedBranch['critiques'] = [];
+        if (pruned.solutionCritique || pruned.solutionCritiqueDisplay) {
+            critiques.push({
+                id: `${pruned.id}-iter-1`,
+                mainStrategyId: pruned.id,
+                globalIteration: 1,
+                status: 'completed',
+                critiqueResponse: pruned.solutionCritique,
+                critiqueResponseDisplay: pruned.solutionCritiqueDisplay || pruned.solutionCritique,
+            });
+        }
+        if (pruned.iterationHistory?.iterations) {
+            pruned.iterationHistory.iterations.forEach((it: any, index: number) => {
+                const iterNum = it.iterationNumber === 1 ? (index + 2) : (it.iterationNumber || (index + 2));
+                if (it.critique || it.critiqueDisplay) {
+                    critiques.push({
+                        id: `${pruned.id}-iter-${iterNum}`,
+                        mainStrategyId: pruned.id,
+                        globalIteration: iterNum,
+                        status: 'completed',
+                        critiqueResponse: it.critique,
+                        critiqueResponseDisplay: it.critiqueDisplay || it.critique,
+                    });
+                }
+            });
+        }
+
+        unifiedBranches.push({
+            id: pruned.id,
+            displayName: `${formatStrategyId(pruned.originalId || pruned.id)} (Pruned it.${pruned.prunedAtIteration || '?'})`,
+            isPruned: true,
+            prunedAt: pruned.prunedAtIteration,
+            pruneReason: pruned.reason,
+            strategyText: pruned.strategyText,
+            critiques: critiques.sort((a, b) => a.globalIteration - b.globalIteration),
+        });
+    });
+
+    const [selectedBranchId, setSelectedBranchId] = useState<string>(
+        unifiedBranches[0]?.id || ''
+    );
+
+    useEffect(() => {
+        if (!selectedBranchId || !unifiedBranches.some(b => b.id === selectedBranchId)) {
+            setSelectedBranchId(unifiedBranches[0]?.id || '');
+        }
+    }, [unifiedBranches.length, selectedBranchId]);
+
+    const selectedBranch = unifiedBranches.find(b => b.id === selectedBranchId) || unifiedBranches[0];
+    const totalCritiques = unifiedBranches.reduce((sum, b) => sum + b.critiques.length, 0);
+
+    const isCritiquing = process.status === 'processing' && totalCritiques === 0;
+
+    if (isCritiquing) {
+        return (
+            <div className="deepthink-critique-history">
+                <div className="loading" style={{ margin: '2rem 0', textAlign: 'center' }}>
+                    Critiquing solutions across branches...
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="deepthink-critique-history custom-scrollbar">
+            <div className="critique-history-layout">
+                <div className="critique-history-pills" aria-label="Critique strategy filter">
+                    {unifiedBranches.map(branch => (
+                        <button
+                            key={branch.id}
+                            type="button"
+                            className={`critique-history-pill${branch.id === selectedBranchId ? ' active' : ''}${branch.isPruned ? ' pruned' : ''}`}
+                            title={branch.displayName}
+                            onClick={() => setSelectedBranchId(branch.id)}
+                            style={branch.isPruned ? { borderColor: 'rgba(255, 23, 68, 0.4)', color: '#ff1744' } : undefined}
+                        >
+                            {formatStrategyCircleLabel(branch.id)}
+                            {branch.isPruned && <span style={{ fontSize: '0.6rem', color: '#ff1744', display: 'block', lineHeight: 1 }}>✕</span>}
+                        </button>
+                    ))}
+                </div>
+
+                <section className="critique-history-panel">
+                    <div className="critique-history-panel-header">
+                        <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <h4>{selectedBranch ? selectedBranch.displayName : 'Selected Strategy'}</h4>
+                                {selectedBranch?.isPruned && (
+                                    <span className="status-badge status-error" style={{ fontSize: '0.65rem' }}>
+                                        PRUNED AT ITERATION {selectedBranch.prunedAt}
+                                    </span>
+                                )}
+                            </div>
+                            <p>{selectedBranch?.strategyText || 'No strategy text available.'}</p>
+                            {selectedBranch?.pruneReason && (
+                                <p style={{ color: '#ff1744', fontSize: '0.8rem', marginTop: '0.25rem' }}>
+                                    <strong>Prune Decision Reason:</strong> {selectedBranch.pruneReason}
+                                </p>
+                            )}
+                        </div>
+                        <span className="status-badge status-completed">
+                            {selectedBranch?.critiques.length || 0} critiques
+                        </span>
+                    </div>
+
+                    <div className="critique-history-rail custom-scrollbar">
+                        {(!selectedBranch || selectedBranch.critiques.length === 0) ? (
+                            <div className="status-message" style={{ margin: '1.5rem 0' }}>
+                                No critiques logged for this branch yet. Critiques are captured in Iteration 1 and at every subsequent iteration barrier.
+                            </div>
+                        ) : (
+                            selectedBranch.critiques.map((critique) => {
+                                const label = `Iteration ${critique.globalIteration}`;
+                                return (
+                                    <article key={critique.id} className="critique-history-card">
+                                        <div className="critique-history-card-header">
+                                            <div>
+                                                <h5>{label}</h5>
+                                            </div>
+                                            <StatusBadge status={critique.status || 'completed'} />
+                                        </div>
+                                        <div className="critique-history-preview">
+                                            <MathHTML
+                                                content={critiqueDisplay(critique) || 'Critique is processing.'}
+                                                className="critique-content"
+                                            />
+                                        </div>
+                                        {(critique.critiqueResponse || critique.critiqueResponseDisplay) ? (
+                                            <button className="view-critique-button" onClick={() => onViewCritique(critique.id)}>
+                                                <MIcon name="rate_review" /> View Full Critique
+                                            </button>
+                                        ) : critique.status === 'error' ? (
+                                            <div className="error-message">{critique.error || 'Critique failed'}</div>
+                                        ) : null}
+                                    </article>
+                                );
+                            })
+                        )}
+                    </div>
+                </section>
+            </div>
+        </div>
+    );
+};
+
+// Branch State Surface Tab & Exports
+export { BranchStateModal } from './BranchStateModal';
+export { DosSynthesisCard } from './DosSynthesisCard';
+export { HarnessNoteBanner } from './HarnessNoteBanner';
+
+
+
+// Final Result Tab
+export const FinalResultTab: React.FC<{
+    process: DeepthinkPipelineState;
+    escapeHtml: (s: string) => string;
+}> = ({ process, escapeHtml }) => (
+    <div className="deepthink-final-result">
+        {process.finalJudgingStatus === 'completed' && process.finalJudgedBestSolution
+            ? (
+                <div className="judged-solution-container final-judged-solution">
+                    <MathHTML content={process.finalJudgedBestSolution} />
+                </div>
+            )
+            : process.finalJudgingStatus === 'processing'
+                ? <div className="loading">Final judging in progress...</div>
+                : process.finalJudgingStatus === 'error'
+                    ? <div className="status-message error"><p>Error during final judging:</p><pre>{escapeHtml(process.finalJudgingError || 'Unknown error')}</pre></div>
+                    : process.status === 'completed'
+                        ? <div className="status-message">Final result not available</div>
+                        : <div className="status-message">Waiting for solution completion...</div>}
+    </div>
+);

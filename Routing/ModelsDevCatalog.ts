@@ -12,6 +12,7 @@
 export interface ModelsDevReasoningOption {
     type?: string;
     options?: string[];
+    values?: string[];
     min?: number;
     max?: number;
     default?: string | number;

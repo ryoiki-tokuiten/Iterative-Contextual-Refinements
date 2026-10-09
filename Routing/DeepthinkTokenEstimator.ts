@@ -49,7 +49,7 @@ interface TokenProfile {
     hypothesisGenerationOutputPerHypothesis: number;
     strategyGenerationOutputPerStrategy: number;
     memoryOutput: number;
-    pqfOutput: number;
+    bsrOutput: number;
     strategyUpdateOutput: number;
     finalJudgeOutput: number;
     updateBranchShare: number;
@@ -60,7 +60,6 @@ const MAX_DEEPTHINK_STRATEGIES = 5;
 const MAX_DEEPTHINK_DEPTH = 10;
 const MEMORY_INTERVAL = 5;
 const HYPOTHESIS_HEARTBEAT_INTERVAL = 2;
-const PQF_GROUP_SIZE = 2;
 const CORRECTOR_CONTEXT_CEILING = 195_000;
 const SOLUTION_POOL_CONTEXT_CEILING = 155_000;
 
@@ -80,7 +79,7 @@ const WORST_PROFILE: TokenProfile = {
     hypothesisGenerationOutputPerHypothesis: 500,
     strategyGenerationOutputPerStrategy: 500,
     memoryOutput: 4_000,
-    pqfOutput: 1_500,
+    bsrOutput: 1_500,
     strategyUpdateOutput: 3_000,
     finalJudgeOutput: 5_000,
     updateBranchShare: 1,
@@ -103,7 +102,7 @@ const AVERAGE_PROFILE: TokenProfile = {
     hypothesisGenerationOutputPerHypothesis: 300,
     strategyGenerationOutputPerStrategy: 250,
     memoryOutput: 1_400,
-    pqfOutput: 600,
+    bsrOutput: 600,
     strategyUpdateOutput: 800,
     finalJudgeOutput: 1_500,
     updateBranchShare: 0.2,
@@ -123,14 +122,6 @@ function getHypothesisRoundGlobals(depth: number): number[] {
     return rounds;
 }
 
-function getPqfGroupSizes(strategyCount: number): number[] {
-    const sizes: number[] = [];
-    for (let remaining = strategyCount; remaining > 0; remaining -= PQF_GROUP_SIZE) {
-        sizes.push(Math.min(PQF_GROUP_SIZE, remaining));
-    }
-    return sizes;
-}
-
 function calculateApiCalls(strategyCount: number, hypothesisCount: number, depth: number, disableSolutionPool: boolean): ApiCallRange {
     let min = 1; // Initial strategy generation
     let max = 1;
@@ -146,9 +137,9 @@ function calculateApiCalls(strategyCount: number, hypothesisCount: number, depth
     max += strategyCount * depth * branchCallsPerDepth;
 
     const maintenancePasses = Math.floor(depth / MEMORY_INTERVAL);
-    const pqfAgentCount = Math.ceil(strategyCount / PQF_GROUP_SIZE);
-    min += maintenancePasses * (strategyCount + pqfAgentCount);
-    max += maintenancePasses * (strategyCount + pqfAgentCount + 1 + (strategyCount * 2));
+    const bsrAgentCount = strategyCount;
+    min += maintenancePasses * (strategyCount + bsrAgentCount);
+    max += maintenancePasses * (strategyCount + bsrAgentCount + 1 + (strategyCount * 2));
 
     min += 1; // Final judging
     max += 1;
@@ -223,7 +214,6 @@ function calculateMaintenanceInput(profile: TokenProfile, strategyCount: number,
     const maintenancePasses = Math.floor(depth / MEMORY_INTERVAL);
     if (maintenancePasses <= 0) return 0;
 
-    const groupSizes = getPqfGroupSizes(strategyCount);
     let input = 0;
 
     for (let pass = 1; pass <= maintenancePasses; pass++) {
@@ -232,9 +222,8 @@ function calculateMaintenanceInput(profile: TokenProfile, strategyCount: number,
             (pass > 1 ? profile.memoryBankContext : 0);
         input += strategyCount * memoryInputPerStrategy;
 
-        input += groupSizes.reduce((total, groupSize) => {
-            return total + profile.promptBase + (groupSize * MEMORY_INTERVAL * profile.branchPairContext);
-        }, 0);
+        // BSR agent per branch
+        input += strategyCount * (profile.promptBase + (MEMORY_INTERVAL * profile.branchPairContext));
 
         const updatedBranches = strategyCount * profile.updateBranchShare;
         if (updatedBranches > 0) {
@@ -277,7 +266,7 @@ function calculateOutputTokens(
 ): number {
     const hypothesisRounds = hypothesisCount > 0 ? getHypothesisRoundGlobals(depth).length : 0;
     const maintenancePasses = Math.floor(depth / MEMORY_INTERVAL);
-    const pqfAgentCount = Math.ceil(strategyCount / PQF_GROUP_SIZE);
+    const bsrAgentCount = strategyCount;
     const updatedBranches = strategyCount * profile.updateBranchShare * maintenancePasses;
 
     const branchOutput = strategyCount * depth * (
@@ -288,7 +277,7 @@ function calculateOutputTokens(
 
     const maintenanceOutput = maintenancePasses * (
         (strategyCount * profile.memoryOutput) +
-        (pqfAgentCount * profile.pqfOutput) +
+        (bsrAgentCount * profile.bsrOutput) +
         profile.strategyUpdateOutput
     );
 

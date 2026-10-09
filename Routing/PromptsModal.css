@@ -4,35 +4,30 @@
 
 .prompts-mode-container {
     display: none;
+    width: 100%;
     height: 100%;
     flex-direction: column;
+    flex: 1;
+    min-height: 0;
 }
 
 .prompts-mode-container.active {
     display: flex;
-    height: 100%;
 }
 
 .prompt-content-pane {
     display: none;
     flex-direction: column;
-    gap: 1.5rem;
-    /* Gap between cards */
-    animation: cardEntrance 0.4s var(--easing-curve) backwards;
+    width: 100%;
     height: 100%;
+    flex: 1;
     min-height: 0;
+    animation: cardEntrance 0.4s var(--easing-curve) backwards;
 }
 
 .prompt-content-pane.active {
-    /* Side-by-side layout as requested by user */
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 1fr;
-    column-gap: 1.5rem;
-    height: 100%;
+    display: flex;
 }
-
-
 
 .prompt-pane-title {
     display: none;
@@ -45,21 +40,9 @@
     box-shadow: var(--shadow-inset-strong);
     display: flex;
     flex-direction: column;
+    width: 100%;
     height: 100%;
-    /* Full height */
-}
-
-/* System instruction (Left Column) */
-.prompt-card:first-of-type {
-    grid-column: 1;
-    grid-row: 1;
-    min-height: 0;
-}
-
-/* User prompt template (Right Column) */
-.prompt-card:last-of-type {
-    grid-column: 2;
-    grid-row: 1;
+    flex: 1;
     min-height: 0;
 }
 
@@ -163,6 +146,8 @@ textarea.prompt-textarea:focus {
     position: relative;
     height: 100%;
     min-height: 0;
+    min-width: 0;
+    width: 100%;
 }
 
 /* Navigation Typography & Items */
