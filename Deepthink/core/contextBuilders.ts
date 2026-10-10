@@ -7,7 +7,7 @@
  * is the absolute source of truth (§4, §5, §6.7, §7).
  */
 
-import { Part } from "@google/genai";
+import type { Part } from "@google/genai";
 import type {
   BsrAction,
   BsrEvolveForm,

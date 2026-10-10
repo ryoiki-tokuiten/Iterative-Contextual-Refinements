@@ -39,8 +39,8 @@
 /* Sidebar */
 .vfs-sidebar {
     width: 260px;
-    border-right: 1px solid rgba(100, 110, 220, 0.15);
-    background-color: #08090d;
+    border-right: 1px solid var(--panel-border);
+    background: var(--panel-bg);
     display: flex;
     flex-direction: column;
     border-bottom-left-radius: var(--border-radius-lg);
@@ -142,7 +142,6 @@
 }
 
 .tree-node:hover {
-    background-color: rgba(255, 255, 255, 0.045);
     border-color: transparent;
     box-shadow: none;
     color: var(--text-color);
@@ -227,7 +226,7 @@
 /* Main Code Editor Area */
 .vfs-editor-area {
     flex: 1;
-    background-color: #0b0c13;
+    background: var(--panel-bg);
     display: flex;
     flex-direction: column;
     min-width: 0; /* Important for flex child with CodeMirror */
@@ -246,8 +245,8 @@
 .vfs-editor-header {
     height: 40px;
     padding: 0 16px;
-    background-color: #090a0f;
-    border-bottom: 1px solid rgba(100, 110, 220, 0.1);
+    background: var(--panel-bg);
+    border-bottom: 1px solid var(--panel-border);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -290,9 +289,9 @@
     flex-direction: column;
     gap: 14px;
     padding: 18px;
-    border: 1px solid rgba(100, 110, 220, 0.25);
+    border: 1px solid var(--panel-border);
     border-radius: 8px;
-    background: #101118;
+    background: var(--panel-bg);
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
 }
 
@@ -343,7 +342,7 @@
     min-height: 0;
     min-width: 0;
     overflow: auto;
-    background-color: #0a0b10;
+    background: var(--panel-bg);
 }
 
 /* Markdown Rendered Viewport */
@@ -353,14 +352,14 @@
     overflow-y: auto;
     overflow-x: hidden;
     padding: 1.5rem 2rem;
-    background-color: #0a0b10;
+    background: var(--panel-bg);
 }
 
 .git-diff-view {
     flex: 1;
     min-height: 0;
     overflow: auto;
-    background: #0a0b10;
+    background: var(--panel-bg);
 }
 
 .git-diff-view .d2h-wrapper {
@@ -383,7 +382,7 @@
 
 .vfs-codemirror-wrapper .cm-editor {
     height: 100%;
-    background-color: #0a0b10 !important;
+    background: var(--panel-bg) !important;
 }
 
 .vfs-codemirror-wrapper .cm-scroller {
@@ -494,7 +493,6 @@
 }
 
 .light-mode .tree-node:hover {
-    background-color: rgba(80, 90, 180, 0.06);
     color: #1a1b25;
 }
 
@@ -599,8 +597,8 @@
     flex-direction: column;
     gap: 8px;
     padding: 12px;
-    background-color: #06070a;
-    border-top: 1px solid rgba(100, 110, 220, 0.15);
+    background: var(--panel-bg);
+    border-top: 1px solid var(--panel-border);
     box-sizing: border-box;
 }
 
@@ -660,7 +658,6 @@
 }
 
 .vfs-refresh-btn-footer:hover:not(:disabled) {
-    background-color: rgba(255, 255, 255, 0.08);
     color: var(--text-color);
     border-color: rgba(100, 110, 220, 0.3);
 }
@@ -677,7 +674,6 @@
 }
 
 .light-mode .vfs-refresh-btn-footer:hover:not(:disabled) {
-    background-color: rgba(0, 0, 0, 0.06);
     border-color: rgba(80, 90, 180, 0.3);
 }
 

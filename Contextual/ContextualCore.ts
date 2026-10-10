@@ -296,7 +296,8 @@ async function runContextualLoop() {
             // ---------------------------------------------------------
             // 1: MAIN GENERATOR AGENT
             // ---------------------------------------------------------
-            const mainGenerationResult = await callContextualAgent('Main Generator', mainGeneratorMessages, contextualCustomPrompts!.sys_contextual_mainGenerator);
+            const mainGenModel = contextualCustomPrompts?.model_mainGenerator;
+            const mainGenerationResult = await callContextualAgent('Main Generator', mainGeneratorMessages, contextualCustomPrompts!.sys_contextual_mainGenerator, mainGenModel);
 
             if (!mainGenerationResult || abortController?.signal.aborted || !globalState.isContextualRunning) break;
 
@@ -338,7 +339,8 @@ async function runContextualLoop() {
             // ---------------------------------------------------------
             iterativeAgentMessages.push(new HumanMessage("Please critique the submitted solution above, including any referenced artifacts that are relevant to the critique."));
             
-            const suggestionsResult = await callContextualAgent('Iterative Agent', iterativeAgentMessages, contextualCustomPrompts!.sys_contextual_iterativeAgent);
+            const iterativeModel = contextualCustomPrompts?.model_iterativeAgent;
+            const suggestionsResult = await callContextualAgent('Iterative Agent', iterativeAgentMessages, contextualCustomPrompts!.sys_contextual_iterativeAgent, iterativeModel);
 
             if (!suggestionsResult || abortController?.signal.aborted || !globalState.isContextualRunning) break;
 
@@ -393,7 +395,8 @@ async function runContextualLoop() {
             
             strategicPoolMessages.push(new HumanMessage(stratObservation));
 
-            const strategicPoolResult = await callContextualAgent('Strategic Pool Agent', strategicPoolMessages, contextualCustomPrompts!.sys_contextual_solutionPoolAgent);
+            const poolModel = contextualCustomPrompts?.model_solutionPoolAgent;
+            const strategicPoolResult = await callContextualAgent('Strategic Pool Agent', strategicPoolMessages, contextualCustomPrompts!.sys_contextual_solutionPoolAgent, poolModel);
 
             if (!strategicPoolResult || abortController?.signal.aborted || !globalState.isContextualRunning) break;
 
@@ -470,7 +473,8 @@ async function runContextualLoop() {
                     'Task: Create an evolving memory document summarizing what worked and what didn\'t based on these iteration texts.'
                 ].join('\n');
 
-                const memoryResult = await callContextualAgent('Memory Agent', [new HumanMessage(memoryPrompt)], contextualCustomPrompts!.sys_contextual_memoryAgent);
+                const memoryModel = contextualCustomPrompts?.model_memoryAgent;
+                const memoryResult = await callContextualAgent('Memory Agent', [new HumanMessage(memoryPrompt)], contextualCustomPrompts!.sys_contextual_memoryAgent, memoryModel);
                 
                 if (memoryResult && !abortController?.signal.aborted && globalState.isContextualRunning) {
                     const memoryText = memoryResult.text;
@@ -568,11 +572,12 @@ async function runContextualLoop() {
 async function callContextualAgent(
     agentName: string,
     messages: BaseMessage[],
-    systemPrompt: string
+    systemPrompt: string,
+    agentModel?: string | null
 ): Promise<ContextualAgentCallResult | null> {
     if (!activeContextualState) return null;
 
-    const modelName = getSelectedModel();
+    const modelName = (agentModel && agentModel.trim()) || getSelectedModel();
     const sandboxEnabled = isContextualSandboxToolEnabled();
     const responseTimeoutMs = sandboxEnabled ? SANDBOX_AGENT_TIMEOUT_MS : STANDARD_AGENT_TIMEOUT_MS;
     const startedAt = Date.now();

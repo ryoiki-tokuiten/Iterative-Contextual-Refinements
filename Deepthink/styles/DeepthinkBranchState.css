@@ -13,15 +13,15 @@
 
 .harness-note-card {
   margin-bottom: 1.25rem;
-  background: rgba(var(--card-bg-base-rgb, 30, 30, 42), 0.7);
-  border: 1px solid var(--border-color);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
   border-radius: var(--border-radius-md, 8px);
   overflow: hidden;
   transition: border-color var(--transition-speed, 0.2s) ease;
 }
 
 .harness-note-card:hover {
-  border-color: rgba(var(--accent-purple-rgb, 140, 100, 255), 0.35);
+  border-color: var(--panel-border-hover);
 }
 
 .harness-note-header {
@@ -29,7 +29,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0.65rem 1rem;
-  background: rgba(var(--card-bg-base-rgb, 30, 30, 42), 0.4);
+  background: var(--panel-header-bg);
   cursor: pointer;
   user-select: none;
 }
@@ -157,17 +157,15 @@
 }
 
 .bsr-branch-card {
-  background: rgba(var(--card-bg-base-rgb), 0.55);
-  border: 1px solid rgba(var(--border-color-rgb), 0.3);
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
   border-radius: var(--border-radius-md, 12px);
   padding: 1.15rem;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: transform var(--transition-speed, 0.2s) ease, border-color var(--transition-speed, 0.2s) ease, box-shadow var(--transition-speed, 0.2s) ease;
+  transition: transform var(--transition-speed, 0.2s) ease, border-color var(--transition-speed, 0.2s) ease, box-shadow var(--transition-speed, 0.2s) ease, background var(--transition-speed, 0.2s) ease;
 }
 
 .bsr-branch-card:hover {

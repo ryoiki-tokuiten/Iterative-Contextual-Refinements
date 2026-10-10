@@ -6,11 +6,9 @@
 .knowledge-packet-section {
     margin-top: 2rem;
     padding: 1.5rem;
-    background: rgba(var(--bg-color-rgb), 0.3);
-    border: 1px solid var(--border-color);
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
     border-radius: var(--border-radius-lg);
-    backdrop-filter: var(--card-blur-effect);
-    -webkit-backdrop-filter: var(--card-blur-effect);
     box-shadow: var(--shadow-md);
 }
 
@@ -36,8 +34,8 @@
 .hypothesis-block {
     margin-bottom: 2rem;
     padding: 1.5rem;
-    background: rgba(var(--bg-color-rgb), 0.5);
-    border: 1px solid var(--border-color);
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
     border-radius: var(--border-radius-md);
 }
 

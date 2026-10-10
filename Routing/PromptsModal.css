@@ -59,6 +59,8 @@
     justify-content: space-between;
     align-items: center;
     background-color: rgba(var(--card-bg-base-rgb), 0.2);
+    position: relative;
+    z-index: 100;
 }
 
 .prompt-card-title {
@@ -199,180 +201,130 @@ textarea.prompt-textarea:focus {
     font-weight: 500;
 }
 
-/* Model Selector in Header */
+/* Prompt Card Model Selector Trigger & Floating Dropdown Panel */
 .prompt-model-selector {
-    min-width: 180px;
-    display: flex;
+    position: relative;
+    display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
 }
 
 .prompt-model-select {
-    width: 100%;
-    padding: 0.4rem 0.6rem;
-    border-radius: var(--border-radius-sm);
-    background-color: rgba(var(--bg-color-rgb), 0.5);
-    border: 1px solid var(--border-color);
-    color: var(--text-color);
-    font-size: 0.85rem;
-    cursor: pointer;
+    display: none;
 }
 
-/* Custom Model Select Styles (matches ModelSelectionUI) */
-.custom-model-select {
-    position: relative;
-    width: 100%;
-    min-width: 180px;
-}
-
-.custom-model-select-trigger {
-    display: flex;
+.prompt-model-trigger {
+    display: inline-flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.4rem 0.6rem;
-    background-color: rgba(var(--bg-color-rgb), 0.5);
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius-sm);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    user-select: none;
-}
-
-.custom-model-select-trigger:hover {
-    border-color: var(--accent-blue);
-    background-color: rgba(var(--bg-color-rgb), 0.8);
-}
-
-.custom-model-select-trigger.open {
-    border-color: var(--accent-blue);
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-}
-
-.custom-model-select-text {
-    font-size: 0.85rem;
+    gap: 8px;
+    padding: 5px 12px;
+    background: rgba(var(--card-bg-base-rgb), 0.35);
+    border: 1px solid rgba(var(--border-color-rgb), 0.25);
+    border-radius: var(--border-radius-sm, 8px);
     color: var(--text-color);
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+    max-width: 250px;
+}
+
+.prompt-model-trigger:hover {
+    border-color: var(--accent-blue);
+    background: rgba(var(--card-bg-base-rgb), 0.6);
+}
+
+.prompt-model-trigger.is-open {
+    border-color: var(--accent-blue);
+    background: rgba(var(--accent-blue-rgb), 0.12);
+    box-shadow: 0 0 0 2px rgba(var(--accent-blue-rgb), 0.2);
+}
+
+.prompt-model-trigger-text {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 190px;
+    color: var(--text-color);
 }
 
-.custom-model-select-arrow {
-    font-size: 1.2rem;
+.prompt-model-trigger-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: var(--text-tertiary-color);
     transition: transform 0.2s ease;
+    flex-shrink: 0;
 }
 
-.custom-model-select-trigger.open .custom-model-select-arrow {
+.prompt-model-trigger.is-open .prompt-model-trigger-arrow {
     transform: rotate(180deg);
     color: var(--accent-blue);
 }
 
-.custom-model-select-dropdown {
+/* Floating Connected Model Selection Panel */
+.prompt-model-dropdown-panel {
     position: absolute;
-    top: 100%;
-    left: 0;
-    width: 100%;
-    max-height: 300px;
-    overflow-y: auto;
-    background-color: var(--bg-color);
-    border: 1px solid var(--border-color);
-    border-top: none;
-    border-bottom-left-radius: var(--border-radius-sm);
-    border-bottom-right-radius: var(--border-radius-sm);
-    z-index: var(--z-index-dropdown);
+    top: calc(100% + 6px);
+    right: 0;
+    z-index: 10000;
+    width: 380px;
+    max-width: min(380px, calc(100vw - 320px));
+    background: var(--bg-color);
+    border: 1px solid rgba(var(--border-color-rgb), 0.3);
+    border-radius: 14px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55), 0 4px 16px rgba(0, 0, 0, 0.3);
     display: none;
-    box-shadow: var(--shadow-lg);
+    overflow: hidden;
+    animation: promptDropdownFadeIn 0.15s ease-out;
 }
 
-.custom-model-select-dropdown.open {
-    display: block;
-}
-
-.custom-model-select-provider-section {
-    border-bottom: 1px solid var(--border-color);
-}
-
-.custom-model-select-provider-section:last-child {
-    border-bottom: none;
-}
-
-.custom-model-select-provider-header {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    background-color: rgba(var(--card-bg-base-rgb), 0.5);
-    color: var(--text-tertiary-color);
-    position: sticky;
-    top: 0;
-}
-
-/* Provider Colors */
-.custom-model-select-provider-header.openai {
-    color: #10a37f;
-    background-color: rgba(16, 163, 127, 0.1);
-}
-
-.custom-model-select-provider-header.anthropic {
-    color: #d97757;
-    background-color: rgba(217, 119, 87, 0.1);
-}
-
-.custom-model-select-provider-header.google {
-    color: #4285f4;
-    background-color: rgba(66, 133, 244, 0.1);
-}
-
-.custom-model-select-provider-header.openai-compatible {
-    color: var(--accent-blue);
-    background-color: rgba(var(--accent-blue-rgb), 0.1);
-}
-
-.custom-model-select-provider-header.meta {
-    color: #0668E1;
-    background-color: rgba(6, 104, 225, 0.1);
-}
-
-.custom-model-select-provider-header.mistral {
-    color: #f59e0b;
-    background-color: rgba(245, 158, 11, 0.1);
-}
-
-.custom-model-select-option {
-    padding: 0.5rem 0.8rem;
-    cursor: pointer;
-    transition: background-color 0.15s ease;
+.prompt-model-dropdown-panel.is-open {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
 }
 
-.custom-model-select-option:hover {
-    background-color: rgba(var(--text-color-rgb), 0.05);
+@keyframes promptDropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
-.custom-model-select-option.selected {
-    background-color: rgba(var(--accent-blue-rgb), 0.1);
-    color: var(--accent-blue);
-    font-weight: 500;
+.prompt-model-dropdown-panel .model-selector {
+    border: none;
+    border-radius: 13px;
+    background: transparent;
+    width: 100%;
 }
 
-.custom-model-select-option .option-check {
-    display: none;
-    font-size: 1.1rem;
-    color: var(--accent-green);
-    align-items: center;
-    justify-content: center;
+.prompt-model-dropdown-panel .model-selector-models {
+    max-height: 220px;
+    min-height: 160px;
 }
 
-.custom-model-select-option.selected .option-check {
-    display: inline-flex;
+/* Global Model Option in per-agent ModelSelector */
+.global-model-option {
+    border-bottom: 1px solid rgba(var(--border-color-rgb), 0.15);
+    margin-bottom: 4px;
+    padding-bottom: 6px;
 }
 
-.custom-model-select-option-text {
-    font-size: 0.85rem;
+.global-model-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.global-model-badge {
+    font-size: 11px;
+    color: var(--text-tertiary-color);
+    font-weight: normal;
 }
 
 

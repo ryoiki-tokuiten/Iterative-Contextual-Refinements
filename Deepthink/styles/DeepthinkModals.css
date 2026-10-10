@@ -203,8 +203,8 @@
     max-height: 80%;
     overflow: hidden;
 
-    background: var(--bg-color);
-    border: 1px solid var(--border-color);
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
     border-radius: 28px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 
@@ -212,7 +212,8 @@
 }
 
 .embedded-modal-content .modal-header {
-    background: var(--card-bg-color);
+    background: transparent;
+    border-bottom: 1px solid var(--panel-border);
     padding: 1rem 1.5rem;
     display: flex !important;
 }
@@ -283,13 +284,11 @@
 }
 
 .embedded-modal-content .modal-nav-btn:not(:disabled):hover {
-    background: rgba(var(--accent-blue-rgb), 0.1);
     border-color: var(--accent-blue);
     color: var(--accent-blue);
 }
 
 .embedded-modal-content .modal-nav-btn.active {
-    background: rgba(var(--accent-blue-rgb), 0.14);
     border-color: var(--accent-blue);
     color: var(--accent-blue);
 }
@@ -326,7 +325,6 @@
 }
 
 .response-toggle-option.active {
-    background: rgba(var(--accent-blue-rgb), 0.16);
     color: var(--accent-blue);
     box-shadow: 0 0 0 1px rgba(var(--accent-blue-rgb), 0.24), 0 6px 18px rgba(var(--accent-blue-rgb), 0.14);
 }
@@ -383,9 +381,9 @@
     width: 100%;
     min-width: 0;
     padding: 1rem;
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--panel-border);
     border-radius: 8px;
-    background: rgba(var(--card-bg-base-rgb), 0.42);
+    background: var(--panel-bg);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
 }
 

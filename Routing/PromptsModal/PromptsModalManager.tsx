@@ -48,12 +48,14 @@ const PromptsModalManager: React.FC = () => {
                 containerId="adaptiveDeepthink-prompts-container"
                 panes={ADAPTIVE_PROMPT_PANES}
                 manager={globalAdaptiveDeepthinkPromptsManager}
+                availableModels={availableModels}
             />
             {contextualPromptsManager ? (
                 <PromptContent
                     containerId="contextual-prompts-container"
                     panes={CONTEXTUAL_PROMPT_PANES}
                     manager={contextualPromptsManager}
+                    availableModels={availableModels}
                 />
             ) : null}
         </PromptsModalLayout>

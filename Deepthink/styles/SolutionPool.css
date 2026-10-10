@@ -270,14 +270,14 @@ body.light-mode .solution-pool-download-button {
     max-height: 260px;
     overflow: hidden;
     padding: 1rem;
-    border: 1px solid rgba(var(--accent-blue-rgb), 0.18);
+    border: 1px solid var(--panel-border);
     border-radius: var(--border-radius-sm);
-    background: rgba(var(--accent-blue-rgb), 0.045);
+    background: var(--panel-bg);
+    transition: background var(--transition-speed) var(--easing-curve),
+                border-color var(--transition-speed) var(--easing-curve);
 }
 
 .sp-memory-bank-card.replaced {
-    border-color: rgba(var(--accent-purple-rgb), 0.18);
-    background: rgba(var(--accent-purple-rgb), 0.04);
 }
 
 .sp-memory-bank-card-header {

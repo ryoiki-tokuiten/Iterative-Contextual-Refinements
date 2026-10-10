@@ -811,9 +811,9 @@
     min-width: 0;
     height: 100%;
     min-height: 0;
-    border: 1px solid rgba(245, 158, 11, 0.16);
+    border: 1px solid var(--panel-border);
     border-radius: var(--border-radius-sm);
-    background: rgba(var(--card-bg-base-rgb), 0.22);
+    background: var(--panel-bg);
     overflow: hidden;
 }
 
@@ -823,8 +823,8 @@
     justify-content: space-between;
     gap: 1rem;
     padding: 1rem 1.25rem;
-    border-bottom: 1px solid rgba(var(--border-color-rgb), 0.18);
-    background: rgba(245, 158, 11, 0.045);
+    border-bottom: 1px solid var(--panel-header-border);
+    background: var(--panel-header-bg);
 }
 
 .critique-history-panel-header h4 {
@@ -864,10 +864,12 @@
     min-width: 0;
     height: 100%;
     padding: 1.2rem;
-    border: 1px solid rgba(245, 158, 11, 0.18);
+    border: 1px solid var(--panel-border);
     border-radius: var(--border-radius-sm);
-    background: rgba(var(--bg-color-rgb), 0.18);
+    background: var(--panel-bg);
     scroll-snap-align: start;
+    transition: background var(--transition-speed) var(--easing-curve),
+                border-color var(--transition-speed) var(--easing-curve);
 }
 
 .critique-history-card-header {
@@ -1063,8 +1065,9 @@
 .solution-panel {
     display: flex;
     flex-direction: column;
-    border: 1px solid #333;
-    border-radius: 8px;
+    border: 1px solid var(--panel-border);
+    border-radius: var(--border-radius-sm);
+    background: var(--panel-bg);
     overflow: hidden;
 }
 
@@ -1074,8 +1077,8 @@
     justify-content: space-between;
     gap: 12px;
     padding: 12px 16px;
-    background: rgba(15, 17, 32, 0.4);
-    border-bottom: 1px solid #333;
+    background: var(--panel-header-bg);
+    border-bottom: 1px solid var(--panel-header-border);
 }
 
 .solution-panel-body {

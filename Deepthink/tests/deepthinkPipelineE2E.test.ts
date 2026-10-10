@@ -25,12 +25,25 @@ import {
   computeForecastQuantities,
   computePressures,
   decideAction,
+  evaluateBranchState,
   computeCalibrationMetrics,
   calculateSurpriseBits,
   calculateUtilizationVector,
   PROBABILITY_FLOOR,
   LOG2_3,
 } from '../core/formulas.ts';
+import { BSR_WEIGHT_PRESETS, MAX_DEEPTHINK_DEPTH } from '../../Routing/ModelConfig.ts';
+import {
+  calculateDeepthinkTokenEstimate,
+  buildDeepthinkTokenTrend,
+  SANDBOX_PER_CALL,
+  SANDBOX_ITERATION_NOISE,
+} from '../../Routing/DeepthinkTokenEstimator.ts';
+import {
+  calculateDeepthinkApiCallsFromParams,
+  SANDBOX_API_CALL_MULTIPLIER,
+  formatApiCallCount,
+} from '../../Routing/ApiCallEstimator.ts';
 
 import {
   validateLoopBounds,
@@ -799,5 +812,338 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
     // Verify EVOLVE rollback was recorded (§8.2)
     const rollbacks = git.getRollbacks();
     assert.ok(rollbacks.some(rb => rb.slotIndex === 1), 'Rollback must be recorded for slot 1 (main2)');
+  });
+});
+
+// ============================================================================
+// SUITE 6: Configurable BSR Parameters & Preset Integration
+// ============================================================================
+
+describe('Deepthink BSR Configurable Parameters & Presets', () => {
+  it('Noise level (tau) correctly distinguishes trends vs stalls based on threshold', () => {
+    // 1 progress event of size medium = weight 2
+    const progress: BsrEvent[] = [{ iteration: 1, size: 'medium', reason: 'partial breakthrough' }];
+    const regression: BsrEvent[] = [];
+
+    // Under tau = 2: net 2 >= 2 -> PROGRESS
+    const resDefault = scoreWindow(1, 2, progress, regression, [], { tau: 2 });
+    assert.strictEqual(resDefault.windowOutcome, 'PROGRESS');
+
+    // Under strict tau = 4: net 2 < 4 -> STALL (system is skeptical)
+    const resStrict = scoreWindow(1, 2, progress, regression, [], { tau: 4 });
+    assert.strictEqual(resStrict.windowOutcome, 'STALL');
+
+    // Under twitchy tau = 1 with only a small event (weight 1):
+    const smallProg: BsrEvent[] = [{ iteration: 1, size: 'small', reason: 'minor tweak' }];
+    const resTwitchy = scoreWindow(1, 2, smallProg, regression, [], { tau: 1 });
+    assert.strictEqual(resTwitchy.windowOutcome, 'PROGRESS');
+  });
+
+  it('Pressure floor (theta) governs destructive action triggering', () => {
+    const pressures = { CONTINUE: 0.1, EVOLVE: 0.35, PRUNE: 0.2 };
+
+    // With default theta = 0.3: EVOLVE (0.35 >= 0.30) triggers
+    const resDefault = decideAction(pressures, 0.4, 0.2, 0.5, 1, { theta: 0.3 });
+    assert.strictEqual(resDefault.decision, 'EVOLVE');
+
+    // With conservative theta = 0.5: pressures (0.35, 0.2) are below theta -> CONTINUE
+    const resConservative = decideAction(pressures, 0.4, 0.2, 0.5, 1, { theta: 0.5 });
+    assert.strictEqual(resConservative.decision, 'CONTINUE');
+
+    // With ruthless theta = 0.1: EVOLVE triggers easily
+    const lowPressures = { CONTINUE: 0.05, EVOLVE: 0.15, PRUNE: 0.08 };
+    const resRuthless = decideAction(lowPressures, 0.2, 0.1, 0.5, 1, { theta: 0.1 });
+    assert.strictEqual(resRuthless.decision, 'EVOLVE');
+  });
+
+  it('Verifies the 3 genuinely interesting BSR weight presets apply accurate mathematical scaling', () => {
+    assert.strictEqual(BSR_WEIGHT_PRESETS.length, 3);
+
+    const [std, flat, steep] = BSR_WEIGHT_PRESETS;
+    assert.deepStrictEqual(std.weights, { small: 1, medium: 2, large: 4 });
+    assert.deepStrictEqual(flat.weights, { small: 1, medium: 2, large: 3 });
+    assert.deepStrictEqual(steep.weights, { small: 1, medium: 3, large: 10 });
+
+    // Under steepened weights: 1 large breakthrough (10) outweighs 3 medium regressions (-9) -> Net +1
+    const steepProg: BsrEvent[] = [{ iteration: 1, size: 'large', reason: 'major leap' }];
+    const steepRegr: BsrEvent[] = [
+      { iteration: 1, size: 'medium', reason: 'regr 1' },
+      { iteration: 1, size: 'medium', reason: 'regr 2' },
+      { iteration: 1, size: 'medium', reason: 'regr 3' },
+    ];
+    const scoreSteep = scoreWindow(1, 2, steepProg, steepRegr, [], { weights: steep.weights });
+    assert.strictEqual(scoreSteep.net, 10 - 9); // +1 net
+
+    // Under standard weights: 1 large breakthrough (4) is outweighed by 3 medium regressions (-6) -> Net -2
+    const scoreStd = scoreWindow(1, 2, steepProg, steepRegr, [], { weights: std.weights });
+    assert.strictEqual(scoreStd.net, 4 - 6); // -2 net
+  });
+});
+
+describe('Deepthink Token Volume & API Call Estimations (Schedule 5..20 & Sandbox Delta)', () => {
+  it('enforces depth scaling up to MAX_DEEPTHINK_DEPTH (20) without capping at 10', () => {
+    assert.strictEqual(MAX_DEEPTHINK_DEPTH, 20);
+
+    const est10 = calculateDeepthinkTokenEstimate({
+      strategiesCount: 3,
+      hypothesisCount: 2,
+      deepthinkDepth: 10,
+    });
+    const est15 = calculateDeepthinkTokenEstimate({
+      strategiesCount: 3,
+      hypothesisCount: 2,
+      deepthinkDepth: 15,
+    });
+    const est20 = calculateDeepthinkTokenEstimate({
+      strategiesCount: 3,
+      hypothesisCount: 2,
+      deepthinkDepth: 20,
+    });
+
+    // Verify depths are accurately set without truncation
+    assert.strictEqual(est10.depth, 10);
+    assert.strictEqual(est15.depth, 15);
+    assert.strictEqual(est20.depth, 20);
+
+    // Verify token volumes strictly scale up as depth advances from 10 to 15 to 20
+    assert.ok(est15.input.average > est10.input.average, 'depth 15 input avg > depth 10');
+    assert.ok(est20.input.average > est15.input.average, 'depth 20 input avg > depth 15');
+    assert.ok(est15.output.average > est10.output.average, 'depth 15 output avg > depth 10');
+    assert.ok(est20.output.average > est15.output.average, 'depth 20 output avg > depth 15');
+    assert.ok(est15.total.average > est10.total.average, 'depth 15 total avg > depth 10');
+    assert.ok(est20.total.average > est15.total.average, 'depth 20 total avg > depth 15');
+
+    // Verify API call predictions scale past 10
+    assert.ok(est20.apiCalls.min > est10.apiCalls.min, 'depth 20 api calls min > depth 10');
+    assert.ok(est20.apiCalls.max > est10.apiCalls.max, 'depth 20 api calls max > depth 10');
+
+    // Verify buildDeepthinkTokenTrend produces full 20-point series
+    const trend20 = buildDeepthinkTokenTrend({
+      strategiesCount: 3,
+      hypothesisCount: 2,
+      maxDepth: 20,
+    });
+    assert.strictEqual(trend20.length, 20);
+    assert.strictEqual(trend20[0].depth, 1);
+    assert.strictEqual(trend20[19].depth, 20);
+
+    // Verify ApiCallEstimator helper scales up to depth 20
+    const apiCalls10 = calculateDeepthinkApiCallsFromParams({
+      model: 'test',
+      thinkingBudget: 0,
+      thinkingLevel: 'medium',
+      strategiesCount: 3,
+      strategyProximityLoops: 1,
+      hypothesisCount: 2,
+      hypothesisProximityLoops: 1,
+      i: 10,
+    });
+    const apiCalls20 = calculateDeepthinkApiCallsFromParams({
+      model: 'test',
+      thinkingBudget: 0,
+      thinkingLevel: 'medium',
+      strategiesCount: 3,
+      strategyProximityLoops: 1,
+      hypothesisCount: 2,
+      hypothesisProximityLoops: 1,
+      i: 20,
+    });
+    assert.ok(apiCalls20.min > apiCalls10.min, 'apiCalls20 min > apiCalls10 min');
+    assert.ok(apiCalls20.max > apiCalls10.max, 'apiCalls20 max > apiCalls10 max');
+  });
+
+  it('correctly augments token counts with sandbox terminal environment per agent invoke (+50k/+350k in, +30k/+250k out) and random noise per iteration', () => {
+    assert.strictEqual(SANDBOX_PER_CALL.input.average, 50_000);
+    assert.strictEqual(SANDBOX_PER_CALL.input.worst, 350_000);
+    assert.strictEqual(SANDBOX_PER_CALL.output.average, 30_000);
+    assert.strictEqual(SANDBOX_PER_CALL.output.worst, 250_000);
+
+    const testDepths = [1, 5, 10, 15, 20];
+    for (const d of testDepths) {
+      const base = calculateDeepthinkTokenEstimate({
+        strategiesCount: 3,
+        hypothesisCount: 2,
+        deepthinkDepth: d,
+        codeExecutionEnabled: false,
+      });
+
+      const withSandbox = calculateDeepthinkTokenEstimate({
+        strategiesCount: 3,
+        hypothesisCount: 2,
+        deepthinkDepth: d,
+        codeExecutionEnabled: true,
+      });
+
+      const expectedInputAvgDelta = base.apiCalls.min * SANDBOX_PER_CALL.input.average;
+      const expectedInputWorstDelta = base.apiCalls.max * SANDBOX_PER_CALL.input.worst;
+      const expectedOutputAvgDelta = base.apiCalls.min * SANDBOX_PER_CALL.output.average;
+      const expectedOutputWorstDelta = base.apiCalls.max * SANDBOX_PER_CALL.output.worst;
+
+      const actualInputAvgDelta = withSandbox.input.average - base.input.average;
+      const actualInputWorstDelta = withSandbox.input.worst - base.input.worst;
+      const noiseAvg = actualInputAvgDelta - expectedInputAvgDelta;
+      const noiseWorst = actualInputWorstDelta - expectedInputWorstDelta;
+
+      // Verify deliberate random noise per iteration between 256k and 512k
+      assert.ok(
+        noiseAvg >= d * SANDBOX_ITERATION_NOISE.min && noiseAvg <= d * SANDBOX_ITERATION_NOISE.max,
+        `Depth ${d} input avg noise (${noiseAvg}) must be within [${d * SANDBOX_ITERATION_NOISE.min}, ${d * SANDBOX_ITERATION_NOISE.max}]`
+      );
+      assert.ok(
+        noiseWorst >= d * SANDBOX_ITERATION_NOISE.min && noiseWorst <= d * SANDBOX_ITERATION_NOISE.max,
+        `Depth ${d} input worst noise (${noiseWorst}) must be within [${d * SANDBOX_ITERATION_NOISE.min}, ${d * SANDBOX_ITERATION_NOISE.max}]`
+      );
+      assert.ok(
+        noiseWorst >= noiseAvg,
+        `Depth ${d} input worst noise (${noiseWorst}) must be >= avg noise (${noiseAvg})`
+      );
+
+      assert.strictEqual(
+        withSandbox.output.average - base.output.average,
+        expectedOutputAvgDelta,
+        `Depth ${d} output average delta should be +${expectedOutputAvgDelta} (${base.apiCalls.min} base API calls * ${SANDBOX_PER_CALL.output.average})`
+      );
+      assert.strictEqual(
+        withSandbox.output.worst - base.output.worst,
+        expectedOutputWorstDelta,
+        `Depth ${d} output worst delta should be +${expectedOutputWorstDelta} (${base.apiCalls.max} base API calls * ${SANDBOX_PER_CALL.output.worst})`
+      );
+
+      // Verify total api calls increase by factor of 12 (min) to 36 (max) when sandbox is enabled
+      assert.strictEqual(
+        withSandbox.apiCalls.min,
+        base.apiCalls.min * SANDBOX_API_CALL_MULTIPLIER.min,
+        `Depth ${d} min API calls must be multiplied by ${SANDBOX_API_CALL_MULTIPLIER.min}x when sandbox is enabled`
+      );
+      assert.strictEqual(
+        withSandbox.apiCalls.max,
+        base.apiCalls.max * SANDBOX_API_CALL_MULTIPLIER.max,
+        `Depth ${d} max API calls must be multiplied by ${SANDBOX_API_CALL_MULTIPLIER.max}x when sandbox is enabled`
+      );
+
+      // Verify total is exactly input + output
+      assert.strictEqual(
+        withSandbox.total.average,
+        withSandbox.input.average + withSandbox.output.average,
+        `Depth ${d} total average must equal input + output`
+      );
+      assert.strictEqual(
+        withSandbox.total.worst,
+        withSandbox.input.worst + withSandbox.output.worst,
+        `Depth ${d} total worst must equal input + output`
+      );
+    }
+
+    // Verify formatApiCallCount formats thousands with k and millions with M
+    assert.strictEqual(formatApiCallCount(30), '30');
+    assert.strictEqual(formatApiCallCount(45), '45');
+    assert.strictEqual(formatApiCallCount(600), '600');
+    assert.strictEqual(formatApiCallCount(2200), '2.2k');
+    assert.strictEqual(formatApiCallCount(2250), '2.3k');
+    assert.strictEqual(formatApiCallCount(15000), '15k');
+    assert.strictEqual(formatApiCallCount(1500000), '1.5M');
+  });
+
+  it('accurately accounts for every possible agent across heartbeats, global updates, and iterations', () => {
+    // Test §3 worked example: i = 15, j = 5, k = 3
+    // S = 3, strategyProx = 2, hypCount = 4, hypProx = 1, pools enabled
+    const res15 = calculateDeepthinkApiCallsFromParams({
+      strategiesCount: 3,
+      i: 15,
+      j: 5,
+      k: 3,
+      strategyProximityLoops: 2,
+      hypothesisCount: 4,
+      hypothesisProximityLoops: 1,
+      disableSolutionPool: false,
+    });
+
+    const b15 = res15.breakdown;
+    assert.strictEqual(b15.standaloneHeartbeats, 3, 'Should have 3 standalone heartbeats (after 3, 8, 13)');
+    assert.strictEqual(b15.globalUpdates, 2, 'Should have 2 global updates (after 5, 10)');
+    assert.strictEqual(b15.totalHeartbeats, 5, 'Should have 5 total heartbeats (3 standalone + 2 GU ending)');
+
+    // 1. Initial Strategy (Seed Generator: 1 + 2 = 3)
+    assert.strictEqual(b15.initialStrategy, 3);
+    // 2. Strategy Proximity: min 2 (seed only), max 2 + 2*2 = 6
+    assert.strictEqual(b15.strategyProximity.min, 2);
+    assert.strictEqual(b15.strategyProximity.max, 6);
+    // 3. Solution Attempt: min 3 (it1), max 3 + 2*3 = 9 (reseeded)
+    assert.strictEqual(b15.solutionAttempt.min, 3);
+    assert.strictEqual(b15.solutionAttempt.max, 9);
+    // 4. Solution Critique: min (15 - 1)*3 = 42 (omitted at it15), max 42 + 2*3 = 48
+    assert.strictEqual(b15.solutionCritique.min, 42);
+    assert.strictEqual(b15.solutionCritique.max, 48);
+    // 5. Solution Correction: (15 - 1)*3 = 42
+    assert.strictEqual(b15.solutionCorrection, 42);
+    // 6. DOS: 3 standalone heartbeat DOS + 2 step-i DOS + 2 step-ii DOS = 7 calls
+    assert.strictEqual(b15.dos, 7);
+    // 7. Hypothesis Generation: 5 heartbeats * (1 + 1 loops) = 10 calls
+    assert.strictEqual(b15.hypothesisGeneration, 10);
+    // 8. Hypothesis Proximity: 5 heartbeats * 1 loop = 5 calls
+    assert.strictEqual(b15.hypothesisProximity, 5);
+    // 9. Hypothesis Tester: 5 heartbeats * 4 hypotheses = 20 calls
+    assert.strictEqual(b15.hypothesisTester, 20);
+    // 10. Structured Solution Pool: 5 heartbeats * 3 branches = 15 calls
+    assert.strictEqual(b15.structuredSolutionPool, 15);
+    // 11. BSR: 2 global updates * 3 branches = 6 calls
+    assert.strictEqual(b15.bsr, 6);
+    // 12. Strategy Generator Global Update: min 0, max 2 GU * (1 + 2) = 6 calls
+    assert.strictEqual(b15.strategyGeneratorGlobalUpdate.min, 0);
+    assert.strictEqual(b15.strategyGeneratorGlobalUpdate.max, 6);
+    // 13. Memory Bank: min 2 GU * 3 branches = 6 calls, max 0
+    assert.strictEqual(b15.memoryBank.min, 6);
+    assert.strictEqual(b15.memoryBank.max, 0);
+    // 14. Final Judge: exactly 1 call
+    assert.strictEqual(b15.finalJudge, 1);
+
+    // Verify mathematical identity: sum of breakdown equals min and max
+    const minSum = b15.initialStrategy +
+      b15.strategyProximity.min +
+      b15.solutionAttempt.min +
+      b15.solutionCritique.min +
+      b15.solutionCorrection +
+      b15.dos +
+      b15.hypothesisGeneration +
+      b15.hypothesisProximity +
+      b15.hypothesisTester +
+      b15.structuredSolutionPool +
+      b15.bsr +
+      b15.strategyGeneratorGlobalUpdate.min +
+      b15.memoryBank.min +
+      b15.finalJudge;
+    assert.strictEqual(minSum, res15.min, `Min sum (${minSum}) must match total min (${res15.min})`);
+
+    const maxSum = b15.initialStrategy +
+      b15.strategyProximity.max +
+      b15.solutionAttempt.max +
+      b15.solutionCritique.max +
+      b15.solutionCorrection +
+      b15.dos +
+      b15.hypothesisGeneration +
+      b15.hypothesisProximity +
+      b15.hypothesisTester +
+      b15.structuredSolutionPool +
+      b15.bsr +
+      b15.strategyGeneratorGlobalUpdate.max +
+      b15.memoryBank.max +
+      b15.finalJudge;
+    assert.strictEqual(maxSum, res15.max, `Max sum (${maxSum}) must match total max (${res15.max})`);
+
+    // Verify when curated context is disabled: total heartbeats = 0, DOS = step-i only
+    const resDisabled = calculateDeepthinkApiCallsFromParams({
+      strategiesCount: 2,
+      i: 10,
+      j: 5,
+      k: 3,
+      hypothesisCount: 0,
+      disableSolutionPool: true,
+    });
+    assert.strictEqual(resDisabled.breakdown.standaloneHeartbeats, 0);
+    assert.strictEqual(resDisabled.breakdown.totalHeartbeats, 0);
+    assert.strictEqual(resDisabled.breakdown.hypothesisGeneration, 0);
+    assert.strictEqual(resDisabled.breakdown.hypothesisTester, 0);
+    assert.strictEqual(resDisabled.breakdown.structuredSolutionPool, 0);
+    assert.strictEqual(resDisabled.breakdown.dos, 1, 'Only Step-i DOS runs for 1 global update at iteration 5');
   });
 });

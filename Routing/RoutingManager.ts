@@ -37,6 +37,7 @@ export class RoutingManager {
         if (!this.promptsModal) {
             this.promptsModal = new PromptsModal();
             this.promptsModal.setModelConfig(this.modelConfigManager);
+            this.promptsModal.setProviderManager(this.providerManager);
         }
 
         // Initialize provider management UI with prompts modal
@@ -161,6 +162,30 @@ export class RoutingManager {
 
     public isSolutionPoolDisabled(): boolean {
         return this.modelConfigManager.isSolutionPoolDisabled();
+    }
+
+    public getBsrNoiseLevel(): number {
+        return this.modelConfigManager.getBsrNoiseLevel();
+    }
+
+    public getBsrPressureFloor(): number {
+        return this.modelConfigManager.getBsrPressureFloor();
+    }
+
+    public getBsrWeightSmall(): number {
+        return this.modelConfigManager.getBsrWeightSmall();
+    }
+
+    public getBsrWeightMedium(): number {
+        return this.modelConfigManager.getBsrWeightMedium();
+    }
+
+    public getBsrWeightLarge(): number {
+        return this.modelConfigManager.getBsrWeightLarge();
+    }
+
+    public getBsrWeightPreset(): string {
+        return this.modelConfigManager.getBsrWeightPreset();
     }
 
     public hasValidApiKey(): boolean {

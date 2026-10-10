@@ -222,6 +222,12 @@ export interface DeepthinkCoreDeps {
     updateControlsState: (newState: any) => void;
     getSelectedThinkingLevel?: () => 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' | string;
     getCustomPromptsDeepthinkState: () => CustomizablePromptsDeepthink;
+    getBsrNoiseLevel?: () => number;
+    getBsrPressureFloor?: () => number;
+    getBsrWeightSmall?: () => number;
+    getBsrWeightMedium?: () => number;
+    getBsrWeightLarge?: () => number;
+    getBsrWeightPreset?: () => string;
 }
 
 let deps: DeepthinkCoreDeps = null!;
@@ -253,6 +259,12 @@ function captureRunConfig(): DeepthinkRunConfig {
         deepthinkCodeExecutionEnabled: Boolean(deps.getDeepthinkCodeExecutionEnabled()),
         thinkingLevel: deps.getSelectedThinkingLevel?.() || 'high',
         model: model.trim(),
+        bsrNoiseLevel: deps.getBsrNoiseLevel?.() ?? 2,
+        bsrPressureFloor: deps.getBsrPressureFloor?.() ?? 0.3,
+        bsrWeightSmall: deps.getBsrWeightSmall?.() ?? 1,
+        bsrWeightMedium: deps.getBsrWeightMedium?.() ?? 2,
+        bsrWeightLarge: deps.getBsrWeightLarge?.() ?? 4,
+        bsrWeightPreset: deps.getBsrWeightPreset?.() ?? 'standard',
     };
 }
 

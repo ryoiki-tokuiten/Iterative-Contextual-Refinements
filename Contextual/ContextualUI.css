@@ -37,8 +37,8 @@
     min-height: var(--button-height-lg);  /* 44px */
     margin: 0;
     padding: 8px 12px;
-    border-bottom: 1px solid rgba(var(--accent-purple-rgb), 0.2);
-    background-color: rgba(var(--card-bg-base-rgb), 0.6);
+    border-bottom: 1px solid var(--panel-header-border);
+    background-color: var(--panel-header-bg);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -68,7 +68,7 @@
     overflow-wrap: break-word;
     flex: 1;
     padding: 10px;
-    background-color: rgba(var(--bg-color-rgb), 0.2);
+    background-color: var(--panel-bg);
     overflow-y: auto;
     min-height: 0;
 }
@@ -113,8 +113,8 @@
 
 /* Minimal Message Cards */
 .minimal-message-card {
-    background: rgba(var(--bg-color-rgb), 0.5);
-    border: 1px solid var(--border-color);
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
     border-radius: var(--border-radius-md);
     overflow: hidden;
     animation: slideIn 0.3s ease-out;
@@ -123,42 +123,21 @@
     flex-direction: column;
     min-height: 200px;
     max-height: 400px;
+    transition: background var(--transition-speed) var(--easing-curve),
+                border-color var(--transition-speed) var(--easing-curve);
 }
 
-.minimal-message-card.main-generator-card {
-    background: rgba(var(--accent-blue-rgb), 0.04);
-    border: 1px solid rgba(var(--accent-blue-rgb), 0.25);
-}
 
-.minimal-message-card.iterative-agent-card {
-    background: rgba(var(--accent-purple-rgb), 0.04);
-    border: 1px solid rgba(var(--accent-purple-rgb), 0.25);
-}
-
-.minimal-message-card.system-card {
-    background: rgba(var(--accent-green-rgb), 0.04);
-    border: 1px solid rgba(var(--accent-green-rgb), 0.25);
-}
-
-.minimal-message-card.memory-agent-card {
-    background: rgba(var(--accent-yellow-rgb), 0.04);
-    border: 1px solid rgba(var(--accent-yellow-rgb), 0.25);
-}
-
-.minimal-message-card.strategic-pool-agent-card {
-    background: rgba(255, 152, 0, 0.04);
-    border: 1px solid rgba(255, 152, 0, 0.25);
-}
 
 .minimal-card-header {
-    background: rgba(var(--card-bg-base-rgb), 0.4);
+    background: var(--panel-header-bg);
     display: flex;
     align-items: center;
     gap: 0.75rem;
     padding: 0.5rem 0.75rem;
     font-size: 0.95rem;
     font-weight: 600;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--panel-header-border);
     flex-shrink: 0;
 }
 
@@ -235,7 +214,7 @@
     line-height: 1.6;
     font-family: var(--font-family);
     color: var(--text-secondary-color);
-    background: rgba(var(--bg-color-rgb), 0.2);
+    background: transparent;
     overflow-y: auto;
     flex: 1;
     min-height: 0;
@@ -292,15 +271,15 @@
     font-size: var(--font-size-sm);
 }
 
-/* Panel Styling - Theme-aware */
+/* Panel Styling - Abstracted Panel Surface */
 .contextual-text-panel,
 .contextual-agent-panel {
     display: flex;
     flex-direction: column;
-    border: 1px solid rgba(var(--accent-purple-rgb), 0.3);
+    border: 1px solid var(--panel-border);
     border-radius: var(--border-radius-lg);
     overflow: hidden;
-    background-color: rgba(var(--card-bg-base-rgb), 0.4);
+    background-color: var(--panel-bg);
 }
 
 /* Scrollbar styling handled by .custom-scrollbar class in index.css */

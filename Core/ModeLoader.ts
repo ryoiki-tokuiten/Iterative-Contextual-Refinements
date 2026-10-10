@@ -85,6 +85,12 @@ export async function ensureDeepthinkInitialized(): Promise<DeepthinkModule> {
             getIsolateBranchesEnabled,
             getSolutionPoolDisabled,
             getDeepthinkCodeExecutionEnabled: () => routingManager.getDeepthinkConfigController().isCodeExecutionEnabled(),
+            getBsrNoiseLevel: () => routingManager.getDeepthinkConfigController().getBsrNoiseLevel(),
+            getBsrPressureFloor: () => routingManager.getDeepthinkConfigController().getBsrPressureFloor(),
+            getBsrWeightSmall: () => routingManager.getDeepthinkConfigController().getBsrWeightSmall(),
+            getBsrWeightMedium: () => routingManager.getDeepthinkConfigController().getBsrWeightMedium(),
+            getBsrWeightLarge: () => routingManager.getDeepthinkConfigController().getBsrWeightLarge(),
+            getBsrWeightPreset: () => routingManager.getDeepthinkConfigController().getBsrWeightPreset(),
             getSelectedThinkingLevel,
             getCustomPromptsDeepthinkState: () =>
                 routingManager.getPromptsManager()?.getDeepthinkPrompts()

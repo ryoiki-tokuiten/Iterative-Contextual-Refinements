@@ -191,6 +191,14 @@
     /* Sub-panel specific aesthetics for internal elements */
     --sub-panel-bg-color: #090909;
     --sub-panel-border-color: rgba(255, 255, 255, 0.18);
+
+    /* Abstracted Panel Surface Architecture */
+    --panel-bg: var(--card-bg-color);
+    --panel-bg-hover: var(--card-bg-hover-color);
+    --panel-border: var(--border-color);
+    --panel-border-hover: var(--border-hover-color);
+    --panel-header-bg: var(--sub-panel-bg-color);
+    --panel-header-border: var(--sub-panel-border-color);
     /* === Z-INDEX LAYERS === */
     --z-index-dropdown: 1000;
     --z-index-modal: 10000;
@@ -198,26 +206,34 @@
 
 /* Light Mode Theme - Professional Clean */
 body.light-mode {
+    /* Custom User Palette */
+    --foreground-primary: #141413;
+    --foreground-secondary: #30302e;
+    --background-primary: #faf9f5;
+    --background-secondary: #f0eee6;
+    --border-strong: #141413;
+    --border-subtle: #d1cfc5;
+
     /* Core Palette */
-    --bg-color: #ffffff;
-    --bg-color-rgb: 255, 255, 255;
-    --card-bg-base-rgb: 255, 255, 255;
+    --bg-color: var(--background-primary);
+    --bg-color-rgb: 250, 249, 245;
+    --card-bg-base-rgb: 250, 249, 245;
 
     /* Glassmorphism Card Style */
-    --card-bg-color: #ffffff;
-    --card-bg-hover-color: #f5f5f5;
+    --card-bg-color: var(--background-primary);
+    --card-bg-hover-color: var(--background-secondary);
     --card-blur-effect: none;
 
     /* Borders & Outlines */
-    --border-color: rgba(0, 0, 0, 0.15);
-    --border-color-rgb: 0, 0, 0;
-    --border-hover-color: rgba(0, 0, 0, 0.25);
+    --border-color: var(--border-subtle);
+    --border-color-rgb: 209, 207, 197;
+    --border-hover-color: var(--border-strong);
     --glow-color: transparent;
     --glow-color-rgb: 0, 0, 0;
 
     /* Typography */
-    --text-color: #0d0d0d;
-    --text-secondary-color: #555555;
+    --text-color: var(--foreground-primary);
+    --text-secondary-color: var(--foreground-secondary);
     --text-tertiary-color: #888888;
 
     /* Accents - Exact Palette */
@@ -238,7 +254,7 @@ body.light-mode {
     /* Semantic States */
     --focus-ring-color: rgba(1, 105, 204, 0.4);
     /* UI Elements */
-    --slider-track-color: rgba(0, 0, 0, 0.12);
+    --slider-track-color: var(--background-secondary);
 
     /* Shadows */
     --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.04);
@@ -249,8 +265,16 @@ body.light-mode {
     --shadow-inset-strong: inset 0 2px 6px rgba(0, 0, 0, 0.08);
 
     /* Sub-panel specific */
-    --sub-panel-bg-color: #ffffff;
-    --sub-panel-border-color: rgba(0, 0, 0, 0.15);
+    --sub-panel-bg-color: var(--background-primary);
+    --sub-panel-border-color: var(--border-subtle);
+
+    /* Abstracted Panel Surface Architecture - Light Mode */
+    --panel-bg: var(--card-bg-color);
+    --panel-bg-hover: var(--card-bg-hover-color);
+    --panel-border: var(--border-color);
+    --panel-border-hover: var(--border-hover-color);
+    --panel-header-bg: var(--sub-panel-bg-color);
+    --panel-header-border: var(--sub-panel-border-color);
 }
 
 /* Light mode gradient background adjustments - Subtle and clean */
@@ -274,8 +298,8 @@ body:not(.light-mode) .theme-toggle-button {
 }
 
 body.light-mode .theme-toggle-button:hover {
-    background: rgba(0, 0, 0, 0.05);
-    border-color: rgba(0, 0, 0, 0.15);
+    background: var(--background-secondary);
+    border-color: var(--border-strong);
 }
 
 body:not(.light-mode) .theme-toggle-button:hover {
@@ -285,12 +309,56 @@ body:not(.light-mode) .theme-toggle-button:hover {
 
 /* Light mode: NO structural changes, only color adjustments */
 body.light-mode .sidebar-section-header {
-    border-bottom-color: rgba(0, 0, 0, 0.06);
-    background: linear-gradient(90deg, rgba(0, 0, 0, 0.02) 0%, transparent 100%);
+    border-bottom-color: var(--border-subtle);
+    background: var(--background-primary);
 }
 
 body.light-mode .input-label {
     color: #666666;
+}
+
+/* Master Light Mode Overrides for Hardcoded Component Transparency (BSR, DOS, Branches) */
+body.light-mode {
+    /* Deepthink Branch State & Config Panels (DOS, BSR) */
+    & .dos-container, & .dos-header-bar, & .dos-utilization-panel, & .dos-branch-meter-row, & .dos-packet-badge,
+    & .dos-branch-badge, & .dos-empty-card, & .bsr-parameters-window, & .window-content, 
+    & .bsr-panel-container, & .bsr-branch-card, & .bsr-modal-content, & .bsr-panel-header, & .bsr-tab-header, & .bsr-section, & .bsr-side-panel,
+    & .bsr-window-graph-card, & .bsr-branch-evaluation-summary, & .bsr-prediction-section, & .bsr-raw-json-block {
+        background-color: var(--background-primary) !important;
+        border-color: var(--border-subtle) !important;
+        color: var(--foreground-primary) !important;
+    }
+
+    & .bsr-table, & .bsr-change-overlay-row, & .bsr-decision-card, & .bsr-metric-box, & .bsr-form-badge, & .bsr-prob-chip,
+    & .bsr-vertical-bar-col, & .bsr-branch-ledger-bar, & .bsr-no-records, & .bsr-visual-bar-track, & .bsr-vbar-shaft {
+        background-color: var(--background-secondary) !important;
+        border-color: var(--border-subtle) !important;
+        color: var(--foreground-primary) !important;
+    }
+
+    & .bsr-graph-evidence-row.stall {
+        background-color: rgba(0, 0, 0, 0.03) !important;
+        border-color: rgba(0, 0, 0, 0.1) !important;
+    }
+
+    /* Additional Solution Pool & Filesystem overrides */
+    & .agent-card, & .sp-solution-card, & .knowledge-packet-card, & .pool-iteration-container, & .sp-fullscreen-panel, & .sp-card-content, & .sp-card-header, & .view-pool-button, & .solution-pool-download-button {
+        background-color: var(--background-primary) !important;
+        border-color: var(--border-subtle) !important;
+    }
+    
+    & .sp-fullscreen-overlay {
+        background-color: rgba(250, 249, 245, 0.9) !important;
+    }
+    
+    & .vfs-sidebar, & .vfs-sidebar-title, & .vfs-editor-header, & .vfs-version-select, & .vfs-media-preview img, & .vfs-refresh-btn-footer, & .vfs-compare-trigger-footer {
+        border-color: var(--border-subtle) !important;
+        background-color: var(--background-secondary) !important;
+    }
+    
+    & .tree-node:hover, & .tree-file.selected {
+        background-color: var(--background-secondary) !important;
+    }
 }
 
 
@@ -486,7 +554,7 @@ h5 {
     border-radius: 4px;
 
     body.light-mode & {
-        background: rgba(0, 0, 0, 0.02);
+        background: var(--background-primary);
     }
 }
 
@@ -500,10 +568,10 @@ h5 {
     }
 
     body.light-mode & {
-        background: rgba(0, 0, 0, 0.15);
+        background: var(--border-subtle);
 
         &:hover {
-            background: rgba(0, 0, 0, 0.25);
+            background: var(--border-strong);
         }
     }
 }
@@ -542,10 +610,10 @@ h5 {
     background: rgba(120, 130, 240, 0.35);
 }
 body.light-mode .scrollbar-compact::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.1);
+    background: var(--border-subtle);
 }
 body.light-mode .scrollbar-compact::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--border-strong);
 }
 
 
@@ -625,7 +693,29 @@ body.light-mode .scrollbar-compact::-webkit-scrollbar-thumb:hover {
     }
 
     body.light-mode & {
-        background: rgba(0, 0, 0, 0.06);
-        border-color: rgba(0, 0, 0, 0.15);
+        background: var(--background-secondary);
+        border-color: var(--border-subtle);
     }
+}
+
+/* ==========================================================================
+   Abstracted Panel & Surface Foundations
+   ========================================================================== */
+
+.panel-surface,
+.ui-panel,
+.card-panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--border-radius-md);
+    box-sizing: border-box;
+    transition: background var(--transition-speed) var(--easing-curve),
+                border-color var(--transition-speed) var(--easing-curve);
+}
+
+
+
+.panel-header-surface {
+    background: var(--panel-header-bg);
+    border-bottom: 1px solid var(--panel-header-border);
 }

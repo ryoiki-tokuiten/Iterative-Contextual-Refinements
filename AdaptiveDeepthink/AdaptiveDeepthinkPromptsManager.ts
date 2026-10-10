@@ -52,6 +52,10 @@ class AdaptiveDeepthinkPromptsManager {
         this.notifyListeners();
     }
 
+    public updateModel(key: keyof CustomizablePromptsAdaptiveDeepthink, value: string | undefined): void {
+        this.updatePrompt(key, value);
+    }
+
     public resetToDefaults(): void {
         this.setPrompts(createDefaultCustomPromptsAdaptiveDeepthink());
     }

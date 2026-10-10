@@ -35,6 +35,9 @@ import {
   calculateSurpriseBits,
   calculateUtilizationVector,
   SIZE_WEIGHTS,
+  TAU,
+  THETA,
+  type BsrConfigOptions,
 } from './formulas.ts';
 import {
   determinePostIterationStep,
@@ -1206,6 +1209,17 @@ export class DeepthinkPipelineOrchestrator {
       eventReasons: string[];
     }> = [];
 
+    const runConfigWeights = {
+      small: this.state.runConfig?.bsrWeightSmall ?? SIZE_WEIGHTS.small,
+      medium: this.state.runConfig?.bsrWeightMedium ?? SIZE_WEIGHTS.medium,
+      large: this.state.runConfig?.bsrWeightLarge ?? SIZE_WEIGHTS.large,
+    };
+    const bsrOptions: BsrConfigOptions = {
+      tau: this.state.runConfig?.bsrNoiseLevel ?? TAU,
+      theta: this.state.runConfig?.bsrPressureFloor ?? THETA,
+      weights: runConfigWeights,
+    };
+
     for (const report of bsrReports) {
       const prevPrediction = this.state.openPredictions[report.branch_id]?.probabilities;
       const ledger = this.state.branchLedgers[report.branch_id] || [];
@@ -1215,7 +1229,8 @@ export class DeepthinkPipelineOrchestrator {
         windowStart,
         iteration,
         ledger,
-        prevPrediction
+        prevPrediction,
+        bsrOptions
       );
 
       evaluatedRecords.push({ report, computed });
@@ -1800,12 +1815,18 @@ export class DeepthinkPipelineOrchestrator {
     if (!report) return;
     const ledger = this.state.branchLedgers[branchId] || [];
 
+    const weights = {
+      small: this.state.runConfig?.bsrWeightSmall ?? SIZE_WEIGHTS.small,
+      medium: this.state.runConfig?.bsrWeightMedium ?? SIZE_WEIGHTS.medium,
+      large: this.state.runConfig?.bsrWeightLarge ?? SIZE_WEIGHTS.large,
+    };
+
     for (const p of report.confirmed_progress) {
       ledger.push({
         iteration: p.iteration,
         direction: 'progress',
         size: p.size,
-        weight: SIZE_WEIGHTS[p.size],
+        weight: weights[p.size] ?? 1,
         reason: p.reason,
       });
     }
@@ -1815,7 +1836,7 @@ export class DeepthinkPipelineOrchestrator {
         iteration: r.iteration,
         direction: 'regression',
         size: r.size,
-        weight: SIZE_WEIGHTS[r.size],
+        weight: weights[r.size] ?? 1,
         reason: r.reason,
       });
     }

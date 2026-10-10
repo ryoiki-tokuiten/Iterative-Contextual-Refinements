@@ -36,6 +36,18 @@ export interface DeepthinkRunConfig {
   thinkingLevel?: string;
   /** Optional custom model overrides */
   model?: string;
+  /** Noise level tau for BSR (smallest net change called a trend) */
+  bsrNoiseLevel?: number;
+  /** Pressure floor theta for BSR (least pressure triggering EVOLVE or PRUNE) */
+  bsrPressureFloor?: number;
+  /** Event size weight for small events */
+  bsrWeightSmall?: number;
+  /** Event size weight for medium events */
+  bsrWeightMedium?: number;
+  /** Event size weight for large events */
+  bsrWeightLarge?: number;
+  /** Weight preset key */
+  bsrWeightPreset?: string;
 }
 
 export interface DeepthinkBranchIteration {

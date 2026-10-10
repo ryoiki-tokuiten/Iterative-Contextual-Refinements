@@ -6,6 +6,7 @@
 import { updatePromptContent } from '../Styles/Components/PromptStyling';
 import { globalState } from '../Core/State';
 import { renderIconMarkup } from '../UI/Icons';
+import { ModelSelectionUI } from './ModelSelectionUI';
 import {
     ADAPTIVE_PROMPT_PANES,
     CONTEXTUAL_PROMPT_PANES,
@@ -23,6 +24,8 @@ export class PromptsModal {
 
     private currentMode: string = 'deepthink';
     private modelConfig: any = null;
+    private providerManager: any = null;
+    private agentModelUIs: Map<string, ModelSelectionUI> = new Map();
 
     constructor() {
         this.elements = {
@@ -72,10 +75,32 @@ export class PromptsModal {
             });
         }
 
-        // Add Escape key handler to close modal (consistent with other full-screen containers)
+        // Add Escape key handler to close open model dropdowns first, then modal
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.elements.overlay?.classList.contains('is-visible')) {
-                this.hide();
+            if (e.key === 'Escape') {
+                const openPanel = document.querySelector('.prompt-model-dropdown-panel.is-open');
+                if (openPanel) {
+                    openPanel.classList.remove('is-open');
+                    document.querySelectorAll('.prompt-model-trigger.is-open').forEach(t => {
+                        t.classList.remove('is-open');
+                    });
+                    e.stopPropagation();
+                    return;
+                }
+                if (this.elements.overlay?.classList.contains('is-visible')) {
+                    this.hide();
+                }
+            }
+        });
+
+        // Close open model dropdowns on click outside
+        document.addEventListener('click', () => {
+            const openPanels = document.querySelectorAll('.prompt-model-dropdown-panel.is-open');
+            if (openPanels.length > 0) {
+                openPanels.forEach(p => p.classList.remove('is-open'));
+                document.querySelectorAll('.prompt-model-trigger.is-open').forEach(t => {
+                    t.classList.remove('is-open');
+                });
             }
         });
 
@@ -127,6 +152,10 @@ export class PromptsModal {
 
     public setModelConfig(modelConfig: any): void {
         this.modelConfig = modelConfig;
+    }
+
+    public setProviderManager(providerManager: any): void {
+        this.providerManager = providerManager;
     }
 
     private initializeModal(): void {
@@ -197,6 +226,7 @@ export class PromptsModal {
 
                         // Update prompt content when switching panes
                         setTimeout(() => updatePromptContent(), 50);
+                        this.initializeModelSelectors();
                     }
                 });
             });
@@ -284,10 +314,99 @@ export class PromptsModal {
         const modelSelectors = document.querySelectorAll('.prompt-model-select');
         modelSelectors.forEach((selector: Element) => {
             const selectElement = selector as HTMLSelectElement;
+            const container = selectElement.parentElement as HTMLElement;
+            if (!container) return;
 
-            // React owns the native select; this class owns the visual overlay and
-            // prompt actions layered beside it.
-            this.createCustomModelSelect(selectElement);
+            const agentName = selectElement.dataset.agent || '';
+
+            // Check if trigger and dropdown panel are already created
+            let trigger = container.querySelector<HTMLButtonElement>(`.prompt-model-trigger[data-agent="${agentName}"]`);
+            let dropdownPanel = container.querySelector<HTMLDivElement>(`.prompt-model-dropdown-panel[data-agent="${agentName}"]`);
+
+            if (!trigger) {
+                // Hide native select
+                selectElement.style.display = 'none';
+
+                // Create the "Select Model" trigger button
+                trigger = document.createElement('button');
+                trigger.type = 'button';
+                trigger.className = 'prompt-model-trigger';
+                trigger.dataset.agent = agentName;
+                const currentVal = selectElement.value;
+                trigger.innerHTML = `
+                    <span class="prompt-model-trigger-text">${currentVal || 'Select Model'}</span>
+                    ${renderIconMarkup('ChevronDown', 'prompt-model-trigger-arrow', {}, 14)}
+                `;
+
+                // Create the floating connected dropdown panel
+                dropdownPanel = document.createElement('div');
+                dropdownPanel.className = 'prompt-model-dropdown-panel';
+                dropdownPanel.dataset.agent = agentName;
+
+                container.appendChild(trigger);
+                container.appendChild(dropdownPanel);
+
+                // Prevent clicks inside floating panel from propagating to document (which would close it)
+                dropdownPanel.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                });
+
+                // Toggle dropdown panel on trigger click
+                trigger.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isOpen = dropdownPanel!.classList.contains('is-open');
+
+                    // Close all other open dropdowns
+                    document.querySelectorAll('.prompt-model-dropdown-panel.is-open').forEach(p => {
+                        if (p !== dropdownPanel) p.classList.remove('is-open');
+                    });
+                    document.querySelectorAll('.prompt-model-trigger.is-open').forEach(t => {
+                        if (t !== trigger) t.classList.remove('is-open');
+                    });
+
+                    if (isOpen) {
+                        dropdownPanel!.classList.remove('is-open');
+                        trigger!.classList.remove('is-open');
+                    } else {
+                        dropdownPanel!.classList.add('is-open');
+                        trigger!.classList.add('is-open');
+                        const ui = this.agentModelUIs.get(agentName);
+                        ui?.updateModelOptions();
+                    }
+                });
+            } else {
+                // Sync trigger text with current select element value
+                const triggerText = trigger.querySelector('.prompt-model-trigger-text');
+                if (triggerText) {
+                    triggerText.textContent = selectElement.value || 'Select Model';
+                }
+            }
+
+            const existingUI = this.agentModelUIs.get(agentName);
+            if (existingUI) {
+                existingUI.updateModelOptions();
+                return;
+            }
+
+            const ui = new ModelSelectionUI(this.modelConfig, null, this.providerManager, {
+                selectElement,
+                container: dropdownPanel!,
+                allowGlobalOption: true,
+                agentName,
+                onModelChange: (model: string) => {
+                    const triggerText = trigger?.querySelector('.prompt-model-trigger-text');
+                    if (triggerText) {
+                        triggerText.textContent = model || 'Select Model';
+                    }
+                    // Close floating panel on selection
+                    dropdownPanel?.classList.remove('is-open');
+                    trigger?.classList.remove('is-open');
+                }
+            });
+            ui.initialize();
+            if (agentName) {
+                this.agentModelUIs.set(agentName, ui);
+            }
         });
 
         // Set up change detection for all textareas
@@ -352,247 +471,7 @@ export class PromptsModal {
         return map;
     }
 
-    private createCustomModelSelect(originalSelect: HTMLSelectElement): void {
-        const container = originalSelect.parentElement;
-        if (!container) return;
 
-        // Check if custom select already exists
-        if (container.querySelector('.custom-model-select')) return;
-
-        const agentName = originalSelect.dataset.agent || 'unknown';
-
-        // Create custom dropdown structure
-        const customSelect = document.createElement('div');
-        customSelect.className = 'custom-model-select';
-        customSelect.innerHTML = `
-            <div class="custom-model-select-trigger" id="custom-model-select-trigger-${agentName}">
-                <span class="custom-model-select-text" id="custom-model-select-text-${agentName}">Use Global Model</span>
-                ${renderIconMarkup('expand_more', 'custom-model-select-arrow')}
-            </div>
-            <div class="custom-model-select-dropdown" id="custom-model-select-dropdown-${agentName}">
-                <!-- Options will be populated here -->
-            </div>
-        `;
-
-        // Insert custom select after the original select
-        container.insertBefore(customSelect, originalSelect.nextSibling);
-
-        // Hide the original select
-        originalSelect.style.display = 'none';
-
-        // Initialize the custom select using shared logic
-        this.initializeCustomSelectListeners(agentName);
-        this.updateCustomSelectOptions(agentName);
-    }
-
-    private initializeCustomSelectListeners(agentName: string): void {
-        const trigger = document.getElementById(`custom-model-select-trigger-${agentName}`);
-        const dropdown = document.getElementById(`custom-model-select-dropdown-${agentName}`);
-
-        if (!trigger || !dropdown) return;
-
-        // Toggle dropdown
-        trigger.addEventListener('click', () => {
-            const isOpen = trigger.classList.contains('open');
-            // Close all other dropdowns first
-            document.querySelectorAll('.custom-model-select-trigger.open').forEach(t => {
-                if (t !== trigger) {
-                    t.classList.remove('open');
-                    const otherId = t.id.replace('custom-model-select-trigger-', '');
-                    const otherDropdown = document.getElementById(`custom-model-select-dropdown-${otherId}`);
-                    if (otherDropdown) otherDropdown.classList.remove('open');
-                }
-            });
-
-            if (isOpen) {
-                this.closeCustomSelect(agentName);
-            } else {
-                this.openCustomSelect(agentName);
-            }
-        });
-
-        // Close dropdown when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!trigger.contains(e.target as Node) && !dropdown.contains(e.target as Node)) {
-                this.closeCustomSelect(agentName);
-            }
-        });
-    }
-
-    private openCustomSelect(agentName: string): void {
-        const trigger = document.getElementById(`custom-model-select-trigger-${agentName}`);
-        const dropdown = document.getElementById(`custom-model-select-dropdown-${agentName}`);
-
-        if (trigger && dropdown) {
-            trigger.classList.add('open');
-            dropdown.classList.add('open');
-        }
-    }
-
-    private closeCustomSelect(agentName: string): void {
-        const trigger = document.getElementById(`custom-model-select-trigger-${agentName}`);
-        const dropdown = document.getElementById(`custom-model-select-dropdown-${agentName}`);
-
-        if (trigger && dropdown) {
-            trigger.classList.remove('open');
-            dropdown.classList.remove('open');
-        }
-    }
-
-    private updateCustomSelectOptions(agentName: string): void {
-        const dropdown = document.getElementById(`custom-model-select-dropdown-${agentName}`);
-        const textElement = document.getElementById(`custom-model-select-text-${agentName}`);
-        const originalSelect = document.querySelector(`select[data-agent="${agentName}"]`) as HTMLSelectElement;
-
-        if (!dropdown || !textElement || !originalSelect) return;
-
-        const availableModels = this.modelConfig.getAvailableModels();
-        const selectedValue = originalSelect.value;
-
-        // Clear existing options
-        dropdown.innerHTML = '';
-
-        // Add "Use Global Model" option
-        const globalOption = document.createElement('div');
-        globalOption.className = 'custom-model-select-option';
-        globalOption.dataset.value = '';
-        if (selectedValue === '') {
-            globalOption.classList.add('selected');
-        }
-
-        globalOption.innerHTML = `
-            <span class="custom-model-select-option-text">Use Global Model</span>
-            ${renderIconMarkup('CircleCheck', 'option-check')}
-        `;
-
-        globalOption.addEventListener('click', () => {
-            this.selectCustomOption(agentName, '', 'Use Global Model');
-        });
-
-        dropdown.appendChild(globalOption);
-
-        // Reuse the same provider grouping logic from ModelSelectionUI
-        this.addProviderGroups(dropdown, availableModels, selectedValue, agentName);
-
-        // Update selected text
-        if (selectedValue === '') {
-            textElement.textContent = 'Use Global Model';
-        } else {
-            textElement.textContent = selectedValue;
-        }
-    }
-
-    private addProviderGroups(dropdown: HTMLElement, availableModels: any[], selectedValue: string, agentName: string): void {
-        // Group models by provider
-        const modelsByProvider: Record<string, typeof availableModels> = {};
-        availableModels.forEach((model: any) => {
-            if (!modelsByProvider[model.provider!]) {
-                modelsByProvider[model.provider!] = [];
-            }
-            modelsByProvider[model.provider!].push(model);
-        });
-
-        // Provider configuration with colors (same as ModelSelectionUI)
-        const providerConfig: Record<string, { class: string }> = {
-            'openai': { class: 'openai' },
-            'anthropic': { class: 'anthropic' },
-            'google': { class: 'google' },
-            'gemini': { class: 'google' },
-            'meta': { class: 'meta' },
-            'mistral': { class: 'mistral' }
-        };
-
-        // Sort providers for consistent ordering
-        const sortedProviders = Object.keys(modelsByProvider).sort((a, b) => {
-            const order = ['openai', 'anthropic', 'google', 'gemini', 'meta', 'mistral'];
-            const aIndex = order.indexOf(a.toLowerCase());
-            const bIndex = order.indexOf(b.toLowerCase());
-            if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
-            if (aIndex === -1) return 1;
-            if (bIndex === -1) return -1;
-            return aIndex - bIndex;
-        });
-
-        // Add provider groups (same structure as ModelSelectionUI)
-        sortedProviders.forEach(provider => {
-            const models = modelsByProvider[provider];
-            const config = providerConfig[provider.toLowerCase()] || {
-                class: provider.toLowerCase().startsWith('openai-compatible:') ? 'openai-compatible' : 'default'
-            };
-
-            // Create provider section container
-            const providerSection = document.createElement('div');
-            providerSection.className = `custom-model-select-provider-section ${config.class}`;
-
-            // Add provider header
-            const providerHeader = document.createElement('div');
-            providerHeader.className = `custom-model-select-provider-header ${config.class}`;
-            providerHeader.innerHTML = `
-                <span>${models[0]?.providerLabel || provider.charAt(0).toUpperCase() + provider.slice(1)}</span>
-            `;
-            providerSection.appendChild(providerHeader);
-
-            // Sort models within provider
-            const sortedModels = models.sort((a: any, b: any) => a.value.localeCompare(b.value));
-
-            // Add models for this provider
-            sortedModels.forEach((model: any) => {
-                const option = document.createElement('div');
-                option.className = 'custom-model-select-option';
-                option.dataset.value = model.value;
-                if (model.value === selectedValue) {
-                    option.classList.add('selected');
-                }
-
-                option.innerHTML = `
-                    <span class="custom-model-select-option-text">${model.label || model.value}</span>
-                    ${renderIconMarkup('CircleCheck', 'option-check')}
-                `;
-
-                option.addEventListener('click', () => {
-                    this.selectCustomOption(agentName, model.value, model.label || model.value);
-                });
-
-                providerSection.appendChild(option);
-            });
-
-            dropdown.appendChild(providerSection);
-        });
-    }
-
-    private selectCustomOption(agentName: string, value: string, label: string): void {
-        const textElement = document.getElementById(`custom-model-select-text-${agentName}`);
-        const dropdown = document.getElementById(`custom-model-select-dropdown-${agentName}`);
-        const originalSelect = document.querySelector(`select[data-agent="${agentName}"]`) as HTMLSelectElement;
-
-        if (textElement) {
-            textElement.textContent = label;
-        }
-
-        // Update the hidden select
-        if (originalSelect) {
-            // Use the native setter to bypass React's value tracker, ensuring onChange fires
-            const nativeSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
-            if (nativeSetter) {
-                nativeSetter.call(originalSelect, value);
-            } else {
-                originalSelect.value = value;
-            }
-            // Trigger change event (React's onChange for <select> maps to native 'change')
-            const changeEvent = new Event('change', { bubbles: true });
-            originalSelect.dispatchEvent(changeEvent);
-        }
-
-        // Update selected state in dropdown
-        if (dropdown) {
-            dropdown.querySelectorAll('.custom-model-select-option').forEach(opt => {
-                opt.classList.remove('selected');
-            });
-            dropdown.querySelector(`[data-value="${value}"]`)?.classList.add('selected');
-        }
-
-        this.closeCustomSelect(agentName);
-    }
 
     private getTextareaIdForAgent(agentName: string): string | null {
         return this.getPromptAgentMap()[agentName] || null;

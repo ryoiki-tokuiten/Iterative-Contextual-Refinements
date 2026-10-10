@@ -279,10 +279,10 @@ export const SolutionPoolTabContent: React.FC<{ process: DeepthinkPipelineState 
                                                 {isSkipped
                                                     ? <span className="status-badge status-skipped">Skipped</span>
                                                     : hasPool
-                                                    ? <span className="status-badge status-completed">Available</span>
-                                                    : isError
-                                                        ? <span className="status-badge status-error">Error</span>
-                                                        : <span className="status-badge status-pending">Pending</span>}
+                                                        ? <span className="status-badge status-completed">Available</span>
+                                                        : isError
+                                                            ? <span className="status-badge status-error">Error</span>
+                                                            : <span className="status-badge status-pending">Pending</span>}
                                             </div>
                                             <div className="agent-results">
                                                 {hasPool ? (
@@ -320,7 +320,6 @@ const SolutionPoolHeader: React.FC<{ processId: string }> = ({ processId }) => (
             <Icon name="workspaces" className="solution-pool-icon" />
             <div className="solution-pool-title-group">
                 <h3 className="solution-pool-title">Structured Structured Noise</h3>
-                <p className="solution-pool-subtitle">Curated branch-local pool snapshots and memory banks</p>
             </div>
         </div>
     </div>

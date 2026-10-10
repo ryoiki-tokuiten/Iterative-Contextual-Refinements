@@ -41,6 +41,12 @@ export const PROBABILITY_FLOOR = 0.01;
 /** log2(3) baseline bits for uniform guess over 3 outcomes (§6.4) */
 export const LOG2_3 = Math.log2(3); // ≈ 1.584962500721156
 
+export interface BsrConfigOptions {
+  tau?: number;
+  theta?: number;
+  weights?: Record<BsrEventSize, number>;
+}
+
 // ============================================================================
 // Pure BSR Calculations (§6.3, §6.4, §6.5)
 // ============================================================================
@@ -68,8 +74,12 @@ export function scoreWindow(
   windowEndIteration: number,
   progressEvents: BsrEvent[],
   regressionEvents: BsrEvent[],
-  ledgerBeforeWindow: BsrLedgerEntry[]
+  ledgerBeforeWindow: BsrLedgerEntry[],
+  options?: { tau?: number; weights?: Record<BsrEventSize, number> }
 ): WindowScoringResult {
+  const tau = options?.tau ?? TAU;
+  const weights = options?.weights ?? SIZE_WEIGHTS;
+
   // Aggregate changes per iteration in the window
   const iterationChanges = new Map<number, number>();
   for (let it = windowStartIteration; it <= windowEndIteration; it++) {
@@ -79,14 +89,14 @@ export function scoreWindow(
   let windowMovement = 0;
 
   for (const ev of progressEvents) {
-    const w = SIZE_WEIGHTS[ev.size] ?? 1;
+    const w = weights[ev.size] ?? 1;
     const cur = iterationChanges.get(ev.iteration) ?? 0;
     iterationChanges.set(ev.iteration, cur + w);
     windowMovement += w;
   }
 
   for (const ev of regressionEvents) {
-    const w = SIZE_WEIGHTS[ev.size] ?? 1;
+    const w = weights[ev.size] ?? 1;
     const cur = iterationChanges.get(ev.iteration) ?? 0;
     iterationChanges.set(ev.iteration, cur - w);
     windowMovement += w;
@@ -110,16 +120,16 @@ export function scoreWindow(
 
   // Window outcome
   let windowOutcome: BsrWindowOutcome = 'STALL';
-  if (net >= TAU) {
+  if (net >= tau) {
     windowOutcome = 'PROGRESS';
-  } else if (net <= -TAU) {
+  } else if (net <= -tau) {
     windowOutcome = 'REGRESS';
   }
 
   // Lost ground: (best_total - net) / (movement + tau)
   const lostGround = windowMovement === 0 && bestTotal === 0
     ? 0
-    : (bestTotal - net) / (windowMovement + TAU);
+    : (bestTotal - net) / (windowMovement + tau);
 
   // Progress kept over the whole life of the branch ledger
   let netLife = 0;
@@ -137,7 +147,7 @@ export function scoreWindow(
 
   const progressKept = movementLife === 0
     ? 0
-    : Math.max(0, netLife) / (movementLife + TAU);
+    : Math.max(0, netLife) / (movementLife + tau);
 
   return {
     net,
@@ -253,15 +263,17 @@ export function decideAction(
   lostGround: number,
   stallEvidence: number,
   progressKept: number,
-  lastGoodIteration: number | 'window_start'
+  lastGoodIteration: number | 'window_start',
+  options?: { theta?: number }
 ): {
   decision: BsrAction;
   form?: BsrEvolveForm;
   rollbackTo?: number | 'window_start';
 } {
+  const theta = options?.theta ?? THETA;
   let decision: BsrAction = 'CONTINUE';
 
-  if (pressures.EVOLVE < THETA && pressures.PRUNE < THETA) {
+  if (pressures.EVOLVE < theta && pressures.PRUNE < theta) {
     decision = 'CONTINUE';
   } else if (pressures.CONTINUE >= Math.max(pressures.EVOLVE, pressures.PRUNE)) {
     decision = 'CONTINUE';
@@ -350,14 +362,16 @@ export function evaluateBranchState(
   windowStartIteration: number,
   windowEndIteration: number,
   ledgerBeforeWindow: BsrLedgerEntry[],
-  previousPrediction: { PROGRESS: number; STALL: number; REGRESS: number } | null | undefined
+  previousPrediction: { PROGRESS: number; STALL: number; REGRESS: number } | null | undefined,
+  options?: BsrConfigOptions
 ): BsrComputedScores {
   const scoring = scoreWindow(
     windowStartIteration,
     windowEndIteration,
     report.confirmed_progress,
     report.confirmed_regression,
-    ledgerBeforeWindow
+    ledgerBeforeWindow,
+    { tau: options?.tau, weights: options?.weights }
   );
 
   const graded = gradePrediction(
@@ -383,7 +397,8 @@ export function evaluateBranchState(
     scoring.lostGround,
     forecast.stallEvidence,
     scoring.progressKept,
-    scoring.lastGoodIteration
+    scoring.lastGoodIteration,
+    { theta: options?.theta }
   );
 
   return {

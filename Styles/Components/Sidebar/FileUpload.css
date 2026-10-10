@@ -12,9 +12,9 @@
     flex-direction: column;
     gap: 0.55rem;
     padding: 0.75rem;
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--panel-border);
     border-radius: 12px;
-    background: rgba(15, 17, 32, 0.18);
+    background: var(--panel-bg);
     transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
 }
 
@@ -192,8 +192,8 @@ body.light-mode .file-drop-zone:hover {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    background: var(--card-bg-color, rgba(15, 17, 32, 0.5));
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
     border-radius: 12px;
     padding: 0.75rem;
     max-height: 350px;
@@ -202,10 +202,7 @@ body.light-mode .file-drop-zone:hover {
 
 /* Light mode container adjustment */
 body.light-mode .file-list-container {
-    background: rgba(255, 255, 255, 0.35) !important;
-    border-color: rgba(0, 0, 0, 0.08) !important;
     box-shadow: var(--shadow-sm);
-    backdrop-filter: var(--card-blur-effect);
 }
 
 .file-list-header {
@@ -271,8 +268,8 @@ body.light-mode .file-list-container {
     position: relative;
     display: flex;
     flex-direction: column;
-    background: var(--card-bg-color, rgba(15, 17, 32, 0.6));
-    border: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
     border-radius: 10px;
     overflow: hidden;
     cursor: pointer;
@@ -282,9 +279,6 @@ body.light-mode .file-list-container {
 
 /* Light mode card adjustment */
 body.light-mode .file-card {
-    background: rgba(255, 255, 255, 0.5) !important;
-    border-color: rgba(0, 0, 0, 0.06) !important;
-    backdrop-filter: var(--card-blur-effect);
 }
 
 .file-card.is-dragging {
@@ -653,20 +647,14 @@ body.light-mode .file-drop-zone.dragging {
 }
 
 body.light-mode .file-list-container {
-    background: rgba(139, 92, 246, 0.04) !important;
-    border-color: rgba(139, 92, 246, 0.15) !important;
     box-shadow: 0 2px 8px rgba(139, 92, 246, 0.08) !important;
 }
 
 body.light-mode .file-card {
-    background: rgba(255, 255, 255, 0.8) !important;
-    border-color: rgba(139, 92, 246, 0.12) !important;
     box-shadow: none !important;
 }
 
 body.light-mode .upload-context-section {
-    background: rgba(255, 255, 255, 0.62);
-    border-color: rgba(99, 102, 241, 0.18);
 }
 
 body.light-mode .upload-context-section.is-file-drag-target {

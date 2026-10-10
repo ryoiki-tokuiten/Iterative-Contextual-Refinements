@@ -47,6 +47,10 @@ export const BranchStateModal: React.FC<BranchStateModalProps> = ({
   const windowStart = Math.max(1, updateIteration - windowInterval + 1);
   const windowEnd = updateIteration;
 
+  // Parameters from runConfig
+  const tau = process.runConfig?.bsrNoiseLevel ?? 2;
+  const theta = process.runConfig?.bsrPressureFloor ?? 0.3;
+
   // Ledger summary
   let netLife = 0;
   let movementLife = 0;
@@ -55,7 +59,7 @@ export const BranchStateModal: React.FC<BranchStateModalProps> = ({
     else netLife -= entry.weight;
     movementLife += entry.weight;
   });
-  const progressKept = movementLife > 0 ? (netLife / (movementLife + 2)).toFixed(3) : '0.000';
+  const progressKept = movementLife > 0 ? (netLife / (movementLife + tau)).toFixed(3) : '0.000';
 
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
@@ -185,17 +189,17 @@ export const BranchStateModal: React.FC<BranchStateModalProps> = ({
                   <strong>Decision Rule Explanation:</strong>
                   {computed.decision === 'CONTINUE' && (
                     <p>
-                      CONTINUE was chosen because pressures for EVOLVE ({computed.pressure.EVOLVE.toFixed(3)}) and PRUNE ({computed.pressure.PRUNE.toFixed(3)}) were below threshold θ (0.30), or CONTINUE ({computed.pressure.CONTINUE.toFixed(3)}) had higher evidence of expected improvement.
+                      CONTINUE was chosen because pressures for EVOLVE ({computed.pressure.EVOLVE.toFixed(3)}) and PRUNE ({computed.pressure.PRUNE.toFixed(3)}) were below threshold θ ({theta.toFixed(2)}), or CONTINUE ({computed.pressure.CONTINUE.toFixed(3)}) had higher evidence of expected improvement.
                     </p>
                   )}
                   {computed.decision === 'EVOLVE' && (
                     <p>
-                      EVOLVE was selected because EVOLVE pressure ({computed.pressure.EVOLVE.toFixed(3)}) cleared threshold θ (0.30) and beat both CONTINUE ({computed.pressure.CONTINUE.toFixed(3)}) and PRUNE ({computed.pressure.PRUNE.toFixed(3)}). Form is <strong>{computed.form}</strong> based on lost ground ({computed.lost_ground.toFixed(3)}) vs stall evidence ({computed.stall_evidence.toFixed(3)}).
+                      EVOLVE was selected because EVOLVE pressure ({computed.pressure.EVOLVE.toFixed(3)}) cleared threshold θ ({theta.toFixed(2)}) and beat both CONTINUE ({computed.pressure.CONTINUE.toFixed(3)}) and PRUNE ({computed.pressure.PRUNE.toFixed(3)}). Form is <strong>{computed.form}</strong> based on lost ground ({computed.lost_ground.toFixed(3)}) vs stall evidence ({computed.stall_evidence.toFixed(3)}).
                     </p>
                   )}
                   {computed.decision === 'PRUNE' && (
                     <p>
-                      PRUNE was selected because the branch ran dry with little progress kept ({computed.progress_kept.toFixed(3)}), no ground to recover via rollback, and PRUNE pressure ({computed.pressure.PRUNE.toFixed(3)}) cleared threshold θ (0.30).
+                      PRUNE was selected because the branch ran dry with little progress kept ({computed.progress_kept.toFixed(3)}), no ground to recover via rollback, and PRUNE pressure ({computed.pressure.PRUNE.toFixed(3)}) cleared threshold θ ({theta.toFixed(2)}).
                     </p>
                   )}
                 </div>

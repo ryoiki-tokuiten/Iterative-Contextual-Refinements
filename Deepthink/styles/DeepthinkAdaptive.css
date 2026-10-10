@@ -177,8 +177,8 @@
 
 /* Tabs for embedded Deepthink - SMALLER VERSIONS only for embedded panel */
 .adaptive-deepthink-embedded-panel .tabs-nav-container {
-    background: rgba(var(--bg-color-rgb), 0.5);
-    border-bottom: 1px solid var(--border-color);
+    background: var(--panel-header-bg);
+    border-bottom: 1px solid var(--panel-header-border);
     padding: 0.4rem 0.75rem;
     flex-shrink: 0;
     /* Don't shrink tabs */
@@ -244,11 +244,11 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    background: rgba(var(--card-bg-base-rgb), 0.1);
+    background: var(--panel-bg);
     margin: 0;
     padding: 0;
     min-width: 0;
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--panel-border);
     border-radius: var(--border-radius-lg);
     overflow: hidden;
 }
@@ -260,18 +260,22 @@
     padding: var(--space-3) var(--space-4);  /* 12px 16px */
     min-height: var(--button-height-lg);  /* 44px */
     margin: 0;
-    border-bottom: 1px solid var(--border-color);
-    background: rgba(var(--bg-color-rgb), 0.5);
+    border-bottom: 1px solid var(--panel-header-border);
+    background: var(--panel-header-bg);
 }
 
 /* Message Cards */
 .adaptive-message-card {
-    background: rgba(var(--bg-color-rgb), 0.3);
-    border: 1px solid var(--border-color);
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
     border-radius: var(--border-radius-md);
     padding: var(--card-padding-sm);  /* 16px */
     animation: slideIn 0.3s ease-out;
+    transition: background var(--transition-speed) var(--easing-curve),
+                border-color var(--transition-speed) var(--easing-curve);
 }
+
+
 
 @keyframes slideIn {
     from {
@@ -284,25 +288,7 @@
     }
 }
 
-.adaptive-message-card.agent-message {
-    background: rgba(var(--accent-purple-rgb), 0.05);
-    border-color: rgba(var(--accent-purple-rgb), 0.2);
-}
 
-.adaptive-message-card.user-message {
-    background: rgba(var(--accent-blue-rgb), 0.05);
-    border-color: rgba(var(--accent-blue-rgb), 0.2);
-}
-
-.adaptive-message-card.system-success {
-    background: rgba(var(--accent-green-rgb), 0.05);
-    border-color: rgba(var(--accent-green-rgb), 0.2);
-}
-
-.adaptive-message-card.system-error {
-    background: rgba(var(--accent-pink-rgb), 0.05);
-    border-color: rgba(var(--accent-pink-rgb), 0.2);
-}
 
 .message-header {
     display: flex;
@@ -407,20 +393,20 @@
 
 /* Tool result display */
 .tool-result {
-    background: rgba(var(--bg-color-rgb), 0.5);
-    border: 1px solid var(--border-color);
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
     border-radius: var(--border-radius-md);
     overflow: hidden;
     margin-top: 0.5rem;
 }
 
 .tool-result-header {
-    background: rgba(var(--accent-blue-rgb), 0.1);
+    background: var(--panel-header-bg);
     color: var(--accent-blue);
     padding: 0.5rem 0.75rem;
     font-size: 0.85rem;
     font-weight: 600;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--panel-header-border);
 }
 
 .tool-result-content {

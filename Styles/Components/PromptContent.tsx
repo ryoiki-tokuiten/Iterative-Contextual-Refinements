@@ -67,7 +67,7 @@ export function PromptContent<T extends object>({
                         onChange={value => updatePrompt(pane.promptKey, value)}
                         modelValue={promptValue(prompts, pane.modelKey)}
                         onModelChange={value => updateModel(pane.modelKey, value)}
-                        availableModels={pane.showAvailableModels ? availableModels : []}
+                        availableModels={pane.showAvailableModels !== false ? availableModels : []}
                         placeholder={pane.placeholder}
                     />
                 </PromptPane>

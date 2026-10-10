@@ -154,6 +154,71 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
         return 'general';
     };
 
+    const formatAgentName = (agentName: string, stepDescription: string): string => {
+        if (!agentName) return '';
+        const name = agentName;
+        const desc = stepDescription || '';
+        const lowerName = name.toLowerCase();
+
+        const metaMatch = desc.match(/\(([^)]+)\)/);
+        const meta = metaMatch ? metaMatch[1] : '';
+
+        const targetMatch = desc.match(/for\s+([a-zA-Z0-9_-]+)/i);
+        const target = targetMatch ? targetMatch[1] : '';
+
+        if (lowerName.includes('solution attempt')) {
+            const parts = [target, meta].filter(Boolean);
+            return parts.length > 0 ? `Initial Execution (${parts.join(', ')})` : 'Initial Execution';
+        }
+        if (lowerName.includes('solution correction')) {
+            const parts = [target, meta].filter(Boolean);
+            return parts.length > 0 ? `Correction Agent (${parts.join(', ')})` : 'Correction Agent';
+        }
+        if (lowerName.includes('solution pool')) {
+            const parts = [target, meta].filter(Boolean);
+            return parts.length > 0 ? `Solution Pool Agent (${parts.join(', ')})` : 'Solution Pool Agent';
+        }
+        if (lowerName.includes('final judge')) return 'Final Judge Agent';
+        
+        if (lowerName.includes('solution critique')) {
+            const parts = [target, meta].filter(Boolean);
+            return parts.length > 0 ? `Critique Agent (${parts.join(', ')})` : 'Critique Agent';
+        }
+
+        if (lowerName.includes('dissected observations') || lowerName.includes('synthesis')) {
+            const isStepI = desc.toLowerCase().includes('step-i');
+            const prefix = isStepI ? 'step-i, For ' : 'For ';
+            return meta ? `Dissected Observations Synthesis Agent (${prefix}${meta})` : 'Dissected Observations Synthesis Agent';
+        }
+
+        if (lowerName.includes('branch state')) {
+            const parts = [target, meta].filter(Boolean);
+            return parts.length > 0 ? `Branch State Representation Agent (${parts.join(', ')})` : 'Branch State Representation Agent';
+        }
+
+        if (lowerName.includes('memory bank')) {
+            const parts = [target, meta].filter(Boolean);
+            return parts.length > 0 ? `Memory Bank Agent (${parts.join(', ')})` : 'Memory Bank Agent';
+        }
+
+        if (lowerName.includes('hypothesis testing')) {
+            const hMatch = desc.match(/\b(h\d+)\b/i);
+            const hPart = hMatch ? hMatch[1] : '';
+            const parts = [hPart, meta].filter(Boolean);
+            return parts.length > 0 ? `Hypothesis Testing Agent (${parts.join(', ')})` : 'Hypothesis Testing Agent';
+        }
+        
+        if (lowerName.includes('hypothesis generation')) {
+            return meta ? `Hypothesis Generator Agent (${meta})` : 'Hypothesis Generator Agent';
+        }
+
+        if (meta) {
+            return `${name} (${meta})`;
+        }
+
+        return name;
+    };
+
     // Filtered events for the terminal log console
     const filteredEvents = events.filter(ev => {
         if (filterType === 'agents' && !['agent_start', 'agent_complete', 'agent_error', 'agent_retry'].includes(ev.eventType)) return false;
@@ -270,15 +335,12 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                 <div className="node-icon-wrapper">
                     <MIcon name={statusIcon} className="node-status-icon" />
                 </div>
-                <div className="node-content">
+                <div className="node-content" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                     <div className="node-header">
-                        <span className="node-name font-mono">{agent.agentName}</span>
+                        <span className="node-name font-mono">{formatAgentName(agent.agentName, agent.stepDescription)}</span>
                         <span className="node-time font-mono">
-                            {new Date(agent.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            {new Date(agent.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
-                    </div>
-                    <div className="node-description truncate" title={agent.stepDescription}>
-                        {agent.stepDescription}
                     </div>
                 </div>
             </div>
@@ -460,7 +522,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                                     Orchestration Event
                                                 </div>
                                                 <div className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--text-secondary-color, #888)' }}>
-                                                    {selectedEvent.agentName || 'Pipeline Orchestrator'} &bull; {new Date(selectedEvent.timestamp).toLocaleTimeString([], { hour12: false })}
+                                                    {selectedEvent.agentName || 'Pipeline Orchestrator'} &bull; {new Date(selectedEvent.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                 </div>
                                             </div>
                                         </div>
@@ -701,10 +763,12 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                             onClick={() => selectEvent(ev)}
                                         >
                                             <span className="log-time">
-                                                {new Date(ev.timestamp).toLocaleTimeString([], { hour12: false })}
+                                                {new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </span>
                                             <span className="log-badge">{badge}</span>
-                                            <span className="log-agent">[{ev.agentName}]</span>
+                                            {ev.agentName && (
+                                                <span className="log-agent">[{formatAgentName(ev.agentName, ev.stepDescription)}]</span>
+                                            )}
                                             <span className="log-message">{ev.stepDescription}</span>
                                         </div>
                                     );

@@ -12,6 +12,14 @@ import { renderIconMarkup } from '../UI/Icons';
 
 import { ProviderManager } from './ProviderManager';
 
+export interface ModelSelectionUIOptions {
+    selectElement?: HTMLSelectElement;
+    container?: HTMLElement;
+    allowGlobalOption?: boolean;
+    agentName?: string;
+    onModelChange?: (model: string) => void;
+}
+
 export class ModelSelectionUI {
     private modelConfig: ModelConfigManager;
     private deepthinkConfig: DeepthinkConfigController | null = null;
@@ -19,16 +27,24 @@ export class ModelSelectionUI {
     private apiCallEstimator: ApiCallEstimator | null = null;
     private activeProvider: string = 'google';
     private searchQuery: string = '';
+    private options?: ModelSelectionUIOptions;
+    private customSelect: HTMLDivElement | null = null;
     private elements: {
         modelSelect: HTMLSelectElement | null;
         thinkingLevelSelect: HTMLSelectElement | null;
         thinkingLevelContainer: HTMLDivElement | null;
     };
 
-    constructor(modelConfig: ModelConfigManager, deepthinkConfig?: DeepthinkConfigController, providerManager?: ProviderManager) {
+    constructor(
+        modelConfig: ModelConfigManager,
+        deepthinkConfig?: DeepthinkConfigController | null,
+        providerManager?: ProviderManager | null,
+        options?: ModelSelectionUIOptions
+    ) {
         this.modelConfig = modelConfig;
         this.deepthinkConfig = deepthinkConfig || null;
         this.providerManager = providerManager || null;
+        this.options = options;
         this.elements = {
             modelSelect: null,
             thinkingLevelSelect: null,
@@ -37,17 +53,27 @@ export class ModelSelectionUI {
     }
 
     private initializeElements(): void {
-        this.elements = {
-            modelSelect: document.getElementById('model-select') as HTMLSelectElement,
-            thinkingLevelSelect: document.getElementById('thinking-level-select') as HTMLSelectElement,
-            thinkingLevelContainer: document.getElementById('thinking-level-container') as HTMLDivElement
-        };
+        if (this.options?.selectElement) {
+            this.elements = {
+                modelSelect: this.options.selectElement,
+                thinkingLevelSelect: null,
+                thinkingLevelContainer: null
+            };
+        } else {
+            this.elements = {
+                modelSelect: document.getElementById('model-select') as HTMLSelectElement,
+                thinkingLevelSelect: document.getElementById('thinking-level-select') as HTMLSelectElement,
+                thinkingLevelContainer: document.getElementById('thinking-level-container') as HTMLDivElement
+            };
+        }
 
         this.createCustomModelSelect();
         this.initializeModelOptions();
         this.initializeEventListeners();
         this.updateUI();
-        this.initializeApiCallEstimator();
+        if (!this.options?.selectElement) {
+            this.initializeApiCallEstimator();
+        }
     }
 
     public initialize(): void {
@@ -68,22 +94,33 @@ export class ModelSelectionUI {
         if (!this.elements.modelSelect) return;
 
         // Clear existing options
-        this.elements.modelSelect.innerHTML = '';
+        if (!this.options?.selectElement || this.elements.modelSelect.options.length === 0) {
+            this.elements.modelSelect.innerHTML = '';
 
-        // Add model options from the model config manager
-        const availableModels = this.modelConfig.getAvailableModels();
-        availableModels.forEach(model => {
-            const option = document.createElement('option');
-            option.value = model.value;
-            option.textContent = model.label || model.value;
-            if (model.description) {
-                option.title = model.description;
+            if (this.options?.allowGlobalOption) {
+                const globalOpt = document.createElement('option');
+                globalOpt.value = '';
+                globalOpt.textContent = 'Use Global Model';
+                this.elements.modelSelect.appendChild(globalOpt);
             }
-            this.elements.modelSelect!.appendChild(option);
-        });
+
+            // Add model options from the model config manager
+            const availableModels = this.modelConfig.getAvailableModels();
+            availableModels.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.value;
+                option.textContent = model.label || model.value;
+                if (model.description) {
+                    option.title = model.description;
+                }
+                this.elements.modelSelect!.appendChild(option);
+            });
+        }
 
         // Set default selection
-        this.elements.modelSelect.value = this.modelConfig.getSelectedModel();
+        if (!this.options?.selectElement) {
+            this.elements.modelSelect.value = this.modelConfig.getSelectedModel();
+        }
 
         // Update custom select options
         this.updateCustomSelectOptions();
@@ -93,33 +130,51 @@ export class ModelSelectionUI {
         this.initializeModelOptions();
     }
 
+    private getSelectedModelValue(): string {
+        if (this.options?.selectElement) {
+            return this.elements.modelSelect?.value || '';
+        }
+        return this.modelConfig.getSelectedModel();
+    }
+
     private createCustomModelSelect(): void {
         if (!this.elements.modelSelect) return;
 
-        const container = this.elements.modelSelect.parentElement;
+        const container = this.options?.container || this.elements.modelSelect.parentElement;
         if (!container) return;
+
+        // Check if model selector already exists (e.g. rendered by React or previously initialized)
+        const existing = container.querySelector('.model-selector');
+        if (existing) {
+            this.customSelect = existing as HTMLDivElement;
+            return;
+        }
 
         // Create the new split layout structure
         const customSelect = document.createElement('div');
         customSelect.className = 'model-selector';
-        customSelect.id = 'model-selector';
+        if (this.options?.agentName) {
+            customSelect.dataset.agent = this.options.agentName;
+        } else {
+            customSelect.id = 'model-selector';
+        }
         customSelect.innerHTML = `
-            <div class="model-selector-providers" id="model-selector-providers">
+            <div class="model-selector-providers">
                 <!-- Provider tabs will be populated here -->
             </div>
             <div class="model-selector-models-container">
-                <div class="model-search-container" id="model-search-container">
+                <div class="model-search-container">
                     ${renderIconMarkup('Search', 'model-search-icon')}
-                    <input type="text" class="model-search-input" id="model-search-input" placeholder="Search models...">
+                    <input type="text" class="model-search-input" placeholder="Search models...">
                 </div>
-                <div class="model-selector-models" id="model-selector-models">
+                <div class="model-selector-models">
                     <!-- Models will be populated here -->
                 </div>
             </div>
         `;
 
         // Bind search input event
-        const searchInput = customSelect.querySelector('#model-search-input') as HTMLInputElement;
+        const searchInput = customSelect.querySelector('.model-search-input') as HTMLInputElement;
         if (searchInput) {
             searchInput.addEventListener('input', () => {
                 this.searchQuery = searchInput.value.trim().toLowerCase();
@@ -127,23 +182,36 @@ export class ModelSelectionUI {
             });
         }
 
-        // Insert custom select after the original select
-        container.insertBefore(customSelect, this.elements.modelSelect.nextSibling);
+        this.customSelect = customSelect;
+
+        // Insert custom select into container
+        if (this.elements.modelSelect.parentElement === container) {
+            container.insertBefore(customSelect, this.elements.modelSelect.nextSibling);
+        } else {
+            container.appendChild(customSelect);
+        }
+
+        // Hide original select
+        this.elements.modelSelect.style.display = 'none';
     }
 
     private filterAndRenderModels(): void {
-        const selectedModel = this.modelConfig.getSelectedModel();
+        const selectedModel = this.getSelectedModelValue();
         this.renderModelsForProvider(this.activeProvider, this.groupAvailableModels(), selectedModel);
     }
 
     private updateCustomSelectOptions(): void {
-        const providersContainer = document.getElementById('model-selector-providers');
-        const modelsContainer = document.getElementById('model-selector-models');
+        const providersContainer = this.customSelect
+            ? this.customSelect.querySelector<HTMLElement>('.model-selector-providers')
+            : document.getElementById('model-selector-providers');
+        const modelsContainer = this.customSelect
+            ? this.customSelect.querySelector<HTMLElement>('.model-selector-models')
+            : document.getElementById('model-selector-models');
 
         if (!providersContainer || !modelsContainer) return;
 
         const availableModels = this.modelConfig.getAvailableModels();
-        const selectedModel = this.modelConfig.getSelectedModel();
+        const selectedModel = this.getSelectedModelValue();
         const modelsByProvider = this.groupAvailableModels();
 
         // Provider configuration with SVG logos
@@ -234,6 +302,7 @@ export class ModelSelectionUI {
             };
 
             const providerTab = document.createElement('button');
+            providerTab.type = 'button';
             providerTab.className = `provider-tab ${config.class}`;
             if (provider.toLowerCase() === this.activeProvider) {
                 providerTab.classList.add('active');
@@ -259,16 +328,20 @@ export class ModelSelectionUI {
     }
 
     private syncModelsSectionHeight(): void {
-        const providersContainer = document.getElementById('model-selector-providers');
-        const modelsContainer = document.getElementById('model-selector-models');
-        const searchContainer = document.getElementById('model-search-container');
+        const providersContainer = this.customSelect
+            ? this.customSelect.querySelector<HTMLElement>('.model-selector-providers')
+            : document.getElementById('model-selector-providers');
+        const modelsContainer = this.customSelect
+            ? this.customSelect.querySelector<HTMLElement>('.model-selector-models')
+            : document.getElementById('model-selector-models');
+        const searchContainer = this.customSelect
+            ? this.customSelect.querySelector<HTMLElement>('.model-search-container')
+            : document.getElementById('model-search-container');
 
         if (providersContainer && modelsContainer) {
-            // Get the natural height of providers column
-            const providersHeight = providersContainer.offsetHeight;
-            const searchHeight = searchContainer ? searchContainer.offsetHeight : 0;
-            // Set models max-height to match (minus padding and search bar height)
-            modelsContainer.style.maxHeight = `${providersHeight - 12 - searchHeight}px`;
+            const providersHeight = providersContainer.offsetHeight || 190;
+            const searchHeight = searchContainer ? searchContainer.offsetHeight : 36;
+            modelsContainer.style.maxHeight = `${Math.max(160, providersHeight - 12 - searchHeight)}px`;
         }
     }
 
@@ -276,14 +349,18 @@ export class ModelSelectionUI {
         this.activeProvider = provider.toLowerCase();
 
         // Clear search input on provider tab change
-        const searchInput = document.getElementById('model-search-input') as HTMLInputElement;
+        const searchInput = this.customSelect
+            ? this.customSelect.querySelector<HTMLInputElement>('.model-search-input')
+            : document.getElementById('model-search-input') as HTMLInputElement;
         if (searchInput) {
             searchInput.value = '';
         }
         this.searchQuery = '';
 
         // Update active state on tabs
-        const tabs = document.querySelectorAll('.provider-tab');
+        const tabs = this.customSelect
+            ? this.customSelect.querySelectorAll('.provider-tab')
+            : document.querySelectorAll('.provider-tab');
         tabs.forEach(tab => {
             tab.classList.remove('active');
             if ((tab as HTMLElement).dataset.provider?.toLowerCase() === this.activeProvider) {
@@ -292,7 +369,7 @@ export class ModelSelectionUI {
         });
 
         // Re-render models
-        const selectedModel = this.modelConfig.getSelectedModel();
+        const selectedModel = this.getSelectedModelValue();
         this.renderModelsForProvider(provider, this.groupAvailableModels(), selectedModel);
         this.updateThinkingLevelVisibility();
     }
@@ -302,10 +379,42 @@ export class ModelSelectionUI {
         modelsByProvider: Record<string, { value: string; label: string; description?: string; provider?: string }[]>,
         selectedModel: string
     ): void {
-        const modelsContainer = document.getElementById('model-selector-models');
+        const modelsContainer = this.customSelect
+            ? this.customSelect.querySelector<HTMLElement>('.model-selector-models')
+            : document.getElementById('model-selector-models');
         if (!modelsContainer) return;
 
         modelsContainer.innerHTML = '';
+
+        // Allow "Use Global Model" option for per-agent selectors
+        if (this.options?.allowGlobalOption) {
+            const globalModelBtn = document.createElement('button');
+            globalModelBtn.type = 'button';
+            globalModelBtn.className = 'model-option global-model-option';
+            if (!selectedModel || selectedModel === '') {
+                globalModelBtn.classList.add('selected');
+            }
+            globalModelBtn.dataset.value = '';
+
+            const checkIcon = (!selectedModel || selectedModel === '')
+                ? renderIconMarkup('CircleCheck', 'model-check-icon', {}, 14)
+                : '';
+
+            const globalModelName = this.modelConfig.getSelectedModel();
+            globalModelBtn.innerHTML = `
+                <div class="global-model-details">
+                    <span class="model-name">Use Global Model</span>
+                    <span class="global-model-badge">Current: ${globalModelName || 'Default'}</span>
+                </div>
+                ${checkIcon}
+            `;
+
+            globalModelBtn.addEventListener('click', () => {
+                this.selectModel('');
+            });
+
+            modelsContainer.appendChild(globalModelBtn);
+        }
 
         const normalizedProvider = provider.toLowerCase();
         const lookupProviderName = normalizedProvider === 'google' ? 'gemini' : normalizedProvider;
@@ -314,7 +423,7 @@ export class ModelSelectionUI {
 
         if (!isConfigured) {
             const displayName = providerConfig?.displayName || (provider.charAt(0).toUpperCase() + provider.slice(1));
-            modelsContainer.innerHTML = `
+            modelsContainer.innerHTML += `
                 <div class="provider-unconfigured-container">
                     <div class="provider-unconfigured-icon">
                         ${renderIconMarkup('TriangleAlert', 'unconfigured-alert-icon', {}, 28)}
@@ -323,14 +432,14 @@ export class ModelSelectionUI {
                     <p class="provider-unconfigured-description">
                         API key or credentials for ${displayName} are not configured in Iterative Studio.
                     </p>
-                    <button class="provider-configure-btn" id="model-selector-configure-btn">
+                    <button class="provider-configure-btn model-selector-configure-btn" id="model-selector-configure-btn">
                         ${renderIconMarkup('settings', 'configure-settings-icon', {}, 14)}
                         <span>Configure API Key</span>
                     </button>
                 </div>
             `;
             
-            const configureBtn = modelsContainer.querySelector('#model-selector-configure-btn');
+            const configureBtn = modelsContainer.querySelector('.model-selector-configure-btn');
             if (configureBtn) {
                 configureBtn.addEventListener('click', () => {
                     document.getElementById('add-providers-trigger')?.click();
@@ -355,18 +464,18 @@ export class ModelSelectionUI {
 
         if (models.length === 0) {
             if (this.searchQuery) {
-                modelsContainer.innerHTML = '<div class="no-models">No matching models found</div>';
+                modelsContainer.innerHTML += '<div class="no-models">No matching models found</div>';
             } else {
-                modelsContainer.innerHTML = `
+                modelsContainer.innerHTML += `
                     <div class="no-models">
                         No models found for ${providerConfig?.displayName || provider}.<br/>
-                        <button class="provider-configure-btn refresh-models-btn" id="model-selector-refresh-btn" style="margin-top: 12px; font-size: 11px; padding: 6px 10px;">
+                        <button class="provider-configure-btn refresh-models-btn model-selector-refresh-btn" id="model-selector-refresh-btn" style="margin-top: 12px; font-size: 11px; padding: 6px 10px;">
                             ${renderIconMarkup('RotateCcw', 'refresh-icon', {}, 12)}
                             <span>Fetch Models</span>
                         </button>
                     </div>
                 `;
-                const refreshBtn = modelsContainer.querySelector('#model-selector-refresh-btn');
+                const refreshBtn = modelsContainer.querySelector('.model-selector-refresh-btn');
                 if (refreshBtn) {
                     refreshBtn.addEventListener('click', async () => {
                         const icon = refreshBtn.querySelector('.refresh-icon');
@@ -389,6 +498,7 @@ export class ModelSelectionUI {
 
         sortedModels.forEach(model => {
             const modelBtn = document.createElement('button');
+            modelBtn.type = 'button';
             modelBtn.className = 'model-option';
             if (model.value === selectedModel) {
                 modelBtn.classList.add('selected');
@@ -411,18 +521,33 @@ export class ModelSelectionUI {
     }
 
     private selectModel(value: string): void {
-        // Update the hidden select
+        if (this.options?.selectElement) {
+            // For per-agent model selector:
+            if (this.elements.modelSelect) {
+                const nativeSetter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+                if (nativeSetter) {
+                    nativeSetter.call(this.elements.modelSelect, value);
+                } else {
+                    this.elements.modelSelect.value = value;
+                }
+                const changeEvent = new Event('change', { bubbles: true });
+                this.elements.modelSelect.dispatchEvent(changeEvent);
+            }
+            if (this.options.onModelChange) {
+                this.options.onModelChange(value);
+            }
+
+            // Re-render models to update checkmark
+            this.renderModelsForProvider(this.activeProvider, this.groupAvailableModels(), value);
+            return;
+        }
+
+        // Global model selector in sidebar:
         if (this.elements.modelSelect) {
             this.elements.modelSelect.value = value;
         }
-
-        // Update model config
         this.modelConfig.setSelectedModel(value);
-
-        // Update code execution toggle visibility (depends on provider)
         updateCodeExecutionToggleVisibility(globalState.currentMode);
-
-        // Re-render models to update checkmark
         this.renderModelsForProvider(this.activeProvider, this.groupAvailableModels(), value);
         this.updateThinkingLevelVisibility();
     }
@@ -440,7 +565,7 @@ export class ModelSelectionUI {
     }
     private initializeEventListeners(): void {
         // Model selection
-        if (this.elements.modelSelect) {
+        if (this.elements.modelSelect && !this.options?.selectElement) {
             this.elements.modelSelect.addEventListener('change', () => {
                 this.modelConfig.setSelectedModel(this.elements.modelSelect!.value);
                 // Update code execution toggle visibility (depends on provider)

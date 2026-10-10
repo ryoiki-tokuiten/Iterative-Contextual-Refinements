@@ -118,3 +118,51 @@ export function determinePostIterationStep(
     nextSinceHeartbeat: incrementedSinceHeartbeat,
   };
 }
+
+export interface LoopScheduleSummary {
+  standaloneHeartbeats: number;
+  globalUpdates: number;
+  totalHeartbeats: number;
+  heartbeatIterations: number[];
+  globalUpdateIterations: number[];
+}
+
+/**
+ * Pure function computing the exact schedule breakdown for iterations 1..i (§3).
+ * Accurately tracks standalone heartbeats, global updates, and ending heartbeats.
+ */
+export function calculateLoopSchedule(
+  i: number,
+  j: number,
+  k: number,
+  curatedContextEnabled: boolean
+): LoopScheduleSummary {
+  let sinceHeartbeat = 0;
+  let standaloneHeartbeats = 0;
+  let globalUpdates = 0;
+  const heartbeatIterations: number[] = [];
+  const globalUpdateIterations: number[] = [];
+
+  for (let n = 1; n <= i; n++) {
+    const step = determinePostIterationStep(n, sinceHeartbeat, i, j, k, curatedContextEnabled);
+    sinceHeartbeat = step.nextSinceHeartbeat;
+
+    if (step.action.type === 'GLOBAL_UPDATE') {
+      globalUpdates++;
+      globalUpdateIterations.push(n);
+      sinceHeartbeat = 0;
+    } else if (step.action.type === 'HEARTBEAT') {
+      standaloneHeartbeats++;
+      heartbeatIterations.push(n);
+      sinceHeartbeat = 0;
+    }
+  }
+
+  return {
+    standaloneHeartbeats,
+    globalUpdates,
+    totalHeartbeats: standaloneHeartbeats + (curatedContextEnabled ? globalUpdates : 0),
+    heartbeatIterations,
+    globalUpdateIterations,
+  };
+}

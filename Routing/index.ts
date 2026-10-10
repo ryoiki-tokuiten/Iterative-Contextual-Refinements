@@ -70,6 +70,30 @@ export function getSolutionPoolDisabled(): boolean {
     return getRoutingManager().isSolutionPoolDisabled();
 }
 
+export function getBsrNoiseLevel(): number {
+    return getRoutingManager().getBsrNoiseLevel();
+}
+
+export function getBsrPressureFloor(): number {
+    return getRoutingManager().getBsrPressureFloor();
+}
+
+export function getBsrWeightSmall(): number {
+    return getRoutingManager().getBsrWeightSmall();
+}
+
+export function getBsrWeightMedium(): number {
+    return getRoutingManager().getBsrWeightMedium();
+}
+
+export function getBsrWeightLarge(): number {
+    return getRoutingManager().getBsrWeightLarge();
+}
+
+export function getBsrWeightPreset(): string {
+    return getRoutingManager().getBsrWeightPreset();
+}
+
 export function hasValidApiKey(): boolean {
     return getRoutingManager().hasValidApiKey();
 }

@@ -500,6 +500,12 @@ const BranchVisualBsr: React.FC<{
     const activeRecord = records[activeIdx];
     if (!activeRecord) return null;
 
+    const activeWeights: Record<string, number> = {
+        small: process.runConfig?.bsrWeightSmall ?? SIZE_WEIGHTS.small,
+        medium: process.runConfig?.bsrWeightMedium ?? SIZE_WEIGHTS.medium,
+        large: process.runConfig?.bsrWeightLarge ?? SIZE_WEIGHTS.large,
+    };
+
     const { computed, report } = activeRecord;
 
     const formLabel = computed.form === 'rollback'
@@ -619,8 +625,8 @@ const BranchVisualBsr: React.FC<{
     iterOrder.forEach(it => {
         const pEvts = iterProgMap.get(it) || [];
         const rEvts = iterRegrMap.get(it) || [];
-        const pScore = pEvts.reduce((sum, e) => sum + (SIZE_WEIGHTS[e.size] || 1), 0);
-        const rScore = rEvts.reduce((sum, e) => sum + (SIZE_WEIGHTS[e.size] || 1), 0);
+        const pScore = pEvts.reduce((sum, e) => sum + (activeWeights[e.size] || 1), 0);
+        const rScore = rEvts.reduce((sum, e) => sum + (activeWeights[e.size] || 1), 0);
         const change = pScore - rScore;
         runningTotal += change;
         points.push({
@@ -1036,7 +1042,7 @@ const BranchVisualBsr: React.FC<{
                                 ) : (
                                     <div className="change-chips-cluster">
                                         {pt.progEvents.map((pe, peIdx) => {
-                                            const weight = SIZE_WEIGHTS[pe.size] || 1;
+                                            const weight = activeWeights[pe.size] || 1;
                                             return (
                                                 <span
                                                     key={`p-${peIdx}`}
@@ -1055,7 +1061,7 @@ const BranchVisualBsr: React.FC<{
                                             );
                                         })}
                                         {pt.regrEvents.map((re, reIdx) => {
-                                            const weight = SIZE_WEIGHTS[re.size] || 1;
+                                            const weight = activeWeights[re.size] || 1;
                                             return (
                                                 <span
                                                     key={`r-${reIdx}`}
