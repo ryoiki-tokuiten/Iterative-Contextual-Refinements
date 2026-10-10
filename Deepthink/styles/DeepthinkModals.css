@@ -509,3 +509,178 @@ body.light-mode .sidebar-toggle-button .icon-slot {
         min-height: 300px;
     }
 }
+
+/* --------------------------------------------------------------------------
+   13. TOTAL LLM CALLS & TOKEN ESTIMATION MODAL
+   -------------------------------------------------------------------------- */
+
+.token-estimation-fullscreen-modal .modal-body {
+    padding: 0 !important;
+    overflow: hidden;
+    height: 100%;
+}
+
+.token-estimation-modal-content {
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    margin: 0 auto;
+    padding: 2rem 2.5rem;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.token-estimation-overview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    width: 100%;
+    flex: 0 0 auto;
+}
+
+.estimation-stat-card {
+    background: var(--card-bg-color, #1e1e24);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg, 12px);
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    transition: all 0.25s ease;
+}
+
+.estimation-stat-card:hover {
+    border-color: rgba(139, 92, 246, 0.35);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+.estimation-stat-card.sandbox-stat {
+    border-color: rgba(var(--dt-red-rgb, 255, 95, 86), 0.35);
+    background: linear-gradient(135deg, var(--card-bg-color, #1e1e24) 0%, rgba(var(--dt-red-rgb, 255, 95, 86), 0.05) 100%);
+}
+
+.estimation-stat-card.sandbox-stat:hover {
+    border-color: rgba(var(--dt-red-rgb, 255, 95, 86), 0.6);
+    box-shadow: 0 6px 22px rgba(var(--dt-red-rgb, 255, 95, 86), 0.15);
+}
+
+.stat-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.stat-card-icon {
+    display: flex;
+    align-items: center;
+    font-size: 1.2rem;
+}
+
+.stat-card-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary-color);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.stat-card-body {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+}
+
+.stat-card-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: var(--text-color);
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+
+.estimation-stat-card.sandbox-stat .stat-card-value {
+    color: var(--accent-red, #ff5f56);
+}
+
+.stat-card-unit {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-tertiary-color, #808090);
+}
+
+.stat-card-footnote {
+    font-size: 0.78rem;
+    color: var(--text-tertiary-color, #808090);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.stat-card-footnote.sandbox-active {
+    color: var(--accent-red, #ff5f56);
+    font-weight: 600;
+}
+
+.stat-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+}
+
+.stat-tag {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    background: rgba(var(--card-bg-base-rgb), 0.5);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--accent-purple);
+}
+
+.token-usage-graph-card {
+    width: 100%;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.token-usage-graph-card .window-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding: 1.25rem;
+}
+
+.token-usage-graph-card .token-volume-estimator {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+.token-usage-graph-card .token-estimator-layout {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.token-usage-graph-card .token-chart-shell {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+}
+
+.token-usage-graph-card .token-chart-svg {
+    min-height: 0;
+}
+

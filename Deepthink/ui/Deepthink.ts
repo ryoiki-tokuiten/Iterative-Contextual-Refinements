@@ -472,6 +472,7 @@ export function renderActiveDeepthinkPipeline() {
     }
 
     const tabContent = createDeepthinkTabContent(deepthinkProcess);
+    window.dispatchEvent(new CustomEvent('deepthinkPipelineStateChanged'));
     pipelineContentRoot.render(tabContent);
 
 }

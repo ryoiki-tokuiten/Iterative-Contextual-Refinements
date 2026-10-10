@@ -24,9 +24,15 @@ function computeIsGenerating(): boolean {
 function computeControlsDisabledState(): ControlsDisabledState {
     const isGenerating = computeIsGenerating();
     const isApiKeyReady = hasValidApiKey();
+    const isDeepthinkRunning = globalState.activeDeepthinkPipeline?.status === 'processing' || globalState.activeDeepthinkPipeline?.status === 'stopping';
+
+    let generateButtonDisabled = isGenerating || !isApiKeyReady;
+    if (globalState.currentMode === 'deepthink' && isDeepthinkRunning) {
+        generateButtonDisabled = false;
+    }
 
     return {
-        generateButton: isGenerating || !isApiKeyReady,
+        generateButton: generateButtonDisabled,
         exportConfigButton: isGenerating,
         importConfigInput: isGenerating,
         initialIdeaInput: isGenerating,
@@ -87,4 +93,5 @@ export function updateControlsState(): void {
     }
 
     globalState.isGenerating = computeIsGenerating();
+    window.dispatchEvent(new CustomEvent('controlsStateUpdated'));
 }

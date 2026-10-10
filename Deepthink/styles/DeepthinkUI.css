@@ -158,28 +158,28 @@
         0 0 2px rgba(var(--deepthink-tab-rgb), 0.3) inset;
 }
 
-/* Live and Filesystem share the same quiet red navigation treatment. */
+/* Live and Filesystem share the same red navigation treatment. */
 #deepthink-tab-live,
 #deepthink-tab-filesystem {
     transition: all var(--transition-speed) var(--easing-curve);
     display: inline-flex !important;
     align-items: center !important;
-    background: rgba(239, 68, 68, 0.04);
-    color: rgba(239, 68, 68, 0.65);
-    border-color: rgba(239, 68, 68, 0.15);
+    background: rgba(var(--accent-pink-rgb), 0.06);
+    color: var(--accent-pink);
+    border-color: rgba(var(--accent-pink-rgb), 0.24);
 }
 
 #deepthink-tab-live.active,
 #deepthink-tab-filesystem.active {
-    background: rgba(239, 68, 68, 0.08) !important;
-    color: #ef4444 !important;
-    border-color: rgba(239, 68, 68, 0.45) !important;
+    background: rgba(var(--accent-pink-rgb), 0.12) !important;
+    color: var(--accent-pink) !important;
+    border-color: rgba(var(--accent-pink-rgb), 0.55) !important;
     box-shadow: none !important; /* No shadow/glow when complete/idle */
 }
 
 #deepthink-tab-live.active .icon-slot,
 #deepthink-tab-filesystem.active .icon-slot {
-    color: #ef4444 !important;
+    color: var(--accent-pink) !important;
 }
 
 /* Only show the blinking red dot when deepthink is actively running/processing */
@@ -188,10 +188,10 @@
     display: inline-block;
     width: 6px;
     height: 6px;
-    background-color: #ef4444;
+    background-color: var(--accent-pink);
     border-radius: 50%;
     margin-left: 6px;
-    box-shadow: 0 0 8px #ef4444;
+    box-shadow: 0 0 8px var(--accent-pink);
     animation: live-blinking 1s infinite alternate;
 }
 
@@ -203,7 +203,7 @@
     100% {
         opacity: 1;
         transform: scale(1.1);
-        box-shadow: 0 0 12px #ef4444, 0 0 4px #ef4444;
+        box-shadow: 0 0 12px var(--accent-pink), 0 0 4px var(--accent-pink);
     }
 }
 

@@ -8,7 +8,7 @@
 /* Default to dark theme */
 .shiki {
     color: var(--shiki-dark);
-    background-color: var(--shiki-dark-bg);
+    background-color: var(--card-bg-color);
 }
 
 .shiki span {
@@ -18,7 +18,7 @@
 /* Light mode: switch to light theme colors */
 body.light-mode .shiki {
     color: var(--shiki-light);
-    background-color: var(--shiki-light-bg);
+    background-color: var(--card-bg-color);
 }
 
 body.light-mode .shiki span {
@@ -38,18 +38,8 @@ body.light-mode .shiki span {
     tab-size: 4;
 }
 
-/* Dark mode background */
-.shiki {
-    background-color: #0a0d15;
-}
-
-body.light-mode .shiki {
-    background-color: #f8fafc;
-}
-
 /* When shiki is inside a code-block-container, flatten it */
 .code-block-container .shiki {
-    background: transparent !important;
     padding: 0 !important;
     border-radius: 0 !important;
     margin: 0 !important;
@@ -83,18 +73,10 @@ body.light-mode .shiki {
 }
 
 .shiki::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--border-color);
     border-radius: 3px;
 }
 
-body.light-mode .shiki::-webkit-scrollbar-thumb {
-    background: rgba(0, 0, 0, 0.15);
-}
-
 .shiki::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.25);
-}
-
-body.light-mode .shiki::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 0, 0, 0.25);
+    background: var(--border-hover-color);
 }

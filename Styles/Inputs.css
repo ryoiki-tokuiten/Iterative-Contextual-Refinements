@@ -69,8 +69,8 @@
 select,
 textarea.input-base,
 input.input-base {
-    background-color: rgba(var(--card-bg-base-rgb), 0.4);
-    color: var(--text-color);
+    background-color: var(--input-background);
+    color: var(--input-foreground);
     border: 1px solid var(--border-color);
     padding: var(--space-3) var(--space-4);
     min-height: var(--input-height-md);
@@ -86,10 +86,15 @@ input.input-base {
 
     &:focus {
         outline: none;
-        border-color: var(--accent-purple);
-        background-color: rgba(var(--card-bg-base-rgb), 0.6);
-        box-shadow: 0 0 0 3px rgba(var(--accent-purple-rgb), 0.15), 0 4px 12px rgba(0, 0, 0, 0.05);
+        border-color: var(--theme-accent-clay-interactive);
+        background-color: var(--input-background);
+        box-shadow: 0 0 0 3px rgba(118, 75, 52, 0.15), 0 4px 12px rgba(0, 0, 0, 0.05);
         transform: translateY(-1px);
+    }
+
+    &::placeholder {
+        color: var(--input-placeholder);
+        opacity: 1;
     }
 
     /* Light Mode Input Overrides */
@@ -114,6 +119,17 @@ input.input-base {
     }
 }
 
+input[type="checkbox"],
+input[type="radio"] {
+    accent-color: var(--checkbox-accent);
+    color-scheme: dark;
+}
+
+body.light-mode input[type="checkbox"],
+body.light-mode input[type="radio"] {
+    color-scheme: light;
+}
+
 textarea.input-base {
     min-height: 120px;
     resize: vertical;
@@ -124,7 +140,7 @@ select.input-base {
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23a0a8c8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%2362626b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 1.25rem center;
     padding-right: 2.5rem;

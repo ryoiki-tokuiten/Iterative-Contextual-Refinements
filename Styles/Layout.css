@@ -88,6 +88,7 @@
     scrollbar-color: var(--border-hover-color) transparent;
     position: relative;
     flex: 1;
+    background: var(--tab-track-background);
     gap: var(--gap-xs);
     align-items: center;
     border: none;
@@ -142,18 +143,17 @@
     }
 
     &:hover:not(:disabled):not(.active) {
-        background: rgba(84, 46, 150, 0.28);
+        background: var(--theme-background-tertiary);
         border-color: rgba(var(--border-color-rgb), 0.35);
         color: var(--text-color);
-        box-shadow: 0 0 18px rgba(124, 74, 240, 0.25);
+        box-shadow: none;
     }
 
     &.active {
-        background: rgba(var(--accent-purple-rgb), 0.08);
-        color: var(--accent-purple);
-        border-color: rgba(var(--accent-purple-rgb), 0.3);
-        box-shadow: 0 0 6px rgba(var(--accent-purple-rgb), 0.2),
-            0 0 2px rgba(var(--accent-purple-rgb), 0.3) inset;
+        background: var(--tab-selected-background);
+        color: var(--tab-selected-foreground);
+        border-color: var(--theme-border-primary);
+        box-shadow: none;
         font-weight: var(--font-weight-semibold);
         backdrop-filter: none;
         -webkit-backdrop-filter: none;

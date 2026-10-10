@@ -1,46 +1,121 @@
 :root {
-    /* Core Palette - Professional Clean Theme */
-    --bg-color: #090909;
-    --bg-color-rgb: 9, 9, 9;
-    --card-bg-base-rgb: 9, 9, 9;
+    /* Dark theme palette */
+    --theme-background-primary: #0a0a0a;
+    --theme-background-secondary: #0c0c0c;
+    --theme-background-tertiary: #0f0f0f;
+    --theme-background-overlay: #040405;
 
-    /* Unified Card Style */
-    --card-bg-color: #090909;
-    --card-bg-hover-color: #121212;
+    --theme-border-primary: #2c2c31;
+    --theme-border-secondary: #222226;
+    --theme-border-tertiary: #19191d;
+
+    --theme-foreground-primary: #e4e4e7;
+    --theme-foreground-secondary: #ababb4;
+    --theme-foreground-tertiary: #7c7c85;
+
+    --theme-accent-clay-primary: #8a5a40;
+    --theme-accent-clay-interactive: #764b34;
+    --theme-accent-pictogram: #52525b;
+
+    --theme-brand-heather: #6b436b;
+    --theme-brand-cactus: #436b6b;
+    --theme-brand-peach: #b37a5a;
+    --theme-brand-gray: #71717a;
+    --theme-brand-ink: #000000;
+    --theme-brand-ink-muted: #090909;
+    --theme-brand-heather-inverse: #d4a5d4;
+    --theme-brand-cactus-inverse: #a5d4d4;
+    --theme-brand-peach-inverse: #f0cbb8;
+    --theme-brand-gray-inverse: #e4e4e7;
+
+    --theme-button-primary-bg: #e4e4e7;
+    --theme-button-primary-fg: #090909;
+    --theme-button-primary-font-weight: 500;
+    --theme-button-secondary-bg: #1c1c20;
+    --theme-button-secondary-fg: #e4e4e7;
+    --theme-button-secondary-fg-hover: #ffffff;
+    --theme-button-secondary-border: #2c2c31;
+    --theme-button-secondary-font-weight: 480;
+    --theme-button-tertiary-bg: #0f0f0f;
+    --theme-button-tertiary-fg: #e4e4e7;
+    --theme-button-tertiary-fg-hover: #ffffff;
+    --theme-button-tertiary-border: #19191d;
+    --theme-button-tertiary-font-weight: 480;
+    --theme-button-clay-bg: #764b34;
+    --theme-button-clay-fg: #ffffff;
+    --theme-button-clay-border: #764b34;
+    --theme-button-clay-font-weight: 480;
+
+    --theme-input-bg: #040405;
+    --theme-input-placeholder: #62626b;
+    --theme-input-text: #e4e4e7;
+    --theme-checkbox-bg-unselected: #000000;
+    --theme-checkbox-bg-selected: #e4e4e7;
+    --theme-checkbox-fg-selected: #090909;
+    --theme-switch-fg: #ffffff;
+    --theme-switch-bg: #0f0f0f;
+    --theme-switch-primary-bg-selected: #2a2a30;
+    --theme-switch-secondary-bg-selected: #16a34a;
+    --theme-tab-track-bg: #040405;
+    --theme-tab-selected-bg: #1c1c20;
+    --theme-tab-selected-fg: #e4e4e7;
+
+    /* Existing component variables resolve to the shared theme palette. */
+    --button-primary-bg: var(--theme-button-primary-bg);
+    --button-primary-fg: var(--theme-button-primary-fg);
+    --button-primary-border: var(--theme-button-primary-bg);
+    --button-primary-font-weight: var(--theme-button-primary-font-weight);
+    --button-secondary-bg: var(--theme-button-secondary-bg);
+    --button-secondary-fg: var(--theme-button-secondary-fg);
+    --button-secondary-fg-hover: var(--theme-button-secondary-fg-hover);
+    --button-secondary-border: var(--theme-button-secondary-border);
+    --button-secondary-font-weight: var(--theme-button-secondary-font-weight);
+    --button-disabled-bg: var(--theme-button-tertiary-bg);
+    --input-background: var(--theme-input-bg);
+    --input-placeholder: var(--theme-input-placeholder);
+    --input-foreground: var(--theme-input-text);
+    --checkbox-accent: var(--theme-checkbox-bg-selected);
+    --tab-track-background: var(--theme-tab-track-bg);
+    --tab-selected-background: var(--theme-tab-selected-bg);
+    --tab-selected-foreground: var(--theme-tab-selected-fg);
+
+    --bg-color: var(--theme-background-primary);
+    --bg-color-rgb: 9, 9, 9;
+    --card-bg-base-rgb: 4, 4, 5;
+
+    --card-bg-color: var(--theme-background-secondary);
+    --card-bg-hover-color: var(--theme-background-tertiary);
     --card-blur-effect: none;
 
-    /* Borders & Outlines - Prominent Contrast */
-    --border-color: rgba(255, 255, 255, 0.18);
-    --border-color-rgb: 255, 255, 255;
-    --border-hover-color: rgba(255, 255, 255, 0.28);
+    --border-color: var(--theme-border-primary);
+    /* Tint for existing translucent dividers and outlines on dark surfaces. */
+    --border-color-rgb: 112, 112, 120;
+    --border-hover-color: var(--theme-border-secondary);
     --glow-color: transparent;
     --glow-color-rgb: 0, 0, 0;
 
-    /* Typography */
-    --text-color: #fcfcfc;
-    --text-secondary-color: #a0a0a0;
-    --text-tertiary-color: #707070;
+    --text-color: var(--theme-foreground-primary);
+    --text-secondary-color: var(--theme-foreground-secondary);
+    --text-tertiary-color: var(--theme-foreground-tertiary);
 
-    /* Accents - Exact Palette */
-    --accent-pink: #e02e2a;
-    --accent-pink-rgb: 224, 46, 42;
-    --accent-green: #00a240;
-    --accent-green-rgb: 0, 162, 64;
-    --accent-yellow: #d9a000;
-    --accent-yellow-rgb: 217, 160, 0;
+    /* Semantic status colors remain distinct from the brand palette. */
+    --accent-pink: #ff5a5f;
+    --accent-pink-rgb: 255, 90, 95;
+    --accent-green: #3ddc84;
+    --accent-green-rgb: 61, 220, 132;
+    --accent-yellow: #ffd166;
+    --accent-yellow-rgb: 255, 209, 102;
     --accent-purple: #b06dff;
     --accent-purple-rgb: 176, 109, 255;
-    --accent-blue: #0169cc;
-    --accent-blue-rgb: 1, 105, 204;
-    --accent-silent-blue-rgb: 1, 105, 204;
-    --accent-silent-green: #008f39;
-    --accent-silent-green-rgb: 0, 143, 57;
+    --accent-blue: #4da3ff;
+    --accent-blue-rgb: 77, 163, 255;
+    --accent-silent-blue-rgb: 77, 163, 255;
+    --accent-silent-green: #2dbf72;
+    --accent-silent-green-rgb: 45, 191, 114;
 
-    /* Semantic States & Focus */
-    --focus-ring-color: rgba(1, 105, 204, 0.5);
+    --focus-ring-color: rgba(77, 163, 255, 0.55);
 
-    /* UI Elements */
-    --slider-track-color: rgba(255, 255, 255, 0.15);
+    --slider-track-color: var(--theme-border-secondary);
 
     /* === PROFESSIONAL SPACING SYSTEM === */
     /* 8pt/4pt Grid System - Base spacing unit: 4px (0.25rem) */
@@ -188,12 +263,12 @@
     --radius-full: 9999px;
     /* Fully rounded */
 
-    /* Sub-panel specific aesthetics for internal elements */
-    --sub-panel-bg-color: #090909;
-    --sub-panel-border-color: rgba(255, 255, 255, 0.18);
+    /* Sub-panel surfaces and their quieter dividers. */
+    --sub-panel-bg-color: var(--theme-background-tertiary);
+    --sub-panel-border-color: var(--theme-border-tertiary);
 
     /* Abstracted Panel Surface Architecture */
-    --panel-bg: var(--card-bg-color);
+    --panel-bg: var(--theme-background-overlay);
     --panel-bg-hover: var(--card-bg-hover-color);
     --panel-border: var(--border-color);
     --panel-border-hover: var(--border-hover-color);
@@ -213,6 +288,23 @@ body.light-mode {
     --background-secondary: #f0eee6;
     --border-strong: #141413;
     --border-subtle: #d1cfc5;
+
+    /* Keep the existing light palette for shared controls. */
+    --button-primary-bg: var(--background-primary);
+    --button-primary-fg: var(--foreground-primary);
+    --button-primary-border: var(--border-subtle);
+    --button-secondary-bg: var(--background-secondary);
+    --button-secondary-fg: var(--foreground-secondary);
+    --button-secondary-fg-hover: var(--foreground-primary);
+    --button-secondary-border: var(--border-subtle);
+    --button-disabled-bg: var(--background-secondary);
+    --input-background: var(--background-primary);
+    --input-placeholder: #999999;
+    --input-foreground: var(--foreground-primary);
+    --checkbox-accent: auto;
+    --tab-track-background: var(--background-primary);
+    --tab-selected-background: var(--background-secondary);
+    --tab-selected-foreground: var(--accent-purple);
 
     /* Core Palette */
     --bg-color: var(--background-primary);
@@ -388,7 +480,8 @@ body.light-mode {
 
 html {
     scroll-behavior: smooth;
-    font-size: calc(var(--font-size-base) * var(--app-scale-factor));
+    font-size: var(--font-size-base);
+    zoom: var(--app-scale-factor);
 }
 
 html,
@@ -631,9 +724,6 @@ body.light-mode .scrollbar-compact::-webkit-scrollbar-thumb:hover {
         height: 0;
     }
 
-    &:hover .toggle-slider {
-        border-color: var(--border-hover-color);
-    }
 }
 
 .toggle-slider {
@@ -643,7 +733,7 @@ body.light-mode .scrollbar-compact::-webkit-scrollbar-thumb:hover {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(var(--card-bg-base-rgb), 0.5);
+    background: var(--theme-switch-bg);
     border: 1px solid var(--border-color);
     border-radius: 24px;
     transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
@@ -655,7 +745,7 @@ body.light-mode .scrollbar-compact::-webkit-scrollbar-thumb:hover {
         width: 18px;
         left: 2px;
         bottom: 2px;
-        background: var(--text-secondary-color);
+        background: var(--theme-switch-fg);
         border-radius: 50%;
         transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
 
@@ -666,12 +756,12 @@ body.light-mode .scrollbar-compact::-webkit-scrollbar-thumb:hover {
 
     .toggle-switch input:checked+&,
     .toggle-input:checked+& {
-        background: rgba(var(--accent-purple-rgb), 0.15);
-        border-color: var(--accent-purple);
+        background: var(--theme-switch-primary-bg-selected);
+        border-color: var(--theme-switch-primary-bg-selected);
 
         &:before {
             transform: translateX(20px);
-            background: var(--accent-purple);
+            background: var(--theme-switch-fg);
             box-shadow: 0 0 8px rgba(var(--accent-purple-rgb), 0.5);
         }
 
@@ -684,12 +774,6 @@ body.light-mode .scrollbar-compact::-webkit-scrollbar-thumb:hover {
                 box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
             }
         }
-    }
-
-    .toggle-switch input:checked:hover+&,
-    .toggle-input:checked:hover+& {
-        border-color: var(--accent-purple);
-        box-shadow: 0 0 0 2px rgba(var(--accent-purple-rgb), 0.15);
     }
 
     body.light-mode & {

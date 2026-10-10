@@ -216,11 +216,14 @@ export class ApiCallEstimator {
     }
 
     public updateApiCallDisplay(): void {
-        const { min, max } = this.calculateDeepthinkApiCalls();
-        if (this.countElement) {
+        const countEl = (this.countElement && document.contains(this.countElement))
+            ? this.countElement
+            : document.getElementById('api-call-count');
+        if (countEl) {
+            const { min, max } = this.calculateDeepthinkApiCalls();
             const formattedMin = formatApiCallCount(min);
             const formattedMax = formatApiCallCount(max);
-            this.countElement.textContent = min === max ? `~${formattedMin}` : `~${formattedMin} to ${formattedMax}`;
+            countEl.textContent = min === max ? `~${formattedMin}` : `~${formattedMin} to ${formattedMax}`;
         }
     }
 }

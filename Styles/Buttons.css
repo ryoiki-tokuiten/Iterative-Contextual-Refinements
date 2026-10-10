@@ -9,9 +9,9 @@
 .button,
 .btn,
 button {
-    background-color: rgba(var(--card-bg-base-rgb), 0.7);
-    color: var(--text-secondary-color);
-    border: 1px solid var(--border-color);
+    background-color: var(--button-secondary-bg);
+    color: var(--button-secondary-fg);
+    border: 1px solid var(--button-secondary-border);
     padding: var(--space-3) var(--spacing-component-lg);
     min-height: var(--button-height-md);
     border-radius: var(--border-radius-md);
@@ -24,7 +24,7 @@ button {
         transform var(--transition-speed-fast);
     font-family: var(--font-family);
     font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
+    font-weight: var(--button-secondary-font-weight);
     line-height: var(--line-height-tight);
     display: inline-flex;
     align-items: center;
@@ -34,9 +34,9 @@ button {
     letter-spacing: var(--letter-spacing-tight);
 
     &:hover {
-        background-color: rgba(var(--card-bg-base-rgb), 0.55);
+        background-color: var(--button-secondary-bg);
         box-shadow: 0 0 0 1.5px rgba(var(--glow-color-rgb), 0.15);
-        color: var(--text-color);
+        color: var(--button-secondary-fg-hover);
         border-color: var(--border-hover-color);
         transform: translateY(-1px);
     }
@@ -50,11 +50,11 @@ button {
     &:disabled {
         opacity: 0.4;
         cursor: not-allowed;
-        background-color: rgba(var(--card-bg-base-rgb), 0.15);
+        background-color: var(--button-disabled-bg);
         transform: translateY(0) scale(1);
         box-shadow: none;
         color: var(--text-tertiary-color);
-        border-color: rgba(var(--border-color-rgb), 0.5);
+        border-color: var(--theme-border-tertiary);
     }
 
     &:focus-visible {
@@ -65,10 +65,10 @@ button {
     /* Primary action modifier */
     &.primary-action {
         background-image: none;
-        background-color: rgba(var(--card-bg-base-rgb), 0.8);
-        border: 1px solid var(--border-hover-color);
-        color: var(--text-color);
-        font-weight: var(--font-weight-semibold);
+        background-color: var(--button-primary-bg);
+        border: 1px solid var(--button-primary-border);
+        color: var(--button-primary-fg);
+        font-weight: var(--button-primary-font-weight);
         font-size: var(--font-size-base);
         padding: var(--space-4) var(--spacing-section-md);
         min-height: var(--button-height-lg);
@@ -77,7 +77,8 @@ button {
         letter-spacing: var(--letter-spacing-tight);
 
         &:hover {
-            background-color: rgba(var(--card-bg-base-rgb), 1);
+            background-color: var(--button-primary-bg);
+            color: var(--button-primary-fg);
             border-color: var(--accent-purple);
             box-shadow: 0 0 15px rgba(var(--accent-purple-rgb), 0.2), var(--shadow-lg);
             transform: translateY(-2px);

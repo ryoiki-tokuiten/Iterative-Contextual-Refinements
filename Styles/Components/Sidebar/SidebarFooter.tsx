@@ -1,25 +1,51 @@
 import React, { useEffect, useState } from 'react';
 import { ApplicationMode } from '../../../Core/Types';
 import { App } from '../../../Core/App';
-import { getRoutingManager } from '../../../Routing';
 import { Icon } from '../../../UI/Icons';
+import { getActiveDeepthinkPipeline } from '../../../Deepthink/core/deepthinkCore';
+import { updateControlsState } from '../../../UI/Controls';
 
 interface SidebarFooterProps {
     currentMode: ApplicationMode;
 }
 
-const isDeepthinkSandboxEnabled = (): boolean =>
-    getRoutingManager().getDeepthinkConfigController().isCodeExecutionEnabled();
+const getPipelineStatus = (): string | null => {
+    const pipeline = getActiveDeepthinkPipeline();
+    return pipeline ? pipeline.status : null;
+};
 
 export const SidebarFooter: React.FC<SidebarFooterProps> = ({ currentMode }) => {
-    const [sandboxEnabled, setSandboxEnabled] = useState(isDeepthinkSandboxEnabled);
+    const [pipelineStatus, setPipelineStatus] = useState<string | null>(getPipelineStatus);
 
     useEffect(() => {
-        const handleSandboxToggle = () => setSandboxEnabled(isDeepthinkSandboxEnabled());
+        const handlePipelineUpdate = () => {
+            setPipelineStatus(getPipelineStatus());
+        };
 
-        window.addEventListener('sandboxToggled', handleSandboxToggle);
-        return () => window.removeEventListener('sandboxToggled', handleSandboxToggle);
+        window.addEventListener('deepthinkPipelineUpdated', handlePipelineUpdate);
+        window.addEventListener('deepthinkPipelineStateChanged', handlePipelineUpdate);
+        window.addEventListener('controlsStateUpdated', handlePipelineUpdate);
+        return () => {
+            window.removeEventListener('deepthinkPipelineUpdated', handlePipelineUpdate);
+            window.removeEventListener('deepthinkPipelineStateChanged', handlePipelineUpdate);
+            window.removeEventListener('controlsStateUpdated', handlePipelineUpdate);
+        };
     }, []);
+
+    const isDeepthinkRunning = currentMode === 'deepthink' && (pipelineStatus === 'processing' || pipelineStatus === 'stopping');
+
+    const handleStopClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        const pipeline = getActiveDeepthinkPipeline();
+        if (pipeline) {
+            pipeline.isStopRequested = true;
+            pipeline.status = 'stopped';
+        }
+        setPipelineStatus('stopped');
+        updateControlsState();
+        window.dispatchEvent(new CustomEvent('deepthinkPipelineUpdated'));
+        window.dispatchEvent(new CustomEvent('deepthinkPipelineStateChanged'));
+    };
 
     const handleGenerateClick = (e: React.MouseEvent<HTMLButtonElement>) => {
         e.preventDefault();
@@ -30,36 +56,36 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({ currentMode }) => 
 
     const getButtonText = () => {
         switch (currentMode) {
-            case 'deepthink': return 'Deepthink';
+            case 'deepthink': return 'Start Deepthink';
             case 'contextual': return 'Start Contextual Refinement';
             case 'adaptive-deepthink': return 'Adaptive Deepthink';
-            default: return 'Deepthink';
+            default: return 'Start Deepthink';
         }
     };
 
     return (
         <footer className="sidebar-footer">
-            <div className="api-call-indicator" style={{ display: currentMode === 'deepthink' ? 'flex' : 'none' }}>
-                <div className="api-call-info">
-                    <span className="api-call-count" id="api-call-count">~0</span>
-                    <span className="api-call-label">API Calls</span>
-                </div>
-                <span
-                    className="api-call-sandbox-info"
-                    id="api-call-sandbox-info"
-                    style={{ display: sandboxEnabled ? 'block' : 'none', marginLeft: '4px' }}
+            {isDeepthinkRunning ? (
+                <button
+                    id="stop-button"
+                    className="sidebar-stop-button"
+                    type="button"
+                    onClick={handleStopClick}
+                    title="Stop Deepthink"
                 >
-                    <Icon name="info" />
-                </span>
-            </div>
-            <button
-                id="generate-button"
-                className="button primary-action"
-                type="button"
-                onClick={handleGenerateClick}
-            >
-                <span className="button-text" id="generate-button-text">{getButtonText()}</span>
-            </button>
+                    <Icon name="stop_circle" />
+                    <span>Stop</span>
+                </button>
+            ) : (
+                <button
+                    id="generate-button"
+                    className="button primary-action"
+                    type="button"
+                    onClick={handleGenerateClick}
+                >
+                    <span className="button-text" id="generate-button-text">{getButtonText()}</span>
+                </button>
+            )}
         </footer>
     );
 };

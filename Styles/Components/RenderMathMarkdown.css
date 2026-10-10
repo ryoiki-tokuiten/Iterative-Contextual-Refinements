@@ -10,15 +10,14 @@
     --line-height-loose: 1.6;
     --line-height-heading: 1.4;
 
-    /* Colors - Dark Mode (Default) */
-    --accent-purple: #8a7ff8;
-    --accent-purple-light: #aea5ff;
-    --accent-purple-lighter: #c2bfff;
     --text-primary: #EAEBF5;
 }
 
 /* --- Main Wrapper --- */
 .render-math-markdown {
+    --accent-purple: #8a7ff8;
+    --accent-purple-light: #aea5ff;
+    --accent-purple-lighter: #c2bfff;
     max-width: 100%;
     min-width: 0;
     min-height: 0;
@@ -136,7 +135,7 @@
 /* Level 1 */
 .latex-content-wrapper .token-heading1,
 .latex-content-wrapper h1 {
-    color: var(--accent-purple) !important;
+    color: var(--accent-purple-lighter) !important;
     font-size: 1.6em !important;
     margin-top: var(--space-8, 2rem) !important;
     margin-bottom: var(--space-4, 1rem) !important;
@@ -162,7 +161,7 @@
 /* Level 2 */
 .latex-content-wrapper .token-heading2,
 .latex-content-wrapper h2 {
-    color: #a094fa !important;
+    color: var(--accent-purple-lighter) !important;
     font-size: 1.4em !important;
     margin-top: var(--space-6, 1.5rem) !important;
     margin-bottom: var(--space-3, 0.75rem) !important;
@@ -392,10 +391,10 @@
 .code-block-container {
     margin: 1.5rem 0;
     max-width: 100%;
-    background: rgba(7, 10, 18, 0.96);
-    border: 1px solid rgba(105, 116, 165, 0.18);
+    background: var(--card-bg-color);
+    border: 1px solid var(--border-color);
     border-radius: 18px;
-    box-shadow: 0 18px 42px rgba(2, 6, 23, 0.28);
+    box-shadow: var(--shadow-md);
     overflow: hidden;
     position: relative;
 }
@@ -408,14 +407,14 @@
     padding: 0.8rem 1rem;
     background: transparent;
     min-height: 0;
-    border-bottom: 1px solid rgba(105, 116, 165, 0.14);
+    border-bottom: 1px solid var(--sub-panel-border-color);
     margin-bottom: var(--space-4);
 }
 
 .code-block-title {
     font-size: 0.72rem;
     font-weight: 700;
-    color: rgba(226, 232, 240, 0.72);
+    color: var(--text-secondary-color);
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
@@ -428,8 +427,8 @@
     height: 2rem;
     margin-left: auto;
     background: transparent;
-    border: 1px solid rgba(148, 163, 184, 0.16);
-    color: rgba(226, 232, 240, 0.78);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary-color);
     cursor: pointer;
     padding: 0;
     border-radius: 10px;
@@ -437,26 +436,25 @@
 }
 
 .code-copy-icon:hover {
-    background: rgba(148, 163, 184, 0.08);
-    border-color: rgba(148, 163, 184, 0.22);
-    color: #f8fafc;
+    background: var(--card-bg-hover-color);
+    border-color: var(--border-hover-color);
+    color: var(--text-color);
     transform: translateY(-1px);
 }
 
 .code-copy-icon:focus {
     outline: none !important;
-    box-shadow: 0 0 0 2px rgba(138, 127, 248, 0.28) !important;
+    box-shadow: 0 0 0 2px var(--focus-ring-color) !important;
 }
 
 .code-copy-icon:focus-visible {
     outline: none !important;
-    box-shadow: 0 0 0 2px rgba(138, 127, 248, 0.4) !important;
+    box-shadow: 0 0 0 2px var(--focus-ring-color) !important;
 }
 
 .code-block-content {
     margin: 0 !important;
     padding: 0 !important;
-    background: transparent !important;
     overflow-x: auto;
 }
 
@@ -464,21 +462,14 @@
 .code-block-content > .shiki {
     margin: 0 !important;
     padding: 0 !important;
-    background: transparent !important;
     border: none !important;
     box-shadow: none !important;
     overflow-x: auto;
 }
 
-.code-block-content > .shiki {
-    background-color: transparent !important;
-}
-
 .render-math-markdown .code-block-container .code-block-content > pre.shiki,
 .render-math-markdown .code-block-container .code-block-content > pre.shiki code,
 .render-math-markdown .code-block-container .code-block-content > pre.shiki .line {
-    background: transparent !important;
-    background-color: transparent !important;
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
@@ -495,8 +486,6 @@
 .render-math-markdown .code-block-container .code-block-content .shiki code {
     display: block;
     padding: 0.1rem 1.15rem 1.15rem !important;
-    background: transparent !important;
-    background-color: transparent !important;
     border: none !important;
     border-radius: 0 !important;
     color: inherit !important;
@@ -671,39 +660,6 @@ body.light-mode .latex-content-wrapper td {
     border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-/* Light Mode Code Blocks */
-body.light-mode .code-block-container {
-    background: #f8fafc;
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
-}
-
-body.light-mode .code-block-container .code-block-header {
-    background: transparent !important;
-    border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
-}
-
-body.light-mode .code-block-title,
-body.light-mode .code-copy-icon {
-    color: #475569;
-}
-
-body.light-mode .code-copy-icon {
-    border-color: rgba(15, 23, 42, 0.1);
-}
-
-body.light-mode .code-copy-icon:hover {
-    background: rgba(148, 163, 184, 0.1);
-    border-color: rgba(15, 23, 42, 0.14);
-    color: #0f172a;
-}
-
-body.light-mode .code-block-content > pre,
-body.light-mode .code-block-content > .shiki,
-body.light-mode .code-block-content :where(pre > code, .shiki code) {
-    color: #1e293b !important;
-}
-
 /* --- Light Mode Text Visibility Overrides --- */
 
 body.light-mode .latex-content-wrapper,
@@ -751,7 +707,6 @@ body.light-mode .latex-content-wrapper a::after {
 .render-math-markdown .exec-output-content > pre {
     margin: 0 !important;
     padding: 0.6rem 1.15rem 1.15rem !important;
-    background: transparent !important;
     border: none !important;
     border-radius: 0 !important;
     box-shadow: none !important;
@@ -762,7 +717,6 @@ body.light-mode .latex-content-wrapper a::after {
     display: block;
     margin: 0 !important;
     padding: 0 !important;
-    background: transparent !important;
     border: none !important;
     border-radius: 0 !important;
     font-family: var(--font-family-mono) !important;

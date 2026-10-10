@@ -7,14 +7,10 @@
  * retired execution choices have been removed from the rendered controls.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { getDeepthinkConfigController } from '../../Routing';
-import {
-    buildDeepthinkTokenTrend,
-    calculateDeepthinkTokenEstimate,
-    type DeepthinkTokenEstimate,
-} from '../../Routing/DeepthinkTokenEstimator';
+import { TotalLLMCallsTokenEstimationModal } from './TotalLLMCallsTokenEstimationModal';
 import {
     MAX_HYPOTHESIS_COUNT,
     MAX_STRATEGY_PROXIMITY_LOOPS,
@@ -27,7 +23,6 @@ import { disableSidebarCollapseButton } from '../../UI/LayoutController';
 import '../styles/DeepthinkConfigPanel.css';
 
 type DeepthinkController = ReturnType<typeof getDeepthinkConfigController>;
-type TokenGraphFocus = 'total' | 'input' | 'output';
 
 interface DeepthinkConfigPanelProps {
     strategiesCount: number;
@@ -93,18 +88,6 @@ interface ToggleSwitchProps {
 
 
 
-const TOKEN_SERIES = [
-    { key: 'input-worst', label: 'Input worst', category: 'input', valueOf: (point: DeepthinkTokenEstimate) => point.input.worst },
-    { key: 'input-average', label: 'Input avg', category: 'input', valueOf: (point: DeepthinkTokenEstimate) => point.input.average },
-    { key: 'output-worst', label: 'Output worst', category: 'output', valueOf: (point: DeepthinkTokenEstimate) => point.output.worst },
-    { key: 'output-average', label: 'Output avg', category: 'output', valueOf: (point: DeepthinkTokenEstimate) => point.output.average },
-] as const;
-
-const TOKEN_CHART = {
-    width: 660,
-    height: 240,
-    padding: { top: 20, right: 18, bottom: 40, left: 60 },
-} as const;
 
 const classNames = (...parts: Array<string | false | null | undefined>): string => (
     parts.filter(Boolean).join(' ')
@@ -229,7 +212,7 @@ const StrategyExecutionSection: React.FC<{
                             value={strategiesCount}
                             min={1}
                             max={5}
-                            color="var(--dt-red)"
+                            color="var(--accent-purple)"
                             onChange={onStrategiesChange}
                         />
                     </div>
@@ -242,7 +225,7 @@ const StrategyExecutionSection: React.FC<{
                             value={strategyProximityLoops}
                             min={1}
                             max={MAX_STRATEGY_PROXIMITY_LOOPS}
-                            color="var(--dt-red)"
+                            color="var(--accent-purple)"
                             onChange={onStrategyProximityLoopsChange}
                         />
                     </div>
@@ -259,9 +242,16 @@ const LoopScheduleSection: React.FC<{
     curatedContextEnabled: boolean;
     onIChange: (i: number) => void;
     onJChange: (j: number) => void;
-}> = ({ i, j, k, curatedContextEnabled, onIChange, onJChange }) => {
+    onKChange: (k: number) => void;
+}> = ({ i, j, k, curatedContextEnabled, onIChange, onJChange, onKChange }) => {
     const errorI = i < 5 || i > 20 ? 'Total iterations (i) must be between 5 and 20.' : null;
     const errorJ = j < 3 || j > 8 ? 'Global update interval (j) must be between 3 and 8.' : null;
+
+    const maxK = Math.max(2, Math.min(8, j));
+    const effectiveK = Math.min(k, maxK);
+    const errorK = curatedContextEnabled && (k < 2 || k > j)
+        ? `Heartbeat interval (k) must be between 2 and j (${j}).`
+        : null;
 
     // Calculate update points (multiples of j strictly less than i)
     const updatePoints: number[] = [];
@@ -327,7 +317,7 @@ const LoopScheduleSection: React.FC<{
             </div>
 
             <div className="loop-controls-inputs">
-                <div className="slider-pair-row">
+                <div className={classNames('slider-pair-row', curatedContextEnabled && 'slider-triple-row')}>
                     <div className="input-group-tight">
                         <label htmlFor="dt-i-slider" className="input-label">
                             Total Iterations (i): <span id="dt-i-value">{i}</span>
@@ -357,6 +347,23 @@ const LoopScheduleSection: React.FC<{
                         />
                         {errorJ && <div className="config-error-text">{errorJ}</div>}
                     </div>
+
+                    {curatedContextEnabled && (
+                        <div className="input-group-tight">
+                            <label htmlFor="dt-k-slider" className="input-label">
+                                Heartbeat Interval (k): <span id="dt-k-value">{effectiveK}</span> iterations
+                            </label>
+                            <SliderWithFill
+                                id="dt-k-slider"
+                                value={effectiveK}
+                                min={2}
+                                max={maxK}
+                                color="var(--accent-pink)"
+                                onChange={onKChange}
+                            />
+                            {errorK && <div className="config-error-text">{errorK}</div>}
+                        </div>
+                    )}
                 </div>
             </div>
         </SectionFrame>
@@ -381,38 +388,119 @@ const SandboxEnvironmentPanel: React.FC<{
     </div>
 );
 
+const TotalLLMCallsButton: React.FC<{
+    sandboxEnabled: boolean;
+    onClick: () => void;
+}> = ({ sandboxEnabled, onClick }) => (
+    <button
+        type="button"
+        id="total-llm-calls-token-estimation-button"
+        className={`code-execution-toggle-container total-llm-calls-toggle-btn ${sandboxEnabled ? 'sandbox-enabled' : ''}`}
+        onClick={onClick}
+        title="Total LLM Calls & Token Estimation"
+        aria-label="Total LLM Calls & Token Estimation"
+    >
+        <span className="total-llm-calls-icon-wrapper">
+            <Icon name="chart-no-axes-combined" />
+        </span>
+        <div className="code-execution-toggle-info">
+            <span className="code-execution-toggle-title">Total LLM Calls &amp; Token Estimation</span>
+            <span className="code-execution-toggle-subtitle">
+                {sandboxEnabled ? 'Sandbox active (12x - 36x API call multiplier)' : 'Detailed token and LLM call estimation graph'}
+            </span>
+        </div>
+    </button>
+);
+
+const Figure4Visualization: React.FC<{ hypothesisEnabled: boolean; poolEnabled: boolean }> = ({ hypothesisEnabled, poolEnabled }) => {
+    const T = (x: number, y: number, s: string, a: 'start' | 'middle' | 'end' = 'middle', c: string = 'ts') => (
+        <text className={c} x={x} y={y} textAnchor={a} dominantBaseline="central">{s}</text>
+    );
+
+    const B = (k: 'g' | 't' | 'c' | 'p', x: number, y: number, w: number, h: number, a: string, b?: string, m?: boolean) => {
+        const cx = x + w / 2;
+        const cy = y + h / 2;
+        return (
+            <g className={`vis-box vis-theme-${k}`} key={`box-${x}-${y}`}>
+                <rect x={x} y={y} width={w} height={h} rx={4} />
+                <text className={m ? 'ts m' : 'th'} x={cx} y={b ? cy - 9 : cy} textAnchor="middle" dominantBaseline="central">{a}</text>
+                {b && <text className="ts" x={cx} y={cy + 10} textAnchor="middle" dominantBaseline="central">{b}</text>}
+            </g>
+        );
+    };
+
+    const P = (d: string, k: number = 0) => (
+        <path
+            key={`path-${d}`}
+            d={d}
+            className="vis-path"
+            strokeDasharray={k & 1 ? "4 4" : undefined}
+            markerStart={k & 2 ? "url(#arrow)" : undefined}
+            markerEnd={k & 4 ? undefined : "url(#arrow)"}
+        />
+    );
+
+    const dimHyp = !hypothesisEnabled ? 'vis-dimmed' : '';
+    const dimPool = !poolEnabled ? 'vis-dimmed' : '';
+    const dimBoth = (!hypothesisEnabled && !poolEnabled) ? 'vis-dimmed' : '';
+
+    return (
+        <div className="figure4-container">
+            <svg viewBox="0 50 680 295" className="figure4-visualization" role="img" aria-label="Hypothesis generator architecture">
+                <defs>
+                    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                        <path d="M2 1L8 5L2 9" className="vis-arrow-path" />
+                    </marker>
+                </defs>
+                {/* Hypothesis flow: top row + history block — dimmed when hypothesis off */}
+                <g className={dimHyp}>
+                    {B('t', 30, 60, 140, 52, 'Critique Synthesis')}
+                    {B('t', 190, 60, 160, 52, 'Hypothesis generation', 'with proximity correction')}
+                    {B('t', 378, 60, 126, 52, 'Independent', 'Hypotheses testing')}
+                    {B('g', 530, 60, 110, 52, 'Map', 'to branches')}
+                    {P('M170 86H188')}
+                    {P('M350 86H376')}
+                    {P('M504 86H528')}
+                    {P('M255 112V284', 1)}
+                    {P('M275 284V114', 1)}
+                    {B('p', 125, 286, 430, 48, 'Back & forth proximity history saved', 'and added back to the next hypothesis generation')}
+                </g>
+                {/* Pool card — dimmed when pool off */}
+                <g className={dimPool}>
+                    {B('t', 505, 180, 135, 52, 'Add Noisy Pool', 'In Each Branch')}
+                </g>
+                {/* Shared infrastructure — dimmed only when both off */}
+                <g className={dimBoth}>
+                    {P('M585 112V178')}
+                    {B('g', 290, 180, 180, 52, 'Branch context', 'mapped packet + pool')}
+                    {B('g', 40, 180, 200, 52, 'Next correction agents', 'read the branch context')}
+                    {P('M505 206H472')}
+                    {P('M290 206H242')}
+                </g>
+            </svg>
+        </div>
+    );
+};
+
 const CuratedContextSection: React.FC<{
     hypothesisEnabled: boolean;
     solutionPoolEnabled: boolean;
     hypothesisCount: number;
     hypothesisProximityLoops: number;
-    k: number;
-    j: number;
     onHypothesisToggle: (enabled: boolean) => void;
     onSolutionPoolToggle: (disabled: boolean) => void;
     onHypothesisChange: (count: number) => void;
     onHypothesisProximityLoopsChange: (count: number) => void;
-    onKChange: (k: number) => void;
 }> = ({
     hypothesisEnabled,
     solutionPoolEnabled,
     hypothesisCount,
     hypothesisProximityLoops,
-    k,
-    j,
     onHypothesisToggle,
     onSolutionPoolToggle,
     onHypothesisChange,
     onHypothesisProximityLoopsChange,
-    onKChange,
 }) => {
-        const isCuratedContextEnabled = hypothesisEnabled || solutionPoolEnabled;
-        const maxK = Math.max(2, Math.min(8, j));
-        const effectiveK = Math.min(k, maxK);
-        const errorK = isCuratedContextEnabled && (k < 2 || k > j)
-            ? `Heartbeat interval (k) must be between 2 and j (${j}).`
-            : null;
-
         const toggleHypotheses = (enabled: boolean) => {
             onHypothesisToggle(enabled);
             if (!enabled) onHypothesisChange(0);
@@ -423,31 +511,11 @@ const CuratedContextSection: React.FC<{
                 <div className="window-header">
                     <div className="window-left dt-title-blue">
                         <Icon name="refresh" />
-                        <div className="window-title">Customize How Often Curated Context Is Refreshed</div>
+                        <div className="window-title">Customize Curated Context</div>
                     </div>
                 </div>
 
                 <div className="window-content" id="dt-information-packet-content">
-                    {/* 1. Heartbeat Interval (k) slider at the VERY TOP (only when curated context is enabled) */}
-                    {isCuratedContextEnabled && (
-                        <div className="k-interval-control">
-                            <div className="input-group-tight">
-                                <label htmlFor="dt-k-slider" className="input-label">
-                                    Heartbeat Interval (k): <span id="dt-k-value">{effectiveK}</span> iterations
-                                </label>
-                                <SliderWithFill
-                                    id="dt-k-slider"
-                                    value={effectiveK}
-                                    min={2}
-                                    max={maxK}
-                                    color="var(--accent-blue)"
-                                    onChange={onKChange}
-                                />
-                                {errorK && <div className="config-error-text">{errorK}</div>}
-                            </div>
-                        </div>
-                    )}
-
                     {/* 2. Hypothesis Generation sub-section (Toggle + in-sync Visual + in-sync Sliders) */}
                     <div className={classNames('curated-subfeature-card', !hypothesisEnabled && 'collapsed')}>
                         <div className="curated-subfeature-header">
@@ -511,265 +579,14 @@ const CuratedContextSection: React.FC<{
                         </div>
 
                     </div>
-                </div>
-            </div>
-        );
-    };
 
-const formatTokenCount = (value: number): string => {
-    const safeValue = Math.max(0, Number.isFinite(value) ? value : 0);
-    if (safeValue >= 1000000) {
-        const millions = safeValue / 1000000;
-        return String(millions >= 10 ? millions.toFixed(1) : millions.toFixed(2)) + 'M';
-    }
-    if (safeValue >= 1000) {
-        const thousands = safeValue / 1000;
-        return String(thousands >= 10 ? thousands.toFixed(0) : thousands.toFixed(1)) + 'K';
-    }
-    return String(Math.round(safeValue));
-};
-
-const formatTokenRange = (rangeValue: { average: number; worst: number }): string => (
-    formatTokenCount(rangeValue.average) + ' - ' + formatTokenCount(rangeValue.worst)
-);
-
-const pathForPoints = (points: Array<{ x: number; y: number }>): string => (
-    points.map((point, index) => (index === 0 ? 'M' : 'L') + ' ' + point.x.toFixed(2) + ' ' + point.y.toFixed(2)).join(' ')
-);
-
-const TokenVolumeGraph: React.FC<{
-    strategiesCount: number;
-    strategyProximityLoops?: number;
-    hypothesisCount: number;
-    hypothesisProximityLoops?: number;
-    i: number;
-    j?: number;
-    k?: number;
-    isolateBranches: boolean;
-    disableSolutionPool: boolean;
-    codeExecutionEnabled?: boolean;
-}> = ({
-    strategiesCount,
-    strategyProximityLoops,
-    hypothesisCount,
-    hypothesisProximityLoops,
-    i,
-    j,
-    k,
-    isolateBranches,
-    disableSolutionPool,
-    codeExecutionEnabled,
-}) => {
-        const [focus, setFocus] = React.useState<TokenGraphFocus>('total');
-        const [hoverDepth, setHoverDepth] = React.useState<number | null>(null);
-        const safeDepth = Math.max(1, Math.round(i || 1));
-        const trend = React.useMemo(() => buildDeepthinkTokenTrend({
-            strategiesCount,
-            strategyProximityLoops,
-            hypothesisCount,
-            hypothesisProximityLoops,
-            j,
-            k,
-            isolateBranches,
-            disableSolutionPool,
-            codeExecutionEnabled,
-            maxDepth: safeDepth,
-        }), [strategiesCount, strategyProximityLoops, hypothesisCount, hypothesisProximityLoops, j, k, isolateBranches, disableSolutionPool, codeExecutionEnabled, safeDepth]);
-        const selected = React.useMemo(() => calculateDeepthinkTokenEstimate({
-            strategiesCount,
-            strategyProximityLoops,
-            hypothesisCount,
-            hypothesisProximityLoops,
-            deepthinkDepth: safeDepth,
-            i: safeDepth,
-            j,
-            k,
-            isolateBranches,
-            disableSolutionPool,
-            codeExecutionEnabled,
-        }), [strategiesCount, strategyProximityLoops, hypothesisCount, hypothesisProximityLoops, j, k, isolateBranches, disableSolutionPool, codeExecutionEnabled, safeDepth]);
-
-        const [chartSize, setChartSize] = React.useState<{ width: number; height: number }>({ width: TOKEN_CHART.width, height: TOKEN_CHART.height });
-        const shellRef = React.useRef<HTMLDivElement>(null);
-
-        React.useEffect(() => {
-            if (!shellRef.current) return;
-            const observer = new ResizeObserver(entries => {
-                if (entries[0]) {
-                    const { width, height } = entries[0].contentRect;
-                    if (width > 0 && height > 0) {
-                        setChartSize({ width, height });
-                    }
-                }
-            });
-            observer.observe(shellRef.current);
-            return () => observer.disconnect();
-        }, []);
-
-        const { width, height } = chartSize;
-        const padding = TOKEN_CHART.padding;
-        const plotWidth = width - padding.left - padding.right;
-        const plotHeight = height - padding.top - padding.bottom;
-        const maxDepth = Math.max(1, trend.at(-1)?.depth ?? selected.depth);
-        const selectedDepth = clamp(selected.depth, 1, maxDepth);
-        const selectedX = maxDepth === 1
-            ? padding.left + plotWidth / 2
-            : padding.left + ((selectedDepth - 1) / (maxDepth - 1)) * plotWidth;
-        const visibleSeries = focus === 'total' ? TOKEN_SERIES : TOKEN_SERIES.filter(item => item.category === focus);
-        const allValues = visibleSeries.flatMap(item => trend.map(point => item.valueOf(point))).filter(value => value > 0);
-        const maxValue = Math.max(...allValues, 1) * 1.1;
-        const minPositive = allValues.length ? Math.max(1, Math.min(...allValues)) : 1;
-        const minValue = Math.max(1, minPositive * 0.72);
-        const xForDepth = (depth: number): number => (
-            maxDepth === 1 ? padding.left + plotWidth / 2 : padding.left + ((depth - 1) / (maxDepth - 1)) * plotWidth
-        );
-        const yForValue = (value: number): number => {
-            const logMin = Math.log10(minValue);
-            const logMax = Math.log10(maxValue);
-            const normalizedValue = (Math.log10(Math.max(value, minValue)) - logMin) / (logMax - logMin || 1);
-            return padding.top + plotHeight - normalizedValue * plotHeight;
-        };
-        const pathForSeries = (valueOf: (point: DeepthinkTokenEstimate) => number): string => (
-            pathForPoints(trend.map(point => ({ x: xForDepth(point.depth), y: yForValue(valueOf(point)) })))
-        );
-        const areaPathForFocus = (category: 'input' | 'output'): string => {
-            const high = category === 'input'
-                ? (point: DeepthinkTokenEstimate) => point.input.worst
-                : (point: DeepthinkTokenEstimate) => point.output.worst;
-            const low = category === 'input'
-                ? (point: DeepthinkTokenEstimate) => point.input.average
-                : (point: DeepthinkTokenEstimate) => point.output.average;
-            const upper = trend.map(point => ({ x: xForDepth(point.depth), y: yForValue(high(point)) }));
-            const lower = [...trend].reverse().map(point => ({ x: xForDepth(point.depth), y: yForValue(low(point)) }));
-            return pathForPoints(upper) + ' ' + lower.map(point => 'L ' + point.x.toFixed(2) + ' ' + point.y.toFixed(2)).join(' ') + ' Z';
-        };
-        const yTicks = [minValue, Math.sqrt(minValue * maxValue), maxValue];
-        const xTicks = maxDepth <= 4 ? range(maxDepth, index => index + 1) : Array.from(new Set([1, Math.ceil(maxDepth / 2), maxDepth]));
-        const hovered = hoverDepth == null ? null : trend.find(point => point.depth === hoverDepth) ?? null;
-        const hoveredX = hovered ? xForDepth(hovered.depth) : 0;
-        const hoverValues = hovered ? visibleSeries.map(item => item.valueOf(hovered)) : [];
-        const hoveredY = hovered && hoverValues.length ? yForValue(Math.max(...hoverValues)) : padding.top;
-        const tooltipWidth = focus === 'total' ? 198 : 168;
-        const tooltipHeight = 30 + visibleSeries.length * 17;
-        const tooltipX = hovered ? clamp(hoveredX + 12, padding.left, width - padding.right - tooltipWidth) : 0;
-        const tooltipY = hovered ? clamp(hoveredY - 12, padding.top + 4, padding.top + plotHeight - tooltipHeight - 4) : 0;
-
-        const setGraphFocus = (nextFocus: TokenGraphFocus) => {
-            setFocus(current => current === nextFocus && nextFocus !== 'total' ? 'total' : nextFocus);
-            setHoverDepth(null);
-        };
-
-        const handlePointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
-            const rect = event.currentTarget.getBoundingClientRect();
-            if (rect.width <= 0) return;
-            const svgX = ((event.clientX - rect.left) / rect.width) * width;
-            const rawDepth = maxDepth === 1 ? 1 : 1 + ((svgX - padding.left) / plotWidth) * (maxDepth - 1);
-            setHoverDepth(clamp(Math.round(rawDepth), 1, maxDepth));
-        };
-
-        return (
-            <div className={'token-volume-estimator focus-' + focus}>
-                <div className="token-estimator-layout">
-                    <div className="token-chart-column">
-                        <div className="token-chart-shell" ref={shellRef}>
-                            <svg
-                                className="token-chart-svg"
-                                viewBox={'0 0 ' + String(width) + ' ' + String(height)}
-                                role="img"
-                                aria-label={'Estimated token volume through iteration ' + String(selectedDepth)}
-                                onPointerMove={handlePointerMove}
-                                onPointerLeave={() => setHoverDepth(null)}
-                            >
-                                <rect className="token-chart-backdrop" x="0" y="0" width={width} height={height} rx="8" />
-                                {yTicks.map((tick, index) => {
-                                    const y = yForValue(tick);
-                                    return (
-                                        <g key={'y-' + String(index)}>
-                                            <line className="token-grid-line" x1={padding.left} y1={y} x2={width - padding.right} y2={y} />
-                                            <text className="token-axis-label token-y-label" x={padding.left - 8} y={y + 4} textAnchor="end">{formatTokenCount(tick)}</text>
-                                        </g>
-                                    );
-                                })}
-                                {xTicks.map(tick => {
-                                    const x = xForDepth(tick);
-                                    return (
-                                        <g key={'x-' + String(tick)}>
-                                            <line className="token-x-tick" x1={x} y1={padding.top + plotHeight} x2={x} y2={padding.top + plotHeight + 5} />
-                                            <text className="token-axis-label" x={x} y={height - 12} textAnchor="middle">{tick}</text>
-                                        </g>
-                                    );
-                                })}
-                                <text className="token-axis-caption" x={padding.left + plotWidth / 2} y={height - 2} textAnchor="middle">Iterations (i)</text>
-                                <text className="token-axis-caption token-y-axis-caption" x={-(padding.top + plotHeight / 2)} y="14" textAnchor="middle" transform="rotate(-90)">Total tokens</text>
-                                <line className="token-selected-depth-line" x1={selectedX} y1={padding.top} x2={selectedX} y2={padding.top + plotHeight} />
-                                {focus !== 'total' && <path className={'token-area-fill ' + focus} d={areaPathForFocus(focus)} />}
-                                {visibleSeries.map(item => <path key={item.key} className={'token-series-line ' + item.key} d={pathForSeries(item.valueOf)} />)}
-                                {visibleSeries.map(item => (
-                                    <circle key={item.key + '-point'} className={'token-selected-point ' + item.key} cx={selectedX} cy={yForValue(item.valueOf(selected))} r="3.4" />
-                                ))}
-                                {hovered && (
-                                    <g className="token-hover-layer">
-                                        <line className="token-hover-line" x1={hoveredX} y1={padding.top} x2={hoveredX} y2={padding.top + plotHeight} />
-                                        {visibleSeries.map(item => (
-                                            <circle key={item.key + '-hover'} className={'token-hover-point ' + item.key} cx={hoveredX} cy={yForValue(item.valueOf(hovered))} r="4.2" />
-                                        ))}
-                                        <rect className="token-hover-tooltip" x={tooltipX} y={tooltipY} width={tooltipWidth} height={tooltipHeight} rx="7" />
-                                        <text className="token-hover-title" x={tooltipX + 10} y={tooltipY + 18}>Iteration {hovered.depth}</text>
-                                        {visibleSeries.map((item, index) => (
-                                            <text key={item.key + '-hover-label'} className={'token-hover-label ' + item.key} x={tooltipX + 10} y={tooltipY + 38 + index * 17}>
-                                                {item.label}: {formatTokenCount(item.valueOf(hovered))}
-                                            </text>
-                                        ))}
-                                    </g>
-                                )}
-                            </svg>
-                        </div>
-                        <div className="token-chart-legend">
-                            {visibleSeries.map(item => (
-                                <span key={item.key} className="token-legend-item">
-                                    <span className={'token-legend-swatch ' + item.key} />
-                                    {item.label}
-                                </span>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="token-summary-column">
-                        {(['input', 'output', 'total'] as const).map(item => (
-                            <button
-                                key={item}
-                                type="button"
-                                className={classNames('token-summary-item filterable', item, focus === item && 'active')}
-                                aria-pressed={focus === item}
-                                onClick={() => setGraphFocus(item)}
-                            >
-                                <span className="token-summary-label">{item[0].toUpperCase() + item.slice(1)}</span>
-                                <span className="token-summary-value">{formatTokenRange(selected[item])}</span>
-                            </button>
-                        ))}
-                    </div>
+                    <Figure4Visualization hypothesisEnabled={hypothesisEnabled} poolEnabled={solutionPoolEnabled} />
                 </div>
             </div>
         );
     };
 
 
-
-const IsolateBranchesPanel: React.FC<{
-    isolateBranches: boolean;
-    onToggle: (enabled: boolean) => void;
-}> = ({ isolateBranches, onToggle }) => (
-    <div className="code-execution-toggle-container isolate-branches-panel" id="dt-isolate-branches-container">
-        <div className="code-execution-toggle-info">
-            <span className="code-execution-toggle-title">Isolate Branches</span>
-            <span className="code-execution-toggle-subtitle">Prevent cross-branch attention</span>
-        </div>
-        <ToggleSwitch
-            id="dt-isolate-branches-toggle"
-            checked={isolateBranches}
-            onChange={onToggle}
-        />
-    </div>
-);
 
 
 const EventSizeWeightsSection: React.FC<{
@@ -780,7 +597,7 @@ const EventSizeWeightsSection: React.FC<{
 
     return (
         <div className="bsr-presets-integrated" style={{ marginTop: '16px' }}>
-            <div style={{ fontSize: '0.85rem', fontWeight: 600, marginBottom: '12px', color: 'var(--foreground-primary)' }}>
+            <div style={{ fontSize: '0.96rem', fontWeight: 600, marginBottom: '12px', color: 'var(--foreground-primary)' }}>
                 Event Size Weights Presets (w):
             </div>
             <div className="bsr-preset-grid" id="dt-bsr-presets-grid">
@@ -908,101 +725,79 @@ const BsrParametersSection: React.FC<{
 };
 
 const DeepthinkConfigPanelComponent: React.FC<DeepthinkConfigPanelProps> = props => {
+    const [isEstimationModalOpen, setIsEstimationModalOpen] = useState(false);
 
     return (
         <div className="deepthink-config-panel">
-        <div className="deepthink-config-scroll-container">
-            <div className="config-top-row">
-                <StrategyExecutionSection
-                    strategiesCount={props.strategiesCount}
-                    strategyProximityLoops={props.strategyProximityLoops}
-                    onStrategiesChange={props.onStrategiesChange}
-                    onStrategyProximityLoopsChange={props.onStrategyProximityLoopsChange}
-                />
-                <div className="code-execution-toggle-container" id="dt-customize-notes-container" style={{ opacity: 0.5, cursor: 'not-allowed' }}>
-                    <Icon name="edit" />
-                    <div className="code-execution-toggle-info">
-                        <span className="code-execution-toggle-title">Customize Notes</span>
-                        <span className="code-execution-toggle-subtitle">Coming soon</span>
-                    </div>
+            <div className="deepthink-config-scroll-container">
+                <div className="config-top-row">
+                    <StrategyExecutionSection
+                        strategiesCount={props.strategiesCount}
+                        strategyProximityLoops={props.strategyProximityLoops}
+                        onStrategiesChange={props.onStrategiesChange}
+                        onStrategyProximityLoopsChange={props.onStrategyProximityLoopsChange}
+                    />
+                    <SandboxEnvironmentPanel enabled={props.codeExecutionEnabled} onToggle={props.onCodeExecutionToggle} />
+                    <TotalLLMCallsButton
+                        sandboxEnabled={props.codeExecutionEnabled}
+                        onClick={() => setIsEstimationModalOpen(true)}
+                    />
                 </div>
-                <SandboxEnvironmentPanel enabled={props.codeExecutionEnabled} onToggle={props.onCodeExecutionToggle} />
-            </div>
-            <div className="config-middle-row" style={{ marginBottom: '0.75rem' }}>
-                <LoopScheduleSection
-                    i={props.i}
-                    j={props.j}
-                    k={props.k}
-                    curatedContextEnabled={props.hypothesisEnabled || !props.disableSolutionPool}
-                    onIChange={props.onIChange}
-                    onJChange={props.onJChange}
-                />
-            </div>
-            <div className="config-bottom-grid">
-                <div className="config-left-col">
-                    <CuratedContextSection
-                        hypothesisEnabled={props.hypothesisEnabled}
-                        solutionPoolEnabled={!props.disableSolutionPool}
-                        hypothesisCount={props.hypothesisCount}
-                        hypothesisProximityLoops={props.hypothesisProximityLoops}
-                        k={props.k}
+                <div className="config-middle-row" style={{ marginBottom: '1rem' }}>
+                    <LoopScheduleSection
+                        i={props.i}
                         j={props.j}
-                        onHypothesisToggle={props.onHypothesisToggle}
-                        onSolutionPoolToggle={props.onSolutionPoolDisabledToggle}
-                        onHypothesisChange={props.onHypothesisChange}
-                        onHypothesisProximityLoopsChange={props.onHypothesisProximityLoopsChange}
+                        k={props.k}
+                        curatedContextEnabled={props.hypothesisEnabled || !props.disableSolutionPool}
+                        onIChange={props.onIChange}
+                        onJChange={props.onJChange}
                         onKChange={props.onKChange}
                     />
-                    <div className="curated-subfeature-card">
-                        <div className="curated-subfeature-header">
-                            <label htmlFor="dt-isolate-branches-toggle" className="curated-toggle-label">
-                                Isolate Branches
-                            </label>
-                            <ToggleSwitch
-                                id="dt-isolate-branches-toggle"
-                                checked={props.isolateBranches}
-                                onChange={props.onIsolateBranchesToggle}
-                            />
-                        </div>
-                    </div>
                 </div>
-                <div className="config-right-col">
-                    <BsrParametersSection
-                        bsrNoiseLevel={props.bsrNoiseLevel}
-                        bsrPressureFloor={props.bsrPressureFloor}
-                        bsrWeightPreset={props.bsrWeightPreset}
-                        onBsrNoiseLevelChange={props.onBsrNoiseLevelChange}
-                        onBsrPressureFloorChange={props.onBsrPressureFloorChange}
-                        onBsrWeightPresetChange={props.onBsrWeightPresetChange}
-                    />
-                </div>
-            </div>
-            <div className="config-middle-row" style={{ marginTop: '0.75rem' }}>
-                <div className="deepthink-options-container" style={{ flex: 1 }}>
-                    <div className="window-header">
-                        <div className="window-left dt-title-green">
-                            <Icon name="sync" />
-                            <div className="window-title">Approximate Token Usage</div>
-                        </div>
-                    </div>
-                    <div className="window-content deepthink-window-content">
-                        <TokenVolumeGraph
-                            strategiesCount={props.strategiesCount}
-                            strategyProximityLoops={props.strategyProximityLoops}
-                            hypothesisCount={props.hypothesisEnabled ? props.hypothesisCount : 0}
+                <div className="config-bottom-grid">
+                    <div className="config-left-col">
+                        <CuratedContextSection
+                            hypothesisEnabled={props.hypothesisEnabled}
+                            solutionPoolEnabled={!props.disableSolutionPool}
+                            hypothesisCount={props.hypothesisCount}
                             hypothesisProximityLoops={props.hypothesisProximityLoops}
-                            i={props.i}
-                            j={props.j}
-                            k={props.k}
-                            isolateBranches={props.isolateBranches}
-                            disableSolutionPool={props.disableSolutionPool}
-                            codeExecutionEnabled={props.codeExecutionEnabled}
+                            onHypothesisToggle={props.onHypothesisToggle}
+                            onSolutionPoolToggle={props.onSolutionPoolDisabledToggle}
+                            onHypothesisChange={props.onHypothesisChange}
+                            onHypothesisProximityLoopsChange={props.onHypothesisProximityLoopsChange}
+                        />
+                        <div className="curated-subfeature-card">
+                            <div className="curated-subfeature-header">
+                                <label htmlFor="dt-isolate-branches-toggle" className="curated-toggle-label">
+                                    Isolate Branches
+                                </label>
+                                <ToggleSwitch
+                                    id="dt-isolate-branches-toggle"
+                                    checked={props.isolateBranches}
+                                    onChange={props.onIsolateBranchesToggle}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <div className="config-right-col">
+                        <BsrParametersSection
+                            bsrNoiseLevel={props.bsrNoiseLevel}
+                            bsrPressureFloor={props.bsrPressureFloor}
+                            bsrWeightPreset={props.bsrWeightPreset}
+                            onBsrNoiseLevelChange={props.onBsrNoiseLevelChange}
+                            onBsrPressureFloorChange={props.onBsrPressureFloorChange}
+                            onBsrWeightPresetChange={props.onBsrWeightPresetChange}
                         />
                     </div>
                 </div>
+
             </div>
+            {isEstimationModalOpen && (
+                <TotalLLMCallsTokenEstimationModal
+                    onClose={() => setIsEstimationModalOpen(false)}
+                />
+            )}
         </div>
-    </div>
     );
 };
 

@@ -354,30 +354,11 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                 {/* Left Side: Agent Timeline */}
                 <div className="live-sidebar">
                     <div className="timeline-header-panel">
-                        <div className="timeline-header-row-top">
-                            <div className={`status-pill status-${process.status} compact-status`}>
+                        <div className="timeline-header-row-bottom">
+                            <div className={`status-pill status-${process.status === 'stopped' ? 'error' : process.status} compact-status`}>
                                 <span className="pulse-indicator"></span>
                                 <span className="status-text">{process.status.toUpperCase()}</span>
                             </div>
-                            {!hideStopButton && (process.status === 'processing' || process.status === 'stopping') && (
-                                <button
-                                    className="stop-button-pill font-mono"
-                                    onClick={() => {
-                                        process.isStopRequested = true;
-                                        process.status = 'stopped';
-                                        updateControlsState();
-                                        setForceUpdate(prev => prev + 1);
-                                        window.dispatchEvent(new CustomEvent('deepthinkPipelineUpdated'));
-                                    }}
-                                    title="Force Stop Pipeline Execution"
-                                >
-                                    <MIcon name="stop_circle" className="stop-button-pill-icon" />
-                                    <span>STOP</span>
-                                </button>
-                            )}
-                        </div>
-
-                        <div className="timeline-header-row-bottom">
                             <div className="duration-pill font-mono">
                                 <MIcon name="timer" className="duration-pill-icon" />
                                 <span>{timeElapsed}</span>
@@ -388,16 +369,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                     {(process.currentIteration ?? (process.dosOutputs?.length ? Math.max(...process.dosOutputs.map(d => d.iteration), 1) : 1))} / {process.runConfig?.i ?? 5}
                                 </span>
                             </div>
-                            {((process.heartbeatNo ?? process.heartbeats?.length ?? 0) > 0) && (
-                                <div className="stat-item" title="Curated Context Heartbeat Count">
-                                    <span className="stat-label">HB:</span>
-                                    <span className="stat-value font-mono">{process.heartbeatNo ?? process.heartbeats?.length}</span>
-                                </div>
-                            )}
-                            <div className="stat-item" title="Total Invocations Logged">
-                                <span className="stat-label">INV:</span>
-                                <span className="stat-value font-mono">{allTimelineAgents.length}</span>
-                            </div>
+                            <div style={{ flex: 1 }} />
                         </div>
                     </div>
 
