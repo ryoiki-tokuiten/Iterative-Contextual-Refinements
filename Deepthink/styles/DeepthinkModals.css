@@ -84,11 +84,19 @@
     border-bottom: 1px solid var(--border-color);
 }
 
+#solution-modal-overlay .modal-header {
+    padding: 0.85rem 1.5rem;
+}
+
 .modal-title {
     margin: 0;
     font-size: 1.25rem;
     font-weight: 600;
     color: var(--text-color);
+}
+
+#solution-modal-overlay .modal-title {
+    font-size: 1.1rem;
 }
 
 .modal-body {
@@ -432,7 +440,7 @@
    -------------------------------------------------------------------------- */
 
 /* Shared typography for active modal content areas */
-.embedded-modal-content .critique-content,
+.embedded-modal-content .deepthink-response-content,
 .embedded-modal-content .hypothesis-argument-content,
 .agent-analysis {
     font-size: 1rem;
@@ -683,4 +691,3 @@ body.light-mode .sidebar-toggle-button .icon-slot {
 .token-usage-graph-card .token-chart-svg {
     min-height: 0;
 }
-

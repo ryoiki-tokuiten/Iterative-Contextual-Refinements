@@ -177,16 +177,6 @@ const CurrentBestGenerationPanel: React.FC<{ content: string; state: ContextualS
                     )}
                     <button
                         className="action-btn"
-                        onClick={() => window.dispatchEvent(new CustomEvent('openVirtualEnvironment', {
-                            detail: state.id === 'deepthink-branch-history' ? undefined : { repositoryId: state.id },
-                        }))}
-                        title="Open Sandbox Virtual Environment Explorer"
-                    >
-                        <Icon name="terminal" />
-                        Virtual Env
-                    </button>
-                    <button
-                        className="action-btn"
                         onClick={async (e) => {
                             const button = e.currentTarget;
                             const icon = button.querySelector('.icon-slot');

@@ -40,10 +40,23 @@ const DeepthinkEmbeddedPanel: React.FC<{ state: AdaptiveDeepthinkStoreState }> =
     }
 
     const allTabs = getVisibleDeepthinkTabs(pipelineState);
+    const preferredTabId = ['solution-pool', 'critique-history'].includes(currentTab)
+        ? 'hypothesis-explorer'
+        : currentTab;
+    const activeTabId = allTabs.some(tab => tab.id === preferredTabId)
+        ? preferredTabId
+        : (allTabs[0]?.id || 'live');
+    pipelineState.activeTabId = activeTabId;
     const deepthinkContent = createDeepthinkTabContent(pipelineState, {
         onStrategyTabClick: updateAdaptiveDeepthinkStrategyTab,
         hideStopButton: true
     });
+
+    useEffect(() => {
+        if (activeTabId !== currentTab) {
+            updateAdaptiveDeepthinkTab(activeTabId);
+        }
+    }, [activeTabId, currentTab]);
 
     useEffect(() => {
         const sidebar = document.getElementById('controls-sidebar');
@@ -92,7 +105,7 @@ const DeepthinkEmbeddedPanel: React.FC<{ state: AdaptiveDeepthinkStoreState }> =
                         <button
                             key={tab.id}
                             id={`deepthink-tab-${tab.id}`}
-                            className={`tab-button deepthink-mode-tab ${currentTab === tab.id ? 'active' : ''} ${tab.statusClass} ${tab.alignRight ? 'align-right' : ''}`}
+                            className={`tab-button deepthink-mode-tab ${activeTabId === tab.id ? 'active' : ''} ${tab.statusClass} ${tab.alignRight ? 'align-right' : ''}`}
                             onClick={() => {
                                 updateAdaptiveDeepthinkTab(tab.id);
                                 if (tab.id === 'live') {

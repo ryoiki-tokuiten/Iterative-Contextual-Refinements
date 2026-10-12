@@ -716,7 +716,7 @@
 }
 
 /* ==========================================================================
-   DOS Presentation Styles (Critique Tab)
+   DOS Presentation Styles
    ========================================================================== */
 
 .dos-container {
@@ -724,11 +724,11 @@
   background: rgba(var(--card-bg-base-rgb), 0.35);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-md, 8px);
-  padding: 0.5rem 1.15rem 0.85rem;
+  padding: 0 1.15rem 0.85rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  height: 210px;
+  height: 320px;
   box-sizing: border-box;
   overflow: hidden;
 }
@@ -765,8 +765,16 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 0.25rem;
+  min-height: 3.5rem;
+  margin-inline: -1.15rem;
+  padding: 0.75rem 1.15rem;
+  box-sizing: border-box;
+  background-color: var(--sub-panel-bg-color);
   border-bottom: 1px solid rgba(var(--border-color-rgb, 255, 255, 255), 0.08);
+}
+
+body.light-mode .dos-header-bar {
+  background-color: var(--background-secondary) !important;
 }
 
 .dos-title-group {
@@ -776,7 +784,7 @@
 }
 
 .dos-title-icon {
-  font-size: 1.1rem;
+  font-size: 1.25rem;
   color: var(--accent-orange, #f59e0b);
   display: inline-flex;
   align-items: center;
@@ -786,9 +794,22 @@
 
 .dos-pinned-title {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 1.1rem;
   font-weight: 600;
   color: var(--text-color);
+}
+
+/* Keep global/adaptive heading rules from scaling the compact DOS header. */
+.dos-container .dos-header-bar .dos-title-group > .dos-title-icon {
+  flex: 0 0 auto;
+  font-size: 1.25rem !important;
+}
+
+.dos-container .dos-header-bar .dos-title-group > .dos-pinned-title {
+  margin: 0 !important;
+  font-size: 1.1rem !important;
+  line-height: 1.25 !important;
+  font-weight: 600;
 }
 
 .dos-packet-badge {
@@ -817,6 +838,10 @@
 }
 
 @media (max-width: 900px) {
+  .dos-container {
+    height: 380px;
+  }
+
   .dos-pinned-body {
     grid-template-columns: 1fr;
   }
@@ -971,11 +996,12 @@
    ========================================================================== */
 
 .bsr-visual-container {
-  margin-top: 0.85rem;
+  --bsr-panel-radius: 16px;
+  margin-top: 3.5rem;
   padding: 0.85rem;
-  background: rgba(var(--card-bg-base-rgb), 0.35);
+  background: var(--background-secondary, var(--theme-background-secondary));
   border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-md, 8px);
+  border-radius: var(--bsr-panel-radius);
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -998,9 +1024,9 @@
 
 .bsr-side-panel {
   position: relative;
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--sub-panel-bg-color);
   border: 1px solid rgba(var(--border-color-rgb, 255, 255, 255), 0.08);
-  border-radius: var(--border-radius-md, 6px);
+  border-radius: var(--bsr-panel-radius);
   padding: 0.75rem 0.85rem;
   display: flex;
   flex-direction: column;
@@ -1021,6 +1047,17 @@
   color: var(--text-secondary-color);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.bsr-forecast-probability-strip {
+  display: flex;
+  gap: 16px;
+  font-size: 0.8rem;
+  margin-bottom: 8px;
+  padding: 6px 12px;
+  background: var(--sub-panel-bg-color);
+  border-radius: var(--bsr-panel-radius);
+  width: fit-content;
 }
 
 .bsr-update-tabs {
@@ -1165,7 +1202,7 @@
   align-items: center;
   gap: 0.3rem;
   padding: 0.15rem 0.42rem;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--sub-panel-bg-color);
   border: 1px solid var(--border-color);
   border-radius: 4px;
   font-size: 0.685rem;
@@ -1286,9 +1323,9 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--sub-panel-bg-color);
   border: 1px solid rgba(var(--border-color-rgb, 255, 255, 255), 0.08);
-  border-radius: var(--border-radius-md, 6px);
+  border-radius: var(--bsr-panel-radius);
   padding: 0.75rem 0.85rem;
 }
 
@@ -1320,17 +1357,76 @@
 .bsr-svg-graph-container {
   width: 100%;
   overflow: hidden;
-  background: rgba(0, 0, 0, 0.16);
-  border-radius: 6px;
+  background: var(--sub-panel-bg-color);
+  border-radius: var(--bsr-panel-radius);
   border: 1px solid rgba(255, 255, 255, 0.04);
   padding: 0.35rem 0.25rem;
   box-sizing: border-box;
 }
 
+body.light-mode .bsr-visual-container .bsr-side-panel,
+body.light-mode .bsr-visual-container .bsr-window-graph-card,
+body.light-mode .bsr-visual-container .bsr-svg-graph-container {
+  background-color: var(--sub-panel-bg-color) !important;
+}
+
+body.light-mode .bsr-visual-container .bsr-grid-line {
+  stroke: rgba(20, 20, 19, 0.12);
+}
+
+body.light-mode .bsr-visual-container .bsr-grid-line.zero {
+  stroke: rgba(20, 20, 19, 0.4);
+}
+
+body.light-mode .bsr-visual-container .bsr-final-total-line {
+  stroke: rgba(20, 20, 19, 0.5);
+}
+
+body.light-mode .bsr-visual-container .bsr-x-axis-tick {
+  stroke: rgba(20, 20, 19, 0.35);
+}
+
+body.light-mode .bsr-visual-container .bsr-start-point {
+  fill: var(--sub-panel-bg-color);
+}
+
 .bsr-window-svg {
   display: block;
   width: 100%;
-  height: 165px;
+  height: 240px;
+  touch-action: pan-y;
+  cursor: crosshair;
+}
+
+.bsr-hover-line {
+  stroke: rgba(var(--dt-yellow-rgb, 245, 158, 11), 0.65);
+  stroke-width: 1.2;
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+
+.bsr-hover-tooltip {
+  fill: var(--card-bg-color, #1e1e24);
+  stroke: var(--border-color);
+  stroke-width: 1;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.35));
+  pointer-events: none;
+}
+
+.bsr-hover-tooltip-title,
+.bsr-hover-tooltip-value {
+  font-size: 11px;
+  pointer-events: none;
+}
+
+.bsr-hover-tooltip-title {
+  fill: var(--text-color);
+  font-weight: 700;
+}
+
+.bsr-hover-tooltip-value {
+  fill: var(--text-secondary-color);
+  font-weight: 500;
 }
 
 .bsr-change-overlay-row {
@@ -1339,6 +1435,13 @@
   margin-top: 0.25rem;
   width: 100%;
   box-sizing: border-box;
+  overflow: visible;
+  background-color: var(--sub-panel-bg-color);
+  border-radius: var(--bsr-panel-radius);
+}
+
+body.light-mode .bsr-visual-container .bsr-change-overlay-row {
+  background-color: var(--sub-panel-bg-color) !important;
 }
 
 .bsr-change-tag-lead {
@@ -1417,6 +1520,11 @@
   border: 1px dashed rgba(255, 255, 255, 0.1);
 }
 
+body.light-mode .bsr-visual-container .change-chip.no-events {
+  background: rgba(20, 20, 19, 0.03);
+  border-color: rgba(20, 20, 19, 0.2);
+}
+
 .bsr-graph-content-layout {
   display: flex;
   width: 100%;
@@ -1427,11 +1535,12 @@
 .bsr-graph-main-col {
   flex: 0 0 70%;
   min-width: 0;
+  align-self: stretch;
 }
 
 .bsr-graph-scroll-container {
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: visible;
   width: 100%;
 }
 
@@ -1443,30 +1552,38 @@
 .bsr-event-evidence-right-pane {
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  align-self: stretch;
   display: flex;
   flex-direction: column;
 }
 
 .bsr-event-evidence-expand {
   display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
   flex-direction: column;
   gap: 0.35rem;
   padding-left: 0.5rem;
   border-left: 1px solid rgba(255, 255, 255, 0.06);
-  max-height: 200px;
+  max-height: none;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 .bsr-graph-evidence-row {
   display: flex;
+  flex: 0 0 auto;
   align-items: flex-start;
   gap: 0.4rem;
   padding: 0.35rem 0.5rem;
-  border-radius: 4px;
+  border-radius: var(--bsr-panel-radius);
   font-size: 0.72rem;
   line-height: 1.35;
   flex-wrap: wrap;
+  background-color: var(--sub-panel-bg-color);
 }
 
 .evidence-content {
@@ -1475,12 +1592,10 @@
 }
 
 .bsr-graph-evidence-row.progress {
-  background: rgba(74, 222, 128, 0.04);
   border: 1px solid rgba(74, 222, 128, 0.15);
 }
 
 .bsr-graph-evidence-row.regression {
-  background: rgba(248, 113, 113, 0.04);
   border: 1px solid rgba(248, 113, 113, 0.15);
 }
 
@@ -1521,4 +1636,3 @@
   color: var(--text-color);
   flex: 1 1 auto;
 }
-

@@ -17,11 +17,9 @@ import {
     EmbeddedModalContent,
     StrategicSolverTab,
     HypothesisExplorerTab,
-    CritiqueHistoryTab,
     FinalResultTab,
 } from './Deepthink.tsx';
 
-import { SolutionPoolTabContent } from './SolutionPool.tsx';
 import { DeepthinkLiveTab } from './DeepthinkLiveTab.tsx';
 import { DeepthinkFilesystemTab } from './DeepthinkFilesystemTab.tsx';
 
@@ -173,47 +171,6 @@ function unmountModal(): void {
     activeSolutionModalStrategyId = null;
 }
 
-function openCritiqueModal(critiqueId: string): void {
-    const pipeline = getActiveDeepthinkPipeline();
-    if (!pipeline || document.querySelector('.embedded-modal-overlay')) return;
-
-    let content: string | undefined = pipeline.solutionCritiques?.find(candidate => candidate.id === critiqueId)?.critiqueResponse;
-
-    if (!content) {
-        const allBranches = [
-            ...(pipeline.initialStrategies || []),
-            ...((pipeline as any).prunedBranches || [])
-        ];
-        for (const branch of allBranches) {
-            if (critiqueId === `${branch.id}-iter-1` || critiqueId === `critique-${branch.id}-1`) {
-                content = branch.solutionCritiqueDisplay || branch.solutionCritique;
-                break;
-            }
-            const it = branch.iterationHistory?.iterations?.find(
-                (i: any) => `${branch.id}-iter-${i.iterationNumber}` === critiqueId || `critique-${branch.id}-${i.iterationNumber}` === critiqueId
-            );
-            if (it) {
-                content = it.critiqueDisplay || it.critique;
-                break;
-            }
-        }
-    }
-
-    if (!content) return;
-
-    const close = () => unmountModal();
-    mountModal(
-        React.createElement(BaseModal, {
-            title: 'Solution Critique',
-            isEmbedded: true,
-            onClose: close,
-            children: React.createElement(EmbeddedModalContent, {
-                content,
-            })
-        })
-    );
-}
-
 function removeDeepthinkSolutionOverlay(immediate = true): void {
     const overlay = document.getElementById('solution-modal-overlay') as (HTMLElement & {
         cleanup?: () => void;
@@ -239,9 +196,14 @@ function removeDeepthinkSolutionOverlay(immediate = true): void {
     activeSolutionModalStrategyId = null;
 }
 
+function findSolutionModalStrategy(pipeline: DeepthinkPipelineState, strategyId: string): DeepthinkMainStrategyData | undefined {
+    return pipeline.initialStrategies?.find(candidate => candidate.id === strategyId)
+        ?? pipeline.prunedBranches?.find((candidate: DeepthinkMainStrategyData) => candidate.id === strategyId);
+}
+
 async function openDeepthinkSolutionModal(strategyId: string) {
     const pipeline = getActiveDeepthinkPipeline();
-    const strategy = pipeline?.initialStrategies.find(candidate => candidate.id === strategyId);
+    const strategy = pipeline && findSolutionModalStrategy(pipeline, strategyId);
     if (!strategy) return;
 
     removeDeepthinkSolutionOverlay(true);
@@ -322,10 +284,7 @@ async function updateSolutionModalContent(modalBody: HTMLElement, strategyId: st
     const pipeline = getActiveDeepthinkPipeline();
     if (!pipeline) return;
 
-    let strategy = pipeline.initialStrategies?.find(candidate => candidate.id === strategyId);
-    if (!strategy && (pipeline as any).prunedBranches) {
-        strategy = ((pipeline as any).prunedBranches).find((candidate: any) => candidate.id === strategyId);
-    }
+    const strategy = findSolutionModalStrategy(pipeline, strategyId);
     if (!strategy) return;
 
     // Subsequent iterations
@@ -432,7 +391,11 @@ export function renderActiveDeepthinkPipeline() {
     const tabs = getVisibleDeepthinkTabs(deepthinkProcess);
 
     if (!tabs.some(t => t.id === deepthinkProcess.activeTabId) && tabs.length > 0) {
-        deepthinkProcess.activeTabId = tabs[0].id;
+        const wasRemovedPoolOrCritiqueTab = ['solution-pool', 'critique-history'].includes(deepthinkProcess.activeTabId);
+        const contextTab = tabs.find(tab => tab.id === 'hypothesis-explorer');
+        deepthinkProcess.activeTabId = wasRemovedPoolOrCritiqueTab && contextTab
+            ? contextTab.id
+            : tabs[0].id;
     }
 
     // Render Tab buttons (imperative — lightweight DOM, React overhead not needed here)
@@ -481,7 +444,6 @@ type DeepthinkTabContentCallbacks = {
     onStrategyTabClick?: (idx: number) => void;
     onViewSolution?: (id: string) => void;
     onViewArgument?: (id: string) => void;
-    onViewCritique?: (id: string) => void;
     onViewReasoning?: (id: string) => void;
     onViewBsr?: (id: string) => void;
     hideStopButton?: boolean;
@@ -489,26 +451,22 @@ type DeepthinkTabContentCallbacks = {
 
 function getDeepthinkTabVisibility(process: DeepthinkPipelineState): {
     showFilesystem: boolean;
-    showHypothesis: boolean;
-    showSolutionPool: boolean;
+    showCuratedContext: boolean;
 } {
     const config = process.runConfig;
     return {
         showFilesystem: true,
-        showHypothesis: config ? config.hypothesisCount > 0 : true,
-        showSolutionPool: config ? !config.disableSolutionPool : true,
+        showCuratedContext: config ? config.hypothesisCount > 0 || !config.disableSolutionPool : true,
     };
 }
 
 export function getVisibleDeepthinkTabs(process: DeepthinkPipelineState): DeepthinkTabDefinition[] {
-    const { showFilesystem, showHypothesis, showSolutionPool } = getDeepthinkTabVisibility(process);
+    const { showFilesystem, showCuratedContext } = getDeepthinkTabVisibility(process);
     return [
         { id: 'live', label: 'Live', icon: 'terminal', visible: true },
         { id: 'filesystem', label: 'Filesystem', icon: 'folder', visible: showFilesystem },
         { id: 'strategic-solver', label: 'Branches', icon: 'psychology', visible: true },
-        { id: 'hypothesis-explorer', label: 'Hypotheses', icon: 'science', visible: showHypothesis },
-        { id: 'critique-history', label: 'Critique', icon: 'rate_review', visible: true },
-        { id: 'solution-pool', label: 'Structured Noise', icon: 'database', visible: showSolutionPool },
+        { id: 'hypothesis-explorer', label: 'Curated Context', icon: 'science', visible: showCuratedContext },
         { id: 'final-result', label: 'Final Result', icon: 'flag', visible: true, alignRight: true }
     ]
         .filter(tab => tab.visible)
@@ -528,7 +486,6 @@ export function createDeepthinkTabContent(
     });
     const onViewSolution = callbacks.onViewSolution ?? ((id: string) => openDeepthinkSolutionModal(id));
     const onViewArgument = callbacks.onViewArgument ?? ((id: string) => openHypothesisArgumentModal(id));
-    const onViewCritique = callbacks.onViewCritique ?? ((id: string) => openCritiqueModal(id));
 
     switch (process.activeTabId) {
         case 'live':
@@ -549,13 +506,6 @@ export function createDeepthinkTabContent(
             return React.createElement(HypothesisExplorerTab, {
                 process,
                 onViewArgument,
-            });
-        case 'solution-pool':
-            return React.createElement(SolutionPoolTabContent, { process });
-        case 'critique-history':
-            return React.createElement(CritiqueHistoryTab, {
-                process,
-                onViewCritique,
             });
         case 'final-result':
             return React.createElement(FinalResultTab, {
@@ -584,17 +534,11 @@ function getTabStatusClass(tabId: string, process: DeepthinkPipelineState): stri
             if (process.initialStrategies?.some(s => s.status === 'processing')) return 'status-deepthink-processing';
             return '';
         case 'hypothesis-explorer':
-            return process.hypothesisExplorerComplete ? 'status-deepthink-completed' : '';
-        case 'solution-pool':
-            if (process.structuredSolutionPoolStatus === 'completed') return 'status-deepthink-completed';
-            if (process.structuredSolutionPoolStatus === 'processing') return 'status-deepthink-processing';
             if (process.structuredSolutionPoolStatus === 'error') return 'status-deepthink-error';
-            return '';
-        case 'critique-history':
-            if (process.solutionCritiquesStatus === 'completed') return 'status-deepthink-completed';
-            if (process.solutionCritiquesStatus === 'processing' || process.solutionCritiques.some(critique => critique.status === 'processing')) return 'status-deepthink-processing';
-            if (process.solutionCritiquesStatus === 'error' || process.solutionCritiques.some(critique => critique.status === 'error')) return 'status-deepthink-error';
-            return '';
+            if (process.structuredSolutionPoolStatus === 'processing') return 'status-deepthink-processing';
+            if (process.structuredSolutionPoolAgents?.some(pool => pool.status === 'processing')) return 'status-deepthink-processing';
+            if (process.structuredSolutionPoolAgents?.some(pool => pool.status === 'completed')) return 'status-deepthink-completed';
+            return process.hypothesisExplorerComplete ? 'status-deepthink-completed' : '';
         case 'final-result':
             if (process.finalJudgingStatus === 'completed') return 'status-deepthink-completed';
             if (process.finalJudgingStatus === 'error') return 'status-deepthink-error';

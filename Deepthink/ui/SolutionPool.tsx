@@ -2,17 +2,17 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  *
- * SolutionPool — React components for rendering structured noise UI.
+ * Solution pools shown inside Curated Context, with the fullscreen pool viewer.
  * All data management logic lives in SolutionPool.ts.
  */
 
 import React, { useEffect } from 'react';
 import { createRoot, Root } from 'react-dom/client';
-import {
+import type {
     DeepthinkPipelineState,
-    getActiveDeepthinkPipeline,
+    DeepthinkStructuredSolutionPoolAgentData,
 } from '../core/deepthinkCore';
-import {
+import type {
     SolutionPoolParsedSolution,
     SolutionPoolParsedResponse,
 } from '../core/solutionPool';
@@ -102,7 +102,7 @@ const SolutionPoolPanel: React.FC<{
 };
 
 // ═══════════════════════════════════════════════════════════════════════
-// Structured Noise Modal (per-strategy)
+// Pool response content
 // ═══════════════════════════════════════════════════════════════════════
 
 const SolutionPoolModalContent: React.FC<{
@@ -124,7 +124,9 @@ const SolutionPoolModalContent: React.FC<{
                     content: s.content || '',
                     confidence: typeof s.confidence === 'number' ? s.confidence : 0.5,
                 }));
-                return <SolutionCardGrid solutions={solutions} />;
+                return solutions.length > 0
+                    ? <SolutionCardGrid solutions={solutions} />
+                    : <div className="curated-pools-empty-state">No alternatives were included in this pool.</div>;
             }
         } catch { /* fall through */ }
         return <RawTextFallback content={poolAgent.poolResponse} />;
@@ -133,197 +135,95 @@ const SolutionPoolModalContent: React.FC<{
     return <RawTextFallback content="No pool data available." />;
 };
 
-type BranchCard = {
-    key: string;
-    strategyId: string;
-    label: string;
-    strategyText: string;
-    memoryBank?: string;
-};
-
-function buildBranchCards(process: DeepthinkPipelineState): BranchCard[] {
-    return process.initialStrategies.map(strategy => ({
-        key: strategy.id,
-        strategyId: strategy.id,
-        label: strategy.id.startsWith('main') ? `Strategy ${strategy.id.slice(4)}` : strategy.id.toUpperCase(),
-        strategyText: strategy.strategyText,
-        memoryBank: strategy.memoryBank,
-    }));
+function formatStrategyId(id: string): string {
+    if (id.startsWith('main')) return `Strategy ${id.slice(4)}`;
+    return id.replace(/-/g, ' ').replace(/\b\w/g, character => character.toUpperCase());
 }
 
-const MemoryBankStrip: React.FC<{ branches: BranchCard[]; process: DeepthinkPipelineState }> = ({ branches, process }) => {
-    const memoryByBranch = new Map<string, BranchCard & { sourceIteration?: number }>();
+function strategyOrder(id: string): number {
+    const match = id.match(/\d+/);
+    return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER;
+}
 
-    branches.forEach(branch => {
-        if (branch.memoryBank?.trim()) {
-            memoryByBranch.set(branch.strategyId, branch);
-        }
-    });
+function hasPoolData(poolAgent: DeepthinkStructuredSolutionPoolAgentData): boolean {
+    return !!poolAgent.poolResponse?.trim()
+        || !!poolAgent.parsedPoolResponse?.solutions?.length;
+}
 
-    (process.memoryBankAgents || []).forEach(agent => {
-        if (!agent.memoryBank?.trim()) return;
-        const key = agent.mainStrategyId;
-        const existing = memoryByBranch.get(key);
-        memoryByBranch.set(key, {
-            key,
-            strategyId: agent.mainStrategyId,
-            label: agent.mainStrategyId.startsWith('main') ? `Strategy ${agent.mainStrategyId.slice(4)}` : agent.mainStrategyId.toUpperCase(),
-            strategyText: existing?.strategyText || '',
-            memoryBank: agent.memoryBank,
-            sourceIteration: agent.globalIteration,
-        });
-    });
+function poolsForHeartbeat(process: DeepthinkPipelineState, heartbeatNo: number): DeepthinkStructuredSolutionPoolAgentData[] {
+    const pools = new Map<string, DeepthinkStructuredSolutionPoolAgentData>();
+    const heartbeat = process.heartbeats?.find(item => item.heartbeat_no === heartbeatNo);
 
-    const cards = Array.from(memoryByBranch.values());
-    if (cards.length === 0) return null;
+    (heartbeat?.pools || []).forEach(pool => pools.set(pool.mainStrategyId, pool));
+    (process.structuredSolutionPoolAgents || [])
+        .filter(pool => pool.heartbeatNo === heartbeatNo)
+        .forEach(pool => pools.set(pool.mainStrategyId, pool));
+
+    return Array.from(pools.values()).sort((a, b) =>
+        strategyOrder(a.mainStrategyId) - strategyOrder(b.mainStrategyId)
+        || a.mainStrategyId.localeCompare(b.mainStrategyId)
+    );
+}
+
+export const CuratedContextSolutionPools: React.FC<{
+    process: DeepthinkPipelineState;
+    heartbeatNo: number;
+}> = ({ process, heartbeatNo }) => {
+    const poolAgents = poolsForHeartbeat(process, heartbeatNo);
+    const isProcessing = process.status === 'processing';
 
     return (
-        <section className="sp-memory-bank-strip">
-            <div className="sp-memory-bank-strip-header">
-                <Icon name="database" />
-                <div>
-                    <h4>Strategy Memory Banks</h4>
-                    <p>Branch-local distilled learning, separated from structured noises.</p>
+        <section className="curated-context-pools">
+            <div className="curated-pools-header">
+                <h3>Solution Pools</h3>
+            </div>
+            {poolAgents.length === 0 ? (
+                <div className="curated-pools-empty-state">
+                    <Icon name={isProcessing ? 'hourglass_empty' : 'info'} />
+                    <span>{isProcessing ? 'Waiting for this heartbeat’s solution pools…' : 'No solution pools were recorded for this heartbeat.'}</span>
                 </div>
-            </div>
-            <div className="sp-memory-bank-grid">
-                {cards.map(card => (
-                    <div key={card.key} className="sp-memory-bank-card">
-                        <div className="sp-memory-bank-card-header">
-                            <span>{card.label}</span>
-                        </div>
-                        {card.sourceIteration && <div className="sp-memory-bank-meta">Updated at global iteration {card.sourceIteration}</div>}
-                        <RenderMathMarkdown content={card.memoryBank || ''} className="sp-memory-bank-content" />
-                    </div>
-                ))}
-            </div>
+            ) : (
+                <div className="agent-grid curated-pool-agent-grid">
+                    {poolAgents.map(poolAgent => {
+                        const hasPool = hasPoolData(poolAgent) && poolAgent.status !== 'skipped';
+                        const isSkipped = poolAgent.status === 'skipped';
+                        const isError = poolAgent.status === 'error';
+                        const solutionCount = poolAgent.parsedPoolResponse?.solutions?.length;
+
+                        return (
+                            <div key={poolAgent.mainStrategyId} className={`agent-card curated-pool-agent-card${isSkipped ? ' pool-skipped' : !hasPool ? ' pool-pending' : ''}`}>
+                                <div className="agent-header">
+                                    <h4 className="agent-title">{formatStrategyId(poolAgent.mainStrategyId)}</h4>
+                                    {hasPool && solutionCount !== undefined && (
+                                        <span className="sp-count-badge sp-count-badge-in-header">{solutionCount} solutions</span>
+                                    )}
+                                    {isSkipped && <span className="status-badge status-skipped">Skipped</span>}
+                                    {!hasPool && !isSkipped && isError && <span className="status-badge status-error">Error</span>}
+                                </div>
+                                <div className="agent-results">
+                                    {hasPool ? (
+                                        <button
+                                            type="button"
+                                            className="view-argument-button view-pool-button"
+                                            onClick={() => openSolutionPoolHeartbeatModal(heartbeatNo, poolAgents)}
+                                        >
+                                            <Icon name="visibility" /> View Pool
+                                        </button>
+                                    ) : (
+                                        <div className={`pool-empty-state-mini${isSkipped ? ' skipped' : ''}`}>
+                                            <Icon name={isSkipped ? 'block' : isError ? 'error' : 'hourglass_empty'} />
+                                            <span>{isSkipped ? 'No pool for this branch' : isError ? 'Pool generation failed' : 'Processing…'}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
         </section>
     );
 };
-
-// ═══════════════════════════════════════════════════════════════════════
-// Structured Noise Tab Content (iteration grid shown in the main tab)
-// ═══════════════════════════════════════════════════════════════════════
-
-export const SolutionPoolTabContent: React.FC<{ process: DeepthinkPipelineState }> = ({ process }) => {
-    if (process.runConfig?.disableSolutionPool === true) {
-        return (
-            <div className="solution-pool-container">
-                <SolutionPoolHeader processId={process.id} />
-                <div className="solution-pool-disabled-state">
-                    <Icon name="block" className="disabled-icon" />
-                    <h4>Structured Structured Noise Disabled</h4>
-                    <p>This feature is currently disabled for this session.</p>
-                    <p className="disabled-hint">Enable Structured Noise in Deepthink settings to use this feature.</p>
-                </div>
-            </div>
-        );
-    }
-
-    const poolAgents = process.structuredSolutionPoolAgents || [];
-    if (poolAgents.length === 0) {
-        return (
-            <div className="solution-pool-container">
-                <SolutionPoolHeader processId={process.id} />
-                <div className="solution-pool-empty-state">
-                    <Icon name="pending" className="empty-icon" />
-                    <h4>Pool Initializing</h4>
-                    <p>Waiting for initial solutions to be generated...</p>
-                </div>
-            </div>
-        );
-    }
-
-    const branches = buildBranchCards(process);
-
-    // Group pools by heartbeat round (or global iteration if heartbeatNo is absent)
-    const heartbeatRounds = React.useMemo(() => {
-        const rounds = new Map<number, { heartbeatNo: number; globalIteration: number }>();
-        poolAgents.forEach(a => {
-            const hb = a.heartbeatNo || 1;
-            const existing = rounds.get(hb);
-            if (!existing || (a.globalIteration || 0) > existing.globalIteration) {
-                rounds.set(hb, { heartbeatNo: hb, globalIteration: a.globalIteration || 1 });
-            }
-        });
-        return Array.from(rounds.values()).sort((a, b) => a.heartbeatNo - b.heartbeatNo);
-    }, [poolAgents]);
-
-    return (
-        <div className="solution-pool-container">
-            <SolutionPoolHeader processId={process.id} />
-            <div className="solution-pool-content-wrapper">
-                <MemoryBankStrip branches={branches} process={process} />
-                {heartbeatRounds.map(round => (
-                    <div key={round.heartbeatNo} className="pool-iteration-container">
-                        <div className="pool-iteration-header">
-                            <h4 className="pool-iteration-title">Heartbeat {round.heartbeatNo} (Iteration {round.globalIteration})</h4>
-                        </div>
-                        <div className="pool-iteration-content">
-                            <div className="agent-grid">
-                                {branches.map(branch => {
-                                    const poolAgent = poolAgents.find(a =>
-                                        a.mainStrategyId === branch.strategyId &&
-                                        ((a.heartbeatNo && a.heartbeatNo === round.heartbeatNo) || a.globalIteration === round.globalIteration)
-                                    );
-                                    const hasPoolResponse = !!(poolAgent?.poolResponse?.trim());
-                                    const isError = poolAgent?.status === 'error';
-                                    const isSkipped = poolAgent?.status === 'skipped';
-                                    const hasPool = hasPoolResponse && !isSkipped;
-                                    const solutionCount = poolAgent?.parsedPoolResponse?.solutions?.length;
-
-                                    return (
-                                        <div key={branch.key} className={`agent-card${isSkipped ? ' pool-skipped' : !hasPool ? ' pool-pending' : ''}`}>
-                                            <div className="agent-header">
-                                                <h4 className="agent-title">{branch.label}</h4>
-                                                {isSkipped
-                                                    ? <span className="status-badge status-skipped">Skipped</span>
-                                                    : hasPool
-                                                        ? <span className="status-badge status-completed">Available</span>
-                                                        : isError
-                                                            ? <span className="status-badge status-error">Error</span>
-                                                            : <span className="status-badge status-pending">Pending</span>}
-                                            </div>
-                                            <div className="agent-results">
-                                                {hasPool ? (
-                                                    <>
-                                                        {solutionCount && <span className="sp-count-badge">{solutionCount} solutions</span>}
-                                                        <button
-                                                            className="view-argument-button view-pool-button"
-                                                            onClick={() => openSolutionPoolModal(branch.strategyId, round.heartbeatNo, round.globalIteration)}
-                                                        >
-                                                            <Icon name="visibility" /> View Structured Noise
-                                                        </button>
-                                                    </>
-                                                ) : (
-                                                    <div className={`pool-empty-state-mini${isSkipped ? ' skipped' : ''}`}>
-                                                        <Icon name={isSkipped ? 'block' : 'hourglass_empty'} />
-                                                        <span>{isSkipped ? 'No structured noise available' : isError ? 'Failed' : 'Processing...'}</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-const SolutionPoolHeader: React.FC<{ processId: string }> = ({ processId }) => (
-    <div className="solution-pool-header">
-        <div className="solution-pool-header-left">
-            <Icon name="workspaces" className="solution-pool-icon" />
-            <div className="solution-pool-title-group">
-                <h3 className="solution-pool-title">Structured Structured Noise</h3>
-            </div>
-        </div>
-    </div>
-);
 
 // ═══════════════════════════════════════════════════════════════════════
 // Imperative Mount Functions
@@ -361,24 +261,29 @@ function mountSolutionPoolPanel(title: string, children: React.ReactNode): void 
     );
 }
 
-function openSolutionPoolModal(strategyId: string, heartbeatNo: number, iteration?: number): void {
-    const pipeline = getActiveDeepthinkPipeline();
-    if (!pipeline) return;
+function openSolutionPoolHeartbeatModal(
+    heartbeatNo: number,
+    poolAgents: DeepthinkStructuredSolutionPoolAgentData[]
+): void {
+    const availablePools = poolAgents.filter(poolAgent => poolAgent.status !== 'skipped' && hasPoolData(poolAgent));
+    if (availablePools.length === 0) return;
 
-    const poolAgent = pipeline.structuredSolutionPoolAgents?.find(a =>
-        a.mainStrategyId === strategyId &&
-        ((a.heartbeatNo && a.heartbeatNo === heartbeatNo) || (iteration !== undefined && a.globalIteration === iteration))
-    ) || pipeline.structuredSolutionPoolAgents?.filter(a => a.mainStrategyId === strategyId).sort((a, b) => (b.globalIteration || 0) - (a.globalIteration || 0))[0];
-
-    if (poolAgent?.status === 'skipped') {
-        alert('No structured noise available for this strategy.');
-        return;
-    }
-    if (!poolAgent?.poolResponse) {
-        alert('No structured noise available for this strategy.');
-        return;
-    }
-
-    const title = `${strategyId.toUpperCase()} — Heartbeat ${heartbeatNo} • Structured Noise`;
-    mountSolutionPoolPanel(title, <SolutionPoolModalContent poolAgent={poolAgent} />);
+    const title = `Heartbeat ${heartbeatNo} · Solution Pools`;
+    mountSolutionPoolPanel(title, (
+        <div className="sp-heartbeat-pool-list">
+            {availablePools.map(poolAgent => (
+                <section className="sp-heartbeat-pool-section" key={poolAgent.mainStrategyId}>
+                    <div className="sp-heartbeat-pool-header">
+                        <h3>{formatStrategyId(poolAgent.mainStrategyId)}</h3>
+                        {poolAgent.parsedPoolResponse?.solutions && (
+                            <span className="sp-count-badge">
+                                {poolAgent.parsedPoolResponse.solutions.length} solutions
+                            </span>
+                        )}
+                    </div>
+                    <SolutionPoolModalContent poolAgent={poolAgent} />
+                </section>
+            ))}
+        </div>
+    ));
 }

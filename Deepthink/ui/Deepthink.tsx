@@ -17,26 +17,14 @@ import { Icon as MIcon } from '../../UI/Icons';
 import type { BsrGlobalUpdateRecord } from '../core/types';
 import { BranchStateModal } from './BranchStateModal';
 import { DosSynthesisCard } from './DosSynthesisCard';
+import { CuratedContextSolutionPools } from './SolutionPool';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Shared Primitives
 // ═══════════════════════════════════════════════════════════════════════
 
-const critiqueDisplay = (value: {
-    critiqueResponseDisplay?: string;
-    critiqueResponse?: string;
-    solutionCritiqueDisplay?: string;
-    solutionCritique?: string;
-    error?: string;
-}): string =>
-    value.critiqueResponseDisplay || value.critiqueResponse || value.solutionCritiqueDisplay || value.solutionCritique || value.error || '';
-
 const hypothesisTesterDisplay = (hypothesis: DeepthinkHypothesisData): string =>
     hypothesis.testerAttemptDisplay || hypothesis.testerAttempt || '';
-
-const StatusBadge: React.FC<{ status: string; label?: string }> = ({ status, label }) => (
-    <span className={`status-badge status-${status}`}>{label || status}</span>
-);
 
 // ═══════════════════════════════════════════════════════════════════════
 // Show More / Show Less Toggle
@@ -47,7 +35,9 @@ const ExpandableText: React.FC<{
     maxLength: number;
     containerClassName?: string;
     textClassName?: string;
-}> = ({ text, maxLength, containerClassName, textClassName }) => {
+    leftActions?: React.ReactNode;
+    rightActions?: React.ReactNode;
+}> = ({ text, maxLength, containerClassName, textClassName, leftActions, rightActions }) => {
     const [expanded, setExpanded] = useState(false);
     const isLong = text.length > maxLength;
     const display = expanded || !isLong ? text : text.substring(0, maxLength) + '...';
@@ -55,11 +45,17 @@ const ExpandableText: React.FC<{
     return (
         <div className={containerClassName}>
             <MathHTML content={display} className={textClassName} />
-            {isLong && (
+            {(isLong || leftActions || rightActions) && (
                 <div className="expandable-text-actions">
-                    <button className="show-more-btn" onClick={() => setExpanded(e => !e)}>
-                        {expanded ? 'Show Less' : 'Show More'}
-                    </button>
+                    <div className="expandable-text-left-actions">{leftActions}</div>
+                    <div className="expandable-text-right-actions">
+                        {rightActions}
+                        {isLong && (
+                            <button className="show-more-btn" onClick={() => setExpanded(e => !e)}>
+                                {expanded ? 'Show Less' : 'Show More'}
+                            </button>
+                        )}
+                    </div>
                 </div>
             )}
         </div>
@@ -116,7 +112,7 @@ export const BaseModal: React.FC<{
 export const EmbeddedModalContent: React.FC<{
     content: string;
     contentClass?: string;
-}> = ({ content, contentClass = 'critique-content' }) => (
+}> = ({ content, contentClass = 'deepthink-response-content' }) => (
     <div className="deepthink-embedded-response">
         <div>
             <MathHTML content={content} className={contentClass} />
@@ -258,21 +254,11 @@ const BranchVersionSwitcher: React.FC<{
     if (prunedStrategies.length === 0) return null;
     
     return (
-        <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }} className="custom-scrollbar">
+        <div className="strategy-branch-version-switcher custom-scrollbar">
             <button
                 type="button"
-                className={`action-btn ${selectedBranchId === activeStrategy.id ? 'active' : ''}`}
+                className={`action-btn strategy-version-button current${selectedBranchId === activeStrategy.id ? ' active' : ''}`}
                 onClick={() => onSelect(activeStrategy.id)}
-                style={{ 
-                    background: selectedBranchId === activeStrategy.id ? 'var(--accent-color)' : 'rgba(var(--card-bg-base-rgb, 18, 18, 18), 0.5)',
-                    color: selectedBranchId === activeStrategy.id ? '#fff' : 'var(--text-color)',
-                    border: '1px solid rgba(var(--border-color-rgb, 255, 255, 255), 0.1)',
-                    padding: '6px 12px',
-                    borderRadius: 'var(--border-radius-sm)',
-                    fontSize: '0.85rem',
-                    fontWeight: 500,
-                    whiteSpace: 'nowrap'
-                }}
             >
                 Current Active
             </button>
@@ -280,17 +266,8 @@ const BranchVersionSwitcher: React.FC<{
                 <button
                     key={pb.id}
                     type="button"
-                    className={`action-btn ${selectedBranchId === pb.id ? 'active' : ''}`}
+                    className={`action-btn strategy-version-button pruned${selectedBranchId === pb.id ? ' active' : ''}`}
                     onClick={() => onSelect(pb.id)}
-                    style={{ 
-                        background: selectedBranchId === pb.id ? 'var(--accent-red)' : 'rgba(var(--card-bg-base-rgb, 18, 18, 18), 0.5)',
-                        color: selectedBranchId === pb.id ? '#fff' : 'var(--text-secondary-color)',
-                        border: '1px solid rgba(var(--border-color-rgb, 255, 255, 255), 0.1)',
-                        padding: '6px 12px',
-                        borderRadius: 'var(--border-radius-sm)',
-                        fontSize: '0.85rem',
-                        whiteSpace: 'nowrap'
-                    }}
                 >
                     {(() => {
                         if (!pb.prunedAtIteration) return 'Pruned';
@@ -367,18 +344,20 @@ export const StrategicSolverTab: React.FC<{
                                         
                                     return (
                                         <>
-                                            <BranchVersionSwitcher 
-                                                activeStrategy={strategy}
-                                                prunedStrategies={slotPruned}
-                                                selectedBranchId={currentSelectedId}
-                                                onSelect={(id) => setSelectedVersions(prev => ({ ...prev, [index]: id }))}
-                                            />
                                             <StrategyContent
                                                 strategy={displayStrategy}
                                                 process={process}
                                                 escapeHtml={escapeHtml}
                                                 onViewSolution={onViewSolution}
                                                 onViewBsr={handleViewBsr}
+                                                belowTextActions={(
+                                                    <BranchVersionSwitcher
+                                                        activeStrategy={strategy}
+                                                        prunedStrategies={slotPruned}
+                                                        selectedBranchId={currentSelectedId}
+                                                        onSelect={(id) => setSelectedVersions(prev => ({ ...prev, [index]: id }))}
+                                                    />
+                                                )}
                                                 isPruned={currentSelectedId !== activeId}
                                             />
                                         </>
@@ -408,8 +387,9 @@ const StrategyContent: React.FC<{
     escapeHtml: (s: string) => string;
     onViewSolution: (id: string) => void;
     onViewBsr: (id: string) => void;
+    belowTextActions?: React.ReactNode;
     isPruned?: boolean;
-}> = ({ strategy, process, escapeHtml, onViewSolution, onViewBsr, isPruned }) => {
+}> = ({ strategy, process, escapeHtml, onViewSolution, onViewBsr, belowTextActions, isPruned }) => {
     const branchRecords = (process.bsrRecords || []).filter(r => r.branch_id === strategy.id);
     const hasBsr = branchRecords.length > 0;
     
@@ -423,46 +403,59 @@ const StrategyContent: React.FC<{
     
     const activeIndex = Math.min(Math.max(0, historyIndex), history.length - 1);
     const activeText = history[activeIndex].text;
+    const activeVersion = history[activeIndex];
+    const activeVersionBsr = branchRecords.find(record => record.iteration === activeVersion.iteration);
+    const isEvolvedVersion = activeVersionBsr?.computed?.decision === 'EVOLVE';
+    const hasEvolvedHistory = history.some(version =>
+        branchRecords.some(record => record.iteration === version.iteration && record.computed?.decision === 'EVOLVE')
+    );
+    const historyControls = (history.length > 1 || isEvolvedVersion) && (
+        <div className={`strategy-history-controls${hasEvolvedHistory ? ' is-evolved' : ''}`}>
+            <button
+                type="button"
+                className="strategy-history-button"
+                onClick={() => setHistoryIndex(prev => Math.max(0, prev - 1))}
+                disabled={activeIndex === 0}
+                aria-label="View previous strategy version"
+            >
+                <MIcon name="chevron_left" />
+            </button>
+            {isEvolvedVersion ? (
+                <span className="strategy-history-label strategy-history-label-evolved">
+                    <span>EVOLVE · {activeVersionBsr.computed.form === 'rollback' ? 'Rollback' : 'In Place'}</span>
+                    <span className="strategy-history-iteration">Iter {activeVersion.iteration}</span>
+                </span>
+            ) : (
+                <span className="strategy-history-label">
+                    {activeVersion.iteration === history[0].iteration ? `Original Baseline (Global Iter ${history[0].iteration})` : `Evolved (Global Iter ${activeVersion.iteration})`}
+                </span>
+            )}
+            <button
+                type="button"
+                className="strategy-history-button"
+                onClick={() => setHistoryIndex(prev => Math.min(history.length - 1, prev + 1))}
+                disabled={activeIndex === history.length - 1}
+                aria-label="View next strategy version"
+            >
+                <MIcon name="chevron_right" />
+            </button>
+        </div>
+    );
 
     return (
         <div className="strategy-content" style={{ opacity: isPruned ? 0.8 : 1 }}>
-            {history.length > 1 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', fontSize: '0.85rem', color: 'var(--text-secondary-color)' }}>
-                    <button 
-                        type="button"
-                        onClick={() => setHistoryIndex(prev => Math.max(0, prev - 1))}
-                        disabled={activeIndex === 0}
-                        style={{ background: 'transparent', border: 'none', cursor: activeIndex === 0 ? 'default' : 'pointer', color: activeIndex === 0 ? 'rgba(255, 255, 255, 0.1)' : 'var(--text-secondary-color)', display: 'flex', alignItems: 'center', padding: 0 }}
-                    >
-                        <MIcon name="chevron_left" style={{ fontSize: '1.2rem' }} />
-                    </button>
-                    <span style={{ fontWeight: 500 }}>
-                        {history[activeIndex].iteration === history[0].iteration ? `Original Baseline (Global Iter ${history[0].iteration})` : `Evolved (Global Iter ${history[activeIndex].iteration})`}
-                    </span>
-                    <button 
-                        type="button"
-                        onClick={() => setHistoryIndex(prev => Math.min(history.length - 1, prev + 1))}
-                        disabled={activeIndex === history.length - 1}
-                        style={{ background: 'transparent', border: 'none', cursor: activeIndex === history.length - 1 ? 'default' : 'pointer', color: activeIndex === history.length - 1 ? 'rgba(255, 255, 255, 0.1)' : 'var(--text-secondary-color)', display: 'flex', alignItems: 'center', padding: 0 }}
-                    >
-                        <MIcon name="chevron_right" style={{ fontSize: '1.2rem' }} />
-                    </button>
-                </div>
-            )}
             <ExpandableText
                 text={activeText}
                 maxLength={200}
                 containerClassName="strategy-text-container"
                 textClassName="strategy-text"
-            />
-            {hasBsr && branchRecords[branchRecords.length - 1].computed?.decision === 'EVOLVE' && (
-                <div style={{ marginBottom: '1.2rem', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', color: 'var(--accent-yellow)', fontWeight: 600, padding: '0.35rem 0.75rem', background: 'rgba(var(--accent-yellow-rgb, 250, 204, 21), 0.1)', border: '1px solid rgba(var(--accent-yellow-rgb, 250, 204, 21), 0.25)', borderRadius: '100px' }}>
-                    <MIcon name="change_circle" style={{ fontSize: '1.1rem' }} />
-                    EVOLVE · {branchRecords[branchRecords.length - 1].computed?.form === 'rollback' ? 'Rollback' : 'In Place'}
-                </div>
-            )}
-            <div className="strategy-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {strategy.id && (
+                leftActions={(belowTextActions || historyControls) && (
+                    <div className="strategy-text-context-controls">
+                        {belowTextActions}
+                        {historyControls}
+                    </div>
+                )}
+                rightActions={strategy.id && (
                     <button
                         type="button"
                         className="view-solution-button"
@@ -471,7 +464,7 @@ const StrategyContent: React.FC<{
                         <MIcon name="visibility" /> View Solution
                     </button>
                 )}
-            </div>
+            />
             {strategy.error && <div className="error-message">{escapeHtml(strategy.error)}</div>}
 
             {/* Integrated Visual BSR Display (shown only when BSR output is ready for this branch) */}
@@ -496,6 +489,7 @@ const BranchVisualBsr: React.FC<{
     onInspectBsr?: () => void;
 }> = ({ branchId, records, process }) => {
     const [selectedIdx, setSelectedIdx] = useState(records.length - 1);
+    const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
     const activeIdx = Math.min(Math.max(0, selectedIdx), records.length - 1);
     const activeRecord = records[activeIdx];
     if (!activeRecord) return null;
@@ -681,7 +675,7 @@ const BranchVisualBsr: React.FC<{
     }, []);
 
     // Full width responsive SVG coordinate calculations
-    const padLeft = 45;
+    const padLeft = 60;
     const padRight = 75;
     const padTop = 24;
     const padBottom = 26;
@@ -692,7 +686,7 @@ const BranchVisualBsr: React.FC<{
     
     // svgWidth uses cardWidth if it fits, otherwise expands to requiredGraphWidth
     const svgWidth = Math.max(Math.max(500, cardWidth - 28), requiredGraphWidth);
-    const svgHeight = 165;
+    const svgHeight = 240;
 
     const minVal = Math.min(-4, Math.floor(Math.min(...allTotals, finalTotal) / 2) * 2);
     const maxVal = Math.max(6, Math.ceil(Math.max(...allTotals, bestTotal) / 2) * 2);
@@ -705,6 +699,15 @@ const BranchVisualBsr: React.FC<{
 
     const step = (svgWidth - padLeft - padRight) / numSteps;
     const getX = (idx: number) => padLeft + idx * step;
+    const useMultiLineChangeLabels = Math.max(44, step - 6) < 80;
+    const maxEventsAtIteration = points.slice(1).reduce(
+        (maxCount, point) => Math.max(maxCount, point.progEvents.length + point.regrEvents.length),
+        0
+    );
+    const changeOverlayHeight = Math.max(
+        38,
+        maxEventsAtIteration * (useMultiLineChangeLabels ? 32 : 22) + Math.max(0, maxEventsAtIteration - 1) * 2
+    );
 
     // Y-axis tick marks (every 2 units)
     const yTicks: number[] = [];
@@ -719,6 +722,35 @@ const BranchVisualBsr: React.FC<{
     const bestTotalY = getY(bestTotal);
     const finalTotalY = getY(finalTotal);
     const arrowX = svgWidth - padRight + 18;
+    const hoveredIndex = hoveredPointIndex === null
+        ? null
+        : Math.min(lastIdx, Math.max(0, hoveredPointIndex));
+    const hoveredPoint = hoveredIndex === null ? null : points[hoveredIndex];
+    const hoveredX = hoveredIndex === null ? 0 : getX(hoveredIndex);
+    const hoveredY = hoveredPoint ? getY(hoveredPoint.total) : 0;
+    const tooltipWidth = 224;
+    const tooltipHeight = 82;
+    const tooltipX = hoveredPoint
+        ? Math.min(
+            Math.max(padLeft, hoveredX + tooltipWidth + 14 <= svgWidth - padRight ? hoveredX + 14 : hoveredX - tooltipWidth - 14),
+            svgWidth - padRight - tooltipWidth
+        )
+        : 0;
+    const preferredTooltipY = hoveredY - tooltipHeight - 12;
+    const tooltipY = hoveredPoint
+        ? Math.min(
+            Math.max(padTop, preferredTooltipY < padTop ? hoveredY + 12 : preferredTooltipY),
+            svgHeight - padBottom - tooltipHeight
+        )
+        : 0;
+
+    const handleGraphPointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        if (rect.width <= 0) return;
+        const pointerX = ((event.clientX - rect.left) / rect.width) * svgWidth;
+        const nearestIndex = Math.min(lastIdx, Math.max(0, Math.round((pointerX - padLeft) / step)));
+        setHoveredPointIndex(nearestIndex);
+    };
 
     const allChainedEvents = [
         ...chainedRecords.flatMap(r => (r.report?.confirmed_progress || []).map(e => ({ ...e, type: 'progress' as const }))),
@@ -730,7 +762,7 @@ const BranchVisualBsr: React.FC<{
             {/* Top row: 2 side panels side by side */}
             <div className="bsr-side-by-side">
                 {/* Left Panel: Action Pressures (Horizontal bar track with telemetry strip below) */}
-                <div className="bsr-side-panel bsr-action-pressure-panel" style={{ border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '16px' }}>
+                <div className="bsr-side-panel bsr-action-pressure-panel" style={{ border: '1px solid rgba(255,255,255,0.1)', padding: '16px' }}>
                     <div className="bsr-panel-header" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span className="bsr-panel-title">Previous Window (θ = 0.30)</span>
                         <div className="bsr-visual-legend" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
@@ -785,10 +817,10 @@ const BranchVisualBsr: React.FC<{
                     </div>
                 </div>
 
-                {/* Right Panel: Next-Window Forecast (Vertical bars type probabilities) */}
-                <div className="bsr-side-panel bsr-forecast-panel" style={{ border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '16px' }}>
+                {/* Right Panel: Current-Window Forecast (Vertical bars type probabilities) */}
+                <div className="bsr-side-panel bsr-forecast-panel" style={{ border: '1px solid rgba(255,255,255,0.1)', padding: '16px' }}>
                     <div className="bsr-panel-header">
-                        <span className="bsr-panel-title">Next-Window Forecast</span>
+                        <span className="bsr-panel-title">Current-Window Forecast</span>
                         {records.length > 1 && (
                             <div className="bsr-update-tabs">
                                 {records.map((r, idx) => (
@@ -808,7 +840,7 @@ const BranchVisualBsr: React.FC<{
                     {nextPred ? (
                         <>
                             {/* Simplified Probabilities Strip instead of vertical bars */}
-                            <div style={{ display: 'flex', gap: '16px', fontSize: '0.8rem', marginBottom: '8px', padding: '6px 12px', background: 'rgba(0,0,0,0.2)', borderRadius: '4px', width: 'fit-content' }}>
+                            <div className="bsr-forecast-probability-strip">
                                 <span style={{ color: '#10b981', fontWeight: 600 }}>{(pProg * 100).toFixed(0)}% PROGRESS</span>
                                 <span style={{ color: '#f59e0b', fontWeight: 600 }}>{(pStall * 100).toFixed(0)}% STALL</span>
                                 <span style={{ color: '#ef4444', fontWeight: 600 }}>{(pRegr * 100).toFixed(0)}% REGRESS</span>
@@ -868,7 +900,16 @@ const BranchVisualBsr: React.FC<{
                             <div className="bsr-graph-scroll-content" style={{ width: `${svgWidth}px` }}>
                                 {/* SVG Graph stretching full horizontal space */}
                                 <div className="bsr-svg-graph-container">
-                    <svg className="bsr-window-svg" viewBox={`0 0 ${svgWidth} ${svgHeight}`} width="100%" height={svgHeight}>
+                    <svg
+                        className="bsr-window-svg"
+                        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+                        width="100%"
+                        height={svgHeight}
+                        role="img"
+                        aria-label={`Running total graph for ${formatStrategyId(branchId)}`}
+                        onPointerMove={handleGraphPointerMove}
+                        onPointerLeave={() => setHoveredPointIndex(null)}
+                    >
                         {/* Horizontal Gridlines & Y-Axis values */}
                         {yTicks.map(t => {
                             const yPos = getY(t);
@@ -876,6 +917,7 @@ const BranchVisualBsr: React.FC<{
                             return (
                                 <g key={t}>
                                     <line
+                                        className={`bsr-grid-line${isZero ? ' zero' : ''}`}
                                         x1={padLeft - 5}
                                         y1={yPos}
                                         x2={svgWidth - padRight + 28}
@@ -912,6 +954,7 @@ const BranchVisualBsr: React.FC<{
 
                         {/* Final total dashed reference line */}
                         <line
+                            className="bsr-final-total-line"
                             x1={getX(lastIdx)}
                             y1={finalTotalY}
                             x2={arrowX + 10}
@@ -968,6 +1011,7 @@ const BranchVisualBsr: React.FC<{
                                 <g key={i}>
                                     {/* X-axis tick */}
                                     <line
+                                        className="bsr-x-axis-tick"
                                         x1={cx}
                                         y1={getY(minVal)}
                                         x2={cx}
@@ -992,24 +1036,69 @@ const BranchVisualBsr: React.FC<{
 
                                     {/* Point marker */}
                                     {isStart ? (
-                                        <circle cx={cx} cy={cy} r="4" fill="rgba(15, 23, 42, 0.9)" stroke="#6366f1" strokeWidth="2" />
+                                        <circle className="bsr-start-point" cx={cx} cy={cy} r="4" fill="rgba(15, 23, 42, 0.9)" stroke="#6366f1" strokeWidth="2" />
                                     ) : (
                                         <circle cx={cx} cy={cy} r="4" fill="#6366f1" stroke="#818cf8" strokeWidth="1" />
                                     )}
                                 </g>
                             );
                         })}
+
+                        {hoveredPoint && hoveredIndex !== null && (
+                            <g className="bsr-hover-layer" pointerEvents="none">
+                                <line
+                                    className="bsr-hover-line"
+                                    x1={hoveredX}
+                                    y1={padTop}
+                                    x2={hoveredX}
+                                    y2={svgHeight - padBottom}
+                                />
+                                <circle
+                                    cx={hoveredX}
+                                    cy={hoveredY}
+                                    r="6.5"
+                                    fill={hoveredPoint.iterVal === 'start' ? '#312e81' : '#6366f1'}
+                                    stroke="#c7d2fe"
+                                    strokeWidth="2"
+                                />
+                                <rect
+                                    className="bsr-hover-tooltip"
+                                    x={tooltipX}
+                                    y={tooltipY}
+                                    width={tooltipWidth}
+                                    height={tooltipHeight}
+                                    rx="7"
+                                />
+                                <text className="bsr-hover-tooltip-title" x={tooltipX + 10} y={tooltipY + 18}>
+                                    {hoveredPoint.iterVal === 'start' ? 'Window start' : `Iteration ${hoveredPoint.label}`}
+                                </text>
+                                <text className="bsr-hover-tooltip-value" x={tooltipX + 10} y={tooltipY + 37}>
+                                    Running total: {hoveredPoint.total}
+                                </text>
+                                <text className="bsr-hover-tooltip-value" x={tooltipX + 10} y={tooltipY + 54}>
+                                    Change: {hoveredPoint.change > 0 ? '+' : ''}{hoveredPoint.change}
+                                </text>
+                                <text className="bsr-hover-tooltip-value" x={tooltipX + 10} y={tooltipY + 71}>
+                                    Confirmed: {hoveredPoint.progEvents.length} progress · {hoveredPoint.regrEvents.length} regression
+                                </text>
+                            </g>
+                        )}
                     </svg>
                 </div>
 
                 {/* Confirmed events change pills row aligned under columns */}
-                <div className="bsr-change-overlay-row" style={{ width: '100%', position: 'relative', minHeight: '38px' }}>
+                <div className="bsr-change-overlay-row" style={{ width: '100%', position: 'relative', height: `${changeOverlayHeight}px` }}>
                     <span
                         className="bsr-change-tag-lead"
                         style={{
                             position: 'absolute',
                             left: 0,
                             width: `${padLeft}px`,
+                            top: 0,
+                            height: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'flex-end',
                             textAlign: 'right',
                             paddingRight: '10px',
                             boxSizing: 'border-box'
@@ -1022,7 +1111,7 @@ const BranchVisualBsr: React.FC<{
                         const colCenterX = getX(colIdx);
                         const colWidth = Math.max(44, step - 6);
                         const hasEvents = pt.progEvents.length > 0 || pt.regrEvents.length > 0;
-                        const useMultiLine = colWidth < 80;
+                        const useMultiLine = useMultiLineChangeLabels;
 
                         return (
                             <div
@@ -1031,7 +1120,9 @@ const BranchVisualBsr: React.FC<{
                                 style={{
                                     position: 'absolute',
                                     left: `${colCenterX - colWidth / 2}px`,
+                                    top: 0,
                                     width: `${colWidth}px`,
+                                    height: '100%',
                                     display: 'flex',
                                     justifyContent: 'center',
                                     alignItems: 'center'
@@ -1089,9 +1180,12 @@ const BranchVisualBsr: React.FC<{
                         </div>
                     </div>
 
-                {/* Evidence descriptions list below graph */}
+                {/* Match the graph and change-label lane; additional events scroll inside this viewport. */}
                 {allChainedEvents.length > 0 && (
-                    <div className="bsr-event-evidence-right-pane">
+                    <div
+                        className="bsr-event-evidence-right-pane"
+                        style={{ height: `calc(${svgHeight + changeOverlayHeight}px + 0.95rem + 2px)` }}
+                    >
                         <div className="bsr-event-evidence-expand">
                             {allChainedEvents.map((evt, idx) => {
                                 const cleanEvidence = evt.reason
@@ -1123,10 +1217,9 @@ const formatStrategyId = (id: string): string => {
     return id.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 };
 
-const formatStrategyCircleLabel = (id: string): string => {
-    if (id.startsWith('main')) return id.slice(4);
-    const match = id.match(/\d+/);
-    return match?.[0] || id.slice(0, 2).toUpperCase();
+const formatCompactStrategyId = (id: string): string => {
+    const number = id.match(/(\d+)$/)?.[1];
+    return number ? `S${number}` : formatStrategyId(id);
 };
 
 type HypothesisRoundView = {
@@ -1157,6 +1250,10 @@ function buildHypothesisRoundViews(process: DeepthinkPipelineState): HypothesisR
     // 3. Collect from hypotheses
     (process.hypotheses || []).forEach(h => {
         if (h.roundNumber) roundNumberSet.add(h.roundNumber);
+    });
+
+    (process.structuredSolutionPoolAgents || []).forEach(pool => {
+        if (pool.heartbeatNo) roundNumberSet.add(pool.heartbeatNo);
     });
 
     // 4. Collect from heartbeatNo
@@ -1220,7 +1317,7 @@ function buildHypothesisRoundViews(process: DeepthinkPipelineState): HypothesisR
     });
 }
 
-// Hypotheses Tab
+// Curated Context Tab
 export const HypothesisExplorerTab: React.FC<{
     process: DeepthinkPipelineState;
     onViewArgument: (hypothesisId: string) => void;
@@ -1232,25 +1329,15 @@ export const HypothesisExplorerTab: React.FC<{
     }, [roundViews.length]);
     const activeRound = roundViews[Math.min(activeRoundIndex, roundViews.length - 1)] || roundViews[0];
     const activeHypotheses = activeRound?.hypotheses || [];
-
-    if (process.hypothesisGenStatus === 'processing' && !roundViews.some(round => round.hypotheses.length)) return <div className="loading">Generating and testing hypotheses...</div>;
-    if (!roundViews.some(round => round.hypotheses.length))
-        return <div className="status-message">Hypothesis exploration not yet started.</div>;
+    const hypothesesEnabled = process.runConfig?.hypothesisCount !== 0;
+    const poolsEnabled = !process.runConfig?.disableSolutionPool;
+    const contentLayout = hypothesesEnabled && poolsEnabled
+        ? 'has-hypotheses has-pools'
+        : hypothesesEnabled
+            ? 'has-hypotheses'
+            : 'has-pools';
 
     const currentHeartbeatNo = activeRound?.roundNumber ?? (activeRoundIndex + 1);
-
-    // Resolve packet XML content for this heartbeat
-    const resolvedPacket = activeRound?.packet || (activeHypotheses.length > 0 ? (
-        `<Hypothesis-Testing-Packet>\n` +
-        activeHypotheses.map((h, i) =>
-            `  <Hypothesis ${i + 1}>\n` +
-            `    Hypothesis:\n      ${h.hypothesisText || 'None'}\n` +
-            `    Target Branches: ${h.targetBranchIds?.join(', ') || 'All Branches'}\n` +
-            `    Hypothesis Testing:\n      ${h.testerAttempt || (h.testerVerdict ? `Verdict: ${h.testerVerdict}` : 'Pending testing')}\n` +
-            `  </Hypothesis ${i + 1}>`
-        ).join('\n\n') +
-        `\n</Hypothesis-Testing-Packet>`
-    ) : (process.knowledgePacket || 'No information packet recorded for this heartbeat.'));
 
     return (
         <div className="deepthink-hypothesis-explorer">
@@ -1270,304 +1357,83 @@ export const HypothesisExplorerTab: React.FC<{
 
                 <div className="hypothesis-round-content">
                     {/* Synchronized Heartbeat DOS (shown inside each heartbeat) */}
-                    <DosSynthesisCard
-                        process={process}
-                        heartbeatNo={currentHeartbeatNo}
-                    />
-
-                    {activeHypotheses.length === 0 ? (
-                        <div className="status-message">No hypotheses recorded for Heartbeat {currentHeartbeatNo}.</div>
-                    ) : (
-                        <div className="agent-grid hypothesis-agent-grid">
-                            {activeHypotheses.map((h, i) => (
-                                <div key={h.id} className="agent-card">
-                                    <div className="agent-header hypothesis-card-header">
-                                        <h4 className="agent-title">Hypothesis {i + 1}</h4>
-                                        <StatusBadge
-                                            status={h.testerStatus}
-                                            label={h.testerStatus === 'completed' ? 'Completed' : h.testerStatus === 'processing' ? 'Processing' : 'Pending'}
-                                        />
-                                    </div>
-                                    <div className="agent-results">
-                                        <div className="hypothesis-targets">
-                                            <span>Targeting:</span>
-                                            {h.targetBranchIds && h.targetBranchIds.length > 0 ? (
-                                                    h.targetBranchIds.map(id => (
-                                                        <span key={id} className="strategy-target-badge">
-                                                            {formatStrategyId(id)}
-                                                        </span>
-                                                    ))
-                                                ) : (
-                                                    <span className="strategy-target-badge fallback">All Branches</span>
-                                            )}
-                                        </div>
-                                        <ExpandableText
-                                            text={h.hypothesisText || 'No hypothesis text'}
-                                            maxLength={150}
-                                            containerClassName="hypothesis-text-container"
-                                            textClassName="hypothesis-text"
-                                        />
-                                        {hypothesisTesterDisplay(h) && (
-                                            <button
-                                                className="view-argument-button"
-                                                onClick={() => onViewArgument(h.id)}
-                                            >
-                                                <MIcon name="article" /> View The Argument
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                    {hypothesesEnabled && (
+                        <DosSynthesisCard
+                            process={process}
+                            heartbeatNo={currentHeartbeatNo}
+                        />
                     )}
 
-                </div>
-            </div>
-        </div>
-    );
-};
+                    <div className={`curated-context-columns ${contentLayout}`}>
+                        {hypothesesEnabled && (
+                            <section className="curated-context-hypotheses">
+                                <div className="curated-hypotheses-header">
+                                    <h3>Hypotheses</h3>
+                                </div>
 
-
-
-// Critique Tab
-export const CritiqueHistoryTab: React.FC<{
-    process: DeepthinkPipelineState;
-    onViewCritique: (critiqueId: string) => void;
-}> = ({ process, onViewCritique }) => {
-    const activeBranches = process.initialStrategies || [];
-    const prunedBranches = ((process as any).prunedBranches || []) as Array<{
-        id: string;
-        originalId?: string;
-        slotIndex?: number;
-        strategyText: string;
-        prunedAtIteration?: number;
-        reason?: string;
-        solutionCritique?: string;
-        solutionCritiqueDisplay?: string;
-        iterationHistory?: { iterations: any[]; status: string };
-    }>;
-
-    type UnifiedBranch = {
-        id: string;
-        displayName: string;
-        isPruned: boolean;
-        prunedAt?: number;
-        pruneReason?: string;
-        strategyText: string;
-        critiques: Array<{
-            id: string;
-            mainStrategyId: string;
-            globalIteration: number;
-            status: string;
-            critiqueResponse?: string;
-            critiqueResponseDisplay?: string;
-            error?: string;
-        }>;
-    };
-
-    const unifiedBranches: UnifiedBranch[] = [];
-
-    // Active branches
-    activeBranches.forEach((branch) => {
-        const critiques: UnifiedBranch['critiques'] = [];
-        if (branch.solutionCritique || branch.solutionCritiqueDisplay) {
-            critiques.push({
-                id: `${branch.id}-iter-1`,
-                mainStrategyId: branch.id,
-                globalIteration: 1,
-                status: branch.solutionCritiqueStatus || 'completed',
-                critiqueResponse: branch.solutionCritique,
-                critiqueResponseDisplay: branch.solutionCritiqueDisplay || branch.solutionCritique,
-            });
-        }
-        if (branch.iterationHistory?.iterations) {
-            branch.iterationHistory.iterations.forEach((it, index) => {
-                const iterNum = it.iterationNumber === 1 ? (index + 2) : (it.iterationNumber || (index + 2));
-                if (it.critique || it.critiqueDisplay) {
-                    critiques.push({
-                        id: `${branch.id}-iter-${iterNum}`,
-                        mainStrategyId: branch.id,
-                        globalIteration: iterNum,
-                        status: 'completed',
-                        critiqueResponse: it.critique,
-                        critiqueResponseDisplay: it.critiqueDisplay || it.critique,
-                    });
-                }
-            });
-        }
-        if (process.solutionCritiques) {
-            process.solutionCritiques
-                .filter(c => c.mainStrategyId === branch.id)
-                .forEach(c => {
-                    if (!critiques.some(existing => existing.globalIteration === (c.globalIteration || 1))) {
-                        critiques.push({
-                            id: c.id,
-                            mainStrategyId: c.mainStrategyId,
-                            globalIteration: c.globalIteration || 1,
-                            status: c.status || 'completed',
-                            critiqueResponse: c.critiqueResponse,
-                            critiqueResponseDisplay: c.critiqueResponseDisplay || c.critiqueResponse,
-                            error: c.error,
-                        });
-                    }
-                });
-        }
-
-        unifiedBranches.push({
-            id: branch.id,
-            displayName: formatStrategyId(branch.id),
-            isPruned: false,
-            strategyText: branch.strategyText,
-            critiques: critiques.sort((a, b) => a.globalIteration - b.globalIteration),
-        });
-    });
-
-    // Pruned branches
-    prunedBranches.forEach((pruned) => {
-        const critiques: UnifiedBranch['critiques'] = [];
-        if (pruned.solutionCritique || pruned.solutionCritiqueDisplay) {
-            critiques.push({
-                id: `${pruned.id}-iter-1`,
-                mainStrategyId: pruned.id,
-                globalIteration: 1,
-                status: 'completed',
-                critiqueResponse: pruned.solutionCritique,
-                critiqueResponseDisplay: pruned.solutionCritiqueDisplay || pruned.solutionCritique,
-            });
-        }
-        if (pruned.iterationHistory?.iterations) {
-            pruned.iterationHistory.iterations.forEach((it: any, index: number) => {
-                const iterNum = it.iterationNumber === 1 ? (index + 2) : (it.iterationNumber || (index + 2));
-                if (it.critique || it.critiqueDisplay) {
-                    critiques.push({
-                        id: `${pruned.id}-iter-${iterNum}`,
-                        mainStrategyId: pruned.id,
-                        globalIteration: iterNum,
-                        status: 'completed',
-                        critiqueResponse: it.critique,
-                        critiqueResponseDisplay: it.critiqueDisplay || it.critique,
-                    });
-                }
-            });
-        }
-
-        unifiedBranches.push({
-            id: pruned.id,
-            displayName: `${formatStrategyId(pruned.originalId || pruned.id)} (Pruned it.${pruned.prunedAtIteration || '?'})`,
-            isPruned: true,
-            prunedAt: pruned.prunedAtIteration,
-            pruneReason: pruned.reason,
-            strategyText: pruned.strategyText,
-            critiques: critiques.sort((a, b) => a.globalIteration - b.globalIteration),
-        });
-    });
-
-    const [selectedBranchId, setSelectedBranchId] = useState<string>(
-        unifiedBranches[0]?.id || ''
-    );
-
-    useEffect(() => {
-        if (!selectedBranchId || !unifiedBranches.some(b => b.id === selectedBranchId)) {
-            setSelectedBranchId(unifiedBranches[0]?.id || '');
-        }
-    }, [unifiedBranches.length, selectedBranchId]);
-
-    const selectedBranch = unifiedBranches.find(b => b.id === selectedBranchId) || unifiedBranches[0];
-    const totalCritiques = unifiedBranches.reduce((sum, b) => sum + b.critiques.length, 0);
-
-    const isCritiquing = process.status === 'processing' && totalCritiques === 0;
-
-    if (isCritiquing) {
-        return (
-            <div className="deepthink-critique-history">
-                <div className="loading" style={{ margin: '2rem 0', textAlign: 'center' }}>
-                    Critiquing solutions across branches...
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="deepthink-critique-history custom-scrollbar">
-            <div className="critique-history-layout">
-                <div className="critique-history-pills" aria-label="Critique strategy filter">
-                    {unifiedBranches.map(branch => (
-                        <button
-                            key={branch.id}
-                            type="button"
-                            className={`critique-history-pill${branch.id === selectedBranchId ? ' active' : ''}${branch.isPruned ? ' pruned' : ''}`}
-                            title={branch.displayName}
-                            onClick={() => setSelectedBranchId(branch.id)}
-                            style={branch.isPruned ? { borderColor: 'rgba(255, 23, 68, 0.4)', color: '#ff1744' } : undefined}
-                        >
-                            {formatStrategyCircleLabel(branch.id)}
-                            {branch.isPruned && <span style={{ fontSize: '0.6rem', color: '#ff1744', display: 'block', lineHeight: 1 }}>✕</span>}
-                        </button>
-                    ))}
-                </div>
-
-                <section className="critique-history-panel">
-                    <div className="critique-history-panel-header">
-                        <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                <h4>{selectedBranch ? selectedBranch.displayName : 'Selected Strategy'}</h4>
-                                {selectedBranch?.isPruned && (
-                                    <span className="status-badge status-error" style={{ fontSize: '0.65rem' }}>
-                                        PRUNED AT ITERATION {selectedBranch.prunedAt}
-                                    </span>
-                                )}
-                            </div>
-                            <p>{selectedBranch?.strategyText || 'No strategy text available.'}</p>
-                            {selectedBranch?.pruneReason && (
-                                <p style={{ color: '#ff1744', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                                    <strong>Prune Decision Reason:</strong> {selectedBranch.pruneReason}
-                                </p>
-                            )}
-                        </div>
-                        <span className="status-badge status-completed">
-                            {selectedBranch?.critiques.length || 0} critiques
-                        </span>
-                    </div>
-
-                    <div className="critique-history-rail custom-scrollbar">
-                        {(!selectedBranch || selectedBranch.critiques.length === 0) ? (
-                            <div className="status-message" style={{ margin: '1.5rem 0' }}>
-                                No critiques logged for this branch yet. Critiques are captured in Iteration 1 and at every subsequent iteration barrier.
-                            </div>
-                        ) : (
-                            selectedBranch.critiques.map((critique) => {
-                                const label = `Iteration ${critique.globalIteration}`;
-                                return (
-                                    <article key={critique.id} className="critique-history-card">
-                                        <div className="critique-history-card-header">
-                                            <div>
-                                                <h5>{label}</h5>
+                                {activeHypotheses.length === 0 ? (
+                                    <div className="status-message">
+                                        {process.hypothesisGenStatus === 'processing'
+                                            ? `Generating hypotheses for Heartbeat ${currentHeartbeatNo}…`
+                                            : `No hypotheses recorded for Heartbeat ${currentHeartbeatNo}.`}
+                                    </div>
+                                ) : (
+                                    <div className="agent-grid hypothesis-agent-grid">
+                                        {activeHypotheses.map((h, i) => (
+                                            <div key={h.id} className="agent-card">
+                                                <div className="agent-header hypothesis-card-header">
+                                                    <h4 className="agent-title">Hypothesis {i + 1}</h4>
+                                                    <div
+                                                        className="hypothesis-target-circles"
+                                                        role="group"
+                                                        aria-label={`Targets ${h.targetBranchIds?.length ? h.targetBranchIds.map(formatCompactStrategyId).join(', ') : 'all branches'}`}
+                                                    >
+                                                        {h.targetBranchIds && h.targetBranchIds.length > 0
+                                                            ? h.targetBranchIds.map(id => (
+                                                                <span key={id} className="hypothesis-target-circle">{formatCompactStrategyId(id)}</span>
+                                                            ))
+                                                            : <span className="hypothesis-target-circle">ALL</span>}
+                                                    </div>
+                                                </div>
+                                                <div className="agent-results">
+                                                    <div className="hypothesis-text-container">
+                                                        <MathHTML
+                                                            content={h.hypothesisText || 'No hypothesis text'}
+                                                            className="hypothesis-text"
+                                                        />
+                                                    </div>
+                                                    {hypothesisTesterDisplay(h) && (
+                                                        <button
+                                                            type="button"
+                                                            className="view-argument-button"
+                                                            onClick={() => onViewArgument(h.id)}
+                                                        >
+                                                            <MIcon name="article" /> View The Argument
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <StatusBadge status={critique.status || 'completed'} />
-                                        </div>
-                                        <div className="critique-history-preview">
-                                            <MathHTML
-                                                content={critiqueDisplay(critique) || 'Critique is processing.'}
-                                                className="critique-content"
-                                            />
-                                        </div>
-                                        {(critique.critiqueResponse || critique.critiqueResponseDisplay) ? (
-                                            <button className="view-critique-button" onClick={() => onViewCritique(critique.id)}>
-                                                <MIcon name="rate_review" /> View Full Critique
-                                            </button>
-                                        ) : critique.status === 'error' ? (
-                                            <div className="error-message">{critique.error || 'Critique failed'}</div>
-                                        ) : null}
-                                    </article>
-                                );
-                            })
+                                        ))}
+                                    </div>
+                                )}
+                            </section>
+                        )}
+
+                        {poolsEnabled && (
+                            <CuratedContextSolutionPools
+                                process={process}
+                                heartbeatNo={currentHeartbeatNo}
+                            />
                         )}
                     </div>
-                </section>
+
+                </div>
             </div>
         </div>
     );
 };
+
+
 
 // Branch State Surface Tab & Exports
 export { BranchStateModal } from './BranchStateModal';
