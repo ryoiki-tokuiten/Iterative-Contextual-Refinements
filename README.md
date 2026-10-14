@@ -2,6 +2,10 @@
 
 Highly specific & carefully thought multi-agent pipelines. The goal is to scale the inference test-time compute for any kind of problem/benchmark and push the frontier. All major providers are supported + local model support fully.
 
+## Provider setup
+
+Open **Providers** and configure a native provider, a local endpoint, or an OpenAI-compatible API. Atlas Cloud is available as a preset: select **Use Atlas Cloud**, enter your Atlas Cloud API key, and add the endpoint. The preset uses `https://api.atlascloud.ai/v1` and starts with `deepseek-ai/deepseek-v4-flash`; the model list can be refreshed from the endpoint or edited after setup.
+
 ## Operational Modes
 
 ### 1. Deepthink Mode (huge refactoring in progress)
