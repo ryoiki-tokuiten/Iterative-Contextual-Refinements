@@ -14,7 +14,6 @@ import {
     getHypothesisProximityLoops,
     getDeepthinkDepth,
     getIsolateBranchesEnabled,
-    getSolutionPoolDisabled,
     callAI,
     getSelectedThinkingLevel
 } from '../Routing';
@@ -86,7 +85,6 @@ export async function ensureDeepthinkInitialized(): Promise<DeepthinkModule> {
             getJ: () => routingManager.getDeepthinkConfigController().getJ(),
             getK: () => routingManager.getDeepthinkConfigController().getK(),
             getIsolateBranchesEnabled,
-            getSolutionPoolDisabled,
             getDeepthinkCodeExecutionEnabled: () => routingManager.getDeepthinkConfigController().isCodeExecutionEnabled(),
             getBsrNoiseLevel: () => routingManager.getDeepthinkConfigController().getBsrNoiseLevel(),
             getBsrPressureFloor: () => routingManager.getDeepthinkConfigController().getBsrPressureFloor(),

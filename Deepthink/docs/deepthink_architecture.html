@@ -328,7 +328,6 @@ const colsA=[
  ['Attempt','Iter 1 & New',R],
  ['Correction','Iter 2…i',R],
  ['Critique','Iter 1…i−1','#854F0B'],
- ['Noise Pool','Heartbeat','#1baf7a'],
  ['BSR Agent','Global Update',GY],
  ['Mem Bank','Global Update','#6250d6'],
  ['Final Judge','After Iter i','#26215C']
@@ -341,45 +340,34 @@ const rowsA=[
   [2,'Slot + Strategy','','t'],
   [3,'Slot + Strategy','','t'],
   [4,'Slot + Strategy','','t'],
-  [5,'Slot + Strategy','','t'],
-  [6,'All Strategies','','t']
+  [5,'All Strategies','','t']
  ]],
  ['<CorrectionToCritique>','solution produced in current iteration',[
   [2,'Current Solution','','c']
  ]],
- ['<LatestCorrection> & <LatestCritique>','branch’s latest pair as standalone blocks',[
-  [3,'Latest Pair','','t']
- ]],
  ['<WindowCorrectionCritiqueHistory>','uncompressed pairs from current window',[
   [1,'Past j Iterations','','t'],
   [2,'Past j Iterations','','t'],
-  [4,'Past j Iterations','','t'],
-  [5,'Past j Iterations','','t']
+  [3,'Past j Iterations','','t'],
+  [4,'Past j Iterations','','t']
  ]],
  ['<DistilledMemoryBank>','compressed memory from prior Global Update',[
   [1,'Distilled Bank','','a'],
   [2,'Distilled Bank','','a'],
-  [4,'Distilled Bank','','a'],
-  [5,'Distilled Bank','','a']
+  [3,'Distilled Bank','','a'],
+  [4,'Distilled Bank','','a']
  ]],
  ['<StandingEventLedger> & Graded Preds','standing event ledger & graded predictions',[
-  [4,'Previous Output(s)','','t']
+  [3,'Previous Output(s)','','t']
  ]],
  ['<LatestCustomCuratedContext>','mapped hypothesis packet (global + branch)',[
-  [1,'Mapped Packet','until next heartbeat','a'],
-  [3,'Mapped Packet','until next heartbeat','a']
- ]],
- ['<PreviousPoolsForThisBranch>','earlier 5-solution pools for this branch',[
-  [3,'Prior Pools','','a']
- ]],
- ['<CrossStrategyLatestPools>','latest 5-solution pools from peer branches',[
-  [3,'Peer Pools','isolation OFF','p']
+  [1,'Mapped Packet','until next heartbeat','a']
  ]],
  ['<CrossStrategyPeerIntelligence>','peers’ strategy + <LatestCorrection> & <Critique>',[
   [1,'Latest Pair','isolation OFF','p']
  ]],
  ['# Competing Candidate Solutions','<FinalSolution> from each surviving branch',[
-  [6,'All Solutions','','t']
+  [5,'All Solutions','','t']
  ]]
 ];
 
@@ -393,26 +381,27 @@ curY+=14;
 
 // PANEL (b): Global Strategy, Synthesis (DOS) & Hypothesis Loop
 const colsB=[
- ['Seed Strat','Initial Gen','#2a78d6',73],
- ['Update Strategy & Proximity','Global Update','#2a78d6',122],
+ ['Seed Strat & Prox','Initial Gen','#2a78d6',79],
+ ['Update Strategy & Proximity','Global Update','#2a78d6',119],
  ['DOS Step-i','Global Update',G,69],
  ['DOS HB / ii','HB & Post-GU',G,69],
- ['Hypothesis Gen & Proximity','Heartbeat','#eb6834',122]
+ ['Hypothesis Gen & Proximity','Heartbeat','#eb6834',119]
 ];
 
 const rowsB=[
- ['Requested Number of Strategies','strategiesCount integer target',[
+ ['Requested Target Count','strategiesCount / hypothesisCount',[
   [0,'Count Target','','t'],
-  [1,'Count Target','','t']
+  [1,'Count Target','','t'],
+  [4,'Count Target','','t']
  ]],
  ['Current Loop Gen ⇄ Proximity Turns','back-and-forth turns in active loop',[
   [0,'Seed Turns','Gen ⇄ Prox','a'],
   [1,'Update Turns','Gen ⇄ Prox','a'],
   [4,'HB Turns','Gen ⇄ Prox','a']
  ]],
- ['<ProximityHistory>','prior seed, update & heartbeat turns',[
-  [1,'Prior History','','t'],
-  [4,'Prior History','','t']
+ ['<ProximityHistory> (Reframed)','prior seed/update/HB turns + reframed notes',[
+  [1,'Reframed History','','t'],
+  [4,'Reframed History','','t']
  ]],
  ['<StrategiesFinalizedAndUsedSoFar>','ledger of all finalized strategies so far',[
   [1,'Used Ledger','','t']
@@ -421,9 +410,9 @@ const rowsB=[
   [1,'BSR Decisions','','t'],
   [3,'Slot Statuses','Step-ii only','a']
  ]],
- ['<CurrentActiveStrategies> + Corrections','all active strategies + Latest Correction',[
-  [1,'All Active Strategies','+ Latest Correction','t'],
-  [4,'All Active Strategies','+ Latest Correction','t']
+ ['<CurrentActiveStrategies>','active strategies + Latest Corr (+ Map in HB)',[
+  [1,'Active Strategies','+ Latest Correction','t'],
+  [4,'Active + Mapped','+ Latest Correction','t']
  ]],
  ['<ActiveBranchesState> (Corr + Crit)','all active strategies + Latest Corr & Crit',[
   [2,'All Branches','corr + critique','t'],
@@ -434,8 +423,9 @@ const rowsB=[
   [3,'Step-i Baseline','Step-ii only','a'],
   [4,'DOS Synthesis','','t']
  ]],
- ['<PreviousHeartbeatHypothesesAndTests>','prior HB claims, targets, verdicts & tests',[
-  [3,'Prior HB Tests','','a']
+ ['Prior HB Hypotheses, Tests & Feedback','prior HB claims, tests & realized feedback',[
+  [3,'Prior HB Tests','','a'],
+  [4,'Tests + Feedback','surprise & util','a']
  ]]
 ];
 
@@ -517,20 +507,20 @@ s+=`<rect x="30" y="290" width="18" height="13" rx="2" fill="#E1F5EE" stroke="${
 // (b) Dual-tier memory: Prompt compression vs On-disk .jsonl trajectory rewind
 const y2=334;
 s+=ln(30,y2-8,650,y2-8,'#cfcdc4',1);
-s+=T(30,y2+12,'(b) Dual-tier memory: bounded in-prompt distillation vs full on-disk .jsonl trajectory rewind','start','th');
-s+=T(30,y2+30,'Instead of seeing only past final outputs, agents can rewind the exact step-by-step tool transcript (.jsonl) on disk.','start','ts',gray);
+s+=T(30,y2+12,'(b) Dual-tier memory: bounded in-prompt distillation and on-disk .jsonl trajectory files','start','th');
+s+=T(30,y2+30,'Alongside each final .md output, the harness saves the full step-by-step tool transcript (.jsonl) in the same directory.','start','ts',gray);
 
 // Left box: Strategy-N/history/ directory layout
 s+=box(30,y2+46,286,148,'#F8F7F2','#5F5E5A',1,4)+
 T(42,y2+62,'Strategy-N/history/ (persisted per invoke)','start','th','font-size:11.2px')+
-box(42,y2+76,262,24,'#E1F5EE',G,.85,3)+T(50,y2+88,'iteration_06.md  (final solution + critique)','start','ts m','font-size:9.2px;fill:#04342C')+
-box(42,y2+104,262,26,'#FAEEDA',OR,1.1,3)+T(50,y2+117,'iteration_06.trajectory.jsonl (full trace)','start','ts m','font-size:9.2px;font-weight:700;fill:#412402')+
-box(42,y2+134,262,24,'#EEEDFE',V,.85,3)+T(50,y2+146,'memory_bank_01.md (distilled window)','start','ts m','font-size:9.2px;fill:#26215C')+
-T(42,y2+176,'Also written in Hypothesis-M/, Solution_Pools/, etc.','start','ts','font-size:9.8px;fill:#5a5955');
+box(42,y2+76,262,24,'#E1F5EE',G,.85,3)+T(50,y2+88,'iteration_06.md     (final solution + critique)','start','ts m','font-size:9.2px;fill:#04342C')+
+box(42,y2+104,262,26,'#FAEEDA',OR,1.1,3)+T(50,y2+117,'iteration_06.jsonl  (full agent trajectory)','start','ts m','font-size:9.2px;font-weight:700;fill:#412402')+
+box(42,y2+134,262,24,'#EEEDFE',V,.85,3)+T(50,y2+146,'memory_bank_01.md   (+ memory_bank_01.jsonl)','start','ts m','font-size:9.2px;fill:#26215C')+
+T(42,y2+176,'Also written in Hypothesis-M/, DOS_history/, etc.','start','ts','font-size:9.8px;fill:#5a5955');
 
-// Right box: What is inside *.trajectory.jsonl and how rewind works
+// Right box: What is inside *.jsonl and how rewind works
 s+=box(340,y2+46,310,148,'#FFFDF8',OR,1,4)+
-T(352,y2+62,'Inside *.trajectory.jsonl — Rewindable Episodic Memory','start','th','font-size:11.2px;fill:#412402')+
+T(352,y2+62,'Inside *.jsonl — Full Agent Trajectory','start','th','font-size:11.2px;fill:#412402')+
 box(350,y2+72,290,64,'#F8F7F2','#d8d6cd',.8,3)+
 T(356,y2+83,'{"turn":1, "tool":"sandbox_exec", "cmd":"pytest"}','start','ts m','font-size:8.6px;fill:#3d3d3a')+
 T(356,y2+97,'{"turn":2, "stdout":"FAIL: n=0 edge", "exit":1}','start','ts m','font-size:8.6px;fill:#993C1D')+
@@ -555,7 +545,7 @@ let s='';
 
 // (a) Universal access matrix & collaboration topology
 s+=T(30,20,'(a) Repository access permissions and collaboration surfaces','start','th');
-s+=T(30,38,'All agents share /tmp/ and shared_workspace.md, except Hypothesis Testers which are mechanically isolated to Hypothesis-M/.','start','ts',gray);
+s+=T(30,38,'Every agent shares full repository read scope, workspace-root /tmp/ (R/W), and live shared_workspace.md collaboration.','start','ts',gray);
 
 const headers=['Agent Role','Primary Working Dir','Repo Read Scope','/tmp/ Dir','shared_workspace'];
 const hx=[30,188,326,456,542];
@@ -563,35 +553,32 @@ s+=box(30,52,620,24,'#F1EFE8','#5F5E5A',.9,3);
 headers.forEach((h,i)=>s+=T(hx[i]+6,64,h,'start','th','font-size:10.5px'));
 
 const rows=[
- ['Strategy Gen / Proximity / DOS','none (repo root)','Full repository','Read / Write','read · edit · write · append'],
- ['Hypothesis Gen / Proximity','none (repo root)','Full repository','Read / Write','read · edit · write · append'],
- ['Hypothesis Tester (× m)','Hypothesis-M/ (R/W)','Hypothesis-M/ only','Read / Write','Isolated (no tool)'],
- ['Solution Attempt / Correction','Strategy-N/ (R/W)','Full repository','Read / Write','read · edit · write · append'],
- ['Solution Critique / Mem. / BSR','Strategy-N/ (R/W)','Full repository','Read / Write','read · edit · write · append'],
- ['Structured Noise Pool','Solution_Pools/ (R/W)','Full repository','Read / Write','read · edit · write · append'],
- ['Final Judge','none (repo root)','Full repository','Read / Write','read · edit · write · append']
+ ['Strategy Gen / Proximity / DOS','none (repo root)','Full repository','Read / Write','read · edit · append'],
+ ['Hypothesis Gen / Proximity','none (repo root)','Full repository','Read / Write','read · edit · append'],
+ ['Hypothesis Tester (× m)','Hypothesis-M/ (R/W)','Full repository','Read / Write','read · edit · append'],
+ ['Attempt / Correction / Critique','Strategy-N/ (R/W)','Full repository','Read / Write','read · edit · append'],
+ ['Memory Bank / BSR','Strategy-N/ (read-only)','Full repository','Read / Write','read · edit · append'],
+ ['Final Judge','none (repo root)','Full repository','Read / Write','read · edit · append']
 ];
 rows.forEach((r,i)=>{
- const y=76+24*i,isTester=(i==2);
- s+=box(30,y,620,24,isTester?'#FFFDF6':i%2?'#FAF9F5':'#fff','#d8d6cd',.7,0);
- s+=T(hx[0]+6,y+12,r[0],'start','ts',`font-size:10px;font-weight:${isTester?700:500}`)+
+ const y=76+24*i;
+ s+=box(30,y,620,24,i%2?'#FAF9F5':'#fff','#d8d6cd',.7,0);
+ s+=T(hx[0]+6,y+12,r[0],'start','ts','font-size:10px;font-weight:500')+
   T(hx[1]+6,y+12,r[1],'start','ts m','font-size:9.3px')+
-  T(hx[2]+6,y+12,r[2],'start','ts',`font-size:10px;fill:${isTester?R:'#3d3d3a'}`)+
+  T(hx[2]+6,y+12,r[2],'start','ts','font-size:10px;fill:#3d3d3a')+
   badge(hx[3]+6,y+4,74,16,r[3],'#E1F5EE',G,'#04342C',9)+
-  (isTester
-   ? badge(hx[4]+6,y+4,96,16,'Isolated (none)','#FAECE7',R,'#4A1B0C',9)
-   : badge(hx[4]+6,y+4,96,16,'All 4 ops (≤5k)','#EEEDFE',V,'#26215C',9));
+  badge(hx[4]+6,y+4,96,16,'read·edit·append','#EEEDFE',V,'#26215C',9);
 });
 
 // (b) Surgical shared_workspace.md tool & 5,000-token cap
-const y1=264;
+const y1=240;
 s+=ln(30,y1-10,650,y1-10,'#cfcdc4',1);
 s+=T(30,y1+10,'(b) Live shared_workspace.md blackboard: surgical edit tool and 5,000-token gate','start','th');
-s+=T(30,y1+28,'Parallel calls serialize through an atomic mutex; surgical edits prevent blind full-file overwrites across branches.','start','ts',gray);
+s+=T(30,y1+28,'Parallel calls serialize through an atomic mutex; targeted edits update sections in place within a 5,000-token cap.','start','ts',gray);
 
 s+=L('t',30,y1+46,136,36,'Branch main1…N','correction / critique')+
-L('a',30,y1+90,136,36,'Hyp. Gen / DOS','global synthesis notes')+
-L('p',30,y1+134,136,36,'Pool / Strat / Judge','cross-branch notes');
+L('a',30,y1+90,136,36,'Hyp. Gen / Tester','hypotheses & test notes')+
+L('p',30,y1+134,136,36,'DOS / Strategy / Judge','cross-branch notes');
 
 s+=P(`M166 ${y1+64}H214`)+P(`M166 ${y1+108}H214`)+P(`M166 ${y1+152}H214`);
 
@@ -600,9 +587,9 @@ T(314,y1+62,'shared_workspace() Tool API','middle','th','font-size:11.5px')+
 badge(228,y1+76,82,22,'read()','#F1EFE8','#5F5E5A','#2C2C2A',10)+
 badge(318,y1+76,82,22,'edit(old,new)','#E1F5EE',G,'#04342C',10)+
 badge(228,y1+104,82,22,'append(text)','#EEEDFE',V,'#26215C',10)+
-badge(318,y1+104,82,22,'write(full)','#FAECE7',R,'#4A1B0C',10)+
+badge(318,y1+104,82,22,'replace_all','#FAEEDA',OR,'#412402',10)+
 T(314,y1+140,'Serialized execution queue','middle','ts','font-size:10px;font-weight:600')+
-T(314,y1+155,'(role-anonymous live mutations)','middle','ts',sg);
+T(314,y1+155,'(atomic read, edit & append)','middle','ts',sg);
 
 s+=P(`M412 ${y1+108}H444`);
 
@@ -611,13 +598,13 @@ T(548,y1+64,'Token Budget Gate','middle','th','font-size:12px;fill:#26215C')+
 `<rect x="462" y="${y1+78}" width="172" height="16" rx="3" fill="#fff" stroke="${V}" stroke-width=".9"/>`+
 `<rect x="462" y="${y1+78}" width="132" height="16" rx="3" fill="#CECBF6"/>`+
 T(548,y1+86,'3,840 / 5,000 tokens max','middle','ts m','font-size:9.5px;font-weight:700;fill:#26215C')+
-T(462,y1+110,'• Rejects any edit/append/write','start','ts','font-size:10px')+
-T(462,y1+124,'  that exceeds 5,000 tokens','start','ts','font-size:10px')+
-T(462,y1+138,'• Persisted at repo root (.gitignore)','start','ts','font-size:10px')+
-T(462,y1+152,'• Included in latest.gz snapshot','start','ts','font-size:10px');
+T(462,y1+110,'• Caps file at 5,000 tokens max','start','ts','font-size:10px')+
+T(462,y1+124,'• Preserves failed call in history','start','ts','font-size:10px')+
+T(462,y1+138,'• Injects harness note to trim','start','ts','font-size:10px')+
+T(462,y1+152,'• Untracked at repo root (.gitignore)','start','ts','font-size:10px');
 
 // (c) Co-evolving verification harnesses in /tmp/
-const y2=456;
+const y2=432;
 s+=ln(30,y2-10,650,y2-10,'#cfcdc4',1);
 s+=T(30,y2+10,'(c) Self-built verification harnesses and adversarial test hardening in /tmp/','start','th');
 s+=T(30,y2+28,'Because every agent has R/W access to /tmp/, branches and critiques co-evolve executable verification suites across the run.','start','ts',gray);
@@ -635,7 +622,7 @@ L('c',482,y2+46,168,54,'2. Critique Agent','hardens /tmp/ harness & falsifies');
 s+=`<path d="M566 ${y2+100}V${y2+116}H114V${y2+102}" fill="none" stroke="${R}" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#ar)"/>`+
 T(340,y2+132,'3. Next Correction runs the hardened /tmp/ suite; BSR uses sandbox test runs as confirmed event evidence','middle','ts','font-size:10.2px;font-weight:600;fill:#4A1B0C');
 
-return [604,'Multi-agent coordination, surgical shared_workspace, and /tmp verification loops',s,''];})();
+return [580,'Multi-agent coordination, surgical shared_workspace, and /tmp verification loops',s,''];})();
 
 // ============================================================================
 // FIGURE 7: TOOL-CALL HORIZON (m), GRACE TURNS, REVOCATION & TOKEN GATE
@@ -648,7 +635,7 @@ let s='';
 
 // (a) Progressive tool-call horizon management
 s+=T(30,20,'(a) Bounded tool-call horizon (max calls = m), warning injections, 5-turn grace window, and tool revocation','start','th');
-s+=T(30,38,'If an agent reaches m tool calls without submitting, the harness avoids restarting the whole run by escalating in-trajectory.','start','ts',gray);
+s+=T(30,38,'Countdown reminders at m − 10 and m − 5 guide pacing; at m an urgent prompt grants 5 overtime turns before revoking other tools.','start','ts',gray);
 
 const ty=96;
 // Timeline bar segments (y: 96..128)
@@ -692,16 +679,16 @@ badge(418,ay+31,222,18,'ONLY final_output callable (forced submit)','#EEEDFE',V,
 // (b) Dual final_output Validation Gate & Retry Budget
 const y2=262;
 s+=ln(30,y2-10,650,y2-10,'#cfcdc4',1);
-s+=T(30,y2+10,'(b) The final_output submission gate: total output tokens gate + schema verification & retry budget','start','th');
-s+=T(30,y2+28,'Every final_output call must clear both token-budget validation and strict structural checks before entering pipeline state.','start','ts',gray);
+s+=T(30,y2+10,'(b) The final_output submission gate: per-role output token cap + schema verification & retry budget','start','th');
+s+=T(30,y2+28,'Every final_output call must clear both its role token limit and structural schema checks before entering pipeline state.','start','ts',gray);
 
 s+=L('t',30,y2+48,118,52,'Agent calls','final_output(payload)')+P(`M148 ${y2+74}H176`);
 
 // Gate 1: Token Gate
 s+=box(178,y2+44,146,60,'#EEEDFE',V,1.2,4)+
 T(251,y2+60,'1. Output Tokens Gate','middle','th','font-size:11.5px;fill:#26215C')+
-T(251,y2+76,'Verifies total output','middle','ts','font-size:10px')+
-T(251,y2+89,'token bounds & budget','middle','ts','font-size:10px')+
+T(251,y2+76,'≤ 5,000 tokens (default)','middle','ts','font-size:9.8px')+
+T(251,y2+89,'≤ 10,000 (Corr. & MemBank)','middle','ts','font-size:9.8px')+
 P(`M324 ${y2+74}H352`);
 
 // Gate 2: Schema Gate
@@ -717,14 +704,14 @@ s+=L('g',542,y2+48,108,52,'Accepted','commit + snapshot');
 // Failure loop back / retry backoff
 s+=`<path d="M251 ${y2+104}V${y2+130}H433V${y2+104}" fill="none" stroke="${R}" stroke-width="1.1"/>`+
 `<path d="M342 ${y2+130}V${y2+146}" fill="none" stroke="${R}" stroke-width="1.2" marker-end="url(#ar)"/>`+
-box(88,y2+148,508,42,'#FAECE7',R,1,4)+
-T(342,y2+163,'Gate failure: rejected in-turn (or counts as failed attempt if turn budget exhausted)','middle','th','font-size:11px;fill:#4A1B0C')+
-T(342,y2+179,'Retry schedule: 4 attempts max · waits of 30s, 60s, 5m · shared 30-minute total wall-clock budget','middle','ts','font-size:10.2px;fill:#4A1B0C');
+box(68,y2+148,548,42,'#FAECE7',R,1,4)+
+T(342,y2+163,'Gate error: tool call & error stay in history + harness note instructs agent to condense / fix','middle','th','font-size:10.6px;fill:#4A1B0C')+
+T(342,y2+179,'Call retry schedule: 4 attempts max · waits of 30s, 60s, 5m · shared 30-minute total wall-clock budget','middle','ts','font-size:10px;fill:#4A1B0C');
 
 return [464,'Bounded tool-call horizon, progressive warnings, tool revocation, and final_output gates',s,''];})();
 
 // ============================================================================
-// FIGURE 8: CURATED CONTEXT HEARTBEAT (DEEP 3-PANEL ARCHITECTURE)
+// FIGURE 8: CURATED CONTEXT HEARTBEAT ARCHITECTURE
 // ============================================================================
 const NHEART=(()=>{
 const {C,T,L,P,D,ln,TX,card,box,badge}=HX;
@@ -732,28 +719,25 @@ const G='#0F6E56',R='#993C1D',V='#534AB7',N='#8a8880',OR='#BA7517';
 const gray='fill:#5a5955;font-size:12px',sm='font-size:11px',sg='fill:#5a5955;font-size:10px';
 let s='';
 
-// (a) Five-stage pipeline
-s+=T(30,20,'(a) Five-stage Curated Context Heartbeat pipeline and configuration matrix','start','th');
+// (a) Four-stage pipeline
+s+=T(30,20,'(a) Four-stage Curated Context Heartbeat pipeline and configuration','start','th');
 s+=T(30,38,'Refreshes empirical evidence every k iterations (and at the end of every Global Update, which reuses Step-ii DOS).','start','ts',gray);
 
-s+=L('t',30,56,108,54,'1. DOS Call','audits prev. HB + state')+P('M138 83H160')+
-L('t',162,56,138,54,'2. Hypothesis Loop','Gen ⇄ Prox (L rounds)')+P('M300 83H322')+
-L('a',324,56,122,54,'3. Testers (× m)','in Hypothesis-M/')+P('M446 83H468')+
-L('g',470,56,84,54,'4. Map','packet per slot')+P('M554 83H576')+
-L('p',578,56,72,54,'5. Pools','5 alts / slot');
+s+=L('t',30,56,132,54,'1. DOS Call','audits prev. HB + state')+P('M162 83H186')+
+L('t',188,56,156,54,'2. Hypothesis Loop','Gen ⇄ Prox (L rounds)')+P('M344 83H368')+
+L('a',370,56,140,54,'3. Testers (× m)','in Hypothesis-M/')+P('M510 83H534')+
+L('g',536,56,114,54,'4. Map','packet per slot');
 
 // Feedback record side-output from Step 1 -> Step 2
-s+=`<path d="M84 110V132H231V112" fill="none" stroke="${V}" stroke-width="1.1" stroke-dasharray="3 2" marker-end="url(#av)"/>`+
-T(158,144,'attaches surprise_bits + utilization [C,P,N,M] to prev. HB block','middle','ts','font-size:9.8px;fill:#26215C');
+s+=`<path d="M96 110V132H266V112" fill="none" stroke="${V}" stroke-width="1.1" stroke-dasharray="3 2" marker-end="url(#av)"/>`+
+T(181,144,'attaches surprise_bits + utilization [C,P,N,M] to prev. HB block','middle','ts','font-size:9.8px;fill:#26215C');
 
 // Mode table on right of (a)
 s+=box(30,160,620,50,'#F8F7F2','#cfcdc4',.9,4)+
-T(42,176,'Active stages by configuration (shared k slider):','start','th','font-size:11px')+
-badge(310,167,162,18,'Hyp ON + Pools ON: Steps 1 → 5','#E1F5EE',G,'#04342C',9.2)+
-badge(480,167,160,18,'Hyp ON + Pools OFF: Steps 1 → 4','#E1F5EE',G,'#04342C',9.2)+
+T(42,176,'Active stages by configuration (k slider):','start','th','font-size:11px')+
+badge(310,167,330,18,'Hypotheses ON: Steps 1 → 4 run every k iterations','#E1F5EE',G,'#04342C',9.2)+
 T(42,196,'Post-Update HB: Step 1 reuses Step-ii DOS.','start','ts',sg)+
-badge(310,188,162,18,'Hyp OFF + Pools ON: Step 5 only','#EEEDFE',V,'#26215C',9.2)+
-badge(480,188,160,18,'Both OFF: panel collapses, k ignored','#F1EFE8','#8a8880','#5a5955',9.2);
+badge(310,188,330,18,'Hypotheses OFF: Heartbeat skipped, k ignored','#F1EFE8','#8a8880','#5a5955',9.2);
 
 // (b) Target-branch packet routing
 const y1=232;
@@ -781,42 +765,10 @@ hyps.forEach(([id,t,v,fi,st,targets],i)=>{
  const y=y1+46+38*b;
  s+=box(420,y,230,30,'#F8F7F2','#333',1,3)+
   T(432,y+11,lbl,'start','th','font-size:11px')+
-  T(432,y+23,'→ read by Correction & Pool agent','start','ts',sg);
+  T(432,y+23,'→ read by Correction agent','start','ts',sg);
 });
 
-// (c) Structured noise (Solution Pools)
-const y2=404;
-s+=ln(30,y2-10,650,y2-10,'#cfcdc4',1);
-s+=T(30,y2+10,'(c) Parallel Structured Noise (Solution Pool) agents — evidence, never a final candidate','start','th');
-s+=T(30,y2+28,'Runs after mapping completes so each branch’s pool agent reads its newly mapped hypothesis packet alongside peer pools.','start','ts',gray);
-
-s+=box(30,y2+42,272,126,'#F1EFE8','#5F5E5A',.9,4)+
-T(40,y2+56,'Prompt Inputs to Pool Agent (mainN)','start','th','font-size:10.8px')+
-T(40,y2+71,'1. # Core Challenge + direct_context/ + images','start','ts','font-size:9.3px')+
-T(40,y2+84,'2. Assigned Strategy ID (mainN) & Strategy Text','start','ts','font-size:9.3px')+
-T(40,y2+97,'3. <LatestCorrection> (branch’s latest solution)','start','ts','font-size:9.3px')+
-T(40,y2+110,'4. <LatestCritique> (branch’s latest critique)','start','ts','font-size:9.3px')+
-T(40,y2+123,'5. <PreviousPoolsForThisBranch> (if slot has pools)','start','ts','font-size:9.3px')+
-T(40,y2+136,'6. <MappedHypothesisPacket> (from Step 4 tests)','start','ts','font-size:9.3px')+
-T(40,y2+149,'7. <CrossStrategyLatestPools> (if isolation off)','start','ts','font-size:9.3px')+
-T(40,y2+162,'+ Tools: Solution_Pools/ (R/W), /tmp/, shared_workspace','start','ts','font-size:8.8px;fill:#5a5955');
-
-s+=P(`M302 ${y2+105}H324`);
-
-s+=box(326,y2+42,324,126,'#EEEDFE',V,1.1,4)+
-T(336,y2+57,'Output: Heartbeat-N/Solution_Pools/Strategy-N.md','start','th','font-size:10.8px;fill:#26215C')+
-[0,1,2,3,4].map(i=>{
- const x=336+61*i;
- return box(x,y2+70,56,48,'#fff',V,.8,3)+
-  T(x+28,y2+83,'Alt '+(i+1),'middle','th','font-size:9.8px;fill:#26215C')+
-  T(x+28,y2+97,'title + full','middle','ts','font-size:8px;fill:#5a5955')+
-  T(x+28,y2+109,'c = '+(0.85-0.1*i).toFixed(2),'middle','ts m','font-size:8.4px;font-weight:600');
-}).join('')+
-T(336,y2+134,'JSON: { strategy_id, solutions: [{ title, content, confidence }] }','start','ts m','font-size:8.7px;fill:#26215C')+
-T(336,y2+149,'• Appended to run-wide structured-noise store under slot name','start','ts','font-size:9.3px')+
-T(336,y2+162,'• Never passed to Final Judge (supporting exploration only)','start','ts','font-size:9.3px');
-
-return [582,'Curated context heartbeat architecture',s,''];})();
+return [404,'Curated context heartbeat architecture',s,''];})();
 
 // ============================================================================
 // FIGURE 9: STATELESS DOS CALL MODES & CROSS-HEARTBEAT FEEDBACK TIMING
@@ -1211,7 +1163,7 @@ box(446,uy+23,204,22,'#E1F5EE',G,.8,3)+T(548,uy+34,'latest.gz (state + commit SH
 
 // legend
 const ly=uy+68;
-s+=dot(36,ly,'c')+T(50,ly,'per-folder commit (.md + .trajectory.jsonl)','start','ts',sm)+dot(350,ly,'m')+T(364,ly,'memory-bank distillation + window_start commit','start','ts',sm);
+s+=dot(36,ly,'c')+T(50,ly,'per-folder commit (.md + .jsonl)','start','ts',sm)+dot(350,ly,'m')+T(364,ly,'memory-bank distillation + window_start commit','start','ts',sm);
 s+=dot(36,ly+24,'h')+T(50,ly+24,'shared directories, never erased','start','ts',sm)+dot(350,ly+24,'r')+T(364,ly+24,'restore commit (EVOLVE with rollback)','start','ts',sm);
 s+=dot(36,ly+48,'v')+T(50,ly+48,'new folder in a freed slot','start','ts',sm)+dot(350,ly+48,'a')+T(364,ly+48,'archived by PRUNE (ordinal suffix _01)','start','ts',sm);
 return [ly+70,'Repository history and persistence',s,''];})();
@@ -1261,7 +1213,7 @@ const SECTIONS=[
   id:'sec-4',
   kicker:'Section IV',
   title:'Curated Context Heartbeat & Hypothesis Feedback Loop',
-  desc:'Each Heartbeat synthesizes cross-branch state via DOS, generates falsifiable hypotheses with prior probability forecasts, tests them in parallel, maps verified packets to target branches, and generates five worked alternative solutions per branch (Structured Noise). At the following Heartbeat, DOS audits how branches utilized the packet and grades the generator’s prior via information-theoretic surprise.',
+  desc:'Each Heartbeat synthesizes cross-branch state via DOS, generates falsifiable hypotheses with prior probability forecasts, tests them in parallel, and maps verified packets to target branches. At the following Heartbeat, DOS audits how branches utilized the packet and grades the generator’s prior via information-theoretic surprise.',
   figs:['heart','dos','hyp']
  },
  {

@@ -16,7 +16,6 @@ import { hypothesisTesterPrompt } from './hypothesisTester.ts';
 import { solutionAttemptPrompt } from './solutionAttempt.ts';
 import { solutionCritiquePrompt } from './solutionCritique.ts';
 import { solutionCorrectionPrompt } from './solutionCorrection.ts';
-import { solutionPoolPrompt } from './solutionPool.ts';
 import { memoryBankPrompt } from './memoryBank.ts';
 import { dosPrompt } from './dos.ts';
 import { bsrPrompt } from './bsr.ts';
@@ -32,7 +31,6 @@ export interface CustomizablePromptsDeepthink {
   sys_deepthink_hypothesisGeneration: string;
   sys_deepthink_hypothesisProximity: string;
   sys_deepthink_hypothesisTester: string;
-  sys_deepthink_structuredSolutionPool: string;
   sys_deepthink_memoryBank: string;
   sys_deepthink_dos: string;
   sys_deepthink_bsr: string;
@@ -47,7 +45,6 @@ export interface CustomizablePromptsDeepthink {
   model_hypothesisGeneration?: string | null;
   model_hypothesisProximity?: string | null;
   model_hypothesisTester?: string | null;
-  model_structuredSolutionPool?: string | null;
   model_memoryBank?: string | null;
   model_dos?: string | null;
   model_bsr?: string | null;
@@ -65,7 +62,6 @@ export function createDefaultCustomPromptsDeepthink(): CustomizablePromptsDeepth
     sys_deepthink_hypothesisGeneration: hypothesisGeneratorPrompt,
     sys_deepthink_hypothesisProximity: hypothesisProximityPrompt,
     sys_deepthink_hypothesisTester: hypothesisTesterPrompt,
-    sys_deepthink_structuredSolutionPool: solutionPoolPrompt,
     sys_deepthink_memoryBank: memoryBankPrompt,
     sys_deepthink_dos: dosPrompt,
     sys_deepthink_bsr: bsrPrompt,
@@ -84,7 +80,6 @@ export {
   solutionAttemptPrompt,
   solutionCritiquePrompt,
   solutionCorrectionPrompt,
-  solutionPoolPrompt,
   memoryBankPrompt,
   dosPrompt,
   bsrPrompt,

@@ -12,7 +12,7 @@ Invariants:
 2. Every iteration is a barrier. All branches run correction + critique in parallel and the system waits for all of them. The final iteration runs correction only (§3).
 3. PRUNE archives the node and creates a new node in the freed slot. No logic exists to update a node's children or dependents.
 4. One fixed pipeline. Configuration changes scale and participation, never structure. No modes, no sub-strategies, no branch versions, no backward compatibility.
-5. Hypotheses and structured noises are optional. The system runs without either.
+5. Hypotheses are optional. The system runs without them.
 6. Models produce judgments. Deterministic code makes decisions.
 
 ---
@@ -28,16 +28,13 @@ Invariants:
 | `strategyProximityLoops` | Strategy generator/proximity loops | | |
 | `hypothesisCount` | Hypotheses per heartbeat. 0 disables hypotheses | | |
 | `hypothesisProximityLoops` | Hypothesis generator/proximity loops | | |
-| `disableSolutionPool` | Skips structured noises | | |
-| `isolateBranches` | Correction and pool agents receive no peer-branch context. Enforced by prompt only (§8.3) | | |
+| `isolateBranches` | Correction agents receive no peer-branch context. Enforced by prompt only (§8.3) | | |
 | `deepthinkCodeExecutionEnabled` | Enables role-scoped sandbox tools | | |
 | `thinkingLevel` | Provider reasoning effort | | |
 
 All bounds are inclusive: 5 ≤ `i` ≤ 20, 3 ≤ `j` ≤ 8, 2 ≤ `k` ≤ `j`. The frontend shows a direct error on any violation of the `i`, `j`, `k` bounds.
 
-**Panel.** The hypothesis panel in `DeepthinkConfigPanel` is renamed **"Customize How Often Curated Context Is Refreshed"**. It holds one `k` slider shared by hypotheses and structured noises, plus a control to disable each. If both are disabled, the panel collapses and shows that custom curated context is disabled, and `k` is never checked.
-
-**Removed:** `deepthinkDepth` (replaced by `i`), `pqfAggressiveness`.
+**Panel.** The curated context panel in `DeepthinkConfigPanel` holds the hypothesis toggle and sliders, while `k` is configured in the Loop Schedule panel when hypotheses are enabled. If hypotheses are disabled, custom curated context is disabled and `k` is never checked.
 
 ---
 
@@ -127,33 +124,25 @@ An empty `target_branches` marks globally useful evidence. Probabilities must su
 
 ### 4.3 `test_hypothesis(hypothesis_object)`
 
-Starts one tester per hypothesis, in parallel. Each tester receives the challenge (and original image when present) and its one hypothesis. Nothing else. No strategy text, branch history, other hypotheses, or routing. The tester's view of the repository is limited to its own `Hypothesis-M/` folder (§8.3) and it gets no `shared_workspace()` (§8.4), so its independence is enforced mechanically, not by a prompt. This matters because its verdict feeds `surprise_bits` (§5.2).
+Starts one tester per hypothesis, in parallel. Each tester receives the challenge (and original image when present) and its one hypothesis in its prompt, while having full read access across the repository, read/write access in its own `Hypothesis-M/` folder and `/tmp/`, and access to `shared_workspace()` (§8.3, §8.4). Its verdict feeds `surprise_bits` (§5.2).
 
 Returns the per-hypothesis testing outputs and the mapped packets. `hypothesis_testing_mapped(branch_id)` is the packet for one branch: every global hypothesis plus every hypothesis targeting that branch, each with its full test result. No concatenated blob of all outputs is produced.
 
-### 4.4 `generate_solution_pool(iteration, context)`
+### 4.4 `curated_context_heartbeat()`
 
-One pool agent per branch, in parallel. Returns a JSON structured noise per branch. The pool explores five substantively executed alternatives. It is evidence for later corrections, not a final-judge candidate, and never creates a persistent branch.
+| Hypotheses | Runs |
+|---|---|
+| on | DOS → `generate_hypothesis()` → `test_hypothesis()` → map to branches |
+| off | nothing |
 
-### 4.5 `curated_context_heartbeat()`
-
-| Hypotheses | Pools | Runs |
-|---|---|---|
-| on | on | DOS → `generate_hypothesis()` → `test_hypothesis()` → map to branches → `generate_solution_pool()` per branch |
-| on | off | DOS → `generate_hypothesis()` → `test_hypothesis()` → map to branches |
-| off | on | `generate_solution_pool()` per branch. No DOS, no hypotheses |
-| off | off | nothing |
-
-Pools start only after testing and mapping finish, because each pool receives its branch's mapped packet. The heartbeat waits for all pools.
-
-**DOS in a heartbeat.** A heartbeat that does not end a global update runs its own DOS (the heartbeat DOS, §5.1). The heartbeat that ends a global update does not: the global update has just run the step-ii DOS (§4.6 vi) on exactly the state the heartbeat needs, and the heartbeat reuses its output.
+**DOS in a heartbeat.** A heartbeat that does not end a global update runs its own DOS (the heartbeat DOS, §5.1). The heartbeat that ends a global update does not: the global update has just run the step-ii DOS (§4.5 vi) on exactly the state the heartbeat needs, and the heartbeat reuses its output.
 
 Returns:
 
 - For the hypothesis subsystem's history: `hypothesis_proximity_history_heartbeat_NN` + `hypothesis_testing_output_heartbeat_NN`.
-- For the branches: `latest_custom_curated_context(heartbeat_no, branch_id)` = that branch's mapped hypothesis packet + that branch's pool. Either part is null if its module is disabled.
+- For the branches: `latest_custom_curated_context(heartbeat_no, branch_id)` = that branch's mapped hypothesis packet (or null if hypotheses are disabled).
 
-### 4.6 `perform_global_update()`
+### 4.5 `perform_global_update()`
 
 i. Run one BSR agent per branch and the step-i DOS (one call, §5.1), all in parallel.
 
@@ -167,7 +156,7 @@ v. Run memory-bank distillation on every surviving branch (CONTINUE, or EVOLVE i
 
 vi. If hypotheses are enabled, run the step-ii DOS (§5.1, context in §7 `context_for_DOS`). It sees the post-update state: the latest correction and critique of every active branch (the new branches' first execution and critique included), the previous heartbeat's hypotheses with their testing outputs and mappings, a note on what happened to each slot, and the step-i output unchanged. This is the call that produces the hypothesis feedback for the previous heartbeat. If hypotheses are disabled, nothing consumes its output and the step is skipped.
 
-vii. Run `curated_context_heartbeat()` regardless of `k`. `since_heartbeat = 0`. Its DOS step is the step-ii DOS of step vi, reused (§4.5).
+vii. Run `curated_context_heartbeat()` regardless of `k`. `since_heartbeat = 0`. Its DOS step is the step-ii DOS of step vi, reused (§4.4).
 
 The step-i DOS runs even when curated context is disabled. Strategy generation needs it. The step-ii DOS runs only when hypotheses are enabled.
 
@@ -266,8 +255,8 @@ Feedback for heartbeat N is attached when the next feedback-producing DOS return
 
 | Consumer | Receives | Must not receive |
 |---|---|---|
-| Hypothesis generator + proximity | DOS core synthesis (from the DOS call that feeds this heartbeat: the heartbeat DOS, or the step-ii DOS when the heartbeat ends a global update), persistent history with realized feedback, latest correction from each branch (corrections only, no critiques) | |
-| Strategy generator + proximity | DOS core synthesis (this is `dos_output.for_strategies`, the step-i DOS output) | `your-predicted-test-outcome`, `surprise_bits`, `utilization`, `critique_counterevidence` |
+| Hypothesis generator + proximity | Core challenge + `hypothesisCount`, `hypothesis_proximity_history` (with prior heartbeat contexts replaced by `{HB_Reframed_Note}`), `{HB_Note}` + active heartbeat context (active running strategies + latest branch corrections + mapped branch packets, previous heartbeat's final generated hypotheses + independent testing outputs & verdicts, realized hypothesis feedback records, and DOS core synthesis from the heartbeat DOS or reused step-ii DOS) | Raw branch critiques, `strategies_finalized_and_used_so_far`, BSR scores |
+| Strategy generator + proximity | Core challenge + `strategiesCount`, `strategy_proximity_history` (with prior global update contexts replaced by `{GU_Reframed_Note}`), `{GU_Note}` + active global update context (current active strategies + latest branch corrections, consolidated BSR decisions + event reasons, `dos_output.for_strategies` from step-i DOS, and `strategies_finalized_and_used_so_far`) | `your_predicted_test_outcome`, `surprise_bits`, `utilization`, `critique_counterevidence`, BSR probabilities/scores |
 
 ### 5.6 Interpretation
 
@@ -483,7 +472,7 @@ When the evidence is tied, the less destructive action wins: CONTINUE, then EVOL
 - Oscillation (a good start, then confirmed regressions) gives high `lost_ground` and so EVOLVE with rollback.
 - A branch that is confidently out of steam with little standing gives PRUNE.
 - A branch that is confidently out of steam with a lot standing gives EVOLVE in place, and its answer stays a final-judge candidate.
-- Everything else gives CONTINUE. The old states `oscillatory` and `local-minima` no longer exist: `lost_ground` is the measured form of the first and `stall_evidence` of the second.
+- Everything else gives CONTINUE. Oscillation is measured by `lost_ground` and local saturation by `stall_evidence`.
 - `lost_ground` and `progress_kept` are observed. Only `expected_drift` and `stall_evidence` depend on the forecast, and credibility limits how much a forecast that was just wrong can matter.
 
 **Sharp predictions are required.** Stall evidence needs conviction. With `critique_alignment` 0.9 and full credibility, the prediction (0.05, 0.85, 0.10) gives stall evidence 0.45, but the softer (0.10, 0.70, 0.20) gives 0.22 and nothing fires. That is intended: re-aiming or discarding a branch needs a confident reason, and a near-uniform prediction cannot produce one (Example 1 gives 0.04). `θ` = 0.3 sits between the two. `lost_ground` needs no forecast, so an observed regression is acted on whatever BSR expects, unless a credible forecast of improvement outweighs it.
@@ -532,11 +521,11 @@ Rollback matters most on long-horizon tasks that run for hours. Reverting is far
 |---|---|---|
 | Strategy generator + proximity (global update) | For each EVOLVE or PRUNE branch: the decision, the form, the rollback point, the BSR event reasons | Probabilities, surprisal, credibility, effective prediction, pressures, the prediction's reasoning |
 | The same branch's next BSR call | Its ledger, and its earlier predictions that have been graded, each with outcome and surprisal | The prediction for the window it is judging |
-| Every other agent (correction, critique, memory bank, structured noise, hypothesis, tester, DOS, final judge) | Nothing from BSR | Everything |
+| Every other agent (correction, critique, memory bank, hypothesis, tester, DOS, final judge) | Nothing from BSR | Everything |
 
 **Hidden-prediction rule.** A prediction is hidden from the BSR call that judges the window it predicts, so BSR cannot shade its report to fit its own forecast. Once graded it becomes feedback to later BSR calls, as hypothesis feedback does in §5.4. It is hidden from every acting agent, so no branch is steered by a forecast about itself.
 
-The rule is structural. BSR records are not stored in the repository (§12.13) and every context function in §7 lists exactly what its agent receives, so nothing depends on a prompt telling an agent not to look. The tester's independence (§4.3) is structural in the same way, through its folder-only view (§8.3).
+The rule is structural. BSR records are not stored in the repository (§12.13) and every context function in §7 lists exactly what its agent receives, so nothing depends on a prompt telling an agent not to look.
 
 ### 6.8 Persistence
 
@@ -618,7 +607,7 @@ Where they differ:
 | `main3` | 15, 17 | 15 / 19 = 0.789 | 0.357 | 0.095 | **EVOLVE in place** |
 | `main4` | 1, 7 | 1 / 9 = 0.111 | 0.050 | 0.402 | **PRUNE** |
 
-Both branches are confidently out of steam. `main3` holds a lot of real progress, so its strategy is re-aimed and its answer stays in the final judge's pool. Its prediction is voided, and the strategy agent receives its event reasons. `main4` has almost nothing standing, so it is archived under an ordinal name (§8.2) and its slot is freed. The strategy agent writes a new strategy for the slot, receives `main4`'s event reasons, and decides how much to inherit. The new branch runs first execution + critique with an empty ledger. This is the failure versus saturation distinction of §6.1 producing different actions.
+Both branches are confidently out of steam. `main3` holds a lot of real progress, so its strategy is re-aimed and its answer stays a final-judge candidate. Its prediction is voided, and the strategy agent receives its event reasons. `main4` has almost nothing standing, so it is archived under an ordinal name (§8.2) and its slot is freed. The strategy agent writes a new strategy for the slot, receives `main4`'s event reasons, and decides how much to inherit. The new branch runs first execution + critique with an empty ledger. This is the failure versus saturation distinction of §6.1 producing different actions.
 
 ---
 
@@ -655,25 +644,108 @@ ofc this is an example for the strategies generator agent and the same principle
 
 
 
-**Slots are reused, branches are not.** Every per-branch context function below (`critique_correction_memory_bank_history`, `cross_strategy_*`, `context_solution_pool`, `context_bsr`) reads a branch's artifacts by the branch that currently occupies the slot, never by slot ID alone. Once a PRUNE is applied, nothing the pruned branch produced (corrections, critiques, memory banks, pools, ledger) can enter any agent's direct context, and the new branch in its slot starts with none of it. The strategy generator and its proximity are the one exception: they still see what was tried, through `strategies_finalized_and_used_so_far`, the proximity history and the BSR event reasons for that update, because that is the purpose of those objects. The archived folder and old heartbeat files stay readable in the repository, which is file-system context, not direct context (§8.4).
+**Slots are reused, branches are not.** Every per-branch context function below (`critique_correction_memory_bank_history`, `cross_strategy_latest_correction_critique`, `context_bsr`) reads a branch's artifacts by the branch that currently occupies the slot, never by slot ID alone. Once a PRUNE is applied, nothing the pruned branch produced (corrections, critiques, memory banks, ledger) can enter any agent's direct context, and the new branch in its slot starts with none of it. The strategy generator and its proximity are the one exception: they still see what was tried, through `strategies_finalized_and_used_so_far`, the proximity history and the BSR event reasons for that update, because that is the purpose of those objects. The archived folder and old heartbeat files stay readable in the repository, which is file-system context, not direct context (§8.4).
 
-### `context_for_strategy_generate(seed | global-update-N)`
-- Seed: core challenge (with images and docs in direct context if any).
-- Global update N: core challenge(with images and docs in direct context if any) + `strategy_proximity_history` + current actual strategies used with a note so that they knows exactly what are the current strategies +  consolidated BSR decisions for update N + latest correction from every branch + `dos_output.for_strategies` + `strategies_finalized_and_used_so_far`.
+### `context_for_strategy_generate(seed | global-update-N)` (Shared identically by Strategy Generator & Strategy Proximity)
 
-where the `strategies_finalized_and_used_so_far` is an object that keeps track of exactly what strategies were actually actually for real finalized and used by the deepthink. this is so that the agent can distinguish it from the strategy proximity history noise and knows exactly what was actually fully and really tried.
+Both **Strategy Generator (SG)** and **Strategy Proximity (SP)** receive the **exact same user prompt** at every turn of a loop (differing only in their system prompt and output schema, and with each completed turn appended to the bottom of the active loop for the next turn).
+
+#### Short Forms
+- **`[Challenge + Count]`**: Core challenge (with any direct context files/images) + target count (`strategiesCount`).
+- **`[Seed G↔P]`**: The back-and-forth turns from Seed (`SG-seed-1` → `SP-seed-1` → `SG-seed-2` → … → `SG-seed-final`).
+- **`[GU-u G↔P]`**: The back-and-forth turns from Global Update $u$ (`SG-gu-1` → `SP-gu-1` → … → `SG-gu-final`).
+- **`{GU_Note(u)}`**: Active note for Global Update $u$:
+  > *"These strategies were actually finalized and were executed, critiqued, and corrected for `j` iterations. The DOS output is a synthesis of the critique across each branch so that you understand where each branch is failing exactly. For richer context, you have also received the latest corrections in every branch. Finally, you will receive a BSR object calculated by the harness by running information-theory and related concepts on the window, containing the decisions about what to continue, evolve, and prune. Now generate the new strategies object for the changed slots only."*
+- **`[GU-u Context]`**: The heavy context for Global Update $u$:
+  1. Current actual strategies (`main1`…`mainN`) + latest correction from every branch
+  2. Consolidated BSR decisions (`CONTINUE` / `EVOLVE in_place` / `EVOLVE rollback` / `PRUNE` + event reasons)
+  3. `dos_output.for_strategies` (Step-i DOS synthesis for GU-$u$)
+  4. `strategies_finalized_and_used_so_far` (ledger of every strategy actually finalized and executed so far)
+- **`{GU_Reframed_Note(u)}`**: Compact note that **replaces** `{GU_Note(u)} + [GU-u Context]` once Global Update $u$ is in the past:
+  > *"Yes, these strategies were actually finalized and were executed, critiqued, and corrected for `j` iterations. You received the DOS output for previous global update `u` too, which you can find inside `DOS_history/DOS_global_update_0{u}_step_i.md`. You can view the past corrections by going to their corresponding `Strategy-N/history/` directories. After this, you went back and forth with your proximity friend:"*
+
+#### Exact Chronological Payloads (`SG & SP`)
+- **During Seed:**
+  - SG Turn 1: `1. [Challenge + Count]`
+  - SP Turn 1: `1. [Challenge + Count]` → `2. SG-seed-1`
+  - SG Turn 2: `1. [Challenge + Count]` → `2. SG-seed-1` → `3. SP-seed-1`
+  - …continues for `strategyProximityLoops` rounds until `SG-seed-final`.
+- **During Global Update 1:**
+  - `1. [Challenge + Count]`
+  - `2. [Seed G↔P]`
+  - `3. {GU_Note(1)} + [GU-1 Context]`
+  - `4. [GU-1 G↔P so far]` (empty on SG Turn 1; `SG-gu1-1` on SP Turn 1; `SG-gu1-1 → SP-gu1-1` on SG Turn 2; etc.)
+- **During Global Update 2** (`{GU_Note(1)} + [GU-1 Context]` is removed and replaced by `{GU_Reframed_Note(1)}`):
+  - `1. [Challenge + Count]`
+  - `2. [Seed G↔P]`
+  - `3. {GU_Reframed_Note(1)}`
+  - `4. [GU-1 G↔P]`
+  - `5. {GU_Note(2)} + [GU-2 Context]`
+  - `6. [GU-2 G↔P so far]`
+- **During Global Update $u$ ($u \ge 3$):**
+  - `1. [Challenge + Count]`
+  - `2. [Seed G↔P]`
+  - `3. {GU_Reframed_Note(1)}` → `4. [GU-1 G↔P]`
+  - `5. {GU_Reframed_Note(2)}` → `6. [GU-2 G↔P]`
+  - …
+  - `{GU_Reframed_Note(u-1)}` → `[GU-(u-1) G↔P]`
+  - `{GU_Note(u)} + [GU-u Context]`
+  - `[GU-u G↔P so far]`
 
 The consolidated decisions carry, for each EVOLVE or PRUNE branch, the decision and the BSR event reasons, and for an EVOLVE with rollback also the rollback point. The strategy agent uses them to know where not to go and, for a pruned slot, how much of the old strategy is worth inheriting (§6.6). They carry no probabilities or computed scores (§6.7).
 
-### `context_for_hypothesis_generate(heartbeat_no)`
+---
 
-hypothesis generation ↔ proximity history + context for the heartbeat_no
+### `context_for_hypothesis_generate(heartbeat_no)` (Shared identically by Hypothesis Generator & Hypothesis Proximity)
 
-context for the heartbeat no: 
-final generated hypothesis object previously + corresponding testing outputs + mapped branch packets (just matching schema that tells it what are the current running strategies and what hypothesis were mapped to what) + realized hypothesis feedback + your predicted test outcome + what was actually observed test outcome when tested independently + surprise bits + utilization of those packets across branches + critique count-evidence.
-this is it. nothing extra or less.
+Both **Hypothesis Generator (HG)** and **Hypothesis Proximity (HP)** receive the **exact same user prompt** at every turn of a heartbeat loop. It does **not** include `hypotheses_finalized_and_used_so_far` or raw branch critiques.
 
-it doesn't need `hypothesis finalized and actually used`like strategies. this is a very genuine and important distinction. 
+#### Short Forms
+- **`[Challenge + Count]`**: Core challenge (with any direct context files/images) + target count (`hypothesisCount`).
+- **`[HB-h G↔P]`**: The back-and-forth turns from Heartbeat $h$ (`HG-hb-1` → `HP-hb-1` → … → `HG-hb-final`).
+- **`{HB_Note(1)}`**: Active note for Heartbeat 1 (no previous hypotheses exist yet):
+  > *"The branches have executed, critiqued, and corrected up to this first heartbeat. You have received the DOS synthesis of where each branch currently stands, along with the currently running strategies and their latest corrections. Now generate the initial hypotheses object."*
+- **`[HB-1 Context]`**:
+  1. Current running strategies (`main1`…`mainN`) + latest correction from each active branch
+  2. DOS core synthesis for Heartbeat 1 (`DOS_heartbeat_01`)
+- **`{HB_Note(h)}`** (for $h \ge 2$): Active note before Heartbeat $h$:
+  > *"The hypotheses from Heartbeat `h-1` were finalized, tested independently by dedicated tester agents, and mapped as packets to the target branches, which then executed corrections with them. Below is the context for Heartbeat `h`: the finalized hypotheses from Heartbeat `h-1` and their independent test outputs, the mapped branch packets showing the current running strategies, their latest corrections, and which hypotheses were routed to which branches, the realized hypothesis feedback (your predicted test outcome, observed test outcome, surprise bits, utilization across branches, and critique counterevidence), and the new DOS synthesis. Now generate the new hypotheses object."*
+- **`[HB-h Context]`** (for $h \ge 2$): Strictly these items (nothing extra or less):
+  1. Final generated hypothesis object from Heartbeat $h-1$ + corresponding independent testing outputs & verdicts
+  2. Mapped branch packets (schema showing current running strategies `main1`…`mainN`, their latest corrections, and which hypotheses from Heartbeat $h-1$ were mapped to which branches)
+  3. Realized hypothesis feedback for Heartbeat $h-1$ (`your_predicted_test_outcome`, `observed_test_outcome`, `surprise_bits`, `utilization` vector `[C/T, P/T, N/T, M/T]`, and `critique_counterevidence`)
+  4. DOS core synthesis for Heartbeat $h$
+- **`{HB_Reframed_Note(h)}`**: Compact note that **replaces** `{HB_Note(h)} + [HB-h Context]` once Heartbeat $h$ is in the past:
+  - For $h = 1$:
+    > *"In Heartbeat 1, you received the initial DOS synthesis (`{dosFilePath}`), the active strategies, and their latest corrections, and went back and forth with your proximity friend:"*
+  - For $h \ge 2$:
+    > *"Yes, the hypotheses from Heartbeat `h-1` were finalized, tested independently, and mapped to branches. For Heartbeat `h`, you received the DOS synthesis inside `{dosFilePath}`, the latest corrections from the corresponding strategy directories, and the prior test outputs and realized feedback records inside `Custom_Curated_Context/Heartbeat-{h-1}/Hypotheses/`. After this, you went back and forth with your proximity friend:"*
+  *(Note: `{dosFilePath}` is dynamically resolved by the harness to either `DOS_history/DOS_heartbeat_0{h}.md` for a standalone heartbeat or `DOS_history/DOS_global_update_0{u}_step_ii.md` when Heartbeat $h$ concluded Global Update $u$.)*
+
+#### Exact Chronological Payloads (`HG & HP`)
+- **During Heartbeat 1:**
+  - `1. [Challenge + Count]`
+  - `2. {HB_Note(1)} + [HB-1 Context]`
+  - `3. [HB-1 G↔P so far]` (empty on HG Turn 1; `HG-hb1-1` on HP Turn 1; `HG-hb1-1 → HP-hb1-1` on HG Turn 2; etc.)
+- **During Heartbeat 2** (`{HB_Note(1)} + [HB-1 Context]` is removed and replaced by `{HB_Reframed_Note(1)}`):
+  - `1. [Challenge + Count]`
+  - `2. {HB_Reframed_Note(1)}`
+  - `3. [HB-1 G↔P]`
+  - `4. {HB_Note(2)} + [HB-2 Context]`
+  - `5. [HB-2 G↔P so far]`
+- **During Heartbeat 3** (`{HB_Note(2)} + [HB-2 Context]` is removed and replaced by `{HB_Reframed_Note(2)}`):
+  - `1. [Challenge + Count]`
+  - `2. {HB_Reframed_Note(1)}` → `3. [HB-1 G↔P]`
+  - `4. {HB_Reframed_Note(2)}` → `5. [HB-2 G↔P]`
+  - `6. {HB_Note(3)} + [HB-3 Context]`
+  - `7. [HB-3 G↔P so far]`
+- **During Heartbeat $h$ inside a Global Update (The Exception):**
+  - When a Global Update $u$ finishes Step v (memory bank distillation on surviving branches + first execution & critique on replacement branches), Step vi runs **`step_ii` DOS**, and Step vii immediately runs a Heartbeat (say Heartbeat $h$) that **reuses `step_ii` DOS** instead of running a standalone Heartbeat DOS.
+  - HG & HP receive the exact same chronological structure as above, with two Global-Update-specific properties inside `[HB-h Context]`:
+    1. **Mapped branch packets** reflect the **post-update active strategies** (including evolved strategy texts and new replacement branches in pruned slots), their **latest corrections** (which for replacement branches is their first execution), and the Heartbeat $h-1$ branch mappings.
+    2. **Realized hypothesis feedback for Heartbeat $h-1$** and **DOS core synthesis** come directly from **Global Update $u$ Step-ii DOS** (where utilization and counterevidence were graded on surviving branches only).
+    3. On the *next* heartbeat ($h+1$), `{HB_Reframed_Note(h)}` points to `DOS_history/DOS_global_update_0{u}_step_ii.md`.
+ 
 
 ### `context_for_DOS(heartbeat_no | global-update-N step-i | global-update-N step-ii)`
 
@@ -713,13 +785,7 @@ Assigned strategy ID + text, `critique_correction_memory_bank_history` + `latest
 
 ### `context_for_critique_agent(branch_id, i)`
 
-Assigned strategy ID + text, the same `critique_correction_memory_bank_history` + the iteration-`i` correction just produced. Nothing from pools or hypotheses.
-
-### `context_solution_pool(branch_id, i, heartbeat_no)`
-
-Assigned strategy ID + text, the branch's latest correction and critique (iteration `i`), all of the branch's pools from previous heartbeats, `cross_strategy_latest_pools(!branch_id)`, and `hypothesis_testing_mapped(branch_id)`.
-
-A branch's pools are those generated for that branch since its creation. A new branch has none, and the earlier pools in its slot belong to the pruned branch and are never delivered.
+Assigned strategy ID + text, the same `critique_correction_memory_bank_history` + the iteration-`i` correction just produced. Nothing from hypotheses.
 
 ### `cross_strategy_latest_correction_critique(!branch_id, i)`
 
@@ -731,13 +797,7 @@ strategy-id-2: same
 ...
 ```
 
-"Latest" for the correction at iteration `i` means iteration `i-1`.
-
-### `cross_strategy_latest_pools(!branch_id)`
-
-The latest completed pool from every other branch. Pools of the current heartbeat run in parallel, so this is the previous heartbeat's. Only active branches that have a completed pool contribute. The pool of a pruned branch is never included, and a freed slot contributes nothing until its new branch has a pool, so right after a global update the cross-branch pools are the survivors' pools only.
-
-Both `cross_*` functions return null when `isolateBranches` is on.
+"Latest" for the correction at iteration `i` means iteration `i-1`. Returns null when `isolateBranches` is on.
 
 ### `context_bsr(branch_id, i)`
 
@@ -771,11 +831,10 @@ repo/
 |    |___strategies_finalized_and_used_so_far.md -- very important and contains the strategies that were actually executed critiqued corrected., pruned, evolved etc. file managed by the harness but always visible to the strategy generator agent.
 ├── Custom_Curated_Context/
 │   ├── Heartbeat-1/
-│   │   ├── Hypotheses/
-│   │   │   ├── generation_history.md
-│   │   │   ├── Hypothesis-1/        hypothesis.md + test files + feedback record
-│   │   │   └── Hypothesis-2/
-│   │   └── Solution_Pools/          one file per branch
+│   │   └── Hypotheses/
+│   │       ├── generation_history.md
+│   │       ├── Hypothesis-1/        hypothesis.md + test files + feedback record
+│   │       └── Hypothesis-2/
 │   └── Heartbeat-2/
 ├── Pruned_Strategies/
 ├── Strategy-1/                      one folder per strategy slot
@@ -790,21 +849,21 @@ repo/
 
 Directory and file names are indicative.
 
-- **`shared_workspace.md`:** a shared document every agent can edit (§8.3). Never committed (§8.2).
-- **`tmp/`:** scratch space for agents with no directory of their own (strategy generator and proximity, DOS). Never committed and not part of the record.
-- **`strategies_history/`:** each file holds the full back-and-forth between the strategy agent and its proximity agent for one call. The harness writes it from the history the call returns (§4.1).
-- **`generation_history.md`:** the same for the hypothesis agent and its proximity agent, for one heartbeat.
-- **`Hypothesis-M/`:** the tester's working directory and its entire view of the repository (§8.3), so there is no separate directory for test output. After the next DOS the harness writes that hypothesis's feedback record here (§5.4).
-- **`Solution_Pools/`:** one file per branch, such as `Strategy-1.md`. Pools live in the heartbeat directory, not in the strategy directory, and a strategy directory holds no link to its pool. After a PRUNE, earlier heartbeats' pool files under that slot name belong to the archived branch: they stay on disk but are never delivered in a prompt (§7).
+- **`shared_workspace.md`:** a shared document (capped at 5,000 tokens) that every agent can read, surgically edit, or append to via `shared_workspace()` (§8.3). Never committed (§8.2).
+- **`tmp/`:** shared untracked read/write directory at the repository root where every agent can write scratch files, shared verification harnesses, and test loops. Never committed and not part of git history.
+- **`.jsonl` trajectory files:** every `.md` final output file written by the harness is accompanied in the same directory by a `.jsonl` file storing the full raw agent trajectory for that invoke.
+- **`strategies_history/`:** each file holds the full back-and-forth between the strategy agent and its proximity agent for one call (plus `.jsonl`). The harness writes it from the history the call returns (§4.1).
+- **`generation_history.md`:** the same for the hypothesis agent and its proximity agent, for one heartbeat (plus `generation_history.jsonl`).
+- **`Hypothesis-M/`:** the tester's working directory (`hypothesis.md` + `hypothesis.jsonl` + test files). After the next DOS the harness writes that hypothesis's feedback record here (`feedback_record.md` + `feedback_record.jsonl`, §5.4).
 - **Heartbeat directories:** never erased.
-- **`Strategy-N/history/`:** one file per iteration (correction summary and critique) and one per memory bank. File numbers are global iteration numbers (§3): a branch created at the update after iteration `n` starts at iteration `n`, and the final iteration's file holds the correction only. There is no `Critique/` subfolder and no BSR file: BSR records are not stored in the repository (§12.13, §6.8).
+- **`Strategy-N/history/`:** one file per iteration (correction summary and critique, plus `.jsonl`) and one per memory bank (plus `.jsonl`). File numbers are global iteration numbers (§3): a branch created at the update after iteration `n` starts at iteration `n`, and the final iteration's file holds the correction only. There is no `Critique/` subfolder and no BSR file: BSR records are not stored in the repository (§6.8).
 
 
 ### 8.2 Git
 
 **One branch.** The repository has a single git branch and a single working tree. The shared directories (`strategies_history/`, `Custom_Curated_Context/` and `Pruned_Strategies/`) and every `Strategy-N/` folder live on it side by side, exactly as in §8.1. There are no per-strategy branches, no worktrees and no merges.
 
-**Never committed.** `shared_workspace.md` and `tmp/` stay out of git: the harness lists both in `.gitignore`. `shared_workspace.md` is managed by the harness and reached only through its own tool (§8.3). Every agent edits it live, so tracking it would only create conflicts and noise.
+**Never committed.** `shared_workspace.md` and `tmp/` stay out of git: the harness lists both in git exclude / `.gitignore`. `shared_workspace.md` is managed by the harness and reached through its `shared_workspace` tool (§8.3). Every agent edits it live, so tracking it would only create conflicts and noise.
 
 **Who runs git.** Only the harness. `.git` sits at the root, which no agent can write (§8.3), so agents can read history but cannot commit or restore. The harness runs its git operations one at a time, never in parallel: git locks the repository for every write, and when two commits happen at the same moment one of them fails instead of waiting. All strategies finish an iteration together, which is exactly when parallel commits would collide. Every commit also happens at a barrier, when no agent is writing, so a commit never captures a half-written file.
 
@@ -812,12 +871,12 @@ Directory and file names are indicative.
 
 - At the end of every iteration the harness commits each strategy folder on its own, one after another, limited to that folder (`git add Strategy-N`, then `git commit -- Strategy-N`). That is N small commits per iteration, each touching one strategy only and each named after its strategy and iteration. These commits are what make rollback possible.
 - A global update commits each surviving strategy folder once more after memory-bank distillation, and each new branch after its first execution + critique. That commit is the starting state of the branch's next window, which a rollback to `window_start` returns to (§6.3).
-- The harness commits the shared directories when a heartbeat finishes and after each strategy history file is written. A DOS run does not trigger a commit because DOS writes nothing.
+- The harness commits the shared directories when a heartbeat finishes and after each strategy history file is written.
 
 **Lifecycle.**
 
 1. The repository is created when the core challenge is ready, before strategy generation.
-2. The harness writes `strategies_history/seed_strategies.md`, then creates N strategy directories.
+2. The harness writes `strategies_history/seed_strategies.md` (and `.jsonl`), then creates N strategy directories.
 3. Branches are dispatched in parallel for execution and critique.
 4. The harness commits each strategy folder when an iteration completes.
 5. Each heartbeat writes its `Heartbeat-N` directory. Branches receive its content through their prompts (`latest_custom_curated_context`) and can open the files.
@@ -832,26 +891,24 @@ Reason for one branch: all strategies run in parallel, and each agent writes in 
 
 | Role | Working directory |
 |---|---|
-| Strategy generator and proximity | root dir is cwd but with only read permission. Scratch in `tmp/` |
-| DOS | root dir is cwd but with only read permission. Scratch in `tmp/` |
-| Hypothesis generator and proximity | `Custom_Curated_Context/Heartbeat-N/` is the cwd but with only read permission. Scratch in tmp/ |
-| Hypothesis tester (one per hypothesis) | `.../Hypotheses/Hypothesis-M/` (read and write access here, and nowhere else) |
-| Structured noise agents | `.../Heartbeat-N/Solution_Pools/`(write access here) |
-| Solution attempt, critique, correction, memory bank, BSR | `Strategy-N/` (write access here)|
-| Final judge | root dir is cwd but with only read permission. no write permissions at all. |
+| Strategy generator and proximity | root dir is cwd (read-only). Read/write in `tmp/` |
+| DOS | root dir is cwd (read-only). Read/write in `tmp/` |
+| Hypothesis generator and proximity | `Custom_Curated_Context/Heartbeat-N/` is cwd (read-only). Read/write in `tmp/` |
+| Hypothesis tester (one per hypothesis) | `.../Hypotheses/Hypothesis-M/` (read/write here and in `tmp/`, full repository read) |
+| Solution attempt, critique, correction | `Strategy-N/` (read/write here and in `tmp/`, full repository read) |
+| Memory bank, BSR | `Strategy-N/` is cwd (read-only). Read/write in `tmp/`, full repository read |
+| Final judge | root dir is cwd (read-only). Read/write in `tmp/` |
 
-- **Read:** every agent can read the whole repository, except the hypothesis tester, which can read only its own `Hypothesis-M/` folder. Its view is limited by the sandbox, not by its prompt (§4.3).
-- **Write:** an agent writes only in its assigned writable permission directory. Nobody writes to the root. That includes `.git`: agents can read history but cannot commit, restore or otherwise write to git (§8.2).
-- `shared_workspace.md` is handled by harness and any agent can edit or read it in real-time in parallel in real-time. the harness will literally give a new tool called "shared_workspace()" and that will allow the agent to read and write this file. this might be stored in some tmp file but the live upto-date copy will be always available in the root directory even in-between the iterations. the latest copy will always remain there, managed by the harness itself, and git never sees it (§8.2).
-- **Harness:** the harness, not any agent, creates directories, writes strategy history files and hypothesis feedback records, commits, restores strategy folders to earlier commits, and moves strategy folders into `Pruned_Strategies/`.
-- **Prompt-enforced isolation:** because reading is open for every other agent, one isolation rule rests on the prompt, not on permissions: `isolateBranches` (§2). The tester's independence (§4.3) is enforced mechanically by its folder-only view.
+- **Read:** every agent can read the whole repository.
+- **Write:** every agent has read/write access to `/tmp/` (`repo/tmp/`) for shared verification harnesses and scratch files, plus write access in its assigned `Working directory` (`Strategy-N/` or `Hypothesis-M/`). Nobody writes directly to the repository root or to `.git` (§8.2).
+- `shared_workspace.md` is handled by the harness and every agent can read, surgically edit (`old_string` $\to$ `new_string` with optional `replace_all`), or append to it in real-time via `shared_workspace()`. Targeted edits update specific sections in place while preserving peer findings, and the file is capped at 5,000 tokens. When an edit or append exceeds 5,000 tokens, the failed tool call and error are preserved in the agent's conversation history and the harness injects a note instructing the agent to trim stale content or make a more concise update. The live up-to-date copy is always available at the root directory even in-between iterations, and git never tracks it (§8.2).
+- **Harness:** the harness, not any agent, creates directories, writes strategy history files, hypothesis feedback records, and `.jsonl` trajectory files, commits, restores strategy folders to earlier commits, and moves strategy folders into `Pruned_Strategies/`.
 
-All sandbox-enabled roles receive `sandbox_exec` and `final_output`. Intermediate tool transcripts stay internal. `final_output` validates role-specific structured output before returning it to the pipeline.
+All sandbox-enabled roles receive `sandbox_exec`, `shared_workspace`, and `final_output`. When `maxToolTurns` is $m$, the harness injects countdown notes at $m - 10$ and $m - 5$ remaining tool calls, grants a 5-turn overtime grace window at $m$ with an urgent submission prompt, and revokes `sandbox_exec` and `shared_workspace` after $m + 5$ turns so only `final_output` remains. `final_output` validates role-specific structured output and enforces per-role output token caps (5,000 tokens for strategy generator, strategy proximity, hypothesis generator, hypothesis proximity, DOS, BSR, critique, hypothesis tester, solution attempt, and final judge; 10,000 tokens for correction and memory bank). When a submission exceeds its token cap, the tool call and error remain in conversation history and the harness injects a note instructing the agent to condense and resubmit within its token limit.
 
 
 ### 8.4 Harness Update (tools that every agent have):
-Currently the harness provides the agents with the sandbox_exec() and a submit final output tool. along with those, now we provide all of them. yes, all of them, a shared_workspace() tool. this single new tool should allow the agents to read and write into the shared workspace in realtime. this should work like google docs which works in real time even if there are parallel agents making edits. the edits won't be tagged by the agent roles. The one exception is the hypothesis tester: it gets no `shared_workspace()`, because the document is live and shared across agents and would be a channel around its folder-only view (§4.3, §8.3).
-and unlike previously, now the final judge also gets repository access, read-only.
+The harness provides every agent with `sandbox_exec()`, `shared_workspace()` (`read`, `edit`, `append`, capped at 5,000 tokens), and `final_output()` (with per-role output token gate). Every agent also gets full repository read scope and read/write access to workspace-root `/tmp/`.
 direct context vs the context through file-system distinction and its logic still stays as it is. literally no change in it. doing anything to it would seriously fk this up so just keep it like that.
 
 ### 8.5 Multi-agent harness empathy:
@@ -876,7 +933,7 @@ but what's very important is that: the current prompts are all handwritten and s
 
 **Memory Bank.** Recursively merges the previous memory with the new window. Records durable lessons, recurring failures, attempted repairs and strategic trajectory. Runs at each global update on surviving branches.
 
-**Final Judge.** Receives the challenge (and original image) and one candidate per active branch: stable strategy ID, active strategy text, final solution. It receives no critique, memory, pool output, hypothesis history, sandbox transcript or archived branch in its direct context. It has read-only access to the repository (§8.3), so it can open those files, but the candidates it chooses between are the ones in its direct context. Its output is the selected candidate's answer, not a synthesis.
+**Final Judge.** Receives the challenge (and original image) and one candidate per active branch: stable strategy ID, active strategy text, final solution. It receives no critique, memory, hypothesis history, sandbox transcript or archived branch in its direct context. It has read-only access to the repository (§8.3), so it can open those files, but the candidates it chooses between are the ones in its direct context. Its output is the selected candidate's answer, not a synthesis.
 
 ### Failure policy
 
@@ -888,58 +945,4 @@ Parsers enforce exact IDs, unique routes, a complete decision vector (one decisi
 
 ## 10. UI surfaces
 
-Branches (active strategies and branch history), Hypotheses (generation/proximity history, heartbeats, routes, tester output, realized feedback), Structured Noise (per-branch, per-heartbeat), Branch State (BSR reports, computed scores, graded predictions and decisions per global update), Final Result, Live (agent lifecycle, prompts, responses, failures), Filesystem (repository inspection). The configuration panel exposes only fixed-pipeline controls, and the prompt editor exposes only agents that exist in this architecture.
-
----
-
-## 11. Removed
-
-- **Post-Quality-Filter**, the `update` decision, `pqfAggressiveness`, branch versions, sub-strategies, modes, full solution context.
-- **Memory + evolution filter every five new history entries.** Replaced by `j`.
-- **Hypothesis refresh every even global iteration** and the pre-execution hypothesis round. Replaced by `k` and critique-driven generation.
-- **Structured noise at every iteration.** Pools now run inside the heartbeat.
-- **The per-role permission matrix.** Replaced by one rule: every agent reads the whole repository and writes only in its own working directory (§8.3).
-- **Most of the information-theory layer:** transition-level scores, the two-view trajectory/global comparison and agreement, critique-resolution balance, quantization, Elias-gamma residual coding, predictive compression gain Q, and the compressed trajectory model. Three parts came back in a much simpler form, specified in §6: confirmed progress and regression (§6.2, §6.3), the next-window prediction with its lifecycle and hidden-prediction rule (§6.4, §6.7), and the PRUNE / EVOLVE / CONTINUE pressures (§6.5).
-- **The old BSR vector fields:** `delta`, `stagnation`, `branch_state` (`oscillatory` / `local-minima`), `regression_start` and `worth_more_compute`. Replaced by confirmed events, the next-window prediction and the computed pressures (§6).
-- **Fresh restart as a form of EVOLVE.** Folded into PRUNE: the strategy agent decides how much of the old strategy a new branch inherits (§6.6).
-- **Per-strategy git branches, worktrees and merges.** Replaced by one branch with one folder per strategy, committed by the harness (§8.2). Parallel agents need every strategy's folder on disk at once, which one working tree cannot give a branch per strategy. Per-strategy revert needs only disjoint folders, not branches.
-
-Reason for removing those parts of the information-theory layer: they add complexity without simplifying anything, contain no encoded cognition like the other components, and would not scale to large swarms or multi-agent systems. That document was also incomplete (sections 2, 13, 20, 21, 27 and 37 are absent, and `A`, `X`, `V`, `O` and `Stability` are never defined), so its formulas could not be implemented as written.
-
-Reason three parts came back: each is now a quantity the system can check against reality and that the decision rule reads. Confirmed events are backed by evidence, the prediction is later scored against what happened, and every pressure is built from those two. Nothing is computed that no decision uses. It reuses the §5 loop (forecast, observation, surprisal) instead of adding a subsystem.
-
-**Kept from that document because they are not information theory:** the marginal-compute question, the two exhaustion modes, the reason + score field pattern, BSR never judging correctness or emitting an action, per-global-update snapshots for survivors, and the destructive-action tie order.
-
----
-
-## 12. Needs a decision
-
-[solved] **12.1 Decision rule.** Resolved by §6.5. The earlier proposal (oscillation → rollback, stuck with nothing left to gain → PRUNE, otherwise CONTINUE) survives as limit cases of the pressure rule, which also gives a saturated branch with progress standing its own action (EVOLVE in place). Code selects the EVOLVE form (§6.5). Fresh restart was folded into PRUNE (§6.6). After a rollback, memory distillation covers only the retained history (§6.6).
-
-[solved] **12.2 BSR schema details.** Resolved by §6.2 and §6.5. The report has no state enum, so a healthy branch needs no value, and `worth_more_compute` and `stagnation` no longer exist. A negative `critique_alignment` means the corrections went against the critiques, and the decision reads it as 0.
-
-[solved] **12.3 Rollback and BSR history.** BSR records are not stored in the repository (§12.13), so git holds none. A rollback removes the discarded iterations' events from the branch's ledger, and PRUNE closes the ledger with the branch (§6.8).
-
-
-[solved] **12.5 DOS runs.** Resolved by §5.1 and `context_for_DOS` (§7). The step-ii DOS of a global update (§4.6 vi) is the DOS of the heartbeat that ends it: it runs once and is reused. `hypothesis_feedback` comes from the heartbeat DOS or the step-ii DOS, never from the step-i DOS, which only feeds strategy generation.
-
-[solved] **12.6 Information-theory remnants.** The DOS field named `mdl` was dropped. DOS outputs `core_synthesis` (and `hypothesis_feedback` when applicable).
- The probability floor and calibration: the floor is 0.01, defined once in §6.4 and used by both `surprise_bits` (§5.2) and BSR's surprisal. Calibration is tracked as mean surprisal (log loss) against the 1.585-bit baseline of a uniform guess (§6.4).
-
-
-[solved] **12.4 Context for new branches.** Slot IDs are reused. The previous heartbeat's mapped packet for that slot was written for the pruned strategy. Undecided whether a new branch's first execution gets that packet, the latest heartbeat's global packets only, or nothing. 
-== this is not even a problem because after the global update the heartbeat immeidately runs ont he latest strategies so it maps to the new strategies by default.
-
-[solved] **12.8 Reading across branches and main.** Dissolved by §8.2. There are no per-strategy git branches, so every strategy folder, the heartbeat directories and the strategy histories sit in one working tree and every agent reads them straight from disk. Nothing is delivered through git, and the harness commits a heartbeat when it finishes. `shared_workspace.md` is untracked and reached through its own tool (§8.3).
-
-**12.12 Minor.**
-- [solved] Bounds on `i`, `j` and `k` are inclusive (§2): 5 ≤ `i` ≤ 20, 3 ≤ `j` ≤ 8, 2 ≤ `k` ≤ `j`, with defaults `i` = 10, `j` = 5, `k` = 3. `j` is not required to be ≤ `i`: with `i = 5` and `j = 8` no global update ever runs.
-
-- [solved] The final judge receives no critique, so the last iteration's critique is unused. The final iteration runs correction only and no critique is run (§3).
-- [solved] Archive paths must be ordinal so reused slot IDs never collide with archived branches or their stored data. yes, true.
-- [solved] New-branch iteration numbering: iteration numbers are global everywhere, and a branch created at the update after iteration `n` records its first execution + critique as iteration `n` (§3).
-
-**12.13 Other repository details, confirmed.**
-- `Strategy-N/history/` holds one file per iteration (correction+critique_together.md), one per memory bank. No BSR file or any other noise.
-- `Solution_Pools/` holds one file per branch. All pool agents of a heartbeat share that directory, so each staying in its own file rests on the prompt. yes, this is true. with the pool agent this is actually okay..
-- DOS output is stored in the repository. BSR output is not stored in the repository.
+Branches (active strategies and branch history), Hypotheses (generation/proximity history, heartbeats, routes, tester output, realized feedback), Branch State (BSR reports, computed scores, graded predictions and decisions per global update), Final Result, Live (agent lifecycle, prompts, responses, failures), Filesystem (repository inspection). The configuration panel exposes only fixed-pipeline controls, and the prompt editor exposes only agents that exist in this architecture.

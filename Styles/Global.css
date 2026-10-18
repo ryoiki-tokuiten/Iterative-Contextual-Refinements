@@ -433,14 +433,10 @@ body.light-mode {
         border-color: rgba(0, 0, 0, 0.1) !important;
     }
 
-    /* Additional Solution Pool & Filesystem overrides */
-    & .agent-card, & .sp-solution-card, & .knowledge-packet-card, & .pool-iteration-container, & .sp-fullscreen-panel, & .sp-card-content, & .sp-card-header, & .view-pool-button, & .solution-pool-download-button {
+    /* Additional Filesystem & Card overrides */
+    & .agent-card, & .knowledge-packet-card {
         background-color: var(--background-primary) !important;
         border-color: var(--border-subtle) !important;
-    }
-    
-    & .sp-fullscreen-overlay {
-        background-color: rgba(250, 249, 245, 0.9) !important;
     }
     
     & .vfs-sidebar, & .vfs-sidebar-title, & .vfs-editor-header, & .vfs-version-select, & .vfs-media-preview img, & .vfs-refresh-btn-footer, & .vfs-compare-trigger-footer {

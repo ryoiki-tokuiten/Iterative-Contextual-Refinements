@@ -77,7 +77,6 @@ interface TokenVolumeGraphProps {
     j?: number;
     k?: number;
     isolateBranches: boolean;
-    disableSolutionPool: boolean;
     codeExecutionEnabled?: boolean;
 }
 
@@ -90,7 +89,6 @@ export const TokenVolumeGraph: React.FC<TokenVolumeGraphProps> = ({
     j,
     k,
     isolateBranches,
-    disableSolutionPool,
     codeExecutionEnabled,
 }) => {
     const [focus, setFocus] = useState<TokenGraphFocus>('total');
@@ -105,10 +103,9 @@ export const TokenVolumeGraph: React.FC<TokenVolumeGraphProps> = ({
         j,
         k,
         isolateBranches,
-        disableSolutionPool,
         codeExecutionEnabled,
         maxDepth: safeDepth,
-    }), [strategiesCount, strategyProximityLoops, hypothesisCount, hypothesisProximityLoops, j, k, isolateBranches, disableSolutionPool, codeExecutionEnabled, safeDepth]);
+    }), [strategiesCount, strategyProximityLoops, hypothesisCount, hypothesisProximityLoops, j, k, isolateBranches, codeExecutionEnabled, safeDepth]);
 
     const selected = useMemo(() => calculateDeepthinkTokenEstimate({
         strategiesCount,
@@ -120,9 +117,8 @@ export const TokenVolumeGraph: React.FC<TokenVolumeGraphProps> = ({
         j,
         k,
         isolateBranches,
-        disableSolutionPool,
         codeExecutionEnabled,
-    }), [strategiesCount, strategyProximityLoops, hypothesisCount, hypothesisProximityLoops, j, k, isolateBranches, disableSolutionPool, codeExecutionEnabled, safeDepth]);
+    }), [strategiesCount, strategyProximityLoops, hypothesisCount, hypothesisProximityLoops, j, k, isolateBranches, codeExecutionEnabled, safeDepth]);
 
     const [chartSize, setChartSize] = useState<{ width: number; height: number }>({
         width: TOKEN_CHART.width,
@@ -331,7 +327,6 @@ export const TotalLLMCallsTokenEstimationModal: React.FC<{
             j: configState.j,
             k: configState.k,
             isolateBranches: configState.isolateBranches,
-            disableSolutionPool: configState.disableSolutionPool,
             codeExecutionEnabled: configState.codeExecutionEnabled,
             deepthinkCodeExecutionEnabled: configState.codeExecutionEnabled,
         });
@@ -354,7 +349,6 @@ export const TotalLLMCallsTokenEstimationModal: React.FC<{
         j: configState.j,
         k: configState.k,
         isolateBranches: configState.isolateBranches,
-        disableSolutionPool: configState.disableSolutionPool,
         codeExecutionEnabled: configState.codeExecutionEnabled,
     }), [configState, safeDepth]);
 
@@ -443,7 +437,6 @@ export const TotalLLMCallsTokenEstimationModal: React.FC<{
                                 j={configState.j}
                                 k={configState.k}
                                 isolateBranches={configState.isolateBranches}
-                                disableSolutionPool={configState.disableSolutionPool}
                                 codeExecutionEnabled={configState.codeExecutionEnabled}
                             />
                         </div>

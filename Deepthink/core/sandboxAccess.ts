@@ -36,10 +36,6 @@ export const DEEPTHINK_SANDBOX_DIRECTORY_POLICY = {
         return `${this.strategyDirectory(slotIndex)}/Critique`;
     },
 
-    solutionPoolDirectory(slotIndex: number): string {
-        return `${this.strategyDirectory(slotIndex)}/SolutionPool`;
-    },
-
     hypothesisRoundDirectory(roundNumber: number): string {
         return `Hypothesis-v${roundNumber}`;
     },
@@ -92,9 +88,8 @@ export function buildDeepthinkSandboxRepositoryAccess(input: DeepthinkSandboxAcc
                 throw new Error('Hypothesis sandbox access requires a hypothesis label.');
             }
             return {
-                repositoryId: input.repositoryId,
+                ...fullRepositoryRead(input.repositoryId),
                 agentDirectory: DEEPTHINK_SANDBOX_DIRECTORY_POLICY.hypothesisDirectory(input.hypothesisRoundNumber, input.hypothesisLabel),
-                readableDirectories: [],
                 revision,
             };
 
@@ -105,7 +100,6 @@ export function buildDeepthinkSandboxRepositoryAccess(input: DeepthinkSandboxAcc
     const slotIndex = requireStrategySlot(input);
     const currentStrategyDirectory = DEEPTHINK_SANDBOX_DIRECTORY_POLICY.strategyDirectory(slotIndex);
     const currentCritiqueDirectory = DEEPTHINK_SANDBOX_DIRECTORY_POLICY.critiqueDirectory(slotIndex);
-    const currentSolutionPoolDirectory = DEEPTHINK_SANDBOX_DIRECTORY_POLICY.solutionPoolDirectory(slotIndex);
     const selectedHypothesisDirectories = (input.selectedHypothesisLabels || [])
         .map(label => DEEPTHINK_SANDBOX_DIRECTORY_POLICY.hypothesisDirectory(input.selectedHypothesisRoundNumber || 1, label));
     const peerStrategyDirectories = (input.peerStrategySlotIndexes || [])
@@ -120,22 +114,12 @@ export function buildDeepthinkSandboxRepositoryAccess(input: DeepthinkSandboxAcc
         };
     }
 
-    if (input.role === 'Structured Structured Noise') {
-        return {
-            repositoryId: input.repositoryId,
-            agentDirectory: currentSolutionPoolDirectory,
-            readableDirectories: unique([currentStrategyDirectory, ...peerStrategyDirectories, ...selectedHypothesisDirectories]),
-            revision,
-        };
-    }
-
     if (input.role === 'Solution Critique') {
         return {
             repositoryId: input.repositoryId,
             agentDirectory: currentCritiqueDirectory,
             readableDirectories: [currentStrategyDirectory],
             liveReadableDirectories: [currentStrategyDirectory],
-            hiddenDirectories: [currentSolutionPoolDirectory],
             revision,
         };
     }
@@ -144,11 +128,10 @@ export function buildDeepthinkSandboxRepositoryAccess(input: DeepthinkSandboxAcc
         ...selectedHypothesisDirectories,
         ...peerStrategyDirectories,
         ...(input.role === 'Solution Correction' ? [currentCritiqueDirectory] : []),
-        ...(input.role === 'Solution Correction' ? [currentSolutionPoolDirectory] : []),
     ];
 
     const hiddenDirectories = input.role === 'Solution Attempt'
-        ? [currentCritiqueDirectory, currentSolutionPoolDirectory]
+        ? [currentCritiqueDirectory]
         : [];
 
     return {

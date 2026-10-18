@@ -25,7 +25,6 @@ export interface DeepthinkRunConfig {
     j?: number;
     k?: number;
     isolateBranches: boolean;
-    solutionPoolDisabled: boolean;
     codeExecutionEnabled: boolean;
     prompts: CustomizablePromptsDeepthink;
 }

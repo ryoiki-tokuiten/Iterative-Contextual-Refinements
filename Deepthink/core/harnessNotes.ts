@@ -10,37 +10,37 @@
 import type { BsrAction, BsrEvolveForm } from './types.ts';
 
 /**
- * Builds the active note injected before strategy generator global update turns (§7).
+ * Builds the active note injected before strategy generator & proximity global update turns (§7).
  */
 export function buildStrategyGlobalUpdateNote(j: number): string {
   return [
     `These strategies were actually finalized and were executed, critiqued, and corrected for ${j} iterations.`,
-    `The DOS output provides a synthesis of the critique across each branch so that you understand where each branch is failing exactly.`,
+    `The DOS output is a synthesis of the critique across each branch so that you understand where each branch is failing exactly.`,
     `For richer context, you have also received the latest corrections in every branch.`,
-    `Finally, you have received the consolidated BSR decisions calculated by the harness from the window's trajectory (EVOLVE, PRUNE, CONTINUE).`,
-    `Now generate the surgical updated strategies object for the changed slots only.`
+    `Finally, you will receive a BSR object calculated by the harness by running information-theory and related concepts on the window, containing the decisions about what to continue, evolve, and prune.`,
+    `Now generate the new strategies object for the changed slots only.`
   ].join(' ');
 }
 
 /**
- * Builds the reframed note injected between earlier historical global update turns in proximity history (§7).
+ * Builds the reframed note injected between earlier historical global update turns in strategy proximity history (§7).
  */
 export function buildStrategyReframedHistoricalNote(
   updateNumber: number,
   j: number,
   dosFilePath?: string
 ): string {
-  const dosLocation = dosFilePath || `DOS_history/global_update_${String(updateNumber).padStart(2, '0')}.md`;
+  const dosLocation = dosFilePath || `DOS_history/DOS_global_update_${String(updateNumber).padStart(2, '0')}_step_i.md`;
   return [
     `Yes, these strategies were actually finalized and were executed, critiqued, and corrected for ${j} iterations.`,
     `You received the DOS output for previous global update ${updateNumber} too, which you can find inside ${dosLocation}.`,
-    `You can view past corrections by going to their corresponding strategy directories.`,
-    `After this, you went back and forth with your proximity reviewer:`
+    `You can view the past corrections by going to their corresponding Strategy-N/history/ directories.`,
+    `After this, you went back and forth with your proximity friend:`
   ].join(' ');
 }
 
 /**
- * Assembles the full historical proximity transcript with dynamically injected reframed notes
+ * Assembles the historical strategy proximity transcript with dynamically injected reframed notes
  * between historical turns (§7).
  */
 export function buildStrategyProximityHistoryWithNotes(
@@ -64,6 +64,75 @@ export function buildStrategyProximityHistoryWithNotes(
     sections.push(`\n# Global Update ${gu.updateNumber} Strategy Revision History`);
     for (const turn of gu.turns) {
       sections.push(`### Strategy ${turn.role === 'generator' ? 'Generator' : 'Proximity Reviewer'} (Turn ${turn.turnNumber ?? 1})\n${turn.content}`);
+    }
+  }
+
+  return sections.join('\n\n');
+}
+
+/**
+ * Builds the active note injected before hypothesis generator & proximity heartbeat turns (§7).
+ */
+export function buildHypothesisHeartbeatNote(heartbeatNo: number): string {
+  if (heartbeatNo <= 1) {
+    return [
+      `The branches have executed, critiqued, and corrected up to this first heartbeat.`,
+      `You have received the DOS synthesis of where each branch currently stands, along with the currently running strategies and their latest corrections.`,
+      `Now generate the initial hypotheses object.`
+    ].join(' ');
+  }
+  const prevHb = heartbeatNo - 1;
+  return [
+    `The hypotheses from Heartbeat ${prevHb} were finalized, tested independently by dedicated tester agents, and mapped as packets to the target branches, which then executed corrections with them.`,
+    `Below is the context for Heartbeat ${heartbeatNo}: the finalized hypotheses from Heartbeat ${prevHb} and their independent test outputs,`,
+    `the mapped branch packets showing the current running strategies, their latest corrections, and which hypotheses were routed to which branches,`,
+    `the realized hypothesis feedback (your predicted test outcome, observed test outcome, surprise bits, utilization across branches, and critique counterevidence),`,
+    `and the new DOS synthesis. Now generate the new hypotheses object.`
+  ].join(' ');
+}
+
+/**
+ * Builds the reframed note that replaces a completed heartbeat's heavy context in hypothesis proximity history (§7).
+ */
+export function buildHypothesisReframedHistoricalNote(
+  heartbeatNo: number,
+  dosFilePath?: string
+): string {
+  const dosLocation = dosFilePath || `DOS_history/DOS_heartbeat_${String(heartbeatNo).padStart(2, '0')}.md`;
+  if (heartbeatNo <= 1) {
+    return [
+      `In Heartbeat 1, you received the initial DOS synthesis (${dosLocation}), the active strategies, and their latest corrections,`,
+      `and went back and forth with your proximity friend:`
+    ].join(' ');
+  }
+  const prevHb = heartbeatNo - 1;
+  return [
+    `Yes, the hypotheses from Heartbeat ${prevHb} were finalized, tested independently, and mapped to branches.`,
+    `For Heartbeat ${heartbeatNo}, you received the DOS synthesis inside ${dosLocation}, the latest corrections from the corresponding strategy directories,`,
+    `and the prior test outputs and realized feedback records inside Custom_Curated_Context/Heartbeat-${prevHb}/Hypotheses/.`,
+    `After this, you went back and forth with your proximity friend:`
+  ].join(' ');
+}
+
+/**
+ * Assembles the historical hypothesis proximity transcript across prior heartbeats with dynamically
+ * injected reframed notes (§7).
+ */
+export function buildHypothesisProximityHistoryWithNotes(
+  priorHeartbeats: Array<{
+    heartbeatNo: number;
+    dosFilePath?: string;
+    turns: Array<{ role: 'generator' | 'proximity'; content: string; turnNumber?: number }>;
+  }>
+): string {
+  const sections: string[] = [];
+
+  for (const hb of priorHeartbeats) {
+    if (!hb.turns || hb.turns.length === 0) continue;
+    sections.push(`---\n${buildHypothesisReframedHistoricalNote(hb.heartbeatNo, hb.dosFilePath)}\n---`);
+    sections.push(`# Heartbeat ${hb.heartbeatNo} Hypothesis Generation History`);
+    for (const turn of hb.turns) {
+      sections.push(`### Hypothesis ${turn.role === 'generator' ? 'Generator' : 'Proximity Reviewer'} (Turn ${turn.turnNumber ?? 1})\n${turn.content}`);
     }
   }
 
@@ -127,3 +196,53 @@ export function buildDosStepIiNote(
     'Do not repeat your first output: use it as a base and give a more nuanced, natural synthesis of the state you see now.'
   ].join('\n');
 }
+
+export function buildRemainingToolCallsHarnessNote(
+  remainingTurns: number,
+  maxToolTurns: number
+): string {
+  return `[HARNESS NOTE — ${remainingTurns} TOOL CALLS REMAINING]: You have ${remainingTurns} tool-call iterations remaining out of your maximum budget of ${maxToolTurns}. Begin wrapping up your verification and prepare to submit your complete response via final_output.`;
+}
+
+export function buildOvertimeFinalSubmitHarnessNote(
+  maxToolTurns: number,
+  graceTurns = 5
+): string {
+  return [
+    '================================================================================',
+    `[CRITICAL HARNESS WARNING — MAXIMUM TOOL CALL BUDGET (${maxToolTurns}) REACHED]`,
+    'STOP ALL NEW EXPLORATION AND SUBMIT YOUR FINAL OUTPUT NOW!',
+    `You have exhausted your full budget of ${maxToolTurns} tool-call iterations without submitting via final_output.`,
+    `Your run is NOT being restarted—all of your sandbox work and conversation history remain intact—and you have been granted a strict final grace window of ${graceTurns} turns to wrap up and call final_output.`,
+    `If you do not submit via final_output within these ${graceTurns} turns, all other tool access (sandbox_exec, shared_workspace) will be completely revoked and only final_output will remain available.`,
+    'Synthesize your findings and call final_output immediately!',
+    '================================================================================',
+  ].join('\n');
+}
+
+export function buildRevokedToolsFinalSubmitHarnessNote(): string {
+  return [
+    '================================================================================',
+    '[CRITICAL HARNESS ENFORCEMENT — ALL OTHER TOOL ACCESS REVOKED]',
+    'You did not submit within the 5-turn grace window after reaching the maximum tool call budget.',
+    'Access to sandbox_exec and shared_workspace has now been revoked.',
+    'Only the final_output tool is available. Call final_output immediately with your complete response.',
+    '================================================================================',
+  ].join('\n');
+}
+
+export function buildFinalOutputTokenGateHarnessNote(
+  agentName: string,
+  actualTokens: number,
+  maxOutputTokens: number
+): string {
+  return `[HARNESS NOTE — FINAL OUTPUT TOKEN LIMIT EXCEEDED]: Your final_output submission for ${agentName} was ${actualTokens} tokens, which exceeds the maximum allowed limit of ${maxOutputTokens} output tokens. Your tool call and its error remain in history. Please output at most ${maxOutputTokens} max output tokens for ${agentName} by condensing and tightening your response, then call final_output again.`;
+}
+
+export function buildSharedWorkspaceTokenGateHarnessNote(
+  actualTokens: number,
+  maxTokens = 5000
+): string {
+  return `[HARNESS NOTE — SHARED WORKSPACE TOKEN LIMIT EXCEEDED]: Your shared_workspace update resulted in ${actualTokens} tokens, which exceeds the maximum limit of ${maxTokens} tokens for shared_workspace.md. Your tool call and its error remain in history. Please output and maintain at most ${maxTokens} total tokens in shared_workspace.md by using shared_workspace(action="edit", old_string=..., new_string=...) to condense or replace existing sections.`;
+}
+

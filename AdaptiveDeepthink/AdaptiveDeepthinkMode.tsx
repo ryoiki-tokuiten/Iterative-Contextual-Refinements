@@ -40,7 +40,7 @@ const DeepthinkEmbeddedPanel: React.FC<{ state: AdaptiveDeepthinkStoreState }> =
     }
 
     const allTabs = getVisibleDeepthinkTabs(pipelineState);
-    const preferredTabId = ['solution-pool', 'critique-history'].includes(currentTab)
+    const preferredTabId = currentTab === 'critique-history'
         ? 'hypothesis-explorer'
         : currentTab;
     const activeTabId = allTabs.some(tab => tab.id === preferredTabId)

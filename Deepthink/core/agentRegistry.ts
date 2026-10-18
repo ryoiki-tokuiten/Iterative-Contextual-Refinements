@@ -15,101 +15,116 @@ import {
 type DeepthinkSystemPromptKey = Extract<keyof CustomizablePromptsDeepthink, `sys_deepthink_${string}`>;
 type DeepthinkModelKey = Extract<keyof CustomizablePromptsDeepthink, `model_${string}`>;
 
+export const DEFAULT_DEEPTHINK_MAX_OUTPUT_TOKENS = 5000;
+
 export const DEEPTHINK_AGENT_REGISTRY = {
   initialStrategy: {
     label: 'Strategy Generator',
     sandboxRole: 'Main Strategy Generation',
     systemPromptKey: 'sys_deepthink_initialStrategy',
     modelKey: 'model_initialStrategy',
+    maxOutputTokens: 5000,
   },
   strategyGeneratorGlobalUpdate: {
     label: 'Strategy Generator (Global Update)',
     sandboxRole: 'Main Strategy Generation',
     systemPromptKey: 'sys_deepthink_strategyGeneratorGlobalUpdate',
     modelKey: 'model_strategyGeneratorGlobalUpdate',
+    maxOutputTokens: 5000,
   },
   strategyProximity: {
     label: 'Strategies Proximity',
     sandboxRole: 'Main Strategy Generation',
     systemPromptKey: 'sys_deepthink_strategyProximity',
     modelKey: 'model_strategyProximity',
+    maxOutputTokens: 5000,
   },
   hypothesisGeneration: {
     label: 'Hypothesis Generation',
     sandboxRole: 'Hypothesis Generation',
     systemPromptKey: 'sys_deepthink_hypothesisGeneration',
     modelKey: 'model_hypothesisGeneration',
+    maxOutputTokens: 5000,
   },
   hypothesisProximity: {
     label: 'Hypothesis Proximity',
     sandboxRole: 'Hypothesis Generation',
     systemPromptKey: 'sys_deepthink_hypothesisProximity',
     modelKey: 'model_hypothesisProximity',
+    maxOutputTokens: 5000,
   },
   hypothesisTester: {
     label: 'Hypothesis Testing',
     sandboxRole: 'Hypothesis Testing',
     systemPromptKey: 'sys_deepthink_hypothesisTester',
     modelKey: 'model_hypothesisTester',
+    maxOutputTokens: 5000,
   },
   solutionAttempt: {
     label: 'Solution Attempt',
     sandboxRole: 'Solution Attempt',
     systemPromptKey: 'sys_deepthink_solutionAttempt',
     modelKey: 'model_solutionAttempt',
+    maxOutputTokens: 5000,
   },
   solutionCritique: {
     label: 'Solution Critique',
     sandboxRole: 'Solution Critique',
     systemPromptKey: 'sys_deepthink_solutionCritique',
     modelKey: 'model_solutionCritique',
+    maxOutputTokens: 5000,
   },
   solutionCorrection: {
     label: 'Solution Correction',
     sandboxRole: 'Solution Correction',
     systemPromptKey: 'sys_deepthink_solutionCorrection',
     modelKey: 'model_solutionCorrection',
-  },
-  structuredSolutionPool: {
-    label: 'Structured Structured Noise',
-    sandboxRole: 'Structured Structured Noise',
-    systemPromptKey: 'sys_deepthink_structuredSolutionPool',
-    modelKey: 'model_structuredSolutionPool',
+    maxOutputTokens: 10000,
   },
   memoryBank: {
     label: 'Memory Bank',
     sandboxRole: 'Memory Bank',
     systemPromptKey: 'sys_deepthink_memoryBank',
     modelKey: 'model_memoryBank',
+    maxOutputTokens: 10000,
   },
   dos: {
     label: 'Dissected Observations Synthesis',
     sandboxRole: 'Dissected Observations Synthesis',
     systemPromptKey: 'sys_deepthink_dos',
     modelKey: 'model_dos',
+    maxOutputTokens: 5000,
   },
   bsr: {
     label: 'Branch State Representation',
     sandboxRole: 'Branch State Representation',
     systemPromptKey: 'sys_deepthink_bsr',
     modelKey: 'model_bsr',
+    maxOutputTokens: 5000,
   },
   finalJudge: {
     label: 'Final Judge',
     sandboxRole: 'Final Judge',
     systemPromptKey: 'sys_deepthink_finalJudge',
     modelKey: 'model_finalJudge',
+    maxOutputTokens: 5000,
   },
 } as const satisfies Record<string, {
   label: string;
   sandboxRole: string;
   systemPromptKey: DeepthinkSystemPromptKey;
   modelKey: DeepthinkModelKey;
+  maxOutputTokens: number;
 }>;
 
 export type DeepthinkAgentKind = keyof typeof DEEPTHINK_AGENT_REGISTRY;
 export type DeepthinkSandboxRole =
   typeof DEEPTHINK_AGENT_REGISTRY[DeepthinkAgentKind]['sandboxRole'];
+
+export function deepthinkAgentMaxOutputTokens(agentKind: DeepthinkAgentKind): number {
+  const def = DEEPTHINK_AGENT_REGISTRY[agentKind];
+  return def?.maxOutputTokens ?? DEFAULT_DEEPTHINK_MAX_OUTPUT_TOKENS;
+}
 
 export function deepthinkAgentModel(
   agentKind: DeepthinkAgentKind,

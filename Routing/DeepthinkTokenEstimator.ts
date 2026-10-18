@@ -26,7 +26,6 @@ export interface DeepthinkTokenEstimateInput {
     j?: number;
     k?: number;
     isolateBranches?: boolean;
-    disableSolutionPool?: boolean;
     codeExecutionEnabled?: boolean;
 }
 
@@ -56,7 +55,6 @@ export interface DeepthinkTokenEstimate {
 
 interface TokenProfile {
     branchPairContext: number;
-    poolContext: number;
     solutionContext: number;
     hypothesisPacketContext: number;
     initialExecutionInput: number;
@@ -65,7 +63,6 @@ interface TokenProfile {
     promptBase: number;
     solutionOutput: number;
     critiqueOutput: number;
-    poolOutput: number;
     hypothesisTestOutput: number;
     hypothesisGenerationOutputPerHypothesis: number;
     strategyGenerationOutputPerStrategy: number;
@@ -77,7 +74,6 @@ interface TokenProfile {
     branchPacketShare: number;
 }
 const CORRECTOR_CONTEXT_CEILING = 195_000;
-const SOLUTION_POOL_CONTEXT_CEILING = 155_000;
 
 export const SANDBOX_PER_CALL = {
     input: {
@@ -101,7 +97,6 @@ export function getRandomSandboxIterationNoise(): number {
 
 const WORST_PROFILE: TokenProfile = {
     branchPairContext: 20_000,
-    poolContext: 15_000,
     solutionContext: 12_000,
     hypothesisPacketContext: 8_000,
     initialExecutionInput: 30_000,
@@ -110,7 +105,6 @@ const WORST_PROFILE: TokenProfile = {
     promptBase: 5_000,
     solutionOutput: 12_000,
     critiqueOutput: 6_000,
-    poolOutput: 15_000,
     hypothesisTestOutput: 8_000,
     hypothesisGenerationOutputPerHypothesis: 500,
     strategyGenerationOutputPerStrategy: 500,
@@ -124,7 +118,6 @@ const WORST_PROFILE: TokenProfile = {
 
 const AVERAGE_PROFILE: TokenProfile = {
     branchPairContext: 4_000,
-    poolContext: 2_750,
     solutionContext: 3_500,
     hypothesisPacketContext: 1_750,
     initialExecutionInput: 9_000,
@@ -133,7 +126,6 @@ const AVERAGE_PROFILE: TokenProfile = {
     promptBase: 4_000,
     solutionOutput: 3_500,
     critiqueOutput: 1_200,
-    poolOutput: 3_200,
     hypothesisTestOutput: 1_800,
     hypothesisGenerationOutputPerHypothesis: 300,
     strategyGenerationOutputPerStrategy: 250,
@@ -159,10 +151,9 @@ function calculateInputTokens(
     i: number,
     j: number,
     k: number,
-    isolateBranches: boolean,
-    disableSolutionPool: boolean
+    isolateBranches: boolean
 ): number {
-    const curatedContextEnabled = hypothesisCount > 0 || !disableSolutionPool;
+    const curatedContextEnabled = hypothesisCount > 0;
     const schedule = calculateLoopSchedule(i, j, k, curatedContextEnabled);
     const { standaloneHeartbeats, globalUpdates, totalHeartbeats } = schedule;
 
@@ -194,10 +185,9 @@ function calculateInputTokens(
             const windowContext = windowPairs * profile.branchPairContext;
             const memBankContext = n > j ? profile.memoryBankContext : 0;
             const peerContext = isolateBranches ? 0 : (strategyCount - 1) * profile.branchPairContext;
-            const poolContext = disableSolutionPool ? 0 : profile.poolContext;
 
             const correctionPerBranch = Math.min(
-                profile.branchPairContext + windowContext + memBankContext + peerContext + branchPacketContext + poolContext,
+                profile.branchPairContext + windowContext + memBankContext + peerContext + branchPacketContext,
                 CORRECTOR_CONTEXT_CEILING
             );
             branchInput += strategyCount * correctionPerBranch;
@@ -236,19 +226,6 @@ function calculateInputTokens(
         const hypTestersInput = hypothesisCount * (profile.hypothesisTestInput + 300);
 
         heartbeatInput += totalHeartbeats * (hypGenTotalInput + hypProxInput + hypTestersInput);
-    }
-
-    // Every heartbeat runs solution pool agents when enabled (§4.4, §4.5)
-    if (!disableSolutionPool && totalHeartbeats > 0) {
-        const poolInputPerBranch = Math.min(
-            profile.branchPairContext +
-            profile.solutionContext +
-            profile.critiqueOutput +
-            (isolateBranches ? 0 : (strategyCount - 1) * profile.poolContext) +
-            branchPacketContext,
-            SOLUTION_POOL_CONTEXT_CEILING
-        );
-        heartbeatInput += totalHeartbeats * strategyCount * poolInputPerBranch;
     }
 
     // 4. Global Updates (§4.6):
@@ -308,10 +285,9 @@ function calculateOutputTokens(
     hypothesisProximityLoops: number,
     i: number,
     j: number,
-    k: number,
-    disableSolutionPool: boolean
+    k: number
 ): number {
-    const curatedContextEnabled = hypothesisCount > 0 || !disableSolutionPool;
+    const curatedContextEnabled = hypothesisCount > 0;
     const schedule = calculateLoopSchedule(i, j, k, curatedContextEnabled);
     const { standaloneHeartbeats, globalUpdates, totalHeartbeats } = schedule;
 
@@ -344,11 +320,6 @@ function calculateOutputTokens(
         const hypProxOutput = hypothesisProximityLoops * (profile === WORST_PROFILE ? 2000 : 800);
         const hypTestersOutput = hypothesisCount * profile.hypothesisTestOutput;
         heartbeatOutput += totalHeartbeats * (hypGenOutput + hypProxOutput + hypTestersOutput);
-    }
-
-    // Every heartbeat runs solution pool agents (when enabled)
-    if (!disableSolutionPool && totalHeartbeats > 0) {
-        heartbeatOutput += totalHeartbeats * strategyCount * profile.poolOutput;
     }
 
     // 4. Global Updates:
@@ -402,7 +373,6 @@ export function calculateDeepthinkTokenEstimate(args: DeepthinkTokenEstimateInpu
     const j = clampInteger(args.j ?? 5, 3, 8);
     const k = clampInteger(args.k ?? 3, 2, j);
     const isolateBranches = args.isolateBranches === true;
-    const disableSolutionPool = args.disableSolutionPool === true;
 
     const averageInput = calculateInputTokens(
         AVERAGE_PROFILE,
@@ -413,8 +383,7 @@ export function calculateDeepthinkTokenEstimate(args: DeepthinkTokenEstimateInpu
         i,
         j,
         k,
-        isolateBranches,
-        disableSolutionPool
+        isolateBranches
     );
     const worstInput = calculateInputTokens(
         WORST_PROFILE,
@@ -425,8 +394,7 @@ export function calculateDeepthinkTokenEstimate(args: DeepthinkTokenEstimateInpu
         i,
         j,
         k,
-        isolateBranches,
-        disableSolutionPool
+        isolateBranches
     );
     const averageOutput = calculateOutputTokens(
         AVERAGE_PROFILE,
@@ -436,8 +404,7 @@ export function calculateDeepthinkTokenEstimate(args: DeepthinkTokenEstimateInpu
         hypothesisProximityLoops,
         i,
         j,
-        k,
-        disableSolutionPool
+        k
     );
     const worstOutput = calculateOutputTokens(
         WORST_PROFILE,
@@ -447,8 +414,7 @@ export function calculateDeepthinkTokenEstimate(args: DeepthinkTokenEstimateInpu
         hypothesisProximityLoops,
         i,
         j,
-        k,
-        disableSolutionPool
+        k
     );
 
     const apiCalls = calculateDeepthinkApiCallsFromParams({
@@ -459,7 +425,6 @@ export function calculateDeepthinkTokenEstimate(args: DeepthinkTokenEstimateInpu
         i,
         j,
         k,
-        disableSolutionPool,
         codeExecutionEnabled: args.codeExecutionEnabled,
         deepthinkCodeExecutionEnabled: args.codeExecutionEnabled,
     } as any);

@@ -157,7 +157,6 @@ function createInitialDeepthinkPipelineState(id: string, question: string): Deep
         initialStrategies: [],
         hypotheses: [],
         solutionCritiques: [],
-        structuredSolutionPoolAgents: [],
         hypothesisExplorerComplete: false,
         knowledgePacket: '',
         finalJudgingStatus: 'pending',

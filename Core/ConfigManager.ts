@@ -41,7 +41,6 @@ import {
     getHypothesisProximityLoops,
     getDeepthinkDepth,
     getIsolateBranchesEnabled,
-    getSolutionPoolDisabled,
     getSelectedThinkingLevel
 } from '../Routing';
 import { updateControlsState } from '../UI/Controls';
@@ -103,7 +102,6 @@ export async function exportConfiguration(format: ExportFormat = 'auto'): Promis
                 hypothesisProximityLoops: getHypothesisProximityLoops(),
                 deepthinkDepth: getDeepthinkDepth(),
                 isolateBranches: getIsolateBranchesEnabled(),
-                disableSolutionPool: getSolutionPoolDisabled(),
                 deepthinkCodeExecutionEnabled: routingManager.getDeepthinkConfigController().isCodeExecutionEnabled(),
                 thinkingLevel: getSelectedThinkingLevel(),
             },
@@ -286,7 +284,6 @@ function restoreModelParameters(params: ExportedConfig['modelParameters']): void
         'hypothesisProximityLoops',
         'deepthinkDepth',
         'isolateBranches',
-        'disableSolutionPool',
         'deepthinkCodeExecutionEnabled',
         'thinkingLevel',
     ];

@@ -92,7 +92,7 @@ function getLanguageExtension(filename: string) {
         case 'py': return [python()];
         case 'css': return [css()];
         case 'html': case 'htm': return [html()];
-        case 'json': return [json()];
+        case 'json': case 'jsonl': return [json()];
         case 'md': return [markdown()];
         case 'rs': return [rust()];
         case 'c': case 'cpp': case 'h': case 'hpp': case 'cc': return [cpp()];

@@ -173,14 +173,22 @@ export class GitRepositoryHarness {
    */
   public async commitStrategyHistory(
     filename: string,
-    content?: string
+    content?: string,
+    trajectoryJsonl?: string
   ): Promise<string> {
     const commitMessage = `Strategy history update: ${filename}`;
     if (content) {
-      await this.writeFilesAndCommit(commitMessage, [{
+      const files: DeepthinkResultsContextFile[] = [{
         path: `strategies_history/${filename}`,
         content,
-      }]);
+      }];
+      if (trajectoryJsonl !== undefined) {
+        files.push({
+          path: `strategies_history/${filename.replace(/\.md$/i, '.jsonl')}`,
+          content: trajectoryJsonl,
+        });
+      }
+      await this.writeFilesAndCommit(commitMessage, files);
     }
     try {
       const rt = await getSandboxRuntime();

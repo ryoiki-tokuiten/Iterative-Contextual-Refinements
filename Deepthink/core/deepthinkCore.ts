@@ -42,28 +42,6 @@ export interface DeepthinkSolutionCritiqueData {
     branchIteration?: number;
 }
 
-export interface SolutionPoolParsedSolution {
-    title: string;
-    content: string;
-    confidence: number;
-}
-
-export interface SolutionPoolParsedResponse {
-    strategy_id: string;
-    solutions: SolutionPoolParsedSolution[];
-}
-
-export interface DeepthinkStructuredSolutionPoolAgentData {
-    mainStrategyId: string;
-    poolResponse?: string;
-    parsedPoolResponse?: SolutionPoolParsedResponse;
-    status: AgentStatus | 'skipped';
-    globalIteration?: number;
-    heartbeatNo?: number;
-    branchIteration?: number;
-    executionTraceText?: string;
-}
-
 export interface DeepthinkBranchIteration {
     iterationNumber: number;
     globalIteration?: number;
@@ -151,9 +129,6 @@ export interface DeepthinkPipelineState {
     finalJudgingExecutionTraceText?: string;
     finalJudgingStatus?: AgentStatus;
     finalJudgingError?: string;
-    structuredSolutionPoolEnabled?: boolean;
-    structuredSolutionPoolAgents: DeepthinkStructuredSolutionPoolAgentData[];
-    structuredSolutionPoolStatus?: 'pending' | 'processing' | 'completed' | 'error' | 'cancelled';
     strategySpecificKnowledgePackets?: Record<string, string>;
     liveEvents?: DeepthinkLiveEvent[];
     currentIteration?: number;
@@ -222,7 +197,6 @@ export interface DeepthinkCoreDeps {
     getJ?: () => number;
     getK?: () => number;
     getIsolateBranchesEnabled: () => boolean;
-    getSolutionPoolDisabled: () => boolean;
     getDeepthinkCodeExecutionEnabled: () => boolean;
     updateControlsState: (newState: any) => void;
     getSelectedThinkingLevel?: () => 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' | string;
@@ -259,7 +233,6 @@ function captureRunConfig(): DeepthinkRunConfig {
         strategyProximityLoops: deps.getStrategyProximityLoops(),
         hypothesisCount: deps.getSelectedHypothesisCount(),
         hypothesisProximityLoops: deps.getHypothesisProximityLoops(),
-        disableSolutionPool: Boolean(deps.getSolutionPoolDisabled()),
         isolateBranches: Boolean(deps.getIsolateBranchesEnabled()),
         deepthinkCodeExecutionEnabled: Boolean(deps.getDeepthinkCodeExecutionEnabled()),
         thinkingLevel: deps.getSelectedThinkingLevel?.() || 'high',
@@ -373,7 +346,6 @@ export async function saveLatestDeepthinkState(pipeline: DeepthinkPipelineState)
                     hypothesisProximityLoops: pipeline.runConfig?.hypothesisProximityLoops ?? (deps?.getHypothesisProximityLoops ? deps.getHypothesisProximityLoops() : 1),
                     deepthinkDepth: pipeline.runConfig?.i ?? (deps?.getDeepthinkDepth ? deps.getDeepthinkDepth() : 5),
                     isolateBranches: pipeline.runConfig?.isolateBranches ?? (deps?.getIsolateBranchesEnabled ? deps.getIsolateBranchesEnabled() : false),
-                    disableSolutionPool: pipeline.runConfig?.disableSolutionPool ?? (deps?.getSolutionPoolDisabled ? deps.getSolutionPoolDisabled() : false),
                     deepthinkCodeExecutionEnabled: pipeline.runConfig?.deepthinkCodeExecutionEnabled ?? (deps?.getDeepthinkCodeExecutionEnabled ? deps.getDeepthinkCodeExecutionEnabled() : false),
                     thinkingLevel: pipeline.runConfig?.thinkingLevel ?? (deps?.getSelectedThinkingLevel ? deps.getSelectedThinkingLevel() : 'high'),
                 },
@@ -436,9 +408,6 @@ export function resetInFlightPipelineExecution(pipeline: DeepthinkPipelineState)
     }
     if (pipeline.solutionCritiquesStatus === 'processing') {
         pipeline.solutionCritiquesStatus = 'pending';
-    }
-    if (pipeline.structuredSolutionPoolStatus === 'processing') {
-        pipeline.structuredSolutionPoolStatus = 'pending';
     }
     if ((pipeline as any).hypothesisGenStatus === 'processing') {
         (pipeline as any).hypothesisGenStatus = 'pending';
@@ -535,7 +504,6 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, direc
         hypothesisRounds: [],
         solutionCritiques: [],
         memoryBankAgents: [],
-        structuredSolutionPoolAgents: [],
         heartbeats: [],
         hypothesisProximityHistory: [],
         bsrRecords: [],

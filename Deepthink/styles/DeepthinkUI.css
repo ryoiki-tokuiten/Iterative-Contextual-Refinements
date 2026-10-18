@@ -680,22 +680,6 @@ body.light-mode .strategy-branch-version-switcher {
     margin-top: 1.5rem;
 }
 
-.curated-context-columns.has-hypotheses.has-pools {
-    grid-template-columns: minmax(0, 7fr) minmax(250px, 3fr);
-}
-
-.curated-context-columns.has-hypotheses.has-pools .curated-context-pools {
-    align-self: stretch;
-    min-height: 100%;
-    padding-top: 1.5rem;
-    padding-left: 1.25rem;
-    border-left: 1px solid var(--border-color);
-}
-
-.curated-context-columns.has-hypotheses.has-pools .curated-pools-header {
-    margin-bottom: 2rem;
-}
-
 .curated-context-hypotheses {
     display: flex;
     flex-direction: column;
@@ -1078,10 +1062,6 @@ body.light-mode .hypothesis-agent-grid .hypothesis-card-header {
 
     .hypothesis-round-layout {
         grid-template-columns: 1fr;
-    }
-
-    .curated-context-columns.has-hypotheses.has-pools {
-        grid-template-columns: minmax(0, 1fr);
     }
 
     .hypothesis-round-pills {

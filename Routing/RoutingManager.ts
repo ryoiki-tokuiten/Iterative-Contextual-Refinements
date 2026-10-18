@@ -160,10 +160,6 @@ export class RoutingManager {
         return this.modelConfigManager.isIsolateBranchesEnabled();
     }
 
-    public isSolutionPoolDisabled(): boolean {
-        return this.modelConfigManager.isSolutionPoolDisabled();
-    }
-
     public getBsrNoiseLevel(): number {
         return this.modelConfigManager.getBsrNoiseLevel();
     }

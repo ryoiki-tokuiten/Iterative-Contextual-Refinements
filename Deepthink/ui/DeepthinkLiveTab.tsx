@@ -137,10 +137,6 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
         if (name.includes('hypothesis') || desc.includes('hypothesis') || name.includes('tester') || desc.includes('tester')) {
             return 'hypothesis'; // Blue
         }
-        // Structured Noise
-        if (name.includes('pool') || desc.includes('pool')) {
-            return 'solutionpool'; // Orange
-        }
         // Strategy / Execution / Attempt / Solver / Proximity
         if (
             name.includes('strategy') || desc.includes('strategy') || 
@@ -173,10 +169,6 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
         if (lowerName.includes('solution correction')) {
             const parts = [target, meta].filter(Boolean);
             return parts.length > 0 ? `Correction Agent (${parts.join(', ')})` : 'Correction Agent';
-        }
-        if (lowerName.includes('solution pool')) {
-            const parts = [target, meta].filter(Boolean);
-            return parts.length > 0 ? `Solution Pool Agent (${parts.join(', ')})` : 'Solution Pool Agent';
         }
         if (lowerName.includes('final judge')) return 'Final Judge Agent';
         

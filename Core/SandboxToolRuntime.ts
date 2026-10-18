@@ -16,6 +16,31 @@ import {
     type ResolvedProvider
 } from './LangGraphToolRuntime';
 import { normalizeOpenAICompatibleProviderError } from './ProviderError';
+import {
+    SHARED_WORKSPACE_TOOL_NAME,
+    SHARED_WORKSPACE_MAX_TOKENS,
+    SharedWorkspaceTokenLimitError,
+    countTextTokens,
+    sharedWorkspaceToolDefinition,
+    sharedWorkspaceToolSchema,
+    type SharedWorkspaceToolInput,
+} from '../Deepthink/core/sharedWorkspace';
+import {
+    buildFinalOutputTokenGateHarnessNote,
+    buildOvertimeFinalSubmitHarnessNote,
+    buildRemainingToolCallsHarnessNote,
+    buildRevokedToolsFinalSubmitHarnessNote,
+    buildSharedWorkspaceTokenGateHarnessNote,
+} from '../Deepthink/core/harnessNotes';
+
+export {
+    SHARED_WORKSPACE_TOOL_NAME,
+    SHARED_WORKSPACE_MAX_TOKENS,
+    SharedWorkspaceTokenLimitError,
+    sharedWorkspaceToolDefinition,
+    sharedWorkspaceToolSchema,
+    type SharedWorkspaceToolInput,
+};
 
 interface SandboxToolAgentOptions {
     agentName: string;
@@ -29,6 +54,16 @@ interface SandboxToolAgentOptions {
     agentFilesystemRules?: string[];
     repositoryAccess?: SandboxRepositoryAccess;
     /**
+     * Maximum tool-call turns (m) before overtime grace window and tool revocation.
+     * Defaults to MAX_TOOL_TURNS (64).
+     */
+    maxToolTurns?: number;
+    /**
+     * Maximum allowed output tokens in final_output submission.
+     * Defaults to 5000 (10000 for Solution Correction and Memory Bank).
+     */
+    maxOutputTokens?: number;
+    /**
      * Optional role-specific contract for a structured final_output payload.
      * The sandbox loop validates this while the model is still in its tool
      * conversation, so an invalid payload becomes a recoverable tool error
@@ -38,7 +73,7 @@ interface SandboxToolAgentOptions {
     /**
      * Optional handler for real-time shared_workspace tool calls (§8.4).
      */
-    sharedWorkspaceHandler?: (input: { action: 'read' | 'write' | 'append'; content?: string }) => Promise<string>;
+    sharedWorkspaceHandler?: (input: SharedWorkspaceToolInput) => Promise<string>;
 }
 
 type ContextualSandboxToolAgentOptions = SandboxToolAgentOptions;
@@ -51,13 +86,14 @@ export interface SandboxRepositoryAccess {
      * scratch space for research and temporary files.
      */
     agentDirectory?: string;
+    agentDirectoryReadOnly?: boolean;
     readableDirectories?: string[];
     /** Readable directories that intentionally follow the live writable branch. */
     liveReadableDirectories?: string[];
     /**
      * Descendant repository directories removed from otherwise readable parent
      * mounts. This preserves branch-local permissions when a child directory
-     * belongs to a different role (for example Strategy-N/SolutionPool).
+     * belongs to a different role (for example Strategy-N/Critique).
      */
     hiddenDirectories?: string[];
     /** Mount the complete repository read-only instead of selected peers. */
@@ -276,6 +312,8 @@ interface SandboxToolAgentResult {
     finalText: string;
     executionTrace?: SandboxToolExecutionTrace;
     executionTraceText?: string;
+    /** Full uncleaned trajectory of the invoke in .jsonl format (one JSON object per line). */
+    rawTrajectoryJsonl?: string;
     geminiContent?: {
         parts: any[];
     };
@@ -363,42 +401,10 @@ const finalOutputToolSchema = z.object({
 
 const SANDBOX_TOOL_NAME = 'sandbox_exec';
 const FINAL_OUTPUT_TOOL_NAME = 'final_output';
-export const SHARED_WORKSPACE_TOOL_NAME = 'shared_workspace';
-
-export const sharedWorkspaceToolSchema = z.object({
-    action: z.enum(['read', 'write', 'append']).describe('Operation to perform: "read", "write", or "append".'),
-    content: z.string().optional().describe('Text content to write or append. Ignored when action is "read".'),
-});
-
-export const sharedWorkspaceToolDefinition: ToolDefinition = {
-    type: 'function',
-    function: {
-        name: SHARED_WORKSPACE_TOOL_NAME,
-        description: [
-            'Read or edit the shared workspace document (shared_workspace.md) in real time.',
-            'All agents across the system (except isolated hypothesis testers) share this document.',
-            'Use this to share valuable discoveries, invariants, equations, verified lemmas, or coordinates with other agents in real time.',
-            'Actions: "read" returns the full document; "write" replaces the document; "append" adds text to the end.'
-        ].join(' '),
-        parameters: {
-            type: 'object',
-            properties: {
-                action: {
-                    type: 'string',
-                    enum: ['read', 'write', 'append'],
-                    description: 'The operation to perform: "read", "write", or "append".'
-                },
-                content: {
-                    type: 'string',
-                    description: 'Markdown content to write or append. Ignored when action is "read".'
-                }
-            },
-            required: ['action'],
-            additionalProperties: false,
-        },
-    },
-};
 const MAX_TOOL_TURNS = 64;
+const OVERTIME_GRACE_TURNS = 5;
+const FORCED_FINAL_OUTPUT_TURNS = 5;
+const DEFAULT_MAX_OUTPUT_TOKENS = 5000;
 const OMIT_TRACE_VALUE = Symbol('omitTraceValue');
 const REDACTED_THOUGHT_TRACE = '[thought content omitted from shared execution trace]';
 let sandboxEnvironmentProfilePromise: Promise<SandboxEnvironmentProfile | null> | null = null;
@@ -657,7 +663,7 @@ function buildEnvironmentProfileText(environmentProfile: SandboxEnvironmentProfi
 function buildRepositoryFilesystemRules(access: SandboxRepositoryAccess): string[] {
     const readableDirectories = Array.from(new Set(access.readableDirectories || []))
         .filter(directory => directory && directory !== access.agentDirectory);
-    const writableDirectory = access.agentDirectory;
+    const writableDirectory = access.agentDirectoryReadOnly ? undefined : access.agentDirectory;
     const fullRepositoryWrite = access.fullRepositoryWrite === true;
     const readableScope = fullRepositoryWrite
         ? '- You may read and write the complete repository. This is the orchestrator-only global workspace.'
@@ -674,34 +680,34 @@ function buildRepositoryFilesystemRules(access: SandboxRepositoryAccess): string
         fullRepositoryWrite
             ? '- This run uses one shared repository mounted read/write at /workspace.'
             : writableDirectory
-                ? `- This run uses a shared repository mounted at /workspace. Your writable working directory is /workspace/${writableDirectory}.`
-                : '- This run uses a shared repository mounted read-only at /workspace. Your private scratch directory is /tmp.',
+                ? `- This run uses a shared repository mounted at /workspace. Your writable working directory is /workspace/${writableDirectory}, and you also have full read/write access to the shared workspace-root /workspace/tmp (also mounted at /tmp).`
+                : `- This run uses a shared repository mounted read-only at /workspace${access.agentDirectory ? ` (starting in /workspace/${access.agentDirectory})` : ''}, with full read/write access to the shared workspace-root /workspace/tmp (also mounted at /tmp).`,
         fullRepositoryWrite
             ? '- Every sandbox command starts in the repository root.'
             : writableDirectory
                 ? '- Every sandbox command starts inside your writable directory.'
-                : '- Every sandbox command starts in the read-only repository root. Use /tmp for temporary scripts, caches, or experimental files.',
+                : `- Every sandbox command starts in the read-only ${access.agentDirectory ? `/workspace/${access.agentDirectory} directory` : 'repository root'}. Use /workspace/tmp (or /tmp) for temporary scripts, shared verification harnesses, caches, or experimental files.`,
         fullRepositoryWrite
             ? '- /workspace is writable for this orchestrator session; preserve strategy branch boundaries.'
-            : '- /workspace itself is read-only. You can list and read visible root files, but you cannot write in the repository root.',
+            : '- /workspace itself is read-only except for your assigned writable directory (if any) and the shared /workspace/tmp (/tmp) directory.',
         fullRepositoryWrite
             ? '- You may create, modify, and delete repository files anywhere under /workspace.'
             : writableDirectory
-                ? `- You may create, modify, and delete repository files only under /workspace/${writableDirectory}.`
-                : '- You may not create, modify, or delete repository files or directories. Do not mistake /tmp scratch files for shared repository artifacts.',
+                ? `- You may create, modify, and delete repository files under /workspace/${writableDirectory} and in the shared untracked /workspace/tmp (/tmp) directory.`
+                : '- You may create, modify, and delete files in the shared untracked /workspace/tmp (/tmp) directory, which is accessible to all agents for verification harnesses and scratch work.',
         '- All direct-context files and additional filesystem uploads are mounted read-only at /workspace/user_uploaded.',
         readableScope,
         hiddenScope,
         fullRepositoryWrite
             ? '- Changes are shared repository state. Do not overwrite branch artifacts unless the orchestration decision explicitly requires it.'
             : access.fullRepositoryRead
-                ? '- Repository files outside the writable directory, if one exists, are mounted read-only. Treat them as shared evidence, not scratch space.'
+                ? '- Repository files outside your writable directory and /workspace/tmp are mounted read-only. Treat them as shared evidence.'
                 : '- Directories other than the locations listed above are not mounted into your sandbox view. Treat absent directories as unavailable context, not as empty evidence.',
         fullRepositoryWrite
             ? '- Keep strategy-local artifacts in their Strategy-N directory whenever possible.'
             : writableDirectory
-                ? '- If you need to modify a readable peer file, copy it into your own writable directory first and edit the copy.'
-                : '- If you need to experiment with a readable file, copy it into /tmp first and keep the repository unchanged.',
+                ? '- If you need to modify a readable peer file, copy it into your own writable directory or /workspace/tmp first and edit the copy.'
+                : '- If you need to experiment with a readable file or build a shared verification loop, use /workspace/tmp (/tmp) and keep tracked repository directories unchanged.',
     ];
 }
 
@@ -735,7 +741,9 @@ function buildSystemPrompt(
         ];
     const commandStartRule = options.repositoryAccess
         ? options.repositoryAccess.agentDirectory
-            ? `Each sandbox command starts in /workspace/${options.repositoryAccess.agentDirectory}. Use /workspace to read visible root and peer directories.`
+            ? options.repositoryAccess.agentDirectoryReadOnly
+                ? `Each sandbox command starts in the read-only /workspace/${options.repositoryAccess.agentDirectory} directory. Use /workspace to read visible root and peer directories, and /tmp for scratch work.`
+                : `Each sandbox command starts in /workspace/${options.repositoryAccess.agentDirectory}. Use /workspace to read visible root and peer directories.`
             : 'Each sandbox command starts in the read-only /workspace repository root. Use /tmp for private scratch work.'
         : 'Each sandbox command starts in /workspace.';
 
@@ -762,6 +770,7 @@ function buildSystemPrompt(
         '',
         'Final output discipline:',
         `- When your work is complete, call ${FINAL_OUTPUT_TOOL_NAME}. Do not end with ordinary prose when tool calling is available. If the tool returns a validation error, correct the payload and call it again.`,
+        `- Your ${FINAL_OUTPUT_TOOL_NAME} submission is strictly gated at a maximum of ${options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS} tokens. Keep your final submission within ${options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS} tokens.`,
         `- The ${FINAL_OUTPUT_TOOL_NAME} response is the only text submitted to the multi-agent system and the only text future agents receive as your answer.`,
         options.finalOutputContract
             ? `- This role has a structured final-output contract (${options.finalOutputContract.name}). Put the required JSON object directly in ${FINAL_OUTPUT_TOOL_NAME}.response; do not serialize it as prose or surround it with markdown. If the environment rejects it, fix only that payload and call ${FINAL_OUTPUT_TOOL_NAME} again—your sandbox research remains available.`
@@ -787,7 +796,7 @@ function buildSystemPrompt(
         `- ${commandStartRule}`,
         '- Prefer relative paths or /workspace paths for persistent files.',
         '- The host filesystem outside your sandbox workspace is not mounted. Do not rely on files outside /workspace.',
-        '- /tmp is also backed by your workspace for temporary command use.',
+        '- /workspace/tmp (also mounted at /tmp) is an untracked shared read/write directory accessible to all agents in the run for building and refining shared verification harnesses and temporary files.',
         '- Direct-context files are supplied in the initial model message and are also mounted read-only under /workspace/user_uploaded for sandbox processing.',
         '- Additional user uploads are mounted read-only under /workspace/user_uploaded.',
         '- Generated or modified image files with png, jpg, jpeg, gif, webp, bmp, tif, or tiff extensions are returned to you as native image inputs.',
@@ -819,13 +828,17 @@ async function invokeAgentTurn(
     provider: ResolvedProvider,
     messages: BaseMessage[],
     systemPrompt: string,
-    options: SandboxToolAgentOptions
+    options: SandboxToolAgentOptions,
+    onlyFinalOutputTool = false
 ): Promise<AIMessage> {
     const finalOutputToolDefinition = createFinalOutputToolDefinition(options.finalOutputContract);
-    const tools: ToolDefinition[] = [sandboxToolDefinition, finalOutputToolDefinition];
-    if (options.sharedWorkspaceHandler) {
-        tools.push(sharedWorkspaceToolDefinition);
-    }
+    const tools: ToolDefinition[] = onlyFinalOutputTool
+        ? [finalOutputToolDefinition]
+        : [
+            sandboxToolDefinition,
+            finalOutputToolDefinition,
+            ...(options.sharedWorkspaceHandler ? [sharedWorkspaceToolDefinition] : []),
+        ];
     if (provider.providerName === 'gemini') {
         return invokeGeminiToolAgentTurn(
             provider.providerConfig,
@@ -1065,6 +1078,7 @@ function normalizeWorkspaceReferencePath(rawPath: string, access?: SandboxReposi
         const visibleDirectories = new Set([
             access.agentDirectory,
             ...(access.readableDirectories || []),
+            'tmp',
             'direct_context',
             'user_uploaded',
         ]);
@@ -1331,6 +1345,29 @@ export function isContextualSandboxToolEnabled(): boolean {
         || globalState.filesystemContextFiles.length > 0;
 }
 
+function buildRawTrajectoryJsonl(allMessages: BaseMessage[]): string {
+    return allMessages
+        .map(message => {
+            const raw = message as any;
+            const messageType = messageTypeForTrace(message);
+            return JSON.stringify({
+                role: messageRoleForTrace(messageType),
+                message_type: messageType,
+                content: raw.content,
+                ...(raw.tool_calls !== undefined ? { tool_calls: raw.tool_calls } : {}),
+                ...(raw.invalid_tool_calls !== undefined ? { invalid_tool_calls: raw.invalid_tool_calls } : {}),
+                ...(raw.tool_call_id !== undefined ? { tool_call_id: raw.tool_call_id } : {}),
+                ...(raw.name !== undefined ? { name: raw.name } : {}),
+                ...(raw.status !== undefined ? { status: raw.status } : {}),
+                ...(raw.additional_kwargs !== undefined ? { additional_kwargs: raw.additional_kwargs } : {}),
+                ...(raw.response_metadata !== undefined ? { response_metadata: raw.response_metadata } : {}),
+                ...(raw.id !== undefined ? { id: raw.id } : {}),
+                ...(raw.artifact !== undefined ? { artifact: raw.artifact } : {}),
+            });
+        })
+        .join('\n');
+}
+
 export async function runSandboxToolAgent(
     options: SandboxToolAgentOptions
 ): Promise<SandboxToolAgentResult> {
@@ -1353,6 +1390,10 @@ export async function runSandboxToolAgent(
     let finalText = '';
     let shouldSeedBackend = true;
 
+    const maxToolTurns = Math.max(1, options.maxToolTurns ?? MAX_TOOL_TURNS);
+    const maxOutputTokens = Math.max(1, options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS);
+    const totalAllowedTurns = maxToolTurns + OVERTIME_GRACE_TURNS + FORCED_FINAL_OUTPUT_TURNS;
+
     const uploadedFileMessage = buildUploadedFileMessage(provider.providerName, seedFiles);
     if (uploadedFileMessage) {
         messages.push(uploadedFileMessage);
@@ -1361,8 +1402,9 @@ export async function runSandboxToolAgent(
     // Mark where the tool loop starts so we can capture the raw messages afterwards
     const loopStartIndex = messages.length;
 
-    for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
-        const response = await invokeAgentTurn(provider, messages, systemPrompt, options);
+    for (let turn = 0; turn < totalAllowedTurns; turn++) {
+        const onlyFinalOutputTool = turn >= maxToolTurns + OVERTIME_GRACE_TURNS;
+        const response = await invokeAgentTurn(provider, messages, systemPrompt, options, onlyFinalOutputTool);
         messages.push(response);
 
         const modelText = getFinalText(response);
@@ -1381,16 +1423,20 @@ export async function runSandboxToolAgent(
 
         if (finalOutputToolCalls.length > 0) {
             const toolCall = finalOutputToolCalls[0];
+            let candidateFinalText = '';
+            let schemaError: string | null = null;
             try {
                 const parsed = finalOutputToolSchema.parse(toolCall.args ?? {});
-                finalText = structuredFinalOutputText(parsed.response, options.finalOutputContract);
-                break;
+                candidateFinalText = structuredFinalOutputText(parsed.response, options.finalOutputContract);
             } catch (error) {
-                const reason = error instanceof Error ? error.message : 'Invalid final output payload.';
+                schemaError = error instanceof Error ? error.message : 'Invalid final output payload.';
+            }
+
+            if (schemaError) {
                 messages.push(new ToolMessage({
                     name: FINAL_OUTPUT_TOOL_NAME,
                     content: [
-                        `final_output was not accepted: ${reason}`,
+                        `final_output was not accepted: ${schemaError}`,
                         options.finalOutputContract
                             ? `Correct the ${options.finalOutputContract.name} JSON object and call ${FINAL_OUTPUT_TOOL_NAME} again. Your previous sandbox work and conversation are still available.`
                             : `Correct the payload and call ${FINAL_OUTPUT_TOOL_NAME} again. Your previous sandbox work and conversation are still available.`
@@ -1398,109 +1444,167 @@ export async function runSandboxToolAgent(
                     tool_call_id: toolCall.id ?? nanoid(8),
                     status: 'error'
                 }));
-                continue;
-            }
-        }
-
-        if (sharedWorkspaceToolCalls.length > 0) {
-            for (const toolCall of sharedWorkspaceToolCalls) {
-                let toolContent = '';
-                let isOk = true;
-                try {
-                    const parsed = sharedWorkspaceToolSchema.parse(toolCall.args ?? {});
-                    if (!options.sharedWorkspaceHandler) {
-                        throw new Error('shared_workspace tool is not available for this role.');
-                    }
-                    toolContent = await options.sharedWorkspaceHandler(parsed);
-                } catch (error) {
-                    isOk = false;
-                    toolContent = `shared_workspace call failed: ${error instanceof Error ? error.message : 'Invalid parameters.'}`;
+            } else {
+                const outputTokenCount = countTextTokens(candidateFinalText);
+                if (outputTokenCount > maxOutputTokens) {
+                    const tokenErrorText = `Tool Error: ${FINAL_OUTPUT_TOOL_NAME} rejected because the output is ${outputTokenCount} tokens, exceeding the maximum allowed limit of ${maxOutputTokens} output tokens for ${options.agentName}.`;
+                    messages.push(new ToolMessage({
+                        name: FINAL_OUTPUT_TOOL_NAME,
+                        content: tokenErrorText,
+                        tool_call_id: toolCall.id ?? nanoid(8),
+                        status: 'error',
+                    }));
+                    messages.push(new HumanMessage(
+                        buildFinalOutputTokenGateHarnessNote(options.agentName, outputTokenCount, maxOutputTokens)
+                    ));
+                    transcriptParts.push(`[${FINAL_OUTPUT_TOOL_NAME} token gate error]: ${tokenErrorText}`);
+                } else {
+                    finalText = candidateFinalText;
+                    break;
                 }
+            }
+        } else if (onlyFinalOutputTool) {
+            // All other tools have been revoked; reject any non-final_output tool calls and demand final_output
+            for (const revokedCall of [...sandboxToolCalls, ...sharedWorkspaceToolCalls]) {
                 messages.push(new ToolMessage({
-                    name: SHARED_WORKSPACE_TOOL_NAME,
+                    name: revokedCall.name,
+                    content: `Tool Error: Access to ${revokedCall.name} has been revoked after exceeding the maximum tool call budget and grace window. Only ${FINAL_OUTPUT_TOOL_NAME} is available.`,
+                    tool_call_id: revokedCall.id ?? nanoid(8),
+                    status: 'error',
+                }));
+            }
+            messages.push(new HumanMessage(buildRevokedToolsFinalSubmitHarnessNote()));
+        } else {
+            if (sharedWorkspaceToolCalls.length > 0) {
+                for (const toolCall of sharedWorkspaceToolCalls) {
+                    let toolContent = '';
+                    let isOk = true;
+                    let tokenLimitError: SharedWorkspaceTokenLimitError | null = null;
+                    try {
+                        const rawArgs = (toolCall.args ?? {}) as Record<string, unknown>;
+                        if (rawArgs.action === 'write') {
+                            throw new Error(
+                                'Full-file "write" is disabled on shared_workspace.md to prevent overwriting peer agents\' work. Use action="edit" (with old_string and new_string) or action="append" (with content).'
+                            );
+                        }
+                        const parsed = sharedWorkspaceToolSchema.parse(rawArgs);
+                        if (!options.sharedWorkspaceHandler) {
+                            throw new Error('shared_workspace tool is not available for this role.');
+                        }
+                        toolContent = await options.sharedWorkspaceHandler(parsed);
+                    } catch (error) {
+                        isOk = false;
+                        if (error instanceof SharedWorkspaceTokenLimitError || (error as any)?.name === 'SharedWorkspaceTokenLimitError') {
+                            tokenLimitError = error as SharedWorkspaceTokenLimitError;
+                        }
+                        toolContent = `shared_workspace call failed: ${error instanceof Error ? error.message : 'Invalid parameters.'}`;
+                    }
+                    messages.push(new ToolMessage({
+                        name: SHARED_WORKSPACE_TOOL_NAME,
+                        content: toolContent,
+                        tool_call_id: toolCall.id ?? nanoid(8),
+                        status: isOk ? 'success' : 'error',
+                    }));
+                    transcriptParts.push(`[shared_workspace ${toolCall.args?.action ?? 'call'}]:\n${toolContent}`);
+                    if (tokenLimitError) {
+                        messages.push(new HumanMessage(
+                            buildSharedWorkspaceTokenGateHarnessNote(
+                                tokenLimitError.tokenCount ?? SHARED_WORKSPACE_MAX_TOKENS + 1,
+                                tokenLimitError.maxTokens ?? SHARED_WORKSPACE_MAX_TOKENS
+                            )
+                        ));
+                    }
+                }
+            }
+
+            if (sandboxToolCalls.length === 0 && sharedWorkspaceToolCalls.length === 0) {
+                messages.push(new HumanMessage(
+                    modelText
+                        ? `Your previous response was ordinary prose, so it was not submitted. Submit the complete role-specific answer now by calling ${FINAL_OUTPUT_TOOL_NAME}.`
+                        : `Submit the complete role-specific answer now by calling ${FINAL_OUTPUT_TOOL_NAME}.`
+                ));
+            }
+
+            for (const toolCall of sandboxToolCalls) {
+                let parsedCommand = '';
+                let toolResponse: SandboxToolResponse;
+
+                try {
+                    const parsed = sandboxToolSchema.parse(toolCall.args ?? {});
+                    parsedCommand = parsed.command;
+                    toolResponse = await executeSandboxTool(
+                        sessionId,
+                        parsedCommand,
+                        shouldSeedBackend ? [...directContextSandboxFiles, ...filesystemFiles] : null,
+                        options.repositoryAccess,
+                        parsed.timeout_ms
+                    );
+                    shouldSeedBackend = false;
+                } catch (error) {
+                    toolResponse = {
+                        ok: false,
+                        exitCode: 1,
+                        stdout: '',
+                        stderr: '',
+                        error: error instanceof Error ? error.message : 'Sandbox tool call failed.',
+                        durationMs: 0,
+                        images: [],
+                        visibleFiles: []
+                    };
+                }
+
+                transcriptParts.push(formatToolTranscript(parsedCommand || '[Invalid or missing sandbox command]', toolResponse));
+                (toolResponse.images ?? []).forEach(image => {
+                    if (image.base64) {
+                        historyImages.set(image.filename, image);
+                    }
+                });
+
+                const toolContent = [
+                    `Sandbox command ${toolResponse.ok ? 'completed' : 'failed'}.`,
+                    `exit_code=${toolResponse.exitCode}`,
+                    `duration_ms=${toolResponse.durationMs}`,
+                    toolResponse.stdout?.trim() ? `stdout:\n${toolResponse.stdout.trimEnd()}` : '',
+                    toolResponse.stderr?.trim() ? `stderr:\n${toolResponse.stderr.trimEnd()}` : '',
+                    toolResponse.error ? `error:\n${toolResponse.error.trimEnd()}` : '',
+                    toolResponse.visibleFiles?.length
+                        ? `visible_image_files:\n${toolResponse.visibleFiles.map(file => `- ${file.filename} (${file.mimeType})`).join('\n')}`
+                        : 'visible_image_files: none',
+                ].filter(Boolean).join('\n\n');
+
+                messages.push(new ToolMessage({
+                    name: SANDBOX_TOOL_NAME,
                     content: toolContent,
                     tool_call_id: toolCall.id ?? nanoid(8),
-                    status: isOk ? 'success' : 'error',
+                    status: toolResponse.ok ? 'success' : 'error',
+                    artifact: {
+                        images: (toolResponse.images ?? []).map(({ filename, mimeType, url }) => ({ filename, mimeType, url })),
+                    },
                 }));
-                transcriptParts.push(`[shared_workspace ${toolCall.args?.action ?? 'call'}]:\n${toolContent}`);
-            }
-        }
 
-        if (sandboxToolCalls.length === 0 && sharedWorkspaceToolCalls.length === 0) {
-            messages.push(new HumanMessage(
-                modelText
-                    ? `Your previous response was ordinary prose, so it was not submitted. Submit the complete role-specific answer now by calling ${FINAL_OUTPUT_TOOL_NAME}.`
-                    : `Submit the complete role-specific answer now by calling ${FINAL_OUTPUT_TOOL_NAME}.`
-            ));
-            continue;
-        }
-
-        for (const toolCall of sandboxToolCalls) {
-            let parsedCommand = '';
-            let toolResponse: SandboxToolResponse;
-
-            try {
-                const parsed = sandboxToolSchema.parse(toolCall.args ?? {});
-                parsedCommand = parsed.command;
-                toolResponse = await executeSandboxTool(
-                    sessionId,
-                    parsedCommand,
-                    shouldSeedBackend ? [...directContextSandboxFiles, ...filesystemFiles] : null,
-                    options.repositoryAccess,
-                    parsed.timeout_ms
-                );
-                shouldSeedBackend = false;
-            } catch (error) {
-                toolResponse = {
-                    ok: false,
-                    exitCode: 1,
-                    stdout: '',
-                    stderr: '',
-                    error: error instanceof Error ? error.message : 'Sandbox tool call failed.',
-                    durationMs: 0,
-                    images: [],
-                    visibleFiles: []
-                };
-            }
-
-            transcriptParts.push(formatToolTranscript(parsedCommand || '[Invalid or missing sandbox command]', toolResponse));
-            (toolResponse.images ?? []).forEach(image => {
-                if (image.base64) {
-                    historyImages.set(image.filename, image);
+                const generatedImageMessage = buildGeneratedImageMessage(provider.providerName, toolResponse.images ?? []);
+                if (generatedImageMessage) {
+                    messages.push(generatedImageMessage);
                 }
-            });
-
-            const toolContent = [
-                `Sandbox command ${toolResponse.ok ? 'completed' : 'failed'}.`,
-                `exit_code=${toolResponse.exitCode}`,
-                `duration_ms=${toolResponse.durationMs}`,
-                toolResponse.stdout?.trim() ? `stdout:\n${toolResponse.stdout.trimEnd()}` : '',
-                toolResponse.stderr?.trim() ? `stderr:\n${toolResponse.stderr.trimEnd()}` : '',
-                toolResponse.error ? `error:\n${toolResponse.error.trimEnd()}` : '',
-                toolResponse.visibleFiles?.length
-                    ? `visible_image_files:\n${toolResponse.visibleFiles.map(file => `- ${file.filename} (${file.mimeType})`).join('\n')}`
-                    : 'visible_image_files: none',
-            ].filter(Boolean).join('\n\n');
-
-            messages.push(new ToolMessage({
-                name: SANDBOX_TOOL_NAME,
-                content: toolContent,
-                tool_call_id: toolCall.id ?? nanoid(8),
-                status: toolResponse.ok ? 'success' : 'error',
-                artifact: {
-                    images: (toolResponse.images ?? []).map(({ filename, mimeType, url }) => ({ filename, mimeType, url })),
-                },
-            }));
-
-            const generatedImageMessage = buildGeneratedImageMessage(provider.providerName, toolResponse.images ?? []);
-            if (generatedImageMessage) {
-                messages.push(generatedImageMessage);
             }
+        }
+
+        // Inject tool-call budget countdown notes and overtime transitions (§8.5)
+        const completedTurns = turn + 1;
+        const remainingInMainBudget = maxToolTurns - completedTurns;
+        if (remainingInMainBudget === 10) {
+            messages.push(new HumanMessage(buildRemainingToolCallsHarnessNote(10, maxToolTurns)));
+        } else if (remainingInMainBudget === 5) {
+            messages.push(new HumanMessage(buildRemainingToolCallsHarnessNote(5, maxToolTurns)));
+        } else if (completedTurns === maxToolTurns) {
+            messages.push(new HumanMessage(buildOvertimeFinalSubmitHarnessNote(maxToolTurns, OVERTIME_GRACE_TURNS)));
+        } else if (completedTurns === maxToolTurns + OVERTIME_GRACE_TURNS) {
+            messages.push(new HumanMessage(buildRevokedToolsFinalSubmitHarnessNote()));
         }
     }
 
     if (!finalText) {
-        throw new Error(`${options.agentName} exceeded ${MAX_TOOL_TURNS} sandbox tool turns without submitting final_output.`);
+        throw new Error(`${options.agentName} exceeded ${maxToolTurns} sandbox tool turns (plus ${OVERTIME_GRACE_TURNS} grace turns and ${FORCED_FINAL_OUTPUT_TURNS} forced-submit turns) without submitting final_output.`);
     }
 
     const submittedText = buildSubmittedFinalOutput({
@@ -1520,6 +1624,10 @@ export async function runSandboxToolAgent(
         finalText,
         loopMessages,
     });
+    const rawTrajectoryJsonl = buildRawTrajectoryJsonl([
+        new SystemMessage(systemPrompt),
+        ...messages,
+    ]);
 
     return {
         text: displayText,
@@ -1527,6 +1635,7 @@ export async function runSandboxToolAgent(
         finalText,
         executionTrace,
         executionTraceText: JSON.stringify(executionTrace, null, 2),
+        rawTrajectoryJsonl,
         geminiContent: provider.providerName === 'gemini'
             ? buildGeminiHistoryContent(displayText, [...historyImages.values()])
             : undefined,

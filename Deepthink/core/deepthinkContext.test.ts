@@ -171,7 +171,8 @@ test('repository policy applies feature flags and preserves the pinned revision'
         hypothesisRoundNumber: 2,
         repositoryRevision: revision,
     });
-    assert.deepEqual(hypothesisTester.readableDirectories, []);
+    assert.equal(hypothesisTester.fullRepositoryRead, true);
+    assert.equal(hypothesisTester.agentDirectory, 'Hypothesis-v2/Hypothesis-1');
 
     const isolatedCorrection = buildDeepthinkSandboxRepositoryAccess({
         repositoryId: 'deepthink-test',
@@ -182,13 +183,30 @@ test('repository policy applies feature flags and preserves the pinned revision'
     });
     assert.equal(isolatedCorrection.readableDirectories?.includes('Strategy-2'), false);
 
-    const crossContextPool = buildDeepthinkSandboxRepositoryAccess({
+    const crossContextCorrection = buildDeepthinkSandboxRepositoryAccess({
         repositoryId: 'deepthink-test',
-        role: 'Structured Structured Noise',
+        role: 'Solution Correction',
         strategySlotIndex: 0,
         peerStrategySlotIndexes: [1],
         repositoryRevision: revision,
     });
-    assert.equal(crossContextPool.readableDirectories?.includes('Strategy-2'), true);
-    assert.equal(crossContextPool.revision, revision);
+    assert.equal(crossContextCorrection.readableDirectories?.includes('Strategy-2'), true);
+    assert.equal(crossContextCorrection.revision, revision);
 });
+
+test('the typed registry enforces per-agent maxOutputTokens limits (5000 default, 10000 for correction and memoryBank)', () => {
+    assert.equal(DEEPTHINK_AGENT_REGISTRY.initialStrategy.maxOutputTokens, 5000);
+    assert.equal(DEEPTHINK_AGENT_REGISTRY.strategyGeneratorGlobalUpdate.maxOutputTokens, 5000);
+    assert.equal(DEEPTHINK_AGENT_REGISTRY.strategyProximity.maxOutputTokens, 5000);
+    assert.equal(DEEPTHINK_AGENT_REGISTRY.hypothesisGeneration.maxOutputTokens, 5000);
+    assert.equal(DEEPTHINK_AGENT_REGISTRY.hypothesisProximity.maxOutputTokens, 5000);
+    assert.equal(DEEPTHINK_AGENT_REGISTRY.dos.maxOutputTokens, 5000);
+    assert.equal(DEEPTHINK_AGENT_REGISTRY.bsr.maxOutputTokens, 5000);
+    assert.equal(DEEPTHINK_AGENT_REGISTRY.solutionAttempt.maxOutputTokens, 5000);
+    assert.equal(DEEPTHINK_AGENT_REGISTRY.solutionCritique.maxOutputTokens, 5000);
+    assert.equal(DEEPTHINK_AGENT_REGISTRY.hypothesisTester.maxOutputTokens, 5000);
+    assert.equal(DEEPTHINK_AGENT_REGISTRY.finalJudge.maxOutputTokens, 5000);
+    assert.equal(DEEPTHINK_AGENT_REGISTRY.solutionCorrection.maxOutputTokens, 10000);
+    assert.equal(DEEPTHINK_AGENT_REGISTRY.memoryBank.maxOutputTokens, 10000);
+});
+

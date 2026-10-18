@@ -17,7 +17,6 @@ import { Icon as MIcon } from '../../UI/Icons';
 import type { BsrGlobalUpdateRecord } from '../core/types';
 import { BranchStateModal } from './BranchStateModal';
 import { DosSynthesisCard } from './DosSynthesisCard';
-import { CuratedContextSolutionPools } from './SolutionPool';
 
 // ═══════════════════════════════════════════════════════════════════════
 // Shared Primitives
@@ -1252,10 +1251,6 @@ function buildHypothesisRoundViews(process: DeepthinkPipelineState): HypothesisR
         if (h.roundNumber) roundNumberSet.add(h.roundNumber);
     });
 
-    (process.structuredSolutionPoolAgents || []).forEach(pool => {
-        if (pool.heartbeatNo) roundNumberSet.add(pool.heartbeatNo);
-    });
-
     // 4. Collect from heartbeatNo
     if (process.heartbeatNo && process.heartbeatNo > 0) {
         for (let i = 1; i <= process.heartbeatNo; i++) {
@@ -1330,12 +1325,6 @@ export const HypothesisExplorerTab: React.FC<{
     const activeRound = roundViews[Math.min(activeRoundIndex, roundViews.length - 1)] || roundViews[0];
     const activeHypotheses = activeRound?.hypotheses || [];
     const hypothesesEnabled = process.runConfig?.hypothesisCount !== 0;
-    const poolsEnabled = !process.runConfig?.disableSolutionPool;
-    const contentLayout = hypothesesEnabled && poolsEnabled
-        ? 'has-hypotheses has-pools'
-        : hypothesesEnabled
-            ? 'has-hypotheses'
-            : 'has-pools';
 
     const currentHeartbeatNo = activeRound?.roundNumber ?? (activeRoundIndex + 1);
 
@@ -1364,7 +1353,7 @@ export const HypothesisExplorerTab: React.FC<{
                         />
                     )}
 
-                    <div className={`curated-context-columns ${contentLayout}`}>
+                    <div className="curated-context-columns has-hypotheses">
                         {hypothesesEnabled && (
                             <section className="curated-context-hypotheses">
                                 <div className="curated-hypotheses-header">
@@ -1417,13 +1406,6 @@ export const HypothesisExplorerTab: React.FC<{
                                     </div>
                                 )}
                             </section>
-                        )}
-
-                        {poolsEnabled && (
-                            <CuratedContextSolutionPools
-                                process={process}
-                                heartbeatNo={currentHeartbeatNo}
-                            />
                         )}
                     </div>
 

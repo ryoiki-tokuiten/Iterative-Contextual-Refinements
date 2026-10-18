@@ -28,7 +28,6 @@ import {
     DeepthinkHypothesisData,
     DeepthinkMainStrategyData,
     DeepthinkPipelineState,
-    DeepthinkStructuredSolutionPoolAgentData,
     type DeepthinkCoreDeps,
     getActiveDeepthinkPipeline,
     setActiveDeepthinkPipelineForImport,
@@ -49,8 +48,7 @@ export type {
     DeepthinkSolutionCritiqueData,
     DeepthinkHypothesisData,
     DeepthinkMainStrategyData,
-    DeepthinkPipelineState,
-    DeepthinkStructuredSolutionPoolAgentData
+    DeepthinkPipelineState
 };
 
 export {
@@ -395,9 +393,9 @@ export function renderActiveDeepthinkPipeline() {
     const tabs = getVisibleDeepthinkTabs(deepthinkProcess);
 
     if (!tabs.some(t => t.id === deepthinkProcess.activeTabId) && tabs.length > 0) {
-        const wasRemovedPoolOrCritiqueTab = ['solution-pool', 'critique-history'].includes(deepthinkProcess.activeTabId);
+        const wasRemovedCritiqueTab = deepthinkProcess.activeTabId === 'critique-history';
         const contextTab = tabs.find(tab => tab.id === 'hypothesis-explorer');
-        deepthinkProcess.activeTabId = wasRemovedPoolOrCritiqueTab && contextTab
+        deepthinkProcess.activeTabId = wasRemovedCritiqueTab && contextTab
             ? contextTab.id
             : tabs[0].id;
     }
@@ -460,7 +458,7 @@ function getDeepthinkTabVisibility(process: DeepthinkPipelineState): {
     const config = process.runConfig;
     return {
         showFilesystem: true,
-        showCuratedContext: config ? config.hypothesisCount > 0 || !config.disableSolutionPool : true,
+        showCuratedContext: config ? config.hypothesisCount > 0 : true,
     };
 }
 
@@ -538,10 +536,9 @@ function getTabStatusClass(tabId: string, process: DeepthinkPipelineState): stri
             if (process.initialStrategies?.some(s => s.status === 'processing')) return 'status-deepthink-processing';
             return '';
         case 'hypothesis-explorer':
-            if (process.structuredSolutionPoolStatus === 'error') return 'status-deepthink-error';
-            if (process.structuredSolutionPoolStatus === 'processing') return 'status-deepthink-processing';
-            if (process.structuredSolutionPoolAgents?.some(pool => pool.status === 'processing')) return 'status-deepthink-processing';
-            if (process.structuredSolutionPoolAgents?.some(pool => pool.status === 'completed')) return 'status-deepthink-completed';
+            if (process.hypotheses?.some(h => h.testerStatus === 'error')) return 'status-deepthink-error';
+            if (process.hypotheses?.some(h => h.testerStatus === 'processing')) return 'status-deepthink-processing';
+            if (process.hypotheses?.some(h => h.testerStatus === 'completed')) return 'status-deepthink-completed';
             return process.hypothesisExplorerComplete ? 'status-deepthink-completed' : '';
         case 'final-result':
             if (process.finalJudgingStatus === 'completed') return 'status-deepthink-completed';

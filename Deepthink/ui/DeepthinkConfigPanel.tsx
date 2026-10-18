@@ -34,7 +34,6 @@ interface DeepthinkConfigPanelProps {
     j: number;
     k: number;
     isolateBranches: boolean;
-    disableSolutionPool: boolean;
     codeExecutionEnabled: boolean;
     bsrNoiseLevel: number;
     bsrPressureFloor: number;
@@ -51,7 +50,6 @@ interface DeepthinkConfigPanelProps {
     onJChange: (j: number) => void;
     onKChange: (k: number) => void;
     onIsolateBranchesToggle: (enabled: boolean) => void;
-    onSolutionPoolDisabledToggle: (disabled: boolean) => void;
     onCodeExecutionToggle: (enabled: boolean) => void;
     onBsrNoiseLevelChange: (val: number) => void;
     onBsrPressureFloorChange: (val: number) => void;
@@ -412,19 +410,15 @@ const TotalLLMCallsButton: React.FC<{
     </button>
 );
 
-const Figure4Visualization: React.FC<{ hypothesisEnabled: boolean; poolEnabled: boolean }> = ({ hypothesisEnabled, poolEnabled }) => {
-    const T = (x: number, y: number, s: string, a: 'start' | 'middle' | 'end' = 'middle', c: string = 'ts') => (
-        <text className={c} x={x} y={y} textAnchor={a} dominantBaseline="central">{s}</text>
-    );
-
+const Figure4Visualization: React.FC<{ hypothesisEnabled: boolean }> = ({ hypothesisEnabled }) => {
     const B = (k: 'g' | 't' | 'c' | 'p', x: number, y: number, w: number, h: number, a: string, b?: string, m?: boolean) => {
         const cx = x + w / 2;
         const cy = y + h / 2;
         return (
             <g className={`vis-box vis-theme-${k}`} key={`box-${x}-${y}`}>
-                <rect x={x} y={y} width={w} height={h} rx={4} />
-                <text className={m ? 'ts m' : 'th'} x={cx} y={b ? cy - 9 : cy} textAnchor="middle" dominantBaseline="central">{a}</text>
-                {b && <text className="ts" x={cx} y={cy + 10} textAnchor="middle" dominantBaseline="central">{b}</text>}
+                <rect x={x} y={y} width={w} height={h} rx={8} />
+                <text className={m ? 'ts m' : 'th'} x={cx} y={b ? cy - 12 : cy} textAnchor="middle" dominantBaseline="central">{a}</text>
+                {b && <text className="ts" x={cx} y={cy + 12} textAnchor="middle" dominantBaseline="central">{b}</text>}
             </g>
         );
     };
@@ -441,41 +435,36 @@ const Figure4Visualization: React.FC<{ hypothesisEnabled: boolean; poolEnabled: 
     );
 
     const dimHyp = !hypothesisEnabled ? 'vis-dimmed' : '';
-    const dimPool = !poolEnabled ? 'vis-dimmed' : '';
-    const dimBoth = (!hypothesisEnabled && !poolEnabled) ? 'vis-dimmed' : '';
 
     return (
         <div className="figure4-container">
-            <svg viewBox="0 50 680 295" className="figure4-visualization" role="img" aria-label="Hypothesis generator architecture">
+            <svg
+                viewBox="22 38 626 438"
+                preserveAspectRatio="xMidYMid meet"
+                className="figure4-visualization"
+                role="img"
+                aria-label="Hypothesis generator architecture"
+            >
                 <defs>
                     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                         <path d="M2 1L8 5L2 9" className="vis-arrow-path" />
                     </marker>
                 </defs>
-                {/* Hypothesis flow: top row + history block — dimmed when hypothesis off */}
                 <g className={dimHyp}>
-                    {B('t', 30, 60, 140, 52, 'Critique Synthesis')}
-                    {B('t', 190, 60, 160, 52, 'Hypothesis generation', 'with proximity correction')}
-                    {B('t', 378, 60, 126, 52, 'Independent', 'Hypotheses testing')}
-                    {B('g', 530, 60, 110, 52, 'Map', 'to branches')}
-                    {P('M170 86H188')}
-                    {P('M350 86H376')}
-                    {P('M504 86H528')}
-                    {P('M255 112V284', 1)}
-                    {P('M275 284V114', 1)}
-                    {B('p', 125, 286, 430, 48, 'Back & forth proximity history saved', 'and added back to the next hypothesis generation')}
-                </g>
-                {/* Pool card — dimmed when pool off */}
-                <g className={dimPool}>
-                    {B('t', 505, 180, 135, 52, 'Add Noisy Pool', 'In Each Branch')}
-                </g>
-                {/* Shared infrastructure — dimmed only when both off */}
-                <g className={dimBoth}>
-                    {P('M585 112V178')}
-                    {B('g', 290, 180, 180, 52, 'Branch context', 'mapped packet + pool')}
-                    {B('g', 40, 180, 200, 52, 'Next correction agents', 'read the branch context')}
-                    {P('M505 206H472')}
-                    {P('M290 206H242')}
+                    {B('t', 28, 46, 136, 84, 'Critique Synthesis')}
+                    {B('t', 188, 46, 164, 84, 'Hypothesis generation', 'with proximity correction')}
+                    {B('t', 376, 46, 132, 84, 'Independent', 'Hypotheses testing')}
+                    {B('g', 532, 46, 110, 84, 'Map', 'to branches')}
+                    {P('M164 88H186')}
+                    {P('M352 88H374')}
+                    {P('M508 88H530')}
+                    {P('M260 130V384', 1)}
+                    {P('M280 384V132', 1)}
+                    {B('p', 120, 386, 440, 82, 'Back & forth proximity history saved', 'and added back to the next hypothesis generation')}
+                    {P('M587 130V258H484')}
+                    {B('g', 298, 216, 184, 84, 'Branch context', 'mapped packet')}
+                    {B('g', 36, 216, 206, 84, 'Next correction agents', 'read the branch context')}
+                    {P('M298 258H244')}
                 </g>
             </svg>
         </div>
@@ -484,20 +473,16 @@ const Figure4Visualization: React.FC<{ hypothesisEnabled: boolean; poolEnabled: 
 
 const CuratedContextSection: React.FC<{
     hypothesisEnabled: boolean;
-    solutionPoolEnabled: boolean;
     hypothesisCount: number;
     hypothesisProximityLoops: number;
     onHypothesisToggle: (enabled: boolean) => void;
-    onSolutionPoolToggle: (disabled: boolean) => void;
     onHypothesisChange: (count: number) => void;
     onHypothesisProximityLoopsChange: (count: number) => void;
 }> = ({
     hypothesisEnabled,
-    solutionPoolEnabled,
     hypothesisCount,
     hypothesisProximityLoops,
     onHypothesisToggle,
-    onSolutionPoolToggle,
     onHypothesisChange,
     onHypothesisProximityLoopsChange,
 }) => {
@@ -565,22 +550,7 @@ const CuratedContextSection: React.FC<{
                         )}
                     </div>
 
-                    {/* 3. Structured Solution Pool sub-section (Toggle + in-sync Visual) */}
-                    <div className={classNames('curated-subfeature-card solution-pool-card', !solutionPoolEnabled && 'collapsed')}>
-                        <div className="curated-subfeature-header">
-                            <label htmlFor="dt-solution-pool-toggle" className="curated-toggle-label">
-                                Structured Noise Injection
-                            </label>
-                            <ToggleSwitch
-                                id="dt-solution-pool-toggle"
-                                checked={solutionPoolEnabled}
-                                onChange={enabled => onSolutionPoolToggle(!enabled)}
-                            />
-                        </div>
-
-                    </div>
-
-                    <Figure4Visualization hypothesisEnabled={hypothesisEnabled} poolEnabled={solutionPoolEnabled} />
+                    <Figure4Visualization hypothesisEnabled={hypothesisEnabled} />
                 </div>
             </div>
         );
@@ -748,7 +718,7 @@ const DeepthinkConfigPanelComponent: React.FC<DeepthinkConfigPanelProps> = props
                         i={props.i}
                         j={props.j}
                         k={props.k}
-                        curatedContextEnabled={props.hypothesisEnabled || !props.disableSolutionPool}
+                        curatedContextEnabled={props.hypothesisEnabled}
                         onIChange={props.onIChange}
                         onJChange={props.onJChange}
                         onKChange={props.onKChange}
@@ -758,11 +728,9 @@ const DeepthinkConfigPanelComponent: React.FC<DeepthinkConfigPanelProps> = props
                     <div className="config-left-col">
                         <CuratedContextSection
                             hypothesisEnabled={props.hypothesisEnabled}
-                            solutionPoolEnabled={!props.disableSolutionPool}
                             hypothesisCount={props.hypothesisCount}
                             hypothesisProximityLoops={props.hypothesisProximityLoops}
                             onHypothesisToggle={props.onHypothesisToggle}
-                            onSolutionPoolToggle={props.onSolutionPoolDisabledToggle}
                             onHypothesisChange={props.onHypothesisChange}
                             onHypothesisProximityLoopsChange={props.onHypothesisProximityLoopsChange}
                         />
@@ -831,7 +799,6 @@ function deriveProps(controller: DeepthinkController): DeepthinkConfigPanelProps
             controller.setK(clampedK);
         },
         onIsolateBranchesToggle: value => controller.setIsolateBranchesEnabled(value),
-        onSolutionPoolDisabledToggle: value => controller.setSolutionPoolDisabled(value),
         onCodeExecutionToggle: value => controller.setCodeExecutionEnabled(value),
         onBsrNoiseLevelChange: value => controller.setBsrNoiseLevel(value),
         onBsrPressureFloorChange: value => controller.setBsrPressureFloor(value),

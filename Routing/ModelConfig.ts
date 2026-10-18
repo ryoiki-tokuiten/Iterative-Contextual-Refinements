@@ -75,7 +75,6 @@ export interface ModelParameters {
     j?: number;
     k?: number;
     isolateBranches: boolean;
-    disableSolutionPool: boolean;
     deepthinkCodeExecutionEnabled: boolean;
     thinkingLevel: ThinkingLevel;
     bsrNoiseLevel: number;
@@ -96,7 +95,6 @@ const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
     j: 5,
     k: 3,
     isolateBranches: false,
-    disableSolutionPool: false,
     deepthinkCodeExecutionEnabled: false,
     thinkingLevel: 'high',
     bsrNoiseLevel: 2,
@@ -184,10 +182,6 @@ export class ModelConfigManager {
 
     public isIsolateBranchesEnabled(): boolean {
         return this.parameters.isolateBranches === true;
-    }
-
-    public isSolutionPoolDisabled(): boolean {
-        return this.parameters.disableSolutionPool === true;
     }
 
     public isDeepthinkCodeExecutionEnabled(): boolean {

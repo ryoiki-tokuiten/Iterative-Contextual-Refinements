@@ -210,10 +210,6 @@
     --agent-color: var(--accent-yellow, #f59e0b);
     --agent-color-rgb: var(--accent-yellow-rgb, 245, 158, 11);
 }
-.category-solutionpool {
-    --agent-color: var(--accent-orange, #f59e0b);
-    --agent-color-rgb: 245, 158, 11;
-}
 .category-correction {
     --agent-color: var(--accent-green, #00e676);
     --agent-color-rgb: var(--accent-green-rgb, 0, 230, 118);

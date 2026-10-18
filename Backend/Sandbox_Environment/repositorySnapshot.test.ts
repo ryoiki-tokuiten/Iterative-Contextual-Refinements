@@ -13,7 +13,7 @@ test('repository agents read one pinned barrier while concurrent branch writes s
         reader: `${repositoryId}-reader`,
         writer: `${repositoryId}-writer`,
         heartbeat: `${repositoryId}-heartbeat`,
-        pool: `${repositoryId}-pool`,
+        critique: `${repositoryId}-critique`,
         permission: `${repositoryId}-permission`,
     };
     const server = await createServer({
@@ -95,7 +95,7 @@ test('repository agents read one pinned barrier while concurrent branch writes s
         const fullWrite = { repositoryId, fullRepositoryWrite: true };
         await execute(
             sessionIds.setup,
-            'mkdir -p Strategy-1 Strategy-2/SolutionPool; printf baseline > Strategy-2/marker.txt; printf pool-baseline > Strategy-2/SolutionPool/pool.txt',
+            'mkdir -p Strategy-1 Strategy-2/Critique; printf baseline > Strategy-2/marker.txt; printf critique-baseline > Strategy-2/Critique/critique.txt',
             fullWrite,
         );
         const baseline = await snapshot('baseline');
@@ -127,29 +127,29 @@ test('repository agents read one pinned barrier while concurrent branch writes s
         );
         assert.notEqual(forbiddenWrite.exitCode, 0);
 
-        const poolBaseline = await snapshot('pool baseline');
+        const critiqueBaseline = await snapshot('critique baseline');
         const heartbeatRead = execute(
             sessionIds.heartbeat,
-            'sleep 1; cat /workspace/Strategy-2/SolutionPool/pool.txt',
+            'sleep 1; cat /workspace/Strategy-2/Critique/critique.txt',
             {
                 repositoryId,
                 fullRepositoryRead: true,
                 hiddenDirectories: ['Pruned_Strategies'],
-                revision: poolBaseline,
+                revision: critiqueBaseline,
             },
         );
         await wait(200);
         await execute(
-            sessionIds.pool,
-            'printf pool-current > pool.txt',
+            sessionIds.critique,
+            'printf critique-current > critique.txt',
             {
                 repositoryId,
-                agentDirectory: 'Strategy-2/SolutionPool',
+                agentDirectory: 'Strategy-2/Critique',
                 readableDirectories: ['Strategy-2'],
-                revision: poolBaseline,
+                revision: critiqueBaseline,
             },
         );
-        assert.equal((await heartbeatRead).stdout.trim(), 'pool-baseline');
+        assert.equal((await heartbeatRead).stdout.trim(), 'critique-baseline');
     } finally {
         await cleanup();
     }

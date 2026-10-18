@@ -26,9 +26,7 @@ export interface DeepthinkRunConfig {
   hypothesisCount: number;
   /** Hypothesis generator/proximity turns */
   hypothesisProximityLoops: number;
-  /** Skips structured noises */
-  disableSolutionPool: boolean;
-  /** Correction and pool agents receive no peer-branch context (enforced by prompt) */
+  /** Correction agents receive no peer-branch context (enforced by prompt) */
   isolateBranches: boolean;
   /** Enables role-scoped sandbox tools */
   deepthinkCodeExecutionEnabled: boolean;
@@ -106,25 +104,6 @@ export interface DeepthinkHypothesisData {
   testerVerdict?: 'VALIDATED' | 'REJECTED' | 'INCONCLUSIVE';
   roundNumber?: number;
   globalIteration?: number;
-}
-
-export interface SolutionPoolItem {
-  title: string;
-  content: string;
-  confidence: number;
-}
-
-export interface DeepthinkStructuredSolutionPoolAgentData {
-  mainStrategyId: string;
-  poolResponse?: string;
-  parsedPoolResponse?: {
-    strategy_id: string;
-    solutions: SolutionPoolItem[];
-  };
-  status: AgentStatus | 'skipped';
-  globalIteration?: number;
-  heartbeatNo?: number;
-  executionTraceText?: string;
 }
 
 // ============================================================================
@@ -273,9 +252,9 @@ export interface RealizedHypothesisFeedback {
 export interface HeartbeatBlock {
   heartbeat_no: number;
   iteration: number;
+  dosFilePath?: string;
   hypotheses: DeepthinkHypothesisData[];
   realized_feedback: RealizedHypothesisFeedback[];
-  pools: DeepthinkStructuredSolutionPoolAgentData[];
 }
 
 // ============================================================================
@@ -306,6 +285,7 @@ export interface ProximityTurn {
   content: string;
   timestamp: number;
   turnNumber?: number;
+  roundNumber?: number;
   version?: number;
 }
 
@@ -330,7 +310,6 @@ export interface DeepthinkPipelineState {
   heartbeats: HeartbeatBlock[];
   hypotheses: DeepthinkHypothesisData[];
   hypothesisProximityHistory: ProximityTurn[];
-  structuredSolutionPoolAgents: DeepthinkStructuredSolutionPoolAgentData[];
 
   // BSR & Global Updates
   bsrRecords: BsrGlobalUpdateRecord[];
@@ -365,8 +344,6 @@ export interface DeepthinkPipelineState {
   solutionCritiques?: any[];
   solutionCritiquesStatus?: any;
   hypothesisExplorerComplete?: boolean;
-  structuredSolutionPoolStatus?: any;
-  structuredSolutionPoolEnabled?: boolean;
 }
 
 /** A hypothesis packet captured for one heartbeat round. */
@@ -384,6 +361,7 @@ export interface DeepthinkResultsContextFile {
 export interface SandboxRepositoryAccess {
   repositoryId: string;
   agentDirectory?: string;
+  agentDirectoryReadOnly?: boolean;
   readableDirectories?: string[];
   liveReadableDirectories?: string[];
   blockedDirectories?: string[];

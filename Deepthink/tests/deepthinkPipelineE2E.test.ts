@@ -389,7 +389,7 @@ describe('Deepthink Consolidated Specification §2 & §3: Loop Schedules & Barri
 
 describe('Deepthink Consolidated Specification §8.3 & §8.4: Shared Workspace Concurrency', () => {
 
-  it('supports real-time concurrent reads and writes with tool interface', async () => {
+  it('supports real-time concurrent reads, appends, surgical edits, and enforces the 5000-token cap', async () => {
     const workspace = new SharedWorkspaceManager();
     await workspace.write('# Initial Workspace Setup\n');
 
@@ -405,10 +405,30 @@ describe('Deepthink Consolidated Specification §8.3 & §8.4: Shared Workspace C
     assert.ok(readResult.includes('Agent 2'));
     assert.ok(readResult.includes('Agent 3'));
 
-    // Overwrite works cleanly
-    await workspace.handleToolCall({ action: 'write', content: '# Final Clean Workspace\n' });
-    const finalResult = await workspace.read();
-    assert.equal(finalResult, '# Final Clean Workspace\n');
+    // Surgical edit works cleanly without wiping peer agents' work
+    await workspace.handleToolCall({
+      action: 'edit',
+      old_string: 'Agent 2: Checked boundary condition.',
+      new_string: 'Agent 2: Confirmed strict boundary tangency.',
+    });
+    const editedResult = await workspace.read();
+    assert.ok(editedResult.includes('Agent 2: Confirmed strict boundary tangency.'));
+    assert.ok(editedResult.includes('Agent 1: Verified convex hull constraint.'));
+
+    // Full-file write via tool call is rejected to prevent wiping peer findings
+    await assert.rejects(
+      () => workspace.handleToolCall({ action: 'write' as any, content: '# Wiped\n' }),
+      /Full-file "write" is disabled/
+    );
+
+    // Token limit gate rejects appends/edits that would exceed 5000 tokens and preserves existing content
+    const hugeContent = 'token '.repeat(5200);
+    await assert.rejects(
+      () => workspace.handleToolCall({ action: 'append', content: hugeContent }),
+      /5000 tokens/
+    );
+    const preservedResult = await workspace.read();
+    assert.equal(preservedResult, editedResult);
   });
 });
 
@@ -439,7 +459,6 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
         strategyProximityLoops: 2,
         hypothesisCount: 2,
         hypothesisProximityLoops: 1,
-        disableSolutionPool: false,
         isolateBranches: false,
         deepthinkCodeExecutionEnabled: false,
         thinkingLevel: 'high',
@@ -454,7 +473,6 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
       hypothesisRounds: [],
       solutionCritiques: [],
       memoryBankAgents: [],
-      structuredSolutionPoolAgents: [],
       heartbeats: [],
       hypothesisProximityHistory: [],
       bsrRecords: [],
@@ -494,6 +512,11 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
           args.systemInstruction.includes('strategies'),
           'Seed strategy generator must receive seed schema system prompt'
         );
+        assert.ok(p.includes('# Core Challenge'), 'Seed SG must receive # Core Challenge');
+        assert.ok(p.includes('Requested Number of Strategies: 3'), 'Seed SG must receive strategiesCount');
+        if (!desc.includes('(Turn 1)')) {
+          assert.ok(p.includes('<SeedStrategyProximityTurns>'), 'Seed SG revision turns must receive <SeedStrategyProximityTurns>');
+        }
         return wrapInRealisticLLMFence({
           strategies: [
             'Strategy main1: Symmetry-based algebraic parameterization',
@@ -509,6 +532,14 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
           args.systemInstruction.includes('evolved_slots') && args.systemInstruction.includes('pruned_slots'),
           'Global update strategy generator must receive surgical schema system prompt'
         );
+        assert.ok(p.includes('# Core Challenge (Global Update 1)'), 'GU SG must receive # Core Challenge');
+        assert.ok(p.includes('Requested Number of Strategies: 3'), 'GU SG must receive strategiesCount');
+        assert.ok(p.includes('<StrategyProximityHistory>'), 'GU SG must receive <StrategyProximityHistory>');
+        assert.ok(p.includes('<HarnessNote>'), 'GU SG must receive <HarnessNote>');
+        assert.ok(p.includes('<CurrentActiveStrategies>'), 'GU SG must receive <CurrentActiveStrategies>');
+        assert.ok(p.includes('<ConsolidatedBsrDecisions>'), 'GU SG must receive <ConsolidatedBsrDecisions>');
+        assert.ok(p.includes('<DosSynthesisForStrategies>'), 'GU SG must receive <DosSynthesisForStrategies>');
+        assert.ok(p.includes('<StrategiesFinalizedAndUsedSoFar>'), 'GU SG must receive <StrategiesFinalizedAndUsedSoFar>');
         return wrapInRealisticLLMFence({
           evolved_slots: [
             { slot_id: 'main2', updated_strategy_text: 'Evolved main2: Constrained gradient projection avoiding boundary singularities' },
@@ -521,9 +552,18 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
 
       // 3. Strategy Proximity Review
       if (kind === 'strategyProximity') {
+        assert.ok(p.includes('# Core Challenge'), 'Strategy Proximity must receive full # Core Challenge');
+        assert.ok(p.includes('Requested Number of Strategies: 3'), 'Strategy Proximity must receive strategiesCount');
         if (desc.includes('Global Update')) {
+          assert.ok(p.includes('<StrategyProximityHistory>'), 'GU Strategy Proximity must receive <StrategyProximityHistory>');
+          assert.ok(p.includes('<HarnessNote>'), 'GU Strategy Proximity must receive <HarnessNote>');
+          assert.ok(p.includes('<CurrentActiveStrategies>'), 'GU Strategy Proximity must receive <CurrentActiveStrategies>');
+          assert.ok(p.includes('<ConsolidatedBsrDecisions>'), 'GU Strategy Proximity must receive <ConsolidatedBsrDecisions>');
+          assert.ok(p.includes('<DosSynthesisForStrategies>'), 'GU Strategy Proximity must receive <DosSynthesisForStrategies>');
+          assert.ok(p.includes('<CurrentGlobalUpdateProximityTurns>'), 'GU Strategy Proximity must receive <CurrentGlobalUpdateProximityTurns>');
           return 'Proximity: Evolved main2 and New main3 maintain complete orthogonality from main1.';
         }
+        assert.ok(p.includes('<SeedStrategyProximityTurns>'), 'Seed Strategy Proximity must receive <SeedStrategyProximityTurns>');
         return 'Proximity: All 3 strategies explore diverse, non-overlapping solution domains.';
       }
 
@@ -630,6 +670,26 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
 
       // 9. Hypothesis Generation (§4.2)
       if (kind === 'hypothesisGeneration' || desc.includes('Hypothesis Generation')) {
+        assert.ok(p.includes('# Core Challenge'), 'HG must receive # Core Challenge');
+        assert.ok(p.includes('Requested Number of Hypotheses: 2'), 'HG must receive hypothesisCount');
+        assert.ok(p.includes('<HarnessNote>'), 'HG must receive <HarnessNote>');
+        assert.ok(p.includes('<DosCoreSynthesis>'), 'HG must receive <DosCoreSynthesis>');
+        assert.equal(p.includes('Latest Critique:'), false, 'HG must NOT receive raw branch critiques');
+        if (desc.includes('Heartbeat 1')) {
+          assert.ok(p.includes('<ActiveRunningStrategies>'), 'HB1 HG must receive <ActiveRunningStrategies>');
+          assert.ok(p.includes('Latest Correction:'), 'HB1 HG must receive Latest Correction from active branches');
+        }
+        if (desc.includes('Heartbeat 2')) {
+          assert.ok(p.includes('<HypothesisProximityHistory>'), 'HB2 HG must receive <HypothesisProximityHistory>');
+          assert.ok(
+            p.includes('DOS_history/DOS_global_update_01_step_ii.md'),
+            'HB2 must include reframed note for HB1 (which ran at end of GU 1) pointing to DOS_global_update_01_step_ii.md'
+          );
+          assert.ok(p.includes('<PreviousHeartbeatHypothesesAndTests>'), 'HB2 must include <PreviousHeartbeatHypothesesAndTests>');
+          assert.ok(p.includes('<MappedBranchPackets>'), 'HB2 must include <MappedBranchPackets>');
+          assert.ok(p.includes('"latest_correction"'), 'HB2 <MappedBranchPackets> must include latest_correction from all active branches');
+          assert.ok(p.includes('<RealizedHypothesisFeedback>'), 'HB2 must include <RealizedHypothesisFeedback>');
+        }
         return wrapInRealisticLLMFence({
           hypotheses: [
             {
@@ -656,6 +716,16 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
 
       // 10. Hypothesis Proximity
       if (kind === 'hypothesisProximity') {
+        assert.ok(p.includes('# Core Challenge'), 'HP must receive # Core Challenge');
+        assert.ok(p.includes('Requested Number of Hypotheses: 2'), 'HP must receive hypothesisCount');
+        assert.ok(p.includes('<HarnessNote>'), 'HP must receive <HarnessNote>');
+        assert.ok(p.includes('<DosCoreSynthesis>'), 'HP must receive <DosCoreSynthesis>');
+        assert.ok(p.includes('<CurrentHeartbeatProximityTurns>'), 'HP must receive <CurrentHeartbeatProximityTurns>');
+        assert.ok(
+          p.includes('Latest Correction:') || p.includes('"latest_correction"'),
+          'HP must receive the latest corrections from all active branches'
+        );
+        assert.equal(p.includes('Latest Critique:'), false, 'HP must NOT receive raw branch critiques');
         return 'Proximity: Hypotheses h1 and h2 are crisp, falsifiable, and orthogonal.';
       }
 
@@ -664,28 +734,16 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
         return 'Tested analytically. Result confirms centers form an equilateral triangle.\n\nCLASSIFICATION: VALIDATED';
       }
 
-      // 12. Structured Noise (§4.4)
-      if (kind === 'structuredSolutionPool' || desc.includes('Structured Noise')) {
-        return wrapInRealisticLLMFence({
-          strategy_id: 'main1',
-          solutions: [
-            { title: 'Alternative A', content: 'Polar coordinate framing', confidence: 0.88 },
-            { title: 'Alternative B', content: 'Cartesian framing with symmetry reduction', confidence: 0.92 },
-          ],
-        });
-      }
-
-      // 13. Memory Bank Distillation (§4.6 v, §9)
+      // 12. Memory Bank Distillation (§4.6 v, §9)
       if (kind === 'memoryBank') {
         return '# Memory Bank Distillation\nDurable invariant: Center homothety holds. Inscribed radius r = s / (2 + 2*sqrt(3)). Avoid boundary singularities.';
       }
 
-      // 14. Final Judge (§7, §9)
+      // 13. Final Judge (§7, §9)
       if (kind === 'finalJudge') {
         finalJudgeCalled = true;
-        // Verify final judge receives ONLY candidate solutions, no critiques, pools, or memory banks (§7, §8.3)
+        // Verify final judge receives ONLY candidate solutions, no critiques or memory banks (§7, §8.3)
         assert.equal(p.includes('## Critique'), false, 'Final judge must NOT receive critiques');
-        assert.equal(p.includes('## Structured Noise'), false, 'Final judge must NOT receive pools');
         assert.equal(p.includes('## Memory Bank'), false, 'Final judge must NOT receive memory banks');
 
         return wrapInRealisticLLMFence({
@@ -787,23 +845,30 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
     const git = orchestrator.getGitHarness();
     const files = git.getCommittedFiles();
 
-    // Verify seed strategies file
+    // Verify seed strategies file and its companion .jsonl trajectory file
     assert.ok(files.has('strategies_history/seed_strategies.md'), 'Seed strategies history must be committed');
+    assert.ok(files.has('strategies_history/seed_strategies.jsonl'), 'Seed strategies trajectory .jsonl must be committed');
     assert.ok(files.get('strategies_history/seed_strategies.md')!.includes('Strategy main1'));
 
-    // Verify strategies finalized and used so far
+    // Verify strategies finalized and used so far (.md and .jsonl)
     assert.ok(files.has('strategies_history/strategies_finalized_and_used_so_far.md'), 'strategies_finalized_and_used_so_far.md must be committed');
+    assert.ok(files.has('strategies_history/strategies_finalized_and_used_so_far.jsonl'), 'strategies_finalized_and_used_so_far.jsonl must be committed');
 
-    // Verify DOS history files (§8.1)
+    // Verify DOS history files (§8.1) (.md and .jsonl)
     assert.ok(files.has('DOS_history/DOS_global_update_01_step_i.md'), 'Step-i DOS must be recorded in repository');
+    assert.ok(files.has('DOS_history/DOS_global_update_01_step_i.jsonl'), 'Step-i DOS trajectory .jsonl must be recorded in repository');
     assert.ok(files.has('DOS_history/DOS_global_update_01_step_ii.md'), 'Step-ii DOS must be recorded in repository');
+    assert.ok(files.has('DOS_history/DOS_global_update_01_step_ii.jsonl'), 'Step-ii DOS trajectory .jsonl must be recorded in repository');
 
-    // Verify per-iteration history files (§8.1, §12.13)
+    // Verify per-iteration history files (§8.1, §12.13) (.md and .jsonl)
     assert.ok(files.has('Strategy-1/history/iteration_01.md'), 'Iteration 1 history must be recorded');
+    assert.ok(files.has('Strategy-1/history/iteration_01.jsonl'), 'Iteration 1 trajectory .jsonl must be recorded');
     assert.ok(files.has('Strategy-1/history/iteration_02.md'), 'Iteration 2 history must be recorded');
+    assert.ok(files.has('Strategy-1/history/iteration_02.jsonl'), 'Iteration 2 trajectory .jsonl must be recorded');
 
-    // Verify memory bank distillation file for surviving branch (§8.1)
+    // Verify memory bank distillation file for surviving branch (§8.1) (.md and .jsonl)
     assert.ok(files.has('Strategy-1/history/memory_bank_01.md'), 'Memory bank distillation must be committed');
+    assert.ok(files.has('Strategy-1/history/memory_bank_01.jsonl'), 'Memory bank distillation trajectory .jsonl must be committed');
 
     // Verify PRUNE archived directory (§8.2)
     const archived = git.getArchivedDirectories();
@@ -1046,7 +1111,7 @@ describe('Deepthink Token Volume & API Call Estimations (Schedule 5..20 & Sandbo
 
   it('accurately accounts for every possible agent across heartbeats, global updates, and iterations', () => {
     // Test §3 worked example: i = 15, j = 5, k = 3
-    // S = 3, strategyProx = 2, hypCount = 4, hypProx = 1, pools enabled
+    // S = 3, strategyProx = 2, hypCount = 4, hypProx = 1
     const res15 = calculateDeepthinkApiCallsFromParams({
       strategiesCount: 3,
       i: 15,
@@ -1055,7 +1120,6 @@ describe('Deepthink Token Volume & API Call Estimations (Schedule 5..20 & Sandbo
       strategyProximityLoops: 2,
       hypothesisCount: 4,
       hypothesisProximityLoops: 1,
-      disableSolutionPool: false,
     });
 
     const b15 = res15.breakdown;
@@ -1084,17 +1148,15 @@ describe('Deepthink Token Volume & API Call Estimations (Schedule 5..20 & Sandbo
     assert.strictEqual(b15.hypothesisProximity, 5);
     // 9. Hypothesis Tester: 5 heartbeats * 4 hypotheses = 20 calls
     assert.strictEqual(b15.hypothesisTester, 20);
-    // 10. Structured Solution Pool: 5 heartbeats * 3 branches = 15 calls
-    assert.strictEqual(b15.structuredSolutionPool, 15);
-    // 11. BSR: 2 global updates * 3 branches = 6 calls
+    // 10. BSR: 2 global updates * 3 branches = 6 calls
     assert.strictEqual(b15.bsr, 6);
-    // 12. Strategy Generator Global Update: min 0, max 2 GU * (1 + 2) = 6 calls
+    // 11. Strategy Generator Global Update: min 0, max 2 GU * (1 + 2) = 6 calls
     assert.strictEqual(b15.strategyGeneratorGlobalUpdate.min, 0);
     assert.strictEqual(b15.strategyGeneratorGlobalUpdate.max, 6);
-    // 13. Memory Bank: min 2 GU * 3 branches = 6 calls, max 0
+    // 12. Memory Bank: min 2 GU * 3 branches = 6 calls, max 0
     assert.strictEqual(b15.memoryBank.min, 6);
     assert.strictEqual(b15.memoryBank.max, 0);
-    // 14. Final Judge: exactly 1 call
+    // 13. Final Judge: exactly 1 call
     assert.strictEqual(b15.finalJudge, 1);
 
     // Verify mathematical identity: sum of breakdown equals min and max
@@ -1107,7 +1169,6 @@ describe('Deepthink Token Volume & API Call Estimations (Schedule 5..20 & Sandbo
       b15.hypothesisGeneration +
       b15.hypothesisProximity +
       b15.hypothesisTester +
-      b15.structuredSolutionPool +
       b15.bsr +
       b15.strategyGeneratorGlobalUpdate.min +
       b15.memoryBank.min +
@@ -1123,7 +1184,6 @@ describe('Deepthink Token Volume & API Call Estimations (Schedule 5..20 & Sandbo
       b15.hypothesisGeneration +
       b15.hypothesisProximity +
       b15.hypothesisTester +
-      b15.structuredSolutionPool +
       b15.bsr +
       b15.strategyGeneratorGlobalUpdate.max +
       b15.memoryBank.max +
@@ -1137,13 +1197,11 @@ describe('Deepthink Token Volume & API Call Estimations (Schedule 5..20 & Sandbo
       j: 5,
       k: 3,
       hypothesisCount: 0,
-      disableSolutionPool: true,
     });
     assert.strictEqual(resDisabled.breakdown.standaloneHeartbeats, 0);
     assert.strictEqual(resDisabled.breakdown.totalHeartbeats, 0);
     assert.strictEqual(resDisabled.breakdown.hypothesisGeneration, 0);
     assert.strictEqual(resDisabled.breakdown.hypothesisTester, 0);
-    assert.strictEqual(resDisabled.breakdown.structuredSolutionPool, 0);
     assert.strictEqual(resDisabled.breakdown.dos, 1, 'Only Step-i DOS runs for 1 global update at iteration 5');
   });
 });

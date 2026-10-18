@@ -20,7 +20,6 @@ export interface DeepthinkConfigState {
     j: number;
     k: number;
     isolateBranches: boolean;
-    disableSolutionPool: boolean;
     codeExecutionEnabled: boolean;
     bsrNoiseLevel: number;
     bsrPressureFloor: number;
@@ -52,7 +51,6 @@ export class DeepthinkConfigController extends EventTarget {
             j: this.modelConfig.getJ(),
             k: this.modelConfig.getK(),
             isolateBranches: this.modelConfig.isIsolateBranchesEnabled(),
-            disableSolutionPool: this.modelConfig.isSolutionPoolDisabled(),
             codeExecutionEnabled: this.modelConfig.isDeepthinkCodeExecutionEnabled(),
             bsrNoiseLevel: this.modelConfig.getBsrNoiseLevel(),
             bsrPressureFloor: this.modelConfig.getBsrPressureFloor(),
@@ -74,7 +72,6 @@ export class DeepthinkConfigController extends EventTarget {
     public getK(): number { return this.modelConfig.getK(); }
     public getMaxStrategies(): number { return MAX_DEEPTHINK_STRATEGIES; }
     public isIsolateBranchesEnabled(): boolean { return this.modelConfig.isIsolateBranchesEnabled(); }
-    public isSolutionPoolDisabled(): boolean { return this.modelConfig.isSolutionPoolDisabled(); }
     public isCodeExecutionEnabled(): boolean { return this.modelConfig.isDeepthinkCodeExecutionEnabled(); }
     public getBsrNoiseLevel(): number { return this.modelConfig.getBsrNoiseLevel(); }
     public getBsrPressureFloor(): number { return this.modelConfig.getBsrPressureFloor(); }
@@ -131,11 +128,6 @@ export class DeepthinkConfigController extends EventTarget {
     public setIsolateBranchesEnabled(enabled: boolean): void {
         this.modelConfig.updateParameter('isolateBranches', enabled);
         this.emitChange('isolateBranches');
-    }
-
-    public setSolutionPoolDisabled(disabled: boolean): void {
-        this.modelConfig.updateParameter('disableSolutionPool', disabled);
-        this.emitChange('disableSolutionPool');
     }
 
     public setCodeExecutionEnabled(enabled: boolean): void {

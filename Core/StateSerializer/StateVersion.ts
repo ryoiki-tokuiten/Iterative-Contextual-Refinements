@@ -59,7 +59,6 @@ export interface ExportedConfig {
         hypothesisProximityLoops: number;
         deepthinkDepth: number;
         isolateBranches: boolean;
-        disableSolutionPool: boolean;
         deepthinkCodeExecutionEnabled: boolean;
         thinkingLevel: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' | string;
     };

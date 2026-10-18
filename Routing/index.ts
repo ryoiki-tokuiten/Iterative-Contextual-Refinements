@@ -66,10 +66,6 @@ export function getIsolateBranchesEnabled(): boolean {
     return getRoutingManager().isIsolateBranchesEnabled();
 }
 
-export function getSolutionPoolDisabled(): boolean {
-    return getRoutingManager().isSolutionPoolDisabled();
-}
-
 export function getBsrNoiseLevel(): number {
     return getRoutingManager().getBsrNoiseLevel();
 }

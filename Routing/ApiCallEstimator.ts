@@ -28,7 +28,6 @@ export interface DeepthinkApiCallBreakdown {
     hypothesisGeneration: number;
     hypothesisProximity: number;
     hypothesisTester: number;
-    structuredSolutionPool: number;
     bsr: number;
     strategyGeneratorGlobalUpdate: { min: number; max: number };
     memoryBank: { min: number; max: number };
@@ -68,9 +67,8 @@ export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): D
     const strategyProximityLoops = Math.max(0, Math.min(MAX_STRATEGY_PROXIMITY_LOOPS, params.strategyProximityLoops ?? 1));
     const hypothesisCount = Math.max(0, Math.min(MAX_HYPOTHESIS_COUNT, params.hypothesisCount ?? 0));
     const hypothesisProximityLoops = Math.max(0, Math.min(MAX_HYPOTHESIS_PROXIMITY_LOOPS, params.hypothesisProximityLoops ?? 1));
-    const disableSolutionPool = params.disableSolutionPool === true;
 
-    const curatedContextEnabled = hypothesisCount > 0 || !disableSolutionPool;
+    const curatedContextEnabled = hypothesisCount > 0;
     const schedule = calculateLoopSchedule(i, j, k, curatedContextEnabled);
     const { standaloneHeartbeats, globalUpdates, totalHeartbeats } = schedule;
 
@@ -92,18 +90,16 @@ export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): D
     const hypCallsPerHeartbeat = hypothesisCount > 0
         ? (1 + (2 * hypothesisProximityLoops)) + hypothesisCount
         : 0;
-    const poolCallsPerHeartbeat = disableSolutionPool ? 0 : strategiesCount;
 
     // Standalone heartbeats run their own Heartbeat DOS call when hypotheses enabled (§5.1)
     const standaloneHeartbeatCalls = standaloneHeartbeats * (
         (hypothesisCount > 0 ? 1 : 0) +
-        hypCallsPerHeartbeat +
-        poolCallsPerHeartbeat
+        hypCallsPerHeartbeat
     );
 
     // Heartbeat ending Global Update reuses Step-ii DOS (0 extra DOS calls per §4.5, §4.6 vii)
     const guHeartbeatCalls = curatedContextEnabled
-        ? globalUpdates * (hypCallsPerHeartbeat + poolCallsPerHeartbeat)
+        ? globalUpdates * hypCallsPerHeartbeat
         : 0;
 
     // 4. Global Updates (§4.6):
@@ -153,7 +149,6 @@ export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): D
     const max = baseMax * maxMultiplier;
 
     const totalHeartbeatsWithHyp = hypothesisCount > 0 ? totalHeartbeats : 0;
-    const totalHeartbeatsWithPools = !disableSolutionPool ? totalHeartbeats : 0;
 
     const breakdown: DeepthinkApiCallBreakdown = {
         initialStrategy: 1 + strategyProximityLoops,
@@ -176,7 +171,6 @@ export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): D
         hypothesisGeneration: totalHeartbeatsWithHyp * (1 + hypothesisProximityLoops),
         hypothesisProximity: totalHeartbeatsWithHyp * hypothesisProximityLoops,
         hypothesisTester: totalHeartbeatsWithHyp * hypothesisCount,
-        structuredSolutionPool: totalHeartbeatsWithPools * strategiesCount,
         bsr: globalUpdates * strategiesCount,
         strategyGeneratorGlobalUpdate: {
             min: 0,

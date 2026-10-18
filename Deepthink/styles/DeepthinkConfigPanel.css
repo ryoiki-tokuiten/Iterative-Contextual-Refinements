@@ -1166,8 +1166,7 @@ button.token-summary-item {
     margin-top: var(--gap-sm);
 }
 
-.isolate-branches-option,
-.disable-solution-pool-option {
+.isolate-branches-option {
     display: flex;
     flex: 0 0 auto;
     align-items: center;
@@ -1332,29 +1331,6 @@ button.token-summary-item {
     font-weight: 700;
 }
 
-.vis-pool-node {
-    position: relative;
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-    color: var(--accent-yellow);
-
-    &.disabled {
-        opacity: 0.32;
-
-        &::after {
-            content: "";
-            position: absolute;
-            width: 20px;
-            height: 1.5px;
-            border-radius: 2px;
-            background: currentColor;
-            transform: rotate(-42deg);
-        }
-    }
-}
-
 .deepthink-process-vis {
     justify-content: center;
     gap: 12px;
@@ -1362,11 +1338,6 @@ button.token-summary-item {
     height: 48px;
     padding: 0 14px;
     margin: 4px 0 6px;
-}
-
-.deepthink-process-vis .vis-pool-node {
-    width: 28px;
-    height: 28px;
 }
 
 .deepthink-process-vis .vis-node {
@@ -1398,14 +1369,6 @@ button.token-summary-item {
 
 .deepthink-process-vis .vis-memory-interval {
     font-size: 8px;
-}
-
-.vis-pool-connector {
-    flex: 0 0 auto;
-
-    &.disabled {
-        opacity: 0.2;
-    }
 }
 
 .vis-critique-loop-pill {
@@ -1921,10 +1884,6 @@ body.light-mode {
         color: #2563eb;
     }
 
-    & .vis-pool-node {
-        color: #d97706;
-    }
-
     & .vis-critique-loop-pill {
         border-color: rgba(0, 0, 0, 0.06);
         background: rgba(0, 0, 0, 0.01);
@@ -2204,9 +2163,10 @@ body.light-mode {
 .curated-subfeature-card {
     display: flex;
     flex-direction: column;
+    flex-shrink: 0;
     gap: 12px;
     padding: 14px 18px;
-    margin-top: 8px;
+    margin-top: 0;
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
@@ -2248,10 +2208,6 @@ body.light-mode {
 
 .curated-toggle-label:hover {
     color: var(--accent-blue);
-}
-
-.curated-subfeature-card.solution-pool-card .curated-toggle-label:hover {
-    color: var(--accent-yellow);
 }
 
 /* ==========================================================================
@@ -2577,14 +2533,18 @@ body.light-mode {
 
 .figure4-container {
     display: flex;
+    flex: 1 1 0;
+    align-items: center;
+    justify-content: center;
     width: 100%;
+    min-height: 240px;
     margin: 0;
     padding: 0;
 }
 
 .figure4-visualization {
     width: 100%;
-    height: auto;
+    height: 100%;
     max-height: 100%;
     display: block;
 }

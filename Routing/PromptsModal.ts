@@ -251,7 +251,7 @@ export class PromptsModal {
                 },
                 {
                     groupTitle: "2. SOLUTION DEVELOPMENT",
-                    prompts: ["deepthink-solution-attempt", "deepthink-solution-critique", "deepthink-solution-correction", "deepthink-structured-solution-pool"]
+                    prompts: ["deepthink-solution-attempt", "deepthink-solution-critique", "deepthink-solution-correction"]
                 },
                 {
                     groupTitle: "3. HYPOTHESIS EXPLORATION",
