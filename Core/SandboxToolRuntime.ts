@@ -168,13 +168,71 @@ export async function snapshotDeepthinkResultsRepository(
 
 /** Pre-create the durable Results Git repository at the start of a sandboxed
  * Deepthink run. This does not seed or expose any agent workspace files. */
-export async function ensureDeepthinkResultsRepository(repositoryId: string): Promise<void> {
+export async function ensureDeepthinkResultsRepository(repositoryId: string): Promise<{ resultPath?: string }> {
     const response = await fetch(`${getSandboxApiBasePath()}/repository/ensure-deepthink`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ repositoryId }),
     });
     if (!response.ok) throw new Error(`Could not initialize Deepthink Results (${response.status}).`);
+    try {
+        const payload = await response.json();
+        return { resultPath: payload?.resultPath };
+    } catch {
+        return {};
+    }
+}
+
+/**
+ * Persist or replace the single latest.gz export in the run's Results repository.
+ */
+export async function saveSandboxLatestGz(
+    repositoryId: string,
+    state: unknown
+): Promise<{ ok: boolean; path?: string }> {
+    const response = await fetch(`${getSandboxApiBasePath()}/repository/save-latest-gz`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ repositoryId, state }),
+    });
+    if (!response.ok) {
+        let msg = `Failed to save latest.gz (${response.status})`;
+        try {
+            const err = await response.json();
+            msg = err?.error || msg;
+        } catch { }
+        throw new Error(msg);
+    }
+    return await response.json();
+}
+
+/**
+ * Open the host Results repository directory in the user's OS file manager.
+ */
+export async function openSandboxRepositoryDirectory(
+    repositoryId?: string
+): Promise<{ ok: boolean; path?: string }> {
+    const response = await fetch(`${getSandboxApiBasePath()}/repository/open-directory`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(repositoryId ? { repositoryId } : {}),
+    });
+    if (!response.ok) {
+        let msg = `Failed to open directory (${response.status})`;
+        try {
+            const err = await response.json();
+            msg = err?.error || msg;
+        } catch { }
+        throw new Error(msg);
+    }
+    return await response.json();
+}
+
+/**
+ * Open the host /Results directory in the user's OS file manager.
+ */
+export async function openResultsDirectory(): Promise<{ ok: boolean; path?: string }> {
+    return openSandboxRepositoryDirectory();
 }
 
 interface SandboxArchivedStrategy {
@@ -394,7 +452,7 @@ function createFinalOutputToolDefinition(contract?: SandboxFinalOutputContract):
                         : {
                             type: 'string',
                             description: 'The complete final answer, solution, critique, test result, or role-specific output to submit to the multi-agent system.'
-                    }
+                        }
                 },
                 required: ['response'],
                 additionalProperties: false
@@ -476,7 +534,8 @@ function getProviderImageContent(
     text: string,
     files: Array<{ mimeType: string; base64: string }>
 ): any[] {
-    const images = files.filter(isImageUpload);
+    const validFiles = files.filter(f => typeof f.base64 === 'string' && f.base64.trim().length > 0);
+    const images = validFiles.filter(isImageUpload);
     if (providerName === 'anthropic') {
         return [
             ...(text ? [{ type: 'text', text }] : []),
@@ -497,7 +556,7 @@ function getProviderImageContent(
             // Gemini accepts inline binary parts for its supported document,
             // image, audio, and video inputs, so preserve direct uploads as
             // native inputs instead of turning them into rough text estimates.
-            ...files.map(file => ({
+            ...validFiles.map(file => ({
                 inlineData: {
                     mimeType: file.mimeType,
                     data: file.base64
@@ -603,10 +662,10 @@ function buildRepositoryFilesystemRules(access: SandboxRepositoryAccess): string
     const readableScope = fullRepositoryWrite
         ? '- You may read and write the complete repository. This is the orchestrator-only global workspace.'
         : access.fullRepositoryRead
-        ? '- You may read every directory and file in this repository. The complete repository is mounted read-only except for your explicitly assigned writable directory, if any.'
-        : readableDirectories.length
-            ? `- You may read these peer directories, mounted read-only: ${readableDirectories.map(directory => `/workspace/${directory}`).join(', ')}.`
-            : '- No peer agent directories are visible for this call.';
+            ? '- You may read every directory and file in this repository. The complete repository is mounted read-only except for your explicitly assigned writable directory, if any.'
+            : readableDirectories.length
+                ? `- You may read these peer directories, mounted read-only: ${readableDirectories.map(directory => `/workspace/${directory}`).join(', ')}.`
+                : '- No peer agent directories are visible for this call.';
     const hiddenScope = (access.hiddenDirectories || []).length
         ? `- The following role-owned child directories are intentionally hidden: ${(access.hiddenDirectories || []).map(directory => `/workspace/${directory}`).join(', ')}.`
         : '';
@@ -615,34 +674,34 @@ function buildRepositoryFilesystemRules(access: SandboxRepositoryAccess): string
         fullRepositoryWrite
             ? '- This run uses one shared repository mounted read/write at /workspace.'
             : writableDirectory
-            ? `- This run uses a shared repository mounted at /workspace. Your writable working directory is /workspace/${writableDirectory}.`
-            : '- This run uses a shared repository mounted read-only at /workspace. Your private scratch directory is /tmp.',
+                ? `- This run uses a shared repository mounted at /workspace. Your writable working directory is /workspace/${writableDirectory}.`
+                : '- This run uses a shared repository mounted read-only at /workspace. Your private scratch directory is /tmp.',
         fullRepositoryWrite
             ? '- Every sandbox command starts in the repository root.'
             : writableDirectory
-            ? '- Every sandbox command starts inside your writable directory.'
-            : '- Every sandbox command starts in the read-only repository root. Use /tmp for temporary scripts, caches, or experimental files.',
+                ? '- Every sandbox command starts inside your writable directory.'
+                : '- Every sandbox command starts in the read-only repository root. Use /tmp for temporary scripts, caches, or experimental files.',
         fullRepositoryWrite
             ? '- /workspace is writable for this orchestrator session; preserve strategy branch boundaries.'
             : '- /workspace itself is read-only. You can list and read visible root files, but you cannot write in the repository root.',
         fullRepositoryWrite
             ? '- You may create, modify, and delete repository files anywhere under /workspace.'
             : writableDirectory
-            ? `- You may create, modify, and delete repository files only under /workspace/${writableDirectory}.`
-            : '- You may not create, modify, or delete repository files or directories. Do not mistake /tmp scratch files for shared repository artifacts.',
+                ? `- You may create, modify, and delete repository files only under /workspace/${writableDirectory}.`
+                : '- You may not create, modify, or delete repository files or directories. Do not mistake /tmp scratch files for shared repository artifacts.',
         '- All direct-context files and additional filesystem uploads are mounted read-only at /workspace/user_uploaded.',
         readableScope,
         hiddenScope,
         fullRepositoryWrite
             ? '- Changes are shared repository state. Do not overwrite branch artifacts unless the orchestration decision explicitly requires it.'
             : access.fullRepositoryRead
-            ? '- Repository files outside the writable directory, if one exists, are mounted read-only. Treat them as shared evidence, not scratch space.'
-            : '- Directories other than the locations listed above are not mounted into your sandbox view. Treat absent directories as unavailable context, not as empty evidence.',
+                ? '- Repository files outside the writable directory, if one exists, are mounted read-only. Treat them as shared evidence, not scratch space.'
+                : '- Directories other than the locations listed above are not mounted into your sandbox view. Treat absent directories as unavailable context, not as empty evidence.',
         fullRepositoryWrite
             ? '- Keep strategy-local artifacts in their Strategy-N directory whenever possible.'
             : writableDirectory
-            ? '- If you need to modify a readable peer file, copy it into your own writable directory first and edit the copy.'
-            : '- If you need to experiment with a readable file, copy it into /tmp first and keep the repository unchanged.',
+                ? '- If you need to modify a readable peer file, copy it into your own writable directory first and edit the copy.'
+                : '- If you need to experiment with a readable file, copy it into /tmp first and keep the repository unchanged.',
     ];
 }
 

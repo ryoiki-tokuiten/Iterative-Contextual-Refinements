@@ -5,6 +5,7 @@ import { access, chmod, copyFile, mkdir, readFile, readdir, rename, rm, stat, wr
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { getEncoding } from 'js-tiktoken';
 
 const encoder = getEncoding('cl100k_base');
@@ -398,13 +399,63 @@ async function getDeepthinkResultsRepositoryPath(repositoryId: string): Promise<
     try {
         const raw = await readFile(getDeepthinkResultsMetadataPath(repositoryId), 'utf8');
         const metadata = JSON.parse(raw) as DeepthinkResultsRepositoryMetadata;
-        if (metadata?.schema !== 'iterative_studio_deepthink_results.v1' || metadata.repositoryId !== repositoryId) {
-            return null;
+        if (metadata?.schema === 'iterative_studio_deepthink_results.v1' && metadata.repositoryId === repositoryId) {
+            if (await fileExists(metadata.resultPath)) return metadata.resultPath;
         }
-        return await fileExists(metadata.resultPath) ? metadata.resultPath : null;
     } catch {
-        return null;
+        // Fall back to scanning RESULTS_ROOT
     }
+
+    // Durable fallback: check directories in RESULTS_ROOT for .deepthink-meta.json
+    try {
+        const entries = await readdir(RESULTS_ROOT, { withFileTypes: true });
+        for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
+            const dirPath = path.join(RESULTS_ROOT, entry.name);
+            const metaFile = path.join(dirPath, '.deepthink-meta.json');
+            if (await fileExists(metaFile)) {
+                try {
+                    const raw = await readFile(metaFile, 'utf8');
+                    const meta = JSON.parse(raw) as DeepthinkResultsRepositoryMetadata;
+                    if (meta?.repositoryId === repositoryId) {
+                        await mkdir(DEEPTHINK_RESULTS_METADATA_ROOT, { recursive: true });
+                        await writeFile(getDeepthinkResultsMetadataPath(repositoryId), JSON.stringify(meta, null, 2)).catch(() => {});
+                        return dirPath;
+                    }
+                } catch {
+                    // Ignore JSON parse errors in corrupt meta
+                }
+            } else {
+                const gzFile = path.join(dirPath, 'latest.gz');
+                if (await fileExists(gzFile)) {
+                    try {
+                        const buf = await readFile(gzFile);
+                        const decompressed = zlib.gunzipSync(buf);
+                        const parsed = JSON.parse(decompressed.toString('utf8'));
+                        const pId = parsed?.data?.modeState?.pipeline?.id;
+                        if (pId === repositoryId) {
+                            const meta: DeepthinkResultsRepositoryMetadata = {
+                                schema: 'iterative_studio_deepthink_results.v1',
+                                repositoryId,
+                                resultPath: dirPath,
+                                createdAt: new Date().toISOString(),
+                            };
+                            await writeFile(metaFile, JSON.stringify(meta, null, 2)).catch(() => {});
+                            await mkdir(DEEPTHINK_RESULTS_METADATA_ROOT, { recursive: true });
+                            await writeFile(getDeepthinkResultsMetadataPath(repositoryId), JSON.stringify(meta, null, 2)).catch(() => {});
+                            return dirPath;
+                        }
+                    } catch {
+                        // Ignore decompression or JSON parse errors
+                    }
+                }
+            }
+        }
+    } catch {
+        // Ignore read errors
+    }
+
+    return null;
 }
 
 async function ensureDeepthinkResultsRepository(repositoryId: string): Promise<string | null> {
@@ -431,6 +482,7 @@ async function ensureDeepthinkResultsRepository(repositoryId: string): Promise<s
         createdAt: new Date().toISOString(),
     };
     await writeFile(getDeepthinkResultsMetadataPath(repositoryId), JSON.stringify(metadata, null, 2));
+    await writeFile(path.join(resultPath, '.deepthink-meta.json'), JSON.stringify(metadata, null, 2));
     // Make the directory a real Git repository at run start, even if an agent
     // decides it has no terminal command to execute before its first snapshot.
     await initAndCommitWorkspace(resultPath, 'Deepthink run initialized');
@@ -2376,8 +2428,8 @@ async function copyPrunedRepositoryTree(source: string, destination: string): Pr
 function isSafeResultsContextPath(relativePath: string): boolean {
     if (!relativePath || relativePath.includes('\\') || relativePath.startsWith('/') || relativePath.endsWith('/')) return false;
     const segments = relativePath.split('/');
-    return /\.(md|json|txt|py|js|ts|tsx|jsx|html|css|yaml|yml|sh)$/i.test(relativePath)
-        && segments.every(segment => /^[a-zA-Z0-9][a-zA-Z0-9_.()+\-]{0,95}$/.test(segment));
+    if (segments.some(seg => seg === '..' || seg === '.' || !seg)) return false;
+    return segments.every(segment => /^[a-zA-Z0-9][a-zA-Z0-9_.()+\-\s]{0,120}$/.test(segment));
 }
 
 async function syncDeepthinkResultsSnapshot(payload: DeepthinkResultsSnapshotRequest): Promise<string> {
@@ -2392,12 +2444,16 @@ async function syncDeepthinkResultsSnapshot(payload: DeepthinkResultsSnapshotReq
 
     const contextFiles = payload.contextFiles || [];
     for (const file of contextFiles) {
-        if (!file || !isSafeResultsContextPath(file.path) || typeof file.content !== 'string') {
+        if (!file || !isSafeResultsContextPath(file.path)) {
             throw new Error('Invalid Results context file.');
         }
         const sourceDestination = safeJoin(sourceRepository, file.path);
         await mkdir(path.dirname(sourceDestination), { recursive: true });
-        await writeFile(sourceDestination, file.content, 'utf8');
+        if ((file as any).base64) {
+            await writeFile(sourceDestination, Buffer.from((file as any).base64, 'base64'));
+        } else if (typeof file.content === 'string') {
+            await writeFile(sourceDestination, file.content, 'utf8');
+        }
     }
 
     await initAndCommitWorkspace(sourceRepository, payload.commitMessage || 'Deepthink Results snapshot');
@@ -2409,7 +2465,11 @@ async function syncDeepthinkResultsSnapshot(payload: DeepthinkResultsSnapshotReq
         for (const file of contextFiles) {
             const destination = safeJoin(resultsRepository, file.path);
             await mkdir(path.dirname(destination), { recursive: true });
-            await writeFile(destination, file.content, 'utf8');
+            if ((file as any).base64) {
+                await writeFile(destination, Buffer.from((file as any).base64, 'base64'));
+            } else if (typeof file.content === 'string') {
+                await writeFile(destination, file.content, 'utf8');
+            }
         }
         await initAndCommitWorkspace(resultsRepository, payload.commitMessage || 'Deepthink Results snapshot');
     }
@@ -2591,6 +2651,102 @@ async function handleEnsureDeepthinkRepository(req: IncomingMessage, res: Server
         await initAndCommitWorkspace(repoPath, 'Deepthink repository initialized');
         const resultPath = await ensureDeepthinkResultsRepository(payload.repositoryId);
         sendJson(res, 200, { ok: true, resultPath });
+    } catch (err: any) {
+        sendJson(res, 500, { ok: false, error: err.message || String(err) });
+    }
+}
+
+async function handleSaveLatestGz(req: IncomingMessage, res: ServerResponse) {
+    if (req.method !== 'POST') {
+        sendJson(res, 405, { ok: false, error: 'Method not allowed.' });
+        return;
+    }
+
+    try {
+        const rawBody = await readRequestBody(req);
+        const payload = JSON.parse(rawBody) as {
+            repositoryId?: string;
+            state?: unknown;
+            gzBase64?: string;
+        };
+
+        if (!payload.repositoryId || !isSafeRepositoryId(payload.repositoryId)) {
+            sendJson(res, 400, { ok: false, error: 'A valid repositoryId is required.' });
+            return;
+        }
+
+        let repoPath = await getDeepthinkResultsRepositoryPath(payload.repositoryId);
+        if (!repoPath) {
+            repoPath = await ensureDeepthinkResultsRepository(payload.repositoryId);
+        }
+        if (!repoPath || !(await fileExists(repoPath))) {
+            sendJson(res, 404, { ok: false, error: 'Results repository not found.' });
+            return;
+        }
+
+        const latestGzPath = path.join(repoPath, 'latest.gz');
+
+        if (payload.gzBase64) {
+            const buffer = Buffer.from(payload.gzBase64, 'base64');
+            await writeFile(latestGzPath, buffer);
+        } else if (payload.state) {
+            const jsonBuffer = Buffer.from(JSON.stringify(payload.state), 'utf8');
+            const compressed = zlib.gzipSync(jsonBuffer);
+            await writeFile(latestGzPath, compressed);
+        } else {
+            sendJson(res, 400, { ok: false, error: 'Either state or gzBase64 is required.' });
+            return;
+        }
+
+        sendJson(res, 200, { ok: true, path: latestGzPath, repositoryId: payload.repositoryId });
+    } catch (err: any) {
+        sendJson(res, 500, { ok: false, error: err.message || String(err) });
+    }
+}
+
+async function handleOpenDirectory(req: IncomingMessage, res: ServerResponse) {
+    if (req.method !== 'POST') {
+        sendJson(res, 405, { ok: false, error: 'Method not allowed.' });
+        return;
+    }
+
+    try {
+        const rawBody = await readRequestBody(req);
+        const payload = JSON.parse(rawBody || '{}') as {
+            repositoryId?: string;
+        };
+
+        await mkdir(RESULTS_ROOT, { recursive: true });
+        let targetPath = RESULTS_ROOT;
+
+        if (payload.repositoryId) {
+            if (!isSafeRepositoryId(payload.repositoryId)) {
+                sendJson(res, 400, { ok: false, error: 'A valid repositoryId is required.' });
+                return;
+            }
+            const repoPath = await getDeepthinkResultsRepositoryPath(payload.repositoryId);
+            if (repoPath && (await fileExists(repoPath))) {
+                targetPath = repoPath;
+            }
+        }
+
+        let cmd = 'xdg-open';
+        let args = [targetPath];
+        if (process.platform === 'win32') {
+            cmd = 'explorer.exe';
+            args = [targetPath];
+        } else if (process.platform === 'darwin') {
+            cmd = 'open';
+            args = [targetPath];
+        }
+
+        const child = spawn(cmd, args, { detached: true, stdio: 'ignore' });
+        child.unref();
+        child.on('error', (err) => {
+            console.warn('Notice: failed to open directory in system file manager:', err);
+        });
+
+        sendJson(res, 200, { ok: true, path: repoPath });
     } catch (err: any) {
         sendJson(res, 500, { ok: false, error: err.message || String(err) });
     }
@@ -3087,6 +3243,10 @@ async function handleRepositoryDiff(req: IncomingMessage, res: ServerResponse) {
             ':(exclude,glob)**/*.tif',
             ':(exclude,glob)**/*.tiff',
             ':(exclude,glob)**/*.svg',
+            ':(exclude,glob)**/.*',
+            ':(exclude,glob)**/.*/**',
+            ':(exclude,glob)**/__pycache__/**',
+            ':(exclude,glob)**/node_modules/**',
         );
 
         const diff = await runGitCommandBuffer(target.root, args);
@@ -3129,6 +3289,16 @@ export async function handleSandboxBackendRequest(
 
         if (pathname === '/api/sandbox/repository/ensure-deepthink') {
             await handleEnsureDeepthinkRepository(req, res);
+            return true;
+        }
+
+        if (pathname === '/api/sandbox/repository/save-latest-gz') {
+            await handleSaveLatestGz(req, res);
+            return true;
+        }
+
+        if (pathname === '/api/sandbox/repository/open-directory') {
+            await handleOpenDirectory(req, res);
             return true;
         }
 

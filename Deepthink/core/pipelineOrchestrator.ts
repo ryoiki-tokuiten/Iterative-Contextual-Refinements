@@ -173,6 +173,23 @@ export class DeepthinkPipelineOrchestrator {
   private globalUpdateStrategyHistories: Array<{ updateNumber: number; turns: ProximityTurn[] }> = [];
   private readonly state: DeepthinkPipelineState;
   private readonly callbacks: PipelineExecutionCallbacks;
+  private abortController = new AbortController();
+
+  public stop(): void {
+    this.state.isStopRequested = true;
+    this.state.status = 'stopped';
+    if (!this.abortController.signal.aborted) {
+      this.abortController.abort(new PipelineStopRequestedError());
+    }
+  }
+
+  public get isStopRequested(): boolean {
+    return Boolean(
+      this.state.isStopRequested ||
+      this.state.status === 'stopped' ||
+      this.abortController.signal.aborted
+    );
+  }
 
   constructor(
     state: DeepthinkPipelineState,
@@ -182,6 +199,30 @@ export class DeepthinkPipelineOrchestrator {
     this.callbacks = callbacks;
     this.gitHarness = new GitRepositoryHarness(state.id);
     this.sharedWorkspace = new SharedWorkspaceManager();
+
+    if (Array.isArray((state as any).commitHashesPerIteration)) {
+      this.commitHashesPerIteration = new Map((state as any).commitHashesPerIteration);
+    } else if ((state as any).commitHashesPerIteration && typeof (state as any).commitHashesPerIteration === 'object') {
+      this.commitHashesPerIteration = new Map(Object.entries((state as any).commitHashesPerIteration));
+    }
+    if (Array.isArray((state as any).strategiesUsedSoFar)) {
+      this.strategiesUsedSoFar = [...(state as any).strategiesUsedSoFar];
+    }
+    if (Array.isArray((state as any).globalUpdateStrategyHistories)) {
+      this.globalUpdateStrategyHistories = [...(state as any).globalUpdateStrategyHistories];
+    }
+  }
+
+  public syncCheckpointState(iteration?: number, heartbeatNo?: number, sinceHeartbeat?: number): void {
+    if (iteration !== undefined) (this.state as any).currentIteration = iteration;
+    if (heartbeatNo !== undefined) (this.state as any).heartbeatNo = heartbeatNo;
+    if (sinceHeartbeat !== undefined) (this.state as any).sinceHeartbeat = sinceHeartbeat;
+    (this.state as any).commitHashesPerIteration = Array.from(this.commitHashesPerIteration.entries());
+    (this.state as any).strategiesUsedSoFar = this.strategiesUsedSoFar;
+    (this.state as any).globalUpdateStrategyHistories = this.globalUpdateStrategyHistories;
+    void this.sharedWorkspace.read().then(content => {
+      (this.state as any).sharedWorkspaceContent = content;
+    }).catch(() => {});
   }
 
   public getSharedWorkspace(): SharedWorkspaceManager {
@@ -228,33 +269,102 @@ export class DeepthinkPipelineOrchestrator {
     this.emitEvent('Orchestrator', 'Initializing Deepthink repository and workspace', 'info');
     await this.gitHarness.initializeRepository(config.strategiesCount);
 
-    // Initialize shared workspace file (§8.1, §8.3)
-    await this.sharedWorkspace.write(`# Shared Workspace\nChallenge: ${this.state.challenge}\n`);
+    // Initialize or restore shared workspace file (§8.1, §8.3)
+    const existingShared = (this.state as any).sharedWorkspaceContent;
+    if (existingShared) {
+      await this.sharedWorkspace.write(existingShared);
+    } else {
+      await this.sharedWorkspace.write(`# Shared Workspace\nChallenge: ${this.state.challenge}\n`);
+    }
 
     // 1. Initial Strategy Generation + Proximity (§4.1)
-    await this.runInitialStrategyGeneration();
+    const hasInitialStrategies = Array.isArray(this.state.initialStrategies) &&
+      this.state.initialStrategies.length >= config.strategiesCount &&
+      this.state.initialStrategies.every(s => typeof s.strategyText === 'string' && s.strategyText.trim().length > 0);
+
+    if (!hasInitialStrategies) {
+      await this.runInitialStrategyGeneration();
+    } else {
+      this.emitEvent('Orchestrator', 'Initial strategies already present; resuming execution loop', 'info');
+    }
 
     // Checkpoint initial window start for window 1 (iterations 1 to j) (§6.3, §8.2)
     for (let slotIdx = 0; slotIdx < this.state.initialStrategies.length; slotIdx++) {
-      const strat = this.state.initialStrategies[slotIdx];
-      const contextFiles: DeepthinkResultsContextFile[] = [
-        {
-          path: `Strategy-${slotIdx + 1}/strategy.md`,
-          content: `# Strategy ${slotIdx + 1} (${strat.id})\n\n${strat.strategyText}\n`,
-        },
-      ];
-      const commit = await this.gitHarness.commitWindowStart(slotIdx, 1, contextFiles);
-      this.commitHashesPerIteration.set(`${slotIdx}:start_1`, commit);
+      const commitKey = `${slotIdx}:start_1`;
+      if (!this.commitHashesPerIteration.has(commitKey)) {
+        const strat = this.state.initialStrategies[slotIdx];
+        const contextFiles: DeepthinkResultsContextFile[] = [
+          {
+            path: `Strategy-${slotIdx + 1}/strategy.md`,
+            content: `# Strategy ${slotIdx + 1} (${strat.id})\n\n${strat.strategyText}\n`,
+          },
+        ];
+        const commit = await this.gitHarness.commitWindowStart(slotIdx, 1, contextFiles);
+        this.commitHashesPerIteration.set(commitKey, commit);
+      }
     }
 
     let sinceHeartbeat = 0;
     let heartbeatNo = 0;
+    const curatedContextEnabled = config.hypothesisCount > 0 || !config.disableSolutionPool;
+
+    // Helper to check if an iteration was fully completed
+    const isIterationFullyComplete = (it: number, currentSinceHeartbeat: number): { complete: boolean; nextSinceHeartbeat: number; nextHeartbeatNo: number } => {
+      const branches = this.state.initialStrategies || [];
+      if (!branches.length) return { complete: false, nextSinceHeartbeat: currentSinceHeartbeat, nextHeartbeatNo: heartbeatNo };
+      const allBranchesDone = branches.every(b => {
+        const entry = b.iterationHistory?.iterations?.find(e => e.iterationNumber === it);
+        if (!entry || !entry.correctedSolution) return false;
+        if (it < config.i && !entry.critique) return false;
+        return true;
+      });
+      if (!allBranchesDone) return { complete: false, nextSinceHeartbeat: currentSinceHeartbeat, nextHeartbeatNo: heartbeatNo };
+
+      const step = determinePostIterationStep(
+        it,
+        currentSinceHeartbeat,
+        config.i,
+        config.j,
+        config.k,
+        curatedContextEnabled
+      );
+
+      let stepDone = true;
+      if (step.action.type === 'GLOBAL_UPDATE') {
+        const guDone = this.state.bsrRecords?.some(r => r.iteration === it) &&
+                       (!curatedContextEnabled || this.state.heartbeats?.some(h => (h as any).iteration === it));
+        if (!guDone) stepDone = false;
+      } else if (step.action.type === 'HEARTBEAT') {
+        const hbDone = !curatedContextEnabled || this.state.heartbeats?.some(h => (h as any).iteration === it);
+        if (!hbDone) stepDone = false;
+      }
+
+      if (!stepDone) {
+        return { complete: false, nextSinceHeartbeat: currentSinceHeartbeat, nextHeartbeatNo: heartbeatNo };
+      }
+
+      let nextHbNo = heartbeatNo;
+      let nextSince = step.nextSinceHeartbeat;
+      if (step.action.type === 'GLOBAL_UPDATE' || step.action.type === 'HEARTBEAT') {
+        nextHbNo++;
+        nextSince = 0;
+      }
+      return { complete: true, nextSinceHeartbeat: nextSince, nextHeartbeatNo: nextHbNo };
+    };
 
     // 2. Iteration Loop (§3)
     for (let iteration = 1; iteration <= config.i; iteration++) {
       this.checkStopRequested();
-      (this.state as any).currentIteration = iteration;
-      (this.state as any).heartbeatNo = heartbeatNo;
+
+      const completionCheck = isIterationFullyComplete(iteration, sinceHeartbeat);
+      if (completionCheck.complete) {
+        this.emitEvent('Loop', `Iteration ${iteration} of ${config.i} already completed, advancing`, 'info');
+        sinceHeartbeat = completionCheck.nextSinceHeartbeat;
+        heartbeatNo = completionCheck.nextHeartbeatNo;
+        continue;
+      }
+
+      this.syncCheckpointState(iteration, heartbeatNo, sinceHeartbeat);
       this.emitEvent('Loop', `Starting Iteration ${iteration} of ${config.i}`, 'info');
 
       if (iteration === 1) {
@@ -272,7 +382,6 @@ export class DeepthinkPipelineOrchestrator {
       await this.commitIterationBarriers(iteration);
 
       // Post-iteration barrier actions (§3)
-      const curatedContextEnabled = config.hypothesisCount > 0 || !config.disableSolutionPool;
       const step = determinePostIterationStep(
         iteration,
         sinceHeartbeat,
@@ -285,27 +394,38 @@ export class DeepthinkPipelineOrchestrator {
       sinceHeartbeat = step.nextSinceHeartbeat;
 
       if (step.action.type === 'FINAL_JUDGE') {
-        this.emitEvent('Loop', 'Reached final iteration barrier. Calling Final Judge.', 'info');
-        await this.runFinalJudge();
+        if (!this.state.finalJudgedBestSolution || this.state.finalJudgingStatus !== 'completed') {
+          this.emitEvent('Loop', 'Reached final iteration barrier. Calling Final Judge.', 'info');
+          await this.runFinalJudge();
+        }
         break;
       } else if (step.action.type === 'GLOBAL_UPDATE') {
-        this.emitEvent('Loop', `Running Global Update at iteration ${iteration}`, 'info');
-        heartbeatNo++;
-        (this.state as any).heartbeatNo = heartbeatNo;
-        await this.performGlobalUpdate(iteration, heartbeatNo);
-        sinceHeartbeat = 0; // GU ends with heartbeat, since_heartbeat resets (§3)
+        const alreadyDone = this.state.bsrRecords?.some(r => r.iteration === iteration) &&
+                            (!curatedContextEnabled || this.state.heartbeats?.some(h => (h as any).iteration === iteration));
+        if (!alreadyDone) {
+          this.emitEvent('Loop', `Running Global Update at iteration ${iteration}`, 'info');
+          heartbeatNo++;
+          this.syncCheckpointState(iteration, heartbeatNo, sinceHeartbeat);
+          await this.performGlobalUpdate(iteration, heartbeatNo);
+          sinceHeartbeat = 0; // GU ends with heartbeat, since_heartbeat resets (§3)
+        }
       } else if (step.action.type === 'HEARTBEAT') {
-        this.emitEvent('Loop', `Running Curated Context Heartbeat at iteration ${iteration}`, 'info');
-        heartbeatNo++;
-        (this.state as any).heartbeatNo = heartbeatNo;
-        await this.runCuratedContextHeartbeat(iteration, heartbeatNo);
-        sinceHeartbeat = 0; // Heartbeat resets counter (§3)
+        const alreadyDone = this.state.heartbeats?.some(h => (h as any).iteration === iteration);
+        if (!alreadyDone) {
+          this.emitEvent('Loop', `Running Curated Context Heartbeat at iteration ${iteration}`, 'info');
+          heartbeatNo++;
+          this.syncCheckpointState(iteration, heartbeatNo, sinceHeartbeat);
+          await this.runCuratedContextHeartbeat(iteration, heartbeatNo);
+          sinceHeartbeat = 0; // Heartbeat resets counter (§3)
+        }
       }
 
+      this.syncCheckpointState(iteration + 1, heartbeatNo, sinceHeartbeat);
       this.callbacks.onStateChange?.(this.state);
     }
 
     this.state.status = 'completed';
+    this.syncCheckpointState();
     this.callbacks.onStateChange?.(this.state);
   }
 
@@ -319,8 +439,18 @@ export class DeepthinkPipelineOrchestrator {
 
     this.emitEvent('Orchestrator', 'Starting seed strategy generation', 'info');
 
+    const history: ProximityTurn[] = Array.isArray(this.state.strategyProximityHistory)
+      ? [...this.state.strategyProximityHistory]
+      : [];
+
     let currentStrategies: string[] = [];
-    const history: ProximityTurn[] = [];
+    const lastGen = history.slice().reverse().find(h => h.role === 'generator');
+    if (lastGen) {
+      try {
+        const parsed = this.parseJsonStrict<{ strategies: string[] }>(lastGen.content, 'Seed Strategy Generator');
+        currentStrategies = parsed.strategies.slice(0, config.strategiesCount);
+      } catch {}
+    }
 
     const seedContract: OutputValidationContract<{ strategies: string[] }> = {
       name: 'SeedStrategiesContract',
@@ -348,60 +478,70 @@ export class DeepthinkPipelineOrchestrator {
       const turn = reviewIndex + 1;
       this.checkStopRequested();
 
-      const promptText = history.length > 0
-        ? [
-            prompt,
-            '',
-            '# Previous Candidate Strategies & Proximity Feedback',
-            history.map(h => `### ${h.role.toUpperCase()} (Turn ${h.turnNumber ?? reviewIndex})\n${h.content}`).join('\n\n'),
-            '',
-            `Please generate ${config.strategiesCount} revised orthogonal strategies addressing the proximity review feedback. Output the same JSON format.`
-          ].join('\n')
-        : prompt;
+      const existingGen = history.find(h => h.role === 'generator' && h.turnNumber === turn);
+      if (!existingGen) {
+        const promptText = history.length > 0
+          ? [
+              prompt,
+              '',
+              '# Previous Candidate Strategies & Proximity Feedback',
+              history.map(h => `### ${h.role.toUpperCase()} (Turn ${h.turnNumber ?? reviewIndex})\n${h.content}`).join('\n\n'),
+              '',
+              `Please generate ${config.strategiesCount} revised orthogonal strategies addressing the proximity review feedback. Output the same JSON format.`
+            ].join('\n')
+          : prompt;
 
-      // Generator turn with contract validation and retry policy (§9)
-      const genOutput = await this.callAgentModelWithRetry({
-        kind: 'initialStrategy',
-        promptText,
-        stepDescription: `Seed Strategy Generator (Turn ${turn})`,
-        jsonResponse: true,
-        isCritical: true, // Strategy generation failure halts run (§9)
-        contract: seedContract,
-        executionGroupId,
-        executionGroupName,
-      });
-
-      const parsed = this.parseJsonStrict<{ strategies: string[] }>(genOutput, 'Seed Strategy Generator');
-      currentStrategies = parsed.strategies.slice(0, config.strategiesCount);
-
-      history.push({
-        role: 'generator',
-        content: genOutput,
-        timestamp: Date.now(),
-        turnNumber: turn,
-      });
-
-      if (reviewIndex < targetProximityReviews) {
-        // Proximity review turn
-        const proxPrompt = [
-          `# Core Challenge\n${this.state.challenge}`,
-          `Review the current strategy candidates for orthogonality and independence:\n\n${JSON.stringify(currentStrategies, null, 2)}`
-        ].join('\n\n');
-        const proxOutput = await this.callAgentModelWithRetry({
-          kind: 'strategyProximity',
-          promptText: proxPrompt,
-          stepDescription: `Strategy Proximity Review (Turn ${turn})`,
-          isCritical: true,
+        // Generator turn with contract validation and retry policy (§9)
+        const genOutput = await this.callAgentModelWithRetry({
+          kind: 'initialStrategy',
+          promptText,
+          stepDescription: `Seed Strategy Generator (Turn ${turn})`,
+          jsonResponse: true,
+          isCritical: true, // Strategy generation failure halts run (§9)
+          contract: seedContract,
           executionGroupId,
           executionGroupName,
         });
 
+        const parsed = this.parseJsonStrict<{ strategies: string[] }>(genOutput, 'Seed Strategy Generator');
+        currentStrategies = parsed.strategies.slice(0, config.strategiesCount);
+
         history.push({
-          role: 'proximity',
-          content: proxOutput,
+          role: 'generator',
+          content: genOutput,
           timestamp: Date.now(),
           turnNumber: turn,
         });
+        this.state.strategyProximityHistory = [...history];
+        this.callbacks.onStateChange?.(this.state);
+      }
+
+      if (reviewIndex < targetProximityReviews) {
+        const existingProx = history.find(h => h.role === 'proximity' && h.turnNumber === turn);
+        if (!existingProx) {
+          // Proximity review turn
+          const proxPrompt = [
+            `# Core Challenge\n${this.state.challenge}`,
+            `Review the current strategy candidates for orthogonality and independence:\n\n${JSON.stringify(currentStrategies, null, 2)}`
+          ].join('\n\n');
+          const proxOutput = await this.callAgentModelWithRetry({
+            kind: 'strategyProximity',
+            promptText: proxPrompt,
+            stepDescription: `Strategy Proximity Review (Turn ${turn})`,
+            isCritical: true,
+            executionGroupId,
+            executionGroupName,
+          });
+
+          history.push({
+            role: 'proximity',
+            content: proxOutput,
+            timestamp: Date.now(),
+            turnNumber: turn,
+          });
+          this.state.strategyProximityHistory = [...history];
+          this.callbacks.onStateChange?.(this.state);
+        }
       }
     }
 
@@ -445,6 +585,9 @@ export class DeepthinkPipelineOrchestrator {
     // Run Solution Attempt in parallel across all branches
     await Promise.all(branches.map(async (branch) => {
       this.checkStopRequested();
+      if (branch.solutionAttempt && branch.status === 'completed') {
+        return;
+      }
       branch.status = 'processing';
       this.callbacks.onStateChange?.(this.state);
 
@@ -469,7 +612,29 @@ export class DeepthinkPipelineOrchestrator {
         branch.solutionAttemptDisplay = attemptOutput;
         branch.refinedSolution = attemptOutput;
         branch.status = 'completed';
+
+        if (!branch.iterationHistory) {
+          branch.iterationHistory = { iterations: [], status: 'completed' };
+        }
+        const existingIdx = branch.iterationHistory.iterations.findIndex(it => it.iterationNumber === 1);
+        if (existingIdx >= 0) {
+          branch.iterationHistory.iterations[existingIdx].correctedSolution = attemptOutput;
+        } else {
+          branch.iterationHistory.iterations.push({
+            iterationNumber: 1,
+            correctedSolution: attemptOutput,
+            critique: '',
+            timestamp: Date.now(),
+          });
+        }
       } catch (err: any) {
+        if (
+          err instanceof PipelineStopRequestedError ||
+          err?.name === 'PipelineStopRequestedError' ||
+          this.isStopRequested
+        ) {
+          throw err;
+        }
         branch.status = 'error';
         branch.error = err.message || String(err);
       }
@@ -478,6 +643,9 @@ export class DeepthinkPipelineOrchestrator {
     // Run Critique in parallel across all branches
     await Promise.all(branches.map(async (branch) => {
       this.checkStopRequested();
+      if (branch.solutionCritique && branch.solutionCritiqueStatus === 'completed') {
+        return;
+      }
       branch.solutionCritiqueStatus = 'processing';
       this.callbacks.onStateChange?.(this.state);
 
@@ -520,13 +688,27 @@ export class DeepthinkPipelineOrchestrator {
         if (!branch.iterationHistory) {
           branch.iterationHistory = { iterations: [], status: 'completed' };
         }
-        branch.iterationHistory.iterations.push({
-          iterationNumber: 1,
-          correctedSolution: branch.solutionAttempt || '',
-          critique: critiqueOutput,
-          timestamp: Date.now(),
-        });
+        const existingCritIdx = branch.iterationHistory.iterations.findIndex(it => it.iterationNumber === 1);
+        if (existingCritIdx >= 0) {
+          branch.iterationHistory.iterations[existingCritIdx].correctedSolution = branch.solutionAttempt || '';
+          branch.iterationHistory.iterations[existingCritIdx].critique = critiqueOutput;
+          branch.iterationHistory.iterations[existingCritIdx].timestamp = Date.now();
+        } else {
+          branch.iterationHistory.iterations.push({
+            iterationNumber: 1,
+            correctedSolution: branch.solutionAttempt || '',
+            critique: critiqueOutput,
+            timestamp: Date.now(),
+          });
+        }
       } catch (err: any) {
+        if (
+          err instanceof PipelineStopRequestedError ||
+          err?.name === 'PipelineStopRequestedError' ||
+          this.isStopRequested
+        ) {
+          throw err;
+        }
         branch.solutionCritiqueStatus = 'error';
         branch.error = err.message || String(err);
       }
@@ -547,6 +729,10 @@ export class DeepthinkPipelineOrchestrator {
     // Run Correction in parallel
     await Promise.all(branches.map(async (branch) => {
       this.checkStopRequested();
+      const existingIteration = branch.iterationHistory?.iterations?.find(it => it.iterationNumber === iteration);
+      if (existingIteration && existingIteration.correctedSolution) {
+        return;
+      }
       branch.correctionStatus = 'processing';
       this.callbacks.onStateChange?.(this.state);
 
@@ -592,7 +778,30 @@ export class DeepthinkPipelineOrchestrator {
         branch.refinedSolution = correctedOutput;
         branch.refinedSolutionDisplay = correctedOutput;
         branch.correctionStatus = 'completed';
+
+        if (!branch.iterationHistory) {
+          branch.iterationHistory = { iterations: [], status: 'completed' };
+        }
+        const existingIdx = branch.iterationHistory.iterations.findIndex(it => it.iterationNumber === iteration);
+        if (existingIdx >= 0) {
+          branch.iterationHistory.iterations[existingIdx].correctedSolution = correctedOutput;
+          branch.iterationHistory.iterations[existingIdx].timestamp = Date.now();
+        } else {
+          branch.iterationHistory.iterations.push({
+            iterationNumber: iteration,
+            correctedSolution: correctedOutput,
+            critique: '',
+            timestamp: Date.now(),
+          });
+        }
       } catch (err: any) {
+        if (
+          err instanceof PipelineStopRequestedError ||
+          err?.name === 'PipelineStopRequestedError' ||
+          this.isStopRequested
+        ) {
+          throw err;
+        }
         branch.correctionStatus = 'error';
         branch.error = err.message || String(err);
       }
@@ -601,6 +810,10 @@ export class DeepthinkPipelineOrchestrator {
     // Run Critique in parallel
     await Promise.all(branches.map(async (branch) => {
       this.checkStopRequested();
+      const existingIteration = branch.iterationHistory?.iterations?.find(it => it.iterationNumber === iteration);
+      if (existingIteration && existingIteration.critique) {
+        return;
+      }
       branch.solutionCritiqueStatus = 'processing';
       this.callbacks.onStateChange?.(this.state);
 
@@ -642,14 +855,31 @@ export class DeepthinkPipelineOrchestrator {
         });
         this.state.solutionCritiquesStatus = 'completed';
 
-        // Append to iteration history
-        branch.iterationHistory?.iterations.push({
-          iterationNumber: iteration,
-          correctedSolution: branch.refinedSolution || '',
-          critique: critiqueOutput,
-          timestamp: Date.now(),
-        });
+        // Append or update iteration history
+        if (!branch.iterationHistory) {
+          branch.iterationHistory = { iterations: [], status: 'completed' };
+        }
+        const existingIdx = branch.iterationHistory.iterations.findIndex(it => it.iterationNumber === iteration);
+        if (existingIdx >= 0) {
+          branch.iterationHistory.iterations[existingIdx].correctedSolution = branch.refinedSolution || '';
+          branch.iterationHistory.iterations[existingIdx].critique = critiqueOutput;
+          branch.iterationHistory.iterations[existingIdx].timestamp = Date.now();
+        } else {
+          branch.iterationHistory.iterations.push({
+            iterationNumber: iteration,
+            correctedSolution: branch.refinedSolution || '',
+            critique: critiqueOutput,
+            timestamp: Date.now(),
+          });
+        }
       } catch (err: any) {
+        if (
+          err instanceof PipelineStopRequestedError ||
+          err?.name === 'PipelineStopRequestedError' ||
+          this.isStopRequested
+        ) {
+          throw err;
+        }
         branch.solutionCritiqueStatus = 'error';
         branch.error = err.message || String(err);
       }
@@ -671,6 +901,10 @@ export class DeepthinkPipelineOrchestrator {
 
     await Promise.all(branches.map(async (branch) => {
       this.checkStopRequested();
+      const existingIteration = branch.iterationHistory?.iterations?.find(it => it.iterationNumber === iteration);
+      if (existingIteration && existingIteration.correctedSolution) {
+        return;
+      }
       branch.correctionStatus = 'processing';
       this.callbacks.onStateChange?.(this.state);
 
@@ -709,13 +943,29 @@ export class DeepthinkPipelineOrchestrator {
         branch.correctionStatus = 'completed';
 
         // Record final iteration correction only (no critique) in history (§3, §8.1)
-        branch.iterationHistory?.iterations.push({
-          iterationNumber: iteration,
-          correctedSolution: correctedOutput,
-          critique: '[Iteration i critique intentionally omitted per §3]',
-          timestamp: Date.now(),
-        });
+        if (!branch.iterationHistory) {
+          branch.iterationHistory = { iterations: [], status: 'completed' };
+        }
+        const existingIdx = branch.iterationHistory.iterations.findIndex(it => it.iterationNumber === iteration);
+        if (existingIdx >= 0) {
+          branch.iterationHistory.iterations[existingIdx].correctedSolution = correctedOutput;
+          branch.iterationHistory.iterations[existingIdx].timestamp = Date.now();
+        } else {
+          branch.iterationHistory.iterations.push({
+            iterationNumber: iteration,
+            correctedSolution: correctedOutput,
+            critique: '[Iteration i critique intentionally omitted per §3]',
+            timestamp: Date.now(),
+          });
+        }
       } catch (err: any) {
+        if (
+          err instanceof PipelineStopRequestedError ||
+          err?.name === 'PipelineStopRequestedError' ||
+          this.isStopRequested
+        ) {
+          throw err;
+        }
         branch.correctionStatus = 'error';
         branch.error = err.message || String(err);
       }
@@ -742,6 +992,14 @@ export class DeepthinkPipelineOrchestrator {
 
     // 1. DOS (if hypotheses are enabled)
     let dosOutput = reusedDos;
+    if (!dosOutput && config.hypothesisCount > 0) {
+      const existingDos = this.state.dosOutputs?.find(
+        d => d.callType === 'heartbeat' && d.iteration === iteration
+      );
+      if (existingDos) {
+        dosOutput = existingDos.output;
+      }
+    }
     if (!dosOutput && config.hypothesisCount > 0) {
       const activeState = this.state.initialStrategies.map(s => ({
         branchId: s.id,
@@ -825,7 +1083,9 @@ export class DeepthinkPipelineOrchestrator {
         },
       };
 
-      const hypHistory: ProximityTurn[] = [];
+      const hypHistory: ProximityTurn[] = Array.isArray(this.state.hypothesisProximityHistory)
+        ? this.state.hypothesisProximityHistory.filter(h => (h as any).roundNumber === heartbeatNo)
+        : [];
       const latestCorrections = this.state.initialStrategies.map(s => ({
         branchId: s.id,
         text: s.refinedSolution || s.solutionAttempt || 'None',
@@ -837,29 +1097,49 @@ export class DeepthinkPipelineOrchestrator {
         const turn = reviewIndex + 1;
         this.checkStopRequested();
 
-        const proximityHistoryText = hypHistory.length > 0
-          ? hypHistory.map(h => `### ${h.role.toUpperCase()} (Turn ${h.turnNumber ?? reviewIndex})\n${h.content}`).join('\n\n')
-          : undefined;
+        let rawHypGen: string;
+        const existingGen = hypHistory.find(h => h.role === 'generator' && h.turnNumber === turn);
+        if (existingGen) {
+          rawHypGen = existingGen.content;
+        } else {
+          const proximityHistoryText = hypHistory.length > 0
+            ? hypHistory.map(h => `### ${h.role.toUpperCase()} (Turn ${h.turnNumber ?? reviewIndex})\n${h.content}`).join('\n\n')
+            : undefined;
 
-        const hypContext = buildContextForHypothesisGenerate(this.state.challenge, 
-          heartbeatNo,
-          this.state.initialStrategies,
-          dosOutput,
-          previousHeartbeat,
-          latestCorrections,
-          proximityHistoryText
-        );
+          const hypContext = buildContextForHypothesisGenerate(this.state.challenge, 
+            heartbeatNo,
+            this.state.initialStrategies,
+            dosOutput,
+            previousHeartbeat,
+            latestCorrections,
+            proximityHistoryText
+          );
 
-        const rawHypGen = await this.callAgentModelWithRetry({
-          kind: 'hypothesisGeneration',
-          promptText: hypContext,
-          stepDescription: `Hypothesis Generation (Heartbeat ${heartbeatNo}, Turn ${turn})`,
-          jsonResponse: true,
-          isCritical: true,
-          contract: hypContract,
-          executionGroupId: `group-heartbeat-${heartbeatNo}-hypotheses`,
-          executionGroupName: `Heartbeat ${heartbeatNo}: Hypothesis Proximity Loop`,
-        });
+          rawHypGen = await this.callAgentModelWithRetry({
+            kind: 'hypothesisGeneration',
+            promptText: hypContext,
+            stepDescription: `Hypothesis Generation (Heartbeat ${heartbeatNo}, Turn ${turn})`,
+            jsonResponse: true,
+            isCritical: true,
+            contract: hypContract,
+            executionGroupId: `group-heartbeat-${heartbeatNo}-hypotheses`,
+            executionGroupName: `Heartbeat ${heartbeatNo}: Hypothesis Proximity Loop`,
+          });
+
+          hypHistory.push({
+            role: 'generator',
+            content: rawHypGen,
+            timestamp: Date.now(),
+            turnNumber: turn,
+            roundNumber: heartbeatNo,
+          } as any);
+
+          this.state.hypothesisProximityHistory = [
+            ...(this.state.hypothesisProximityHistory || []).filter(h => (h as any).roundNumber !== heartbeatNo),
+            ...hypHistory,
+          ];
+          this.callbacks.onStateChange?.(this.state);
+        }
 
         parsedGen = this.parseJsonStrict<{
           hypotheses: Array<{
@@ -873,35 +1153,40 @@ export class DeepthinkPipelineOrchestrator {
           }>;
         }>(rawHypGen, `Hypothesis Generation (Heartbeat ${heartbeatNo}, Turn ${turn})`);
 
-        hypHistory.push({
-          role: 'generator',
-          content: rawHypGen,
-          timestamp: Date.now(),
-          turnNumber: turn,
-        });
-
         if (reviewIndex < targetHypProximityReviews) {
-          const proxPrompt = [
-            `# Core Challenge\n${this.state.challenge}`,
-            `# Review Generated Hypotheses for Heartbeat ${heartbeatNo}`,
-            `Review candidate hypotheses for falsifiability, orthogonality, testability in isolation, and challenge relevance:\n\n${rawHypGen}`,
-          ].join('\n\n');
+          const existingProx = hypHistory.find(h => h.role === 'proximity' && h.turnNumber === turn);
+          if (existingProx) {
+            // Already completed proximity review for this turn
+          } else {
+            const proxPrompt = [
+              `# Core Challenge\n${this.state.challenge}`,
+              `# Review Generated Hypotheses for Heartbeat ${heartbeatNo}`,
+              `Review candidate hypotheses for falsifiability, orthogonality, testability in isolation, and challenge relevance:\n\n${rawHypGen}`,
+            ].join('\n\n');
 
-          const proxOutput = await this.callAgentModelWithRetry({
-            kind: 'hypothesisProximity',
-            promptText: proxPrompt,
-            stepDescription: `Hypothesis Proximity Review (Heartbeat ${heartbeatNo}, Turn ${turn})`,
-            isCritical: true,
-            executionGroupId: `group-heartbeat-${heartbeatNo}-hypotheses`,
-            executionGroupName: `Heartbeat ${heartbeatNo}: Hypothesis Proximity Loop`,
-          });
+            const proxOutput = await this.callAgentModelWithRetry({
+              kind: 'hypothesisProximity',
+              promptText: proxPrompt,
+              stepDescription: `Hypothesis Proximity Review (Heartbeat ${heartbeatNo}, Turn ${turn})`,
+              isCritical: true,
+              executionGroupId: `group-heartbeat-${heartbeatNo}-hypotheses`,
+              executionGroupName: `Heartbeat ${heartbeatNo}: Hypothesis Proximity Loop`,
+            });
 
-          hypHistory.push({
-            role: 'proximity',
-            content: proxOutput,
-            timestamp: Date.now(),
-            turnNumber: turn,
-          });
+            hypHistory.push({
+              role: 'proximity',
+              content: proxOutput,
+              timestamp: Date.now(),
+              turnNumber: turn,
+              roundNumber: heartbeatNo,
+            } as any);
+
+            this.state.hypothesisProximityHistory = [
+              ...(this.state.hypothesisProximityHistory || []).filter(h => (h as any).roundNumber !== heartbeatNo),
+              ...hypHistory,
+            ];
+            this.callbacks.onStateChange?.(this.state);
+          }
         }
       }
 
@@ -1299,7 +1584,8 @@ export class DeepthinkPipelineOrchestrator {
         },
       };
 
-      const currentGuTurns: ProximityTurn[] = [];
+      const existingGuHistory = this.globalUpdateStrategyHistories.find(h => h.updateNumber === updateNumber);
+      const currentGuTurns: ProximityTurn[] = existingGuHistory ? [...existingGuHistory.turns] : [];
       let parsedStrat: {
         evolved_slots?: Array<{ slot_id: string; updated_strategy_text: string }>;
         pruned_slots?: Array<{ slot_id: string; new_strategy_text: string }>;
@@ -1311,39 +1597,54 @@ export class DeepthinkPipelineOrchestrator {
         const turn = reviewIndex + 1;
         this.checkStopRequested();
 
-        const currentTurnsText = currentGuTurns.length > 0
-          ? '\n\n# Current Update Proximity Turns:\n' + currentGuTurns.map(t => `### ${t.role.toUpperCase()} (Turn ${t.turnNumber ?? reviewIndex})\n${t.content}`).join('\n\n')
-          : '';
-        const combinedHistoryText = `${priorProximityHistory}${currentTurnsText}`;
+        let rawStratUpdate: string;
+        const existingGen = currentGuTurns.find(t => t.role === 'generator' && t.turnNumber === turn);
+        if (existingGen) {
+          rawStratUpdate = existingGen.content;
+        } else {
+          const currentTurnsText = currentGuTurns.length > 0
+            ? '\n\n# Current Update Proximity Turns:\n' + currentGuTurns.map(t => `### ${t.role.toUpperCase()} (Turn ${t.turnNumber ?? reviewIndex})\n${t.content}`).join('\n\n')
+            : '';
+          const combinedHistoryText = `${priorProximityHistory}${currentTurnsText}`;
 
-        const stratPrompt = buildContextForStrategyGlobalUpdate(
-          this.state.challenge,
-          updateNumber,
-          config.j,
-          this.state.initialStrategies,
-          consolidatedDecisions,
-          stepIDosOutput,
-          this.strategiesUsedSoFar,
-          combinedHistoryText
-        );
+          const stratPrompt = buildContextForStrategyGlobalUpdate(
+            this.state.challenge,
+            updateNumber,
+            config.j,
+            this.state.initialStrategies,
+            consolidatedDecisions,
+            stepIDosOutput,
+            this.strategiesUsedSoFar,
+            combinedHistoryText
+          );
 
-        const rawStratUpdate = await this.callAgentModelWithRetry({
-          kind: 'strategyGeneratorGlobalUpdate',
-          promptText: stratPrompt,
-          stepDescription: `Strategy Generator Update (Global Update ${updateNumber}, Turn ${turn})`,
-          jsonResponse: true,
-          isCritical: true,
-          contract: stratUpdateContract,
-          executionGroupId: `group-global-update-${updateNumber}-strategies`,
-          executionGroupName: `Global Update ${updateNumber}: Strategy Revision Loop`,
-        });
+          rawStratUpdate = await this.callAgentModelWithRetry({
+            kind: 'strategyGeneratorGlobalUpdate',
+            promptText: stratPrompt,
+            stepDescription: `Strategy Generator Update (Global Update ${updateNumber}, Turn ${turn})`,
+            jsonResponse: true,
+            isCritical: true,
+            contract: stratUpdateContract,
+            executionGroupId: `group-global-update-${updateNumber}-strategies`,
+            executionGroupName: `Global Update ${updateNumber}: Strategy Revision Loop`,
+          });
 
-        currentGuTurns.push({
-          role: 'generator',
-          content: rawStratUpdate,
-          timestamp: Date.now(),
-          turnNumber: turn,
-        });
+          currentGuTurns.push({
+            role: 'generator',
+            content: rawStratUpdate,
+            timestamp: Date.now(),
+            turnNumber: turn,
+          });
+
+          const histIdx = this.globalUpdateStrategyHistories.findIndex(h => h.updateNumber === updateNumber);
+          if (histIdx >= 0) {
+            this.globalUpdateStrategyHistories[histIdx].turns = [...currentGuTurns];
+          } else {
+            this.globalUpdateStrategyHistories.push({ updateNumber, turns: [...currentGuTurns] });
+          }
+          (this.state as any).globalUpdateStrategyHistories = this.globalUpdateStrategyHistories;
+          this.callbacks.onStateChange?.(this.state);
+        }
 
         parsedStrat = this.parseJsonStrict<{
           evolved_slots?: Array<{ slot_id: string; updated_strategy_text: string }>;
@@ -1351,36 +1652,55 @@ export class DeepthinkPipelineOrchestrator {
         }>(rawStratUpdate, `Strategy Generator Update (Global Update ${updateNumber}, Turn ${turn})`);
 
         if (reviewIndex < targetGuProximityReviews) {
-          const proxPrompt = [
-            `# Core Challenge\n${this.state.challenge}`,
-            `# Review Surgical Strategy Updates for Global Update ${updateNumber}`,
-            `Review the proposed strategy changes for EVOLVE and PRUNE slots for orthogonality, independence from other branches, and alignment with BSR event reasons:`,
-            '',
-            rawStratUpdate,
-          ].join('\n\n');
+          const existingProx = currentGuTurns.find(t => t.role === 'proximity' && t.turnNumber === turn);
+          if (existingProx) {
+            // Already completed proximity review for this turn
+          } else {
+            const proxPrompt = [
+              `# Core Challenge\n${this.state.challenge}`,
+              `# Review Surgical Strategy Updates for Global Update ${updateNumber}`,
+              `Review the proposed strategy changes for EVOLVE and PRUNE slots for orthogonality, independence from other branches, and alignment with BSR event reasons:`,
+              '',
+              rawStratUpdate,
+            ].join('\n\n');
 
-          const proxOutput = await this.callAgentModelWithRetry({
-            kind: 'strategyProximity',
-            promptText: proxPrompt,
-            stepDescription: `Strategy Proximity Review (Global Update ${updateNumber}, Turn ${turn})`,
-            isCritical: true,
-            executionGroupId: `group-global-update-${updateNumber}-strategies`,
-            executionGroupName: `Global Update ${updateNumber}: Strategy Revision Loop`,
-          });
+            const proxOutput = await this.callAgentModelWithRetry({
+              kind: 'strategyProximity',
+              promptText: proxPrompt,
+              stepDescription: `Strategy Proximity Review (Global Update ${updateNumber}, Turn ${turn})`,
+              isCritical: true,
+              executionGroupId: `group-global-update-${updateNumber}-strategies`,
+              executionGroupName: `Global Update ${updateNumber}: Strategy Revision Loop`,
+            });
 
-          currentGuTurns.push({
-            role: 'proximity',
-            content: proxOutput,
-            timestamp: Date.now(),
-            turnNumber: turn,
-          });
+            currentGuTurns.push({
+              role: 'proximity',
+              content: proxOutput,
+              timestamp: Date.now(),
+              turnNumber: turn,
+            });
+
+            const histIdx = this.globalUpdateStrategyHistories.findIndex(h => h.updateNumber === updateNumber);
+            if (histIdx >= 0) {
+              this.globalUpdateStrategyHistories[histIdx].turns = [...currentGuTurns];
+            } else {
+              this.globalUpdateStrategyHistories.push({ updateNumber, turns: [...currentGuTurns] });
+            }
+            (this.state as any).globalUpdateStrategyHistories = this.globalUpdateStrategyHistories;
+            this.callbacks.onStateChange?.(this.state);
+          }
         }
       }
 
-      this.globalUpdateStrategyHistories.push({
-        updateNumber,
-        turns: currentGuTurns,
-      });
+      const histIdx = this.globalUpdateStrategyHistories.findIndex(h => h.updateNumber === updateNumber);
+      if (histIdx >= 0) {
+        this.globalUpdateStrategyHistories[histIdx].turns = currentGuTurns;
+      } else {
+        this.globalUpdateStrategyHistories.push({
+          updateNumber,
+          turns: currentGuTurns,
+        });
+      }
 
       // Apply surgical slot changes onto active strategies (§4.1)
       if (parsedStrat.evolved_slots) {
@@ -1853,6 +2173,10 @@ export class DeepthinkPipelineOrchestrator {
 
   private async commitIterationBarriers(iteration: number): Promise<void> {
     for (let slotIdx = 0; slotIdx < this.state.initialStrategies.length; slotIdx++) {
+      const commitKey = `${slotIdx}:${iteration}`;
+      if (this.commitHashesPerIteration.has(commitKey)) {
+        continue;
+      }
       const branch = this.state.initialStrategies[slotIdx];
       const historyEntry = branch.iterationHistory?.iterations.find(it => it.iterationNumber === iteration);
 
@@ -1869,8 +2193,9 @@ export class DeepthinkPipelineOrchestrator {
       }
 
       const commit = await this.gitHarness.commitStrategyIteration(slotIdx, iteration, files);
-      this.commitHashesPerIteration.set(`${slotIdx}:${iteration}`, commit);
+      this.commitHashesPerIteration.set(commitKey, commit);
     }
+    this.syncCheckpointState(iteration);
   }
 
   /**
@@ -1926,44 +2251,66 @@ export class DeepthinkPipelineOrchestrator {
         let outputText: string;
         let executionTraceText: string | undefined;
 
-        if (config.deepthinkCodeExecutionEnabled) {
-          const sessionId = `dtsb-${this.state.id}-${args.kind}-${nanoid(6)}`;
-          const repositoryAccess: SandboxRepositoryAccess = {
-            repositoryId: this.state.id,
-            agentDirectory: args.workingDirectory,
-            fullRepositoryRead: args.kind !== 'hypothesisTester',
-          };
+        const abortPromise = new Promise<never>((_, reject) => {
+          if (this.isStopRequested) return reject(new PipelineStopRequestedError());
+          this.abortController.signal.addEventListener('abort', () => reject(new PipelineStopRequestedError()), { once: true });
+        });
 
-          const sharedWorkspaceHandler = args.kind !== 'hypothesisTester'
-            ? (input: { action: 'read' | 'write' | 'append'; content?: string }) => this.sharedWorkspace.handleToolCall(input)
-            : undefined;
+        const executePromise = (async () => {
+          if (config.deepthinkCodeExecutionEnabled) {
+            const sessionId = `dtsb-${this.state.id}-${args.kind}-${nanoid(6)}`;
+            const repositoryAccess: SandboxRepositoryAccess = {
+              repositoryId: this.state.id,
+              agentDirectory: args.workingDirectory,
+              fullRepositoryRead: args.kind !== 'hypothesisTester',
+            };
 
-          const runAgent = await getSandboxToolAgentRunner();
-          if (!runAgent) {
-            throw new Error('Sandbox tool agent runtime is not available in this environment');
+            const sharedWorkspaceHandler = args.kind !== 'hypothesisTester'
+              ? (input: { action: 'read' | 'write' | 'append'; content?: string }) => this.sharedWorkspace.handleToolCall(input)
+              : undefined;
+
+            const runAgent = await getSandboxToolAgentRunner();
+            if (!runAgent) {
+              throw new Error('Sandbox tool agent runtime is not available in this environment');
+            }
+            const result = await runAgent({
+              agentName: args.kind,
+              sessionId,
+              messages: [new HumanMessage({ content: parsePromptToGeminiParts(args.promptText) })],
+              systemPrompt: systemInstruction,
+              modelName: model,
+              repositoryAccess,
+              sharedWorkspaceHandler,
+            });
+
+            return {
+              text: result.text || result.finalText,
+              trace: result.executionTraceText,
+            };
+          } else {
+            const text = await this.callbacks.callAI({
+              prompt: args.promptText,
+              model,
+              systemInstruction,
+              responseSchema: args.jsonResponse ? true : undefined,
+              thinkingConfig: { thinkingLevel: config.thinkingLevel },
+              agentKind: args.kind,
+              stepDescription: args.stepDescription,
+            });
+            return {
+              text,
+              trace: undefined,
+            };
           }
-          const result = await runAgent({
-            agentName: args.kind,
-            sessionId,
-            messages: [new HumanMessage({ content: parsePromptToGeminiParts(args.promptText) })],
-            systemPrompt: systemInstruction,
-            modelName: model,
-            repositoryAccess,
-            sharedWorkspaceHandler,
-          });
+        })();
 
-          outputText = result.text || result.finalText;
-          executionTraceText = result.executionTraceText;
-        } else {
-          outputText = await this.callbacks.callAI({
-            prompt: args.promptText,
-            model,
-            systemInstruction,
-            responseSchema: args.jsonResponse ? true : undefined,
-            thinkingConfig: { thinkingLevel: config.thinkingLevel },
-            agentKind: args.kind,
-            stepDescription: args.stepDescription,
-          });
+        const executionResult = await Promise.race([executePromise, abortPromise]);
+        outputText = executionResult.text;
+        executionTraceText = executionResult.trace;
+
+        if (this.isStopRequested) {
+          this.checkStopRequested();
+          throw new PipelineStopRequestedError();
         }
 
         if (!outputText || !outputText.trim()) {
@@ -1990,6 +2337,15 @@ export class DeepthinkPipelineOrchestrator {
 
         return outputText;
       } catch (err: any) {
+        if (
+          err instanceof PipelineStopRequestedError ||
+          err?.name === 'PipelineStopRequestedError' ||
+          this.isStopRequested
+        ) {
+          this.checkStopRequested();
+          throw err;
+        }
+
         lastError = err;
         const errMsg = err?.message || String(err);
         const shouldRetry = attempt < MAX_API_ATTEMPTS && (Date.now() - startedAt) < TOTAL_AGENT_TIMEOUT_MS;
@@ -2040,8 +2396,13 @@ export class DeepthinkPipelineOrchestrator {
   }
 
   private checkStopRequested(): void {
-    if (this.state.isStopRequested) {
+    if (this.isStopRequested) {
       this.state.status = 'stopped';
+      this.state.isStopRequested = false;
+      if (!this.abortController.signal.aborted) {
+        this.abortController.abort(new PipelineStopRequestedError());
+      }
+      this.syncCheckpointState();
       throw new PipelineStopRequestedError();
     }
   }

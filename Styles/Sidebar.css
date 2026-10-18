@@ -378,6 +378,54 @@ body.light-mode .sidebar-stop-button {
     }
 }
 
+.sidebar-resume-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    height: 43.2px;
+    padding: 0 1.25rem;
+    border-radius: var(--border-radius-full, 9999px);
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.45);
+    color: #10b981;
+    font-size: var(--font-size-sm, 0.875rem);
+    font-weight: 600;
+    letter-spacing: var(--letter-spacing-tight);
+    cursor: pointer;
+    transition: all var(--transition-speed, 0.2s) ease;
+    flex-shrink: 0;
+    white-space: nowrap;
+
+    &:hover {
+        background: rgba(16, 185, 129, 0.25);
+        border-color: rgba(16, 185, 129, 0.75);
+        color: #10b981;
+        box-shadow: 0 0 14px rgba(16, 185, 129, 0.3);
+        transform: translateY(-1px);
+    }
+
+    &:active {
+        transform: translateY(0);
+    }
+
+    & .icon-slot {
+        font-size: 1.125rem;
+    }
+}
+
+body.light-mode .sidebar-resume-button {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #059669;
+
+    &:hover {
+        background: rgba(16, 185, 129, 0.2);
+        border-color: rgba(16, 185, 129, 0.6);
+        color: #047857;
+    }
+}
+
 .flow-canvas-wrapper {
     flex-grow: 1;
     background-color: transparent;

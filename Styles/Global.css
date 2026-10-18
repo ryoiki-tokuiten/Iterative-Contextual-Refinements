@@ -7,7 +7,7 @@
 
     --theme-border-primary: #2c2c31;
     --theme-border-secondary: #222226;
-    --theme-border-tertiary: #19191d;
+    --theme-border-tertiary: #1e1e23;
 
     --theme-foreground-primary: #e4e4e7;
     --theme-foreground-secondary: #ababb4;
@@ -39,14 +39,14 @@
     --theme-button-tertiary-bg: #0f0f0f;
     --theme-button-tertiary-fg: #e4e4e7;
     --theme-button-tertiary-fg-hover: #ffffff;
-    --theme-button-tertiary-border: #19191d;
+    --theme-button-tertiary-border: #1e1e23;
     --theme-button-tertiary-font-weight: 480;
     --theme-button-clay-bg: #764b34;
     --theme-button-clay-fg: #ffffff;
     --theme-button-clay-border: #764b34;
     --theme-button-clay-font-weight: 480;
 
-    --theme-input-bg: #040405;
+    --theme-input-bg: var(--theme-background-secondary);
     --theme-input-placeholder: #62626b;
     --theme-input-text: #e4e4e7;
     --theme-checkbox-bg-unselected: #000000;
@@ -298,7 +298,7 @@ body.light-mode {
     --button-secondary-fg-hover: var(--foreground-primary);
     --button-secondary-border: var(--border-subtle);
     --button-disabled-bg: var(--background-secondary);
-    --input-background: var(--background-primary);
+    --input-background: var(--background-secondary);
     --input-placeholder: #999999;
     --input-foreground: var(--foreground-primary);
     --checkbox-accent: auto;

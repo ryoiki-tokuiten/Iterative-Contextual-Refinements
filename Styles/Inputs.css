@@ -99,21 +99,19 @@ input.input-base {
 
     /* Light Mode Input Overrides */
     body.light-mode & {
-        background: linear-gradient(to bottom, rgba(255, 255, 255, 0.6), rgba(249, 250, 251, 0.6));
-        border-color: rgba(0, 0, 0, 0.24);
-        backdrop-filter: var(--card-blur-effect);
+        background: var(--background-secondary);
+        border-color: var(--border-subtle);
+        backdrop-filter: none;
         box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.02);
 
-
-
         &:focus {
-            border-color: var(--accent-blue);
-            background-color: rgba(255, 255, 255, 0.95);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15), 0 4px 12px rgba(59, 130, 246, 0.1);
+            border-color: var(--border-strong);
+            background-color: var(--background-secondary);
+            box-shadow: 0 0 0 3px rgba(20, 20, 19, 0.08);
         }
 
         &::placeholder {
-            color: #999999;
+            color: var(--text-tertiary-color, #888888);
             opacity: 0.7;
         }
     }
@@ -148,7 +146,8 @@ select.input-base {
 }
 
 body.light-mode select.input-base {
-    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%2357534E' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"), linear-gradient(to bottom, rgba(255, 255, 255, 0.6), rgba(249, 250, 251, 0.6));
-    background-repeat: no-repeat, no-repeat;
-    background-position: right 1.25rem center, center;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%2357534E' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1.25rem center;
+    background-color: var(--background-secondary);
 }

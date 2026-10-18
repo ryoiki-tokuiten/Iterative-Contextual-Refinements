@@ -61,7 +61,7 @@ const Sidebar: React.FC = () => {
                 <details className="sidebar-section" open>
                     <summary className="sidebar-section-header">Configuration</summary>
                     <div className="sidebar-section-content">
-                        <div className="config-buttons-container" style={{ display: 'flex', gap: '1rem' }}>
+                        <div className="config-buttons-container" style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                             <button id="export-config-button" className="button" type="button" onClick={() => import('../../../Core/App').then(m => m.App.handleExportConfig())}>
                                 <Icon name="upload" />
                                 <span className="button-text">Export</span>
@@ -70,6 +70,18 @@ const Sidebar: React.FC = () => {
                             <button id="import-config-button" className="button" type="button" onClick={() => importInputRef.current?.click()}>
                                 <Icon name="download" />
                                 <span className="button-text">Import</span>
+                            </button>
+                            <div className="config-button-separator" style={{ width: '1px', height: '22px', backgroundColor: 'var(--border-color)', margin: '0 0.1rem', opacity: 0.8 }} />
+                            <button
+                                id="open-results-button"
+                                className="button"
+                                type="button"
+                                title="Open Results directory in file manager"
+                                aria-label="Open Results directory in file manager"
+                                style={{ padding: '0 0.65rem' }}
+                                onClick={() => import('../../../Core/SandboxToolRuntime').then(m => m.openResultsDirectory())}
+                            >
+                                <Icon name="database" />
                             </button>
                         </div>
                     </div>

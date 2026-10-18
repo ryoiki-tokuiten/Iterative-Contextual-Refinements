@@ -187,10 +187,10 @@
 
 }
 
-:is(.window-header,
+.deepthink-config-panel :is(.window-header,
     .section-header,
     .evolution-filter-options-header) {
-    background: var(--panel-header-bg);
+    background: var(--background-primary);
     border-bottom: 1px solid var(--panel-header-border);
 }
 
@@ -1844,11 +1844,11 @@ body.light-mode {
     }
 
     & .deepthink-config-scroll-container .evolution-filter-options-container > .evolution-filter-options-header {
-        background: var(--background-secondary);
+        background: var(--background-primary);
     }
 
     & .deepthink-config-scroll-container :is(.information-packet-window, .bsr-parameters-window) > .window-header {
-        background: var(--background-secondary);
+        background: var(--background-primary);
     }
 
 
@@ -2126,8 +2126,8 @@ body.light-mode {
    Section Headers & Icon Gap Fix (No Mac exit buttons)
    ========================================================================== */
 
-.section-header,
-.evolution-filter-options-header {
+.deepthink-config-panel :is(.section-header,
+.evolution-filter-options-header) {
     display: flex;
     align-items: center;
     justify-content: space-between;

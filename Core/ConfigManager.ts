@@ -107,6 +107,7 @@ export async function exportConfiguration(format: ExportFormat = 'auto'): Promis
                 deepthinkCodeExecutionEnabled: routingManager.getDeepthinkConfigController().isCodeExecutionEnabled(),
                 thinkingLevel: getSelectedThinkingLevel(),
             },
+            directContextFiles: globalState.directContextFiles || [],
         },
     };
 
@@ -194,9 +195,11 @@ async function applyConfiguration(config: VersionedState): Promise<void> {
         initialIdeaInput.value = data.initialIdea || '';
     }
 
-    // 3. Clear problem images for non-deepthink modes
+    // 3. Clear problem images for non-deepthink modes, or restore them if provided
     if (globalState.currentMode !== 'deepthink') {
         globalState.directContextFiles = [];
+    } else if (Array.isArray((data as any).directContextFiles)) {
+        globalState.directContextFiles = (data as any).directContextFiles;
     }
 
     // 4. Update UI for mode change

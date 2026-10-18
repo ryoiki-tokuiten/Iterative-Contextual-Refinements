@@ -402,24 +402,16 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                     if (block.type === 'single') {
                                         return renderTimelineNode(block.agent);
                                     } else {
-                                        const isRunning = block.agents.some(a => a.eventType === 'agent_start' || a.eventType === 'agent_retry');
+                                        const isRunning = process.status !== 'stopped' && block.agents.some(a =>
+                                            a.eventType === 'agent_start' || a.eventType === 'agent_retry'
+                                        );
                                         return (
-                                            <div key={block.id} className={`parallel-active-window ${isRunning ? 'running' : 'completed'}`} style={{
-                                                border: isRunning ? '1px solid rgba(var(--accent-blue-rgb, 0, 210, 255), 0.25)' : '1px solid rgba(0, 230, 118, 0.25)',
-                                                background: isRunning ? 'rgba(var(--accent-blue-rgb, 0, 210, 255), 0.03)' : 'rgba(0, 230, 118, 0.03)',
-                                                borderRadius: '12px',
-                                                padding: '0.5rem',
-                                                marginBottom: '0.5rem'
-                                            }}>
-                                                <div className="parallel-window-header" style={{
-                                                    display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.25rem 0.5rem 0.75rem',
-                                                    color: isRunning ? 'var(--accent-blue, #00d2ff)' : '#00e676',
-                                                    fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase'
-                                                }}>
+                                            <div key={block.id} className={`parallel-active-window ${isRunning ? 'running' : 'completed'}`}>
+                                                <div className="parallel-window-header">
                                                     <MIcon name={isRunning ? "sync" : "check_circle"} className={isRunning ? "parallel-icon spin" : "parallel-icon"} style={{ fontSize: '1rem', animation: isRunning ? 'spin 4s linear infinite' : 'none' }} />
                                                     <span>{block.name}</span>
                                                 </div>
-                                                <div className="parallel-window-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                                <div className="parallel-window-body">
                                                     {block.agents.map(renderTimelineNode)}
                                                 </div>
                                             </div>
@@ -430,45 +422,6 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                         )}
                     </div>
                     
-                    <div className="timeline-footer" style={{ padding: '0.75rem 1rem', borderTop: '1px solid var(--border-color)', marginTop: 'auto' }}>
-                        <button
-                            className="vfs-explorer-trigger-btn full-width"
-                            onClick={() => window.dispatchEvent(new CustomEvent('openDeepthinkFilesystem'))}
-                            title="Open Sandbox Virtual Environment Explorer"
-                            style={{
-                                background: 'rgba(var(--accent-blue-rgb, 0, 210, 255), 0.08)',
-                                border: '1px solid rgba(var(--accent-blue-rgb, 0, 210, 255), 0.25)',
-                                color: 'var(--accent-blue, #00d2ff)',
-                                padding: '0.5rem',
-                                borderRadius: '12px',
-                                fontSize: '0.7rem',
-                                fontWeight: 700,
-                                textTransform: 'uppercase',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '6px',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                outline: 'none',
-                                fontFamily: 'inherit',
-                                width: '100%'
-                            }}
-                            onMouseEnter={e => {
-                                e.currentTarget.style.background = 'rgba(var(--accent-blue-rgb, 0, 210, 255), 0.18)';
-                                e.currentTarget.style.borderColor = 'rgba(var(--accent-blue-rgb, 0, 210, 255), 0.5)';
-                                e.currentTarget.style.boxShadow = '0 0 6px rgba(var(--accent-blue-rgb, 0, 210, 255), 0.2)';
-                            }}
-                            onMouseLeave={e => {
-                                e.currentTarget.style.background = 'rgba(var(--accent-blue-rgb, 0, 210, 255), 0.08)';
-                                e.currentTarget.style.borderColor = 'rgba(var(--accent-blue-rgb, 0, 210, 255), 0.25)';
-                                e.currentTarget.style.boxShadow = 'none';
-                            }}
-                        >
-                            <MIcon name="terminal" style={{ fontSize: '0.9rem' }} />
-                            <span>Virtual Env Workspace</span>
-                        </button>
-                    </div>
                 </div>
 
                 {/* Right Side: Terminal Log & Prompt Inspector */}
@@ -621,7 +574,7 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                                         <div className="selected-agent-config font-mono" style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                                                             {selectedEvent.modelName && (
                                                                 <span className="config-badge model" title="Model Name">
-                                                                    <MIcon name="smart_toy" /> {selectedEvent.modelName}
+                                                                    {selectedEvent.modelName}
                                                                 </span>
                                                             )}
                                                             {selectedEvent.codeExecutionEnabled !== undefined && (
@@ -656,6 +609,8 @@ export const DeepthinkLiveTab: React.FC<DeepthinkLiveTabProps> = ({ process, hid
                                                 <div className="waiting-wrapper">
                                                     {selectedEvent.eventType === 'agent_complete' ? (
                                                         <span>Execution completed with no output artifact.</span>
+                                                    ) : process.status === 'stopped' ? (
+                                                        <span>Pipeline paused.</span>
                                                     ) : (
                                                         <>
                                                             <MIcon name="sync" className="waiting-spinner" />

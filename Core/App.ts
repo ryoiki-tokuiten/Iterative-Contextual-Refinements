@@ -103,6 +103,17 @@ export class App {
         }
     }
 
+    public static async handleResumeDeepthink() {
+        console.log('Resume Deepthink process');
+        if (!hasValidApiKey()) {
+            alert("No providers are configured. Please configure at least one AI provider using the 'Add Providers' button.");
+            return;
+        }
+
+        const deepthink = await ensureDeepthinkInitialized();
+        await deepthink.resumeDeepthinkAnalysisProcess();
+    }
+
     public static handleExportConfig() {
         exportConfiguration();
     }

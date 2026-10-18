@@ -28,4 +28,8 @@ export {
   renderActiveDeepthinkPipeline,
   createDeepthinkTabContent,
   getVisibleDeepthinkTabs,
+  startDeepthinkAnalysisProcess,
+  resumeDeepthinkAnalysisProcess,
+  stopDeepthinkAnalysisProcess,
+  saveLatestDeepthinkState,
 } from './ui/Deepthink';

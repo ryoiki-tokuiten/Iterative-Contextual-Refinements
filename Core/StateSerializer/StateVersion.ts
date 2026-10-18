@@ -63,7 +63,7 @@ export interface ExportedConfig {
         deepthinkCodeExecutionEnabled: boolean;
         thinkingLevel: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' | string;
     };
-
+    directContextFiles?: unknown[];
 }
 
 /**

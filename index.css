@@ -1,6 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Google+Sans+Flex:opsz,wght@6..144,1..1000&family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap');
 @import 'katex/dist/katex.min.css';
-@import 'diff2html/bundles/css/diff2html.min.css';
 @import url('./Styles/Shiki.css');
 @import url('./Styles/Global.css');
 @import url("./Styles/Layout.css");

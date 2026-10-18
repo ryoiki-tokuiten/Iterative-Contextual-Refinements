@@ -88,10 +88,6 @@ export default defineConfig(({ mode }) => {
               id.includes('katex') || id.includes('react-markdown')) {
               return 'vendor-markdown';
             }
-            // Diff utilities
-            if (id.includes('diff2html') || id.includes('node_modules/diff/')) {
-              return 'vendor-diff';
-            }
             // Syntax highlighting (Shiki)
             if (id.includes('shiki') || id.includes('@shikijs')) {
               return 'vendor-shiki';

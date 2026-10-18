@@ -7,7 +7,7 @@
     flex-direction: column;
     gap: var(--spacing-section-lg);
     flex-grow: 1;
-    background-color: transparent;
+    background-color: var(--bg-color);
 }
 
 .status-badge {

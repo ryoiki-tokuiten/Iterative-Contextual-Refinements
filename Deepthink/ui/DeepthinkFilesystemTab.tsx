@@ -116,13 +116,11 @@ export const DeepthinkFilesystemTab: React.FC<DeepthinkFilesystemTabProps> = ({ 
     const [selectedCommit, setSelectedCommit] = useState('current');
     const [compareBase, setCompareBase] = useState('current');
     const [compareHead, setCompareHead] = useState('current');
-    const [isCompareOpen, setIsCompareOpen] = useState(false);
     const [files, setFiles] = useState<FileItem[]>([]);
     const [selectedFile, setSelectedFile] = useState('');
     const [fileContent, setFileContent] = useState('');
     const [diffContent, setDiffContent] = useState('');
     const [view, setView] = useState<ExplorerView>('file');
-    const [isRefreshing, setIsRefreshing] = useState(false);
     const [isTreeLoading, setIsTreeLoading] = useState(false);
     const [isContentLoading, setIsContentLoading] = useState(false);
     const [isDiffLoading, setIsDiffLoading] = useState(false);
@@ -164,19 +162,6 @@ export const DeepthinkFilesystemTab: React.FC<DeepthinkFilesystemTabProps> = ({ 
         }
     };
 
-    const refreshRepository = async (id = repositoryId, commit = selectedCommit) => {
-        if (!id) return;
-        setIsRefreshing(true);
-        try {
-            await Promise.all([
-                fetchHistory(id),
-                fetchFileTree(id, commit),
-            ]);
-        } finally {
-            setIsRefreshing(false);
-        }
-    };
-
     const fetchFileContent = async (id: string, filePath: string, commit: string) => {
         setIsContentLoading(true);
         try {
@@ -190,21 +175,38 @@ export const DeepthinkFilesystemTab: React.FC<DeepthinkFilesystemTabProps> = ({ 
         }
     };
 
-    const compareRevisions = async () => {
-        if (!repositoryId) return;
+    const fetchDiff = async (id: string, base: string, head: string) => {
+        if (!id) return;
         setIsDiffLoading(true);
         try {
-            const response = await fetch(`/api/sandbox/workspace/diff?repositoryId=${encodeURIComponent(repositoryId)}&base=${encodeURIComponent(compareBase)}&head=${encodeURIComponent(compareHead)}`);
-            setDiffContent(response.ok ? (await response.text() || 'These snapshots have no differences.') : 'Unable to load this repository comparison.');
-            setView('diff');
-            setIsCompareOpen(false);
+            const response = await fetch(`/api/sandbox/workspace/diff?repositoryId=${encodeURIComponent(id)}&base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`);
+            setDiffContent(response.ok ? (await response.text() || '') : '');
         } catch (error) {
             console.error('Failed to compare Results repository snapshots:', error);
-            setDiffContent('Unable to load this repository comparison.');
-            setView('diff');
-            setIsCompareOpen(false);
+            setDiffContent('');
         } finally {
             setIsDiffLoading(false);
+        }
+    };
+
+    const handleOpenCompare = () => {
+        if (!history.length) return;
+        const currentHead = selectedCommit;
+        const currentBase = compareBase !== 'current' && compareBase !== currentHead
+            ? compareBase
+            : (history.length > 1 ? history[history.length - 1].hash : (history[0]?.hash || 'current'));
+        setCompareHead(currentHead);
+        setCompareBase(currentBase);
+        setView('diff');
+    };
+
+    const handleOpenDirectory = async () => {
+        if (!repositoryId) return;
+        try {
+            const mod = await import('../../Core/SandboxToolRuntime');
+            await mod.openSandboxRepositoryDirectory(repositoryId);
+        } catch (error) {
+            console.warn('Could not open directory in file manager:', error);
         }
     };
 
@@ -215,7 +217,6 @@ export const DeepthinkFilesystemTab: React.FC<DeepthinkFilesystemTabProps> = ({ 
     }, []);
 
     // The filesystem is a first-class Deepthink tab, not a card inside one.
-    // Let it own the available pipeline surface while this tab is mounted.
     useEffect(() => {
         const container = document.getElementById('pipelines-content-container');
         container?.classList.add('filesystem-active');
@@ -237,17 +238,28 @@ export const DeepthinkFilesystemTab: React.FC<DeepthinkFilesystemTabProps> = ({ 
     useEffect(() => {
         const onSnapshot = (event: Event) => {
             const id = (event as CustomEvent<{ repositoryId?: string }>).detail?.repositoryId;
-            if (id && id === repositoryId) void refreshRepository(id);
+            if (id && id === repositoryId) {
+                void fetchHistory(id);
+                void fetchFileTree(id, selectedCommit);
+                if (view === 'diff') {
+                    void fetchDiff(id, compareBase, compareHead);
+                }
+            }
         };
         window.addEventListener('deepthinkResultsSnapshot', onSnapshot);
         return () => {
             window.removeEventListener('deepthinkResultsSnapshot', onSnapshot);
         };
-    }, [repositoryId, selectedCommit]);
+    }, [repositoryId, selectedCommit, view, compareBase, compareHead]);
 
     useEffect(() => {
         if (repositoryId) void fetchFileTree(repositoryId, selectedCommit);
     }, [repositoryId, selectedCommit]);
+
+    useEffect(() => {
+        if (!repositoryId || view !== 'diff') return;
+        void fetchDiff(repositoryId, compareBase, compareHead);
+    }, [repositoryId, compareBase, compareHead, view]);
 
     useEffect(() => {
         if (!repositoryId || !selectedFile || view !== 'file') return;
@@ -301,18 +313,17 @@ export const DeepthinkFilesystemTab: React.FC<DeepthinkFilesystemTabProps> = ({ 
         });
     };
 
-    const revisionLabel = (revision: string) => {
-        if (revision === 'current') return 'Current snapshot';
-        const commit = history.find(item => item.hash === revision);
-        return commit ? `${commit.message} · ${commit.hash.slice(0, 7)}` : revision.slice(0, 7);
-    };
-
     const revisionOptions = (
         <>
             <option value="current">Current snapshot</option>
-            {history.map(commit => <option key={commit.hash} value={commit.hash}>{commit.message} · {commit.hash.slice(0, 7)}</option>)}
+            {history.map(commit => (
+                <option key={commit.hash} value={commit.hash}>
+                    {commit.message} · {commit.hash.slice(0, 7)}
+                </option>
+            ))}
         </>
     );
+
     const fileTree = buildFileTree(files);
     const mediaType = selectedFile ? getMediaFileType(selectedFile) : null;
     const isMarkdown = Boolean(selectedFile && /\.(md|markdown|mdown|mkdn)$/i.test(selectedFile));
@@ -321,129 +332,176 @@ export const DeepthinkFilesystemTab: React.FC<DeepthinkFilesystemTabProps> = ({ 
         : '';
 
     return (
-            <div className="vfs-filesystem-tab">
-                <div className="vfs-modal-body">
-                    {!repositoryId ? (
-                        <div className="vfs-empty-state"><h3>No Deepthink Results Repository</h3><p>Start a sandboxed Deepthink run to create and inspect its Results repository.</p></div>
-                    ) : (
-                        <div className="vfs-split-layout">
-                            <aside className="vfs-sidebar">
-                                <div className="vfs-sidebar-title">Files</div>
-                                <div className="vfs-tree-container custom-scrollbar">
-                                    {isTreeLoading && !files.length ? <div className="vfs-tree-empty">Loading…</div> : files.length ? renderTreeNodes(fileTree) : <div className="vfs-tree-empty">No files in this snapshot</div>}
+        <div className="vfs-filesystem-tab">
+            <div className="vfs-modal-body">
+                {!repositoryId ? (
+                    <div className="vfs-empty-state">
+                        <h3>No Deepthink Results Repository</h3>
+                        <p>Start a sandboxed Deepthink run to create and inspect its Results repository.</p>
+                    </div>
+                ) : (
+                    <div className="vfs-split-layout">
+                        <aside className="vfs-sidebar">
+                            <div className="vfs-sidebar-title">Files</div>
+                            <div className="vfs-tree-container custom-scrollbar">
+                                {isTreeLoading && !files.length ? (
+                                    <div className="vfs-tree-empty">Loading…</div>
+                                ) : files.length ? (
+                                    renderTreeNodes(fileTree)
+                                ) : (
+                                    <div className="vfs-tree-empty">No files in this snapshot</div>
+                                )}
+                            </div>
+                            <div className="vfs-sidebar-footer">
+                                <div className="vfs-sidebar-footer-row">
+                                    <div className="vfs-agent-select-wrapper" style={{ width: '100%' }}>
+                                        <select
+                                            aria-label="Browse repository snapshot"
+                                            title="Browse repository snapshot"
+                                            value={selectedCommit}
+                                            onChange={event => {
+                                                setSelectedCommit(event.target.value);
+                                                setView('file');
+                                            }}
+                                            className="vfs-agent-select"
+                                        >
+                                            {revisionOptions}
+                                        </select>
+                                        <span className="vfs-select-arrow"><Icon name="chevron_down" /></span>
+                                    </div>
                                 </div>
-                                <div className="vfs-sidebar-footer">
-                                    <div className="vfs-sidebar-footer-row">
-                                        <div className="vfs-agent-select-wrapper" style={{ width: '100%' }}>
-                                            <select
-                                                aria-label="Browse repository snapshot"
-                                                title="Browse repository snapshot"
-                                                value={selectedCommit}
-                                                onChange={event => {
-                                                    setSelectedCommit(event.target.value);
-                                                    setView('file');
-                                                }}
-                                                className="vfs-agent-select"
-                                            >
-                                                {revisionOptions}
-                                            </select>
-                                            <span className="vfs-select-arrow"><Icon name="chevron_down" /></span>
+                                <div className="vfs-sidebar-footer-row">
+                                    <button
+                                        className="vfs-compare-trigger-footer"
+                                        type="button"
+                                        onClick={handleOpenCompare}
+                                        disabled={!history.length}
+                                        title="Compare repository snapshots"
+                                    >
+                                        <Icon name="compare" /> <span>Compare</span>
+                                    </button>
+                                    <button
+                                        className="vfs-filemanager-btn-footer"
+                                        type="button"
+                                        title="Open repository folder in file manager"
+                                        onClick={() => void handleOpenDirectory()}
+                                        disabled={!repositoryId}
+                                    >
+                                        <Icon name="folder" />
+                                    </button>
+                                </div>
+                            </div>
+                        </aside>
+                        <main className="vfs-editor-area">
+                            {view === 'diff' ? (
+                                <div className="vfs-editor-wrapper">
+                                    <div className="vfs-editor-header">
+                                        <div className="vfs-file-info">
+                                            <Icon name="compare" />
+                                            <div className="vfs-compare-select-wrapper">
+                                                <select
+                                                    value={compareBase}
+                                                    onChange={e => setCompareBase(e.target.value)}
+                                                    className="vfs-compare-select"
+                                                    title="Base snapshot"
+                                                >
+                                                    {revisionOptions}
+                                                </select>
+                                                <span className="vfs-select-arrow"><Icon name="chevron_down" /></span>
+                                            </div>
+                                            <span className="vfs-compare-arrow">→</span>
+                                            <div className="vfs-compare-select-wrapper">
+                                                <select
+                                                    value={compareHead}
+                                                    onChange={e => setCompareHead(e.target.value)}
+                                                    className="vfs-compare-select"
+                                                    title="Compare snapshot"
+                                                >
+                                                    {revisionOptions}
+                                                </select>
+                                                <span className="vfs-select-arrow"><Icon name="chevron_down" /></span>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="vfs-sidebar-footer-row">
-                                        <button className="vfs-compare-trigger-footer" type="button" onClick={() => setIsCompareOpen(true)} disabled={!history.length}>
-                                            <Icon name="compare" /> <span>Compare</span>
-                                        </button>
-                                        <button className="vfs-refresh-btn-footer" type="button" title="Refresh repository" onClick={() => void refreshRepository()} disabled={isRefreshing}>
-                                            <Icon name="refresh" className={isRefreshing ? 'spinning' : ''} />
-                                        </button>
-                                    </div>
-                                </div>
-                            </aside>
-                            <main className="vfs-editor-area">
-                                {view === 'diff' ? (
-                                    <div className="vfs-editor-wrapper">
-                                        <div className="vfs-editor-header"><div className="vfs-file-info">{revisionLabel(compareBase)} → {revisionLabel(compareHead)}</div><button className="vfs-inline-action" type="button" onClick={() => setView('file')}>Files</button></div>
+
+                                    {isDiffLoading ? (
+                                        <div className="vfs-code-loading">Loading diff comparison…</div>
+                                    ) : (
                                         <GitDiffView diff={diffContent} />
-                                    </div>
-                                ) : selectedFile ? (
-                                    <div className="vfs-editor-wrapper">
-                                        <div className="vfs-editor-header">
-                                            <div className="vfs-file-info">
-                                                <Icon name="file" />
-                                                <span className="vfs-file-path">{selectedFile}</span>
-                                            </div>
-                                            {isMarkdown && (
-                                                <div className="response-view-toggle" aria-label="Markdown view mode">
-                                                    <button
-                                                        type="button"
-                                                        className={`response-toggle-option ${markdownMode === 'preview' ? 'active' : ''}`}
-                                                        onClick={() => setMarkdownMode('preview')}
-                                                    >
-                                                        Preview
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        className={`response-toggle-option ${markdownMode === 'raw' ? 'active' : ''}`}
-                                                        onClick={() => setMarkdownMode('raw')}
-                                                    >
-                                                        Source
-                                                    </button>
-                                                </div>
-                                            )}
+                                    )}
+                                </div>
+                            ) : selectedFile ? (
+                                <div className="vfs-editor-wrapper">
+                                    <div className="vfs-editor-header">
+                                        <div className="vfs-file-info">
+                                            <Icon name="file" />
+                                            <span className="vfs-file-path">{selectedFile}</span>
                                         </div>
-                                        {isContentLoading ? (
-                                            <div className="vfs-code-loading">Loading file…</div>
-                                        ) : mediaType === 'image' ? (
-                                            <div className="vfs-code-viewport custom-scrollbar has-media">
-                                                <div className="vfs-media-preview img-preview"><img src={fileUrl} alt={selectedFile} /></div>
-                                            </div>
-                                        ) : mediaType === 'video' ? (
-                                            <div className="vfs-code-viewport custom-scrollbar has-media">
-                                                <div className="vfs-media-preview video-preview"><video src={fileUrl} controls /></div>
-                                            </div>
-                                        ) : mediaType === 'audio' ? (
-                                            <div className="vfs-code-viewport custom-scrollbar has-media">
-                                                <div className="vfs-media-preview audio-preview"><audio src={fileUrl} controls /></div>
-                                            </div>
-                                        ) : mediaType === 'pdf' ? (
-                                            <div className="vfs-code-viewport custom-scrollbar">
-                                                <iframe src={fileUrl} title={selectedFile} className="vfs-pdf-preview" />
-                                            </div>
-                                        ) : isMarkdown && markdownMode === 'preview' ? (
-                                            <div className="vfs-markdown-wrapper custom-scrollbar">
-                                                <RenderMathMarkdown content={fileContent} />
-                                            </div>
-                                        ) : (
-                                            <div className="vfs-code-viewport custom-scrollbar">
-                                                <CodeMirror
-                                                    key={`${selectedCommit}:${selectedFile}`}
-                                                    value={fileContent}
-                                                    height="100%"
-                                                    extensions={getLanguageExtension(selectedFile)}
-                                                    readOnly
-                                                    theme={theme}
-                                                    className="vfs-codemirror-wrapper"
-                                                />
+                                        {isMarkdown && (
+                                            <div className="response-view-toggle" aria-label="Markdown view mode">
+                                                <button
+                                                    type="button"
+                                                    className={`response-toggle-option ${markdownMode === 'preview' ? 'active' : ''}`}
+                                                    onClick={() => setMarkdownMode('preview')}
+                                                >
+                                                    Preview
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className={`response-toggle-option ${markdownMode === 'raw' ? 'active' : ''}`}
+                                                    onClick={() => setMarkdownMode('raw')}
+                                                >
+                                                    Source
+                                                </button>
                                             </div>
                                         )}
                                     </div>
-                                ) : <div className="vfs-editor-placeholder"><h3>No File Selected</h3><p>Expand a folder and select a file.</p></div>}
-                            </main>
-                        </div>
-                    )}
-                </div>
-
-                {isCompareOpen && (
-                    <div className="vfs-compare-overlay" onClick={() => setIsCompareOpen(false)}>
-                        <div className="vfs-compare-dialog" onClick={event => event.stopPropagation()}>
-                            <h3>Compare snapshots</h3>
-                            <label>From<select value={compareBase} onChange={event => setCompareBase(event.target.value)} className="vfs-version-select">{revisionOptions}</select></label>
-                            <label>To<select value={compareHead} onChange={event => setCompareHead(event.target.value)} className="vfs-version-select">{revisionOptions}</select></label>
-                            <div className="vfs-compare-dialog-actions"><button className="vfs-inline-action" type="button" onClick={() => setIsCompareOpen(false)}>Cancel</button><button className="vfs-compare-button" type="button" onClick={() => void compareRevisions()} disabled={isDiffLoading || compareBase === compareHead}>{isDiffLoading ? 'Loading…' : 'Compare'}</button></div>
-                        </div>
+                                    {isContentLoading ? (
+                                        <div className="vfs-code-loading">Loading file…</div>
+                                    ) : mediaType === 'image' ? (
+                                        <div className="vfs-code-viewport custom-scrollbar has-media">
+                                            <div className="vfs-media-preview img-preview"><img src={fileUrl} alt={selectedFile} /></div>
+                                        </div>
+                                    ) : mediaType === 'video' ? (
+                                        <div className="vfs-code-viewport custom-scrollbar has-media">
+                                            <div className="vfs-media-preview video-preview"><video src={fileUrl} controls /></div>
+                                        </div>
+                                    ) : mediaType === 'audio' ? (
+                                        <div className="vfs-code-viewport custom-scrollbar has-media">
+                                            <div className="vfs-media-preview audio-preview"><audio src={fileUrl} controls /></div>
+                                        </div>
+                                    ) : mediaType === 'pdf' ? (
+                                        <div className="vfs-code-viewport custom-scrollbar">
+                                            <iframe src={fileUrl} title={selectedFile} className="vfs-pdf-preview" />
+                                        </div>
+                                    ) : isMarkdown && markdownMode === 'preview' ? (
+                                        <div className="vfs-markdown-wrapper custom-scrollbar">
+                                            <RenderMathMarkdown content={fileContent} />
+                                        </div>
+                                    ) : (
+                                        <div className="vfs-code-viewport custom-scrollbar">
+                                            <CodeMirror
+                                                key={`${selectedCommit}:${selectedFile}`}
+                                                value={fileContent}
+                                                height="100%"
+                                                extensions={getLanguageExtension(selectedFile)}
+                                                readOnly
+                                                theme={theme}
+                                                className="vfs-codemirror-wrapper"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="vfs-editor-placeholder">
+                                    <h3>No File Selected</h3>
+                                    <p>Expand a folder and select a file.</p>
+                                </div>
+                            )}
+                        </main>
                     </div>
                 )}
             </div>
+        </div>
     );
 };

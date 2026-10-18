@@ -60,15 +60,17 @@ export class GitRepositoryHarness {
   /**
    * Initializes the repository structure before strategy generation (§8.1, §8.2).
    */
-  public async initializeRepository(_strategyCount?: number): Promise<void> {
+  public async initializeRepository(_strategyCount?: number): Promise<string | undefined> {
     try {
       const rt = await getSandboxRuntime();
       if (rt?.ensureDeepthinkResultsRepository) {
-        await rt.ensureDeepthinkResultsRepository(this.repositoryId);
+        const res = await rt.ensureDeepthinkResultsRepository(this.repositoryId);
+        return res?.resultPath;
       }
     } catch (err) {
       console.warn('Sandbox results repository initialization notice:', err);
     }
+    return undefined;
   }
 
   /**

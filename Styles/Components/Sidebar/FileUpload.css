@@ -14,13 +14,13 @@
     padding: 0.75rem;
     border: 1px solid var(--panel-border);
     border-radius: 12px;
-    background: var(--panel-bg);
+    background: var(--theme-background-secondary);
     transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
 }
 
 .upload-context-section.is-file-drag-target {
-    border-color: var(--accent-purple, #8b5cf6);
-    background: rgba(var(--accent-purple-rgb, 139, 92, 246), 0.08);
+    border-color: var(--text-color);
+    background: var(--theme-background-secondary);
     transform: translateY(-1px);
 }
 
@@ -95,22 +95,22 @@
 
 /* Drop Zone */
 .file-drop-zone {
-    border: 2px dashed var(--border-color, rgba(139, 92, 246, 0.3));
+    border: 2px dashed var(--border-color);
     border-radius: 12px;
     padding: 1.5rem;
     cursor: pointer;
     transition: all 0.2s ease;
-    background: rgba(var(--accent-purple-rgb, 139, 92, 246), 0.03);
+    background: var(--theme-background-secondary);
 }
 
 .file-drop-zone:hover {
-    border-color: var(--accent-purple, #8b5cf6);
-    background: rgba(var(--accent-purple-rgb, 139, 92, 246), 0.06);
+    border-color: var(--text-color);
+    background: var(--theme-background-secondary);
 }
 
 .file-drop-zone.dragging {
-    border-color: var(--accent-purple, #8b5cf6);
-    background: rgba(var(--accent-purple-rgb, 139, 92, 246), 0.12);
+    border-color: var(--text-color);
+    background: var(--theme-background-secondary);
     transform: scale(1.01);
 }
 
@@ -133,12 +133,13 @@
 
 /* Light mode overrides for drop zone */
 body.light-mode .file-drop-zone {
-    background: rgba(var(--accent-purple-rgb, 139, 92, 246), 0.05);
-    border-color: rgba(var(--accent-purple-rgb, 139, 92, 246), 0.2);
+    background: var(--background-secondary);
+    border-color: var(--border-subtle);
 }
 
 body.light-mode .file-drop-zone:hover {
-    background: rgba(var(--accent-purple-rgb, 139, 92, 246), 0.08);
+    background: var(--background-secondary);
+    border-color: var(--border-strong);
 }
 
 .drop-zone-content {
@@ -151,8 +152,8 @@ body.light-mode .file-drop-zone:hover {
 
 .drop-icon {
     font-size: 2.5rem;
-    color: var(--accent-purple, #8b5cf6);
-    opacity: 0.8;
+    color: var(--text-color);
+    opacity: 0.85;
 }
 
 .drop-text {
@@ -179,7 +180,7 @@ body.light-mode .file-drop-zone:hover {
     justify-content: center;
     gap: 0.5rem;
     font-size: 0.8rem;
-    color: var(--accent-purple, #8b5cf6);
+    color: var(--text-secondary-color);
     opacity: 0.9;
 }
 
@@ -633,21 +634,22 @@ body.light-mode .file-card {
 /* All light mode styles consolidated here for maximum specificity */
 
 body.light-mode .file-drop-zone {
-    background: rgba(139, 92, 246, 0.05) !important;
-    border-color: rgba(139, 92, 246, 0.25) !important;
+    background: var(--background-secondary) !important;
+    border-color: var(--border-subtle) !important;
 }
 
 body.light-mode .file-drop-zone:hover {
-    background: rgba(139, 92, 246, 0.1) !important;
-    border-color: rgba(139, 92, 246, 0.4) !important;
+    background: var(--background-secondary) !important;
+    border-color: var(--border-strong) !important;
 }
 
 body.light-mode .file-drop-zone.dragging {
-    background: rgba(139, 92, 246, 0.15) !important;
+    background: var(--background-secondary) !important;
+    border-color: var(--border-strong) !important;
 }
 
 body.light-mode .file-list-container {
-    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.08) !important;
+    box-shadow: var(--shadow-sm) !important;
 }
 
 body.light-mode .file-card {
@@ -655,11 +657,12 @@ body.light-mode .file-card {
 }
 
 body.light-mode .upload-context-section {
+    background: var(--background-secondary) !important;
 }
 
 body.light-mode .upload-context-section.is-file-drag-target {
-    background: rgba(139, 92, 246, 0.1);
-    border-color: rgba(124, 58, 237, 0.5);
+    background: var(--background-secondary);
+    border-color: var(--border-strong);
 }
 
 body.light-mode .filesystem-context-section .compact-upload-control {

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ApplicationMode } from '../../../Core/Types';
 import { App } from '../../../Core/App';
 import { Icon } from '../../../UI/Icons';
-import { getActiveDeepthinkPipeline } from '../../../Deepthink/core/deepthinkCore';
+import { getActiveDeepthinkPipeline, stopDeepthinkAnalysisProcess } from '../../../Deepthink/core/deepthinkCore';
 import { updateControlsState } from '../../../UI/Controls';
 
 interface SidebarFooterProps {
@@ -33,18 +33,17 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({ currentMode }) => 
     }, []);
 
     const isDeepthinkRunning = currentMode === 'deepthink' && (pipelineStatus === 'processing' || pipelineStatus === 'stopping');
+    const isDeepthinkPaused = currentMode === 'deepthink' && pipelineStatus === 'stopped';
 
     const handleStopClick = (e: React.MouseEvent<HTMLButtonElement>) => {
         e.preventDefault();
-        const pipeline = getActiveDeepthinkPipeline();
-        if (pipeline) {
-            pipeline.isStopRequested = true;
-            pipeline.status = 'stopped';
-        }
+        stopDeepthinkAnalysisProcess();
         setPipelineStatus('stopped');
-        updateControlsState();
-        window.dispatchEvent(new CustomEvent('deepthinkPipelineUpdated'));
-        window.dispatchEvent(new CustomEvent('deepthinkPipelineStateChanged'));
+    };
+
+    const handleResumeClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        await App.handleResumeDeepthink();
     };
 
     const handleGenerateClick = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -75,6 +74,17 @@ export const SidebarFooter: React.FC<SidebarFooterProps> = ({ currentMode }) => 
                 >
                     <Icon name="stop_circle" />
                     <span>Stop</span>
+                </button>
+            ) : isDeepthinkPaused ? (
+                <button
+                    id="resume-button"
+                    className="sidebar-resume-button"
+                    type="button"
+                    onClick={handleResumeClick}
+                    title="Resume Deepthink"
+                >
+                    <Icon name="play_arrow" />
+                    <span>Resume</span>
                 </button>
             ) : (
                 <button

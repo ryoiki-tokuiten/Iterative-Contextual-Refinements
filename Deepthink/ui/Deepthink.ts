@@ -23,7 +23,6 @@ import {
 import { DeepthinkLiveTab } from './DeepthinkLiveTab.tsx';
 import { DeepthinkFilesystemTab } from './DeepthinkFilesystemTab.tsx';
 
-// Core Imports
 import {
     DeepthinkSolutionCritiqueData,
     DeepthinkHypothesisData,
@@ -34,8 +33,13 @@ import {
     getActiveDeepthinkPipeline,
     setActiveDeepthinkPipelineForImport,
     initializeDeepthinkCore,
-    startDeepthinkAnalysisProcess
+    startDeepthinkAnalysisProcess,
+    resumeDeepthinkAnalysisProcess,
+    stopDeepthinkAnalysisProcess,
+    saveLatestDeepthinkState
 } from '../core/deepthinkCore';
+
+export { resumeDeepthinkAnalysisProcess, stopDeepthinkAnalysisProcess, saveLatestDeepthinkState };
 
 // ============================================================================ 
 // Types & Re-exports
