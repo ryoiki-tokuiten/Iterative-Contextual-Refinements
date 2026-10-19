@@ -372,7 +372,7 @@ describe('Deepthink Consolidated Specification §2 & §3: Loop Schedules & Barri
     assert.equal(scheduleTrace[12].step, 'heartbeat', 'Iteration 13 runs heartbeat');
     assert.equal(scheduleTrace[12].sinceAfter, 0);
 
-    assert.equal(scheduleTrace[14].step, 'final_judge', 'Iteration 15 stops for final judge (no critique, no heartbeat)');
+    assert.equal(scheduleTrace[14].step, 'final_judge', 'Iteration 15 stops for final judge (no heartbeat)');
   });
 
   it('skips heartbeat when G - n < 2 (skip example: i = 14, j = 6, k = 5) (§3)', () => {
@@ -527,12 +527,13 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
       }
 
       // 2. Surgical Strategy Generator for Global Update (§4.1, §4.6)
-      if (kind === 'strategyGeneratorGlobalUpdate' && desc.includes('Strategy Generator Update')) {
+      if (kind === 'initialStrategy' && desc.includes('Strategy Generator Update')) {
         assert.ok(
           args.systemInstruction.includes('evolved_slots') && args.systemInstruction.includes('pruned_slots'),
-          'Global update strategy generator must receive surgical schema system prompt'
+          'Unified strategy generator must include surgical schema in system prompt'
         );
-        assert.ok(p.includes('# Core Challenge (Global Update 1)'), 'GU SG must receive # Core Challenge');
+        assert.ok(p.includes('# Core Challenge'), 'GU SG must receive # Core Challenge');
+        assert.ok(p.includes('# Strategy Generation Context for Global Update 1'), 'GU SG must receive # Strategy Generation Context for Global Update 1');
         assert.ok(p.includes('Requested Number of Strategies: 3'), 'GU SG must receive strategiesCount');
         assert.ok(p.includes('<StrategyProximityHistory>'), 'GU SG must receive <StrategyProximityHistory>');
         assert.ok(p.includes('<HarnessNote>'), 'GU SG must receive <HarnessNote>');
@@ -552,9 +553,17 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
 
       // 3. Strategy Proximity Review
       if (kind === 'strategyProximity') {
+        assert.ok(
+          args.systemInstruction.includes('You are the core agent behind generating & reviewing the strategies.'),
+          'Strategy Proximity must share the unified strategy system prompt'
+        );
         assert.ok(p.includes('# Core Challenge'), 'Strategy Proximity must receive full # Core Challenge');
         assert.ok(p.includes('Requested Number of Strategies: 3'), 'Strategy Proximity must receive strategiesCount');
         if (desc.includes('Global Update')) {
+          assert.ok(
+            args.systemInstruction.includes('evolved_slots') && args.systemInstruction.includes('pruned_slots'),
+            'GU Strategy Proximity must share the Global Update Strategy Generator system prompt'
+          );
           assert.ok(p.includes('<StrategyProximityHistory>'), 'GU Strategy Proximity must receive <StrategyProximityHistory>');
           assert.ok(p.includes('<HarnessNote>'), 'GU Strategy Proximity must receive <HarnessNote>');
           assert.ok(p.includes('<CurrentActiveStrategies>'), 'GU Strategy Proximity must receive <CurrentActiveStrategies>');
@@ -574,6 +583,8 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
 
       // 5. Solution Critique
       if (kind === 'solutionCritique') {
+        assert.equal(p.includes('<CorrectionToCritique>'), false, 'Critique must NOT receive separate <CorrectionToCritique> block');
+        assert.ok(p.includes('<WindowCorrectionCritiqueHistory>'), 'Critique must receive <WindowCorrectionCritiqueHistory> with current iteration solution');
         if (desc.includes('Iteration 6')) {
           finalCritiqueAttempted = true;
         }
@@ -582,6 +593,30 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
 
       // 6. Solution Correction
       if (kind === 'solutionCorrection') {
+        if (desc.includes('main1') && desc.includes('Iteration 4')) {
+          const iter3Idx = p.indexOf('<Iteration n="3">');
+          const memBankIdx = p.indexOf('<DistilledMemoryBank>');
+          assert.ok(iter3Idx >= 0 && memBankIdx > iter3Idx, 'Iteration 4 (after GU 1) must have [Iter 3] before <DistilledMemoryBank>');
+        }
+        if (desc.includes('main1') && desc.includes('Iteration 5')) {
+          const iter3Idx = p.indexOf('<Iteration n="3">');
+          const memBankIdx = p.indexOf('<DistilledMemoryBank>');
+          const winHistIdx = p.indexOf('<WindowCorrectionCritiqueHistory>');
+          assert.ok(
+            iter3Idx >= 0 && memBankIdx > iter3Idx && winHistIdx > memBankIdx,
+            'Iteration 5 must have [Iter 3] + <DistilledMemoryBank> + <WindowCorrectionCritiqueHistory>'
+          );
+        }
+        if (p.includes('<LatestCustomCuratedContext>')) {
+          assert.ok(p.includes('Testing of that Hypothesis:'), 'Curated context must include Testing of that Hypothesis');
+          assert.equal(p.includes('Verdict:'), false, 'Curated context must not include regex Verdict line');
+        }
+        if (desc.includes('Iteration 6')) {
+          assert.ok(
+            p.includes('<LatestCustomCuratedContext>'),
+            'Final iteration i correction must naturally receive <LatestCustomCuratedContext> from the latest heartbeat'
+          );
+        }
         return '# Corrected Solution\nRefined corner tangency condition. Packing density strictly equals pi / (2 * sqrt(3)).';
       }
 
@@ -618,6 +653,14 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
       // 8. Branch State Representation (BSR) (§6.2)
       if (kind === 'bsr') {
         bsrCallCount++;
+        const ledgerIdx = p.indexOf('<StandingEventLedger>');
+        const gradedIdx = p.indexOf('<EarlierGradedPredictionsHistory>');
+        const memBeforeIdx = p.indexOf('<MemoryBankBeforeWindow>');
+        const winHistIdx = p.indexOf('<WindowCorrectionCritiqueHistory>');
+        assert.ok(
+          ledgerIdx >= 0 && gradedIdx > ledgerIdx && memBeforeIdx > gradedIdx && winHistIdx > memBeforeIdx,
+          'BSR context must order <StandingEventLedger> -> <EarlierGradedPredictionsHistory> -> <MemoryBankBeforeWindow> -> <WindowCorrectionCritiqueHistory>'
+        );
         if (desc.includes('main1') || p.includes('Branch ID: main1')) {
           // main1: Healthy branch => CONTINUE
           return wrapInRealisticLLMFence({
@@ -689,6 +732,9 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
           assert.ok(p.includes('<MappedBranchPackets>'), 'HB2 must include <MappedBranchPackets>');
           assert.ok(p.includes('"latest_correction"'), 'HB2 <MappedBranchPackets> must include latest_correction from all active branches');
           assert.ok(p.includes('<RealizedHypothesisFeedback>'), 'HB2 must include <RealizedHypothesisFeedback>');
+          assert.ok(p.includes('"surprise_note"'), 'HB2 <RealizedHypothesisFeedback> must include dynamic surprise_note');
+          assert.ok(p.includes('Your prediction for this hypothesis was:'), 'HB2 surprise_note must empathetically state what was predicted vs actual outcome');
+          assert.ok(p.includes('<HypothesesFinalizedAndUsedSoFar>'), 'HB2 must include <HypothesesFinalizedAndUsedSoFar>');
         }
         return wrapInRealisticLLMFence({
           hypotheses: [
@@ -716,6 +762,10 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
 
       // 10. Hypothesis Proximity
       if (kind === 'hypothesisProximity') {
+        assert.ok(
+          args.systemInstruction.includes('You are the core agent behind generating & reviewing the hypotheses.'),
+          'Hypothesis Proximity must share the unified hypothesis system prompt'
+        );
         assert.ok(p.includes('# Core Challenge'), 'HP must receive # Core Challenge');
         assert.ok(p.includes('Requested Number of Hypotheses: 2'), 'HP must receive hypothesisCount');
         assert.ok(p.includes('<HarnessNote>'), 'HP must receive <HarnessNote>');
@@ -742,8 +792,9 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
       // 13. Final Judge (§7, §9)
       if (kind === 'finalJudge') {
         finalJudgeCalled = true;
-        // Verify final judge receives ONLY candidate solutions, no critiques or memory banks (§7, §8.3)
-        assert.equal(p.includes('## Critique'), false, 'Final judge must NOT receive critiques');
+        // Verify final judge receives candidate final correction-critique pairs (<FinalSolution> and <FinalCritique>), no memory banks (§7, §8.3)
+        assert.ok(p.includes('<FinalSolution>'), 'Final judge must receive <FinalSolution>');
+        assert.ok(p.includes('<FinalCritique>'), 'Final judge must receive <FinalCritique>');
         assert.equal(p.includes('## Memory Bank'), false, 'Final judge must NOT receive memory banks');
 
         return wrapInRealisticLLMFence({
@@ -816,12 +867,12 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
     assert.ok(state.initialStrategies[2].strategyText.includes('Delaunay triangulation dual graph'));
 
     // 7. Check final iteration 6 behavior (§3):
-    // Iteration 6 ran correction ONLY. Final critique is NEVER run!
-    assert.equal(finalCritiqueAttempted, false, 'Final iteration i critique must NOT be called per §3');
+    // Iteration 6 runs standard correction + critique like every other iteration!
+    assert.equal(finalCritiqueAttempted, true, 'Final iteration i critique MUST run like any other iteration');
     const main1History = state.initialStrategies[0].iterationHistory?.iterations || [];
     const it6Record = main1History.find(it => it.iterationNumber === 6);
     assert.ok(it6Record, 'Iteration 6 correction record must exist');
-    assert.ok(it6Record.critique.includes('intentionally omitted per §3'), 'Iteration 6 critique must be omitted');
+    assert.ok(it6Record.critique.includes('# Solution Critique'), 'Iteration 6 critique must be recorded');
 
     // 8. Final Judge executed and selected winner (§7, §9)
     assert.equal(finalJudgeCalled, true, 'Final judge must be called at iteration i barrier');
@@ -853,6 +904,10 @@ describe('Deepthink Consolidated Specification: Complete End-to-End Pipeline Orc
     // Verify strategies finalized and used so far (.md and .jsonl)
     assert.ok(files.has('strategies_history/strategies_finalized_and_used_so_far.md'), 'strategies_finalized_and_used_so_far.md must be committed');
     assert.ok(files.has('strategies_history/strategies_finalized_and_used_so_far.jsonl'), 'strategies_finalized_and_used_so_far.jsonl must be committed');
+
+    // Verify hypotheses finalized and used so far (.md and .jsonl)
+    assert.ok(files.has('Custom_Curated_Context/hypotheses_finalized_and_used_so_far.md'), 'hypotheses_finalized_and_used_so_far.md must be committed');
+    assert.ok(files.has('Custom_Curated_Context/hypotheses_finalized_and_used_so_far.jsonl'), 'hypotheses_finalized_and_used_so_far.jsonl must be committed');
 
     // Verify DOS history files (§8.1) (.md and .jsonl)
     assert.ok(files.has('DOS_history/DOS_global_update_01_step_i.md'), 'Step-i DOS must be recorded in repository');
@@ -1127,17 +1182,18 @@ describe('Deepthink Token Volume & API Call Estimations (Schedule 5..20 & Sandbo
     assert.strictEqual(b15.globalUpdates, 2, 'Should have 2 global updates (after 5, 10)');
     assert.strictEqual(b15.totalHeartbeats, 5, 'Should have 5 total heartbeats (3 standalone + 2 GU ending)');
 
-    // 1. Initial Strategy (Seed Generator: 1 + 2 = 3)
-    assert.strictEqual(b15.initialStrategy, 3);
+    // 1. Initial Strategy (Seed + Global Updates: min 1 + 2 = 3, max 3 + 2*(1 + 2) = 9)
+    assert.strictEqual(b15.initialStrategy.min, 3);
+    assert.strictEqual(b15.initialStrategy.max, 9);
     // 2. Strategy Proximity: min 2 (seed only), max 2 + 2*2 = 6
     assert.strictEqual(b15.strategyProximity.min, 2);
     assert.strictEqual(b15.strategyProximity.max, 6);
     // 3. Solution Attempt: min 3 (it1), max 3 + 2*3 = 9 (reseeded)
     assert.strictEqual(b15.solutionAttempt.min, 3);
     assert.strictEqual(b15.solutionAttempt.max, 9);
-    // 4. Solution Critique: min (15 - 1)*3 = 42 (omitted at it15), max 42 + 2*3 = 48
-    assert.strictEqual(b15.solutionCritique.min, 42);
-    assert.strictEqual(b15.solutionCritique.max, 48);
+    // 4. Solution Critique: min 15 * 3 = 45 (runs on all 15 iterations), max 45 + 2*3 = 51
+    assert.strictEqual(b15.solutionCritique.min, 45);
+    assert.strictEqual(b15.solutionCritique.max, 51);
     // 5. Solution Correction: (15 - 1)*3 = 42
     assert.strictEqual(b15.solutionCorrection, 42);
     // 6. DOS: 3 standalone heartbeat DOS + 2 step-i DOS + 2 step-ii DOS = 7 calls
@@ -1150,17 +1206,14 @@ describe('Deepthink Token Volume & API Call Estimations (Schedule 5..20 & Sandbo
     assert.strictEqual(b15.hypothesisTester, 20);
     // 10. BSR: 2 global updates * 3 branches = 6 calls
     assert.strictEqual(b15.bsr, 6);
-    // 11. Strategy Generator Global Update: min 0, max 2 GU * (1 + 2) = 6 calls
-    assert.strictEqual(b15.strategyGeneratorGlobalUpdate.min, 0);
-    assert.strictEqual(b15.strategyGeneratorGlobalUpdate.max, 6);
-    // 12. Memory Bank: min 2 GU * 3 branches = 6 calls, max 0
+    // 11. Memory Bank: min 2 GU * 3 branches = 6 calls, max 0
     assert.strictEqual(b15.memoryBank.min, 6);
     assert.strictEqual(b15.memoryBank.max, 0);
-    // 13. Final Judge: exactly 1 call
+    // 12. Final Judge: exactly 1 call
     assert.strictEqual(b15.finalJudge, 1);
 
     // Verify mathematical identity: sum of breakdown equals min and max
-    const minSum = b15.initialStrategy +
+    const minSum = b15.initialStrategy.min +
       b15.strategyProximity.min +
       b15.solutionAttempt.min +
       b15.solutionCritique.min +
@@ -1170,12 +1223,11 @@ describe('Deepthink Token Volume & API Call Estimations (Schedule 5..20 & Sandbo
       b15.hypothesisProximity +
       b15.hypothesisTester +
       b15.bsr +
-      b15.strategyGeneratorGlobalUpdate.min +
       b15.memoryBank.min +
       b15.finalJudge;
     assert.strictEqual(minSum, res15.min, `Min sum (${minSum}) must match total min (${res15.min})`);
 
-    const maxSum = b15.initialStrategy +
+    const maxSum = b15.initialStrategy.max +
       b15.strategyProximity.max +
       b15.solutionAttempt.max +
       b15.solutionCritique.max +
@@ -1185,7 +1237,6 @@ describe('Deepthink Token Volume & API Call Estimations (Schedule 5..20 & Sandbo
       b15.hypothesisProximity +
       b15.hypothesisTester +
       b15.bsr +
-      b15.strategyGeneratorGlobalUpdate.max +
       b15.memoryBank.max +
       b15.finalJudge;
     assert.strictEqual(maxSum, res15.max, `Max sum (${maxSum}) must match total max (${res15.max})`);

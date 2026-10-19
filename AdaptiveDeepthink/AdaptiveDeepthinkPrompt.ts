@@ -3,18 +3,14 @@
 export interface CustomizablePromptsAdaptiveDeepthink {
   sys_adaptiveDeepthink_main: string;
   sys_adaptiveDeepthink_strategyGeneration: string;
-  sys_adaptiveDeepthink_strategyProximity: string;
   sys_adaptiveDeepthink_hypothesisGeneration: string;
-  sys_adaptiveDeepthink_hypothesisProximity: string;
   sys_adaptiveDeepthink_hypothesisTesting: string;
   sys_adaptiveDeepthink_execution: string;
   sys_adaptiveDeepthink_solutionCritique: string;
   sys_adaptiveDeepthink_corrector: string;
   model_main?: string | null;
   model_strategyGeneration?: string | null;
-  model_strategyProximity?: string | null;
   model_hypothesisGeneration?: string | null;
-  model_hypothesisProximity?: string | null;
   model_hypothesisTesting?: string | null;
   model_execution?: string | null;
   model_solutionCritique?: string | null;
@@ -211,9 +207,7 @@ export function createDefaultCustomPromptsAdaptiveDeepthink(): CustomizablePromp
   return {
     sys_adaptiveDeepthink_main: ADAPTIVE_DEEPTHINK_SYSTEM_PROMPT,
     sys_adaptiveDeepthink_strategyGeneration: deepthinkPrompts.sys_deepthink_initialStrategy,
-    sys_adaptiveDeepthink_strategyProximity: deepthinkPrompts.sys_deepthink_strategyProximity,
     sys_adaptiveDeepthink_hypothesisGeneration: deepthinkPrompts.sys_deepthink_hypothesisGeneration,
-    sys_adaptiveDeepthink_hypothesisProximity: deepthinkPrompts.sys_deepthink_hypothesisProximity,
     sys_adaptiveDeepthink_hypothesisTesting: deepthinkPrompts.sys_deepthink_hypothesisTester,
     sys_adaptiveDeepthink_execution: deepthinkPrompts.sys_deepthink_solutionAttempt,
     sys_adaptiveDeepthink_solutionCritique: deepthinkPrompts.sys_deepthink_solutionCritique,

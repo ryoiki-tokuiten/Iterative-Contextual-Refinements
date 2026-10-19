@@ -49,9 +49,9 @@ const listeners = new Set<(state: AdaptiveDeepthinkStoreState | null) => void>()
 
 const ROLE_MODEL_MAP: Record<AdaptiveAgentRole, keyof CustomizablePromptsAdaptiveDeepthink> = {
     'strategy-generator': 'model_strategyGeneration',
-    'strategy-proximity': 'model_strategyProximity',
+    'strategy-proximity': 'model_strategyGeneration',
     'hypothesis-generator': 'model_hypothesisGeneration',
-    'hypothesis-proximity': 'model_hypothesisProximity',
+    'hypothesis-proximity': 'model_hypothesisGeneration',
     'hypothesis-testing': 'model_hypothesisTesting',
     execution: 'model_execution',
     critique: 'model_solutionCritique',
@@ -170,9 +170,7 @@ function createInitialDeepthinkPipelineState(id: string, question: string): Deep
 function createDeepthinkPrompts(prompts: CustomizablePromptsAdaptiveDeepthink): AdaptiveDeepthinkToolPrompts {
     return {
         sys_deepthink_initialStrategy: prompts.sys_adaptiveDeepthink_strategyGeneration,
-        sys_deepthink_strategyProximity: prompts.sys_adaptiveDeepthink_strategyProximity,
         sys_deepthink_hypothesisGeneration: prompts.sys_adaptiveDeepthink_hypothesisGeneration,
-        sys_deepthink_hypothesisProximity: prompts.sys_adaptiveDeepthink_hypothesisProximity,
         sys_deepthink_hypothesisTester: prompts.sys_adaptiveDeepthink_hypothesisTesting,
         sys_deepthink_solutionAttempt: prompts.sys_adaptiveDeepthink_execution,
         sys_deepthink_solutionCritique: prompts.sys_adaptiveDeepthink_solutionCritique,

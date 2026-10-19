@@ -25,18 +25,11 @@ export const DEEPTHINK_AGENT_REGISTRY = {
     modelKey: 'model_initialStrategy',
     maxOutputTokens: 5000,
   },
-  strategyGeneratorGlobalUpdate: {
-    label: 'Strategy Generator (Global Update)',
-    sandboxRole: 'Main Strategy Generation',
-    systemPromptKey: 'sys_deepthink_strategyGeneratorGlobalUpdate',
-    modelKey: 'model_strategyGeneratorGlobalUpdate',
-    maxOutputTokens: 5000,
-  },
   strategyProximity: {
     label: 'Strategies Proximity',
     sandboxRole: 'Main Strategy Generation',
-    systemPromptKey: 'sys_deepthink_strategyProximity',
-    modelKey: 'model_strategyProximity',
+    systemPromptKey: 'sys_deepthink_initialStrategy',
+    modelKey: 'model_initialStrategy',
     maxOutputTokens: 5000,
   },
   hypothesisGeneration: {
@@ -49,8 +42,8 @@ export const DEEPTHINK_AGENT_REGISTRY = {
   hypothesisProximity: {
     label: 'Hypothesis Proximity',
     sandboxRole: 'Hypothesis Generation',
-    systemPromptKey: 'sys_deepthink_hypothesisProximity',
-    modelKey: 'model_hypothesisProximity',
+    systemPromptKey: 'sys_deepthink_hypothesisGeneration',
+    modelKey: 'model_hypothesisGeneration',
     maxOutputTokens: 5000,
   },
   hypothesisTester: {

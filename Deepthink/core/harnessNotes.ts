@@ -7,7 +7,7 @@
  * is the absolute source of truth (§7, §8.5).
  */
 
-import type { BsrAction, BsrEvolveForm } from './types.ts';
+import type { BsrAction, BsrEvolveForm, RealizedHypothesisFeedback } from './types.ts';
 
 /**
  * Builds the active note injected before strategy generator & proximity global update turns (§7).
@@ -70,6 +70,39 @@ export function buildStrategyProximityHistoryWithNotes(
   return sections.join('\n\n');
 }
 
+const LOG2_3 = Math.log2(3); // ≈ 1.584962500721156 bits (blind 1/3 guess across 3 outcomes)
+
+/**
+ * Empathetically states what the Hypothesis Generator predicted vs. what the tester actually found,
+ * what the surprise bits are, and whether the generator should be surprised (§5.2, §5.3, §7).
+ */
+export function buildHypothesisSurpriseNote(
+  surpriseBits: number,
+  observedVerdict: 'VALIDATED' | 'REJECTED' | 'INCONCLUSIVE',
+  predictedProbabilities?: { VALIDATED: number; REJECTED: number; INCONCLUSIVE: number }
+): string {
+  const assignedProb = predictedProbabilities?.[observedVerdict] !== undefined
+    ? predictedProbabilities[observedVerdict]
+    : Math.min(1, Math.max(0.01, Math.pow(2, -surpriseBits)));
+  const pct = (assignedProb * 100).toFixed(0);
+  const bitsStr = surpriseBits.toFixed(2);
+  const predLine = predictedProbabilities
+    ? `Your prediction for this hypothesis was: VALIDATED ${(predictedProbabilities.VALIDATED * 100).toFixed(0)}%, REJECTED ${(predictedProbabilities.REJECTED * 100).toFixed(0)}%, INCONCLUSIVE ${(predictedProbabilities.INCONCLUSIVE * 100).toFixed(0)}%.`
+    : `Your prediction for this hypothesis gave ${observedVerdict} a ~${pct}% chance.`;
+  const gradedLine = `When graded against the independent test, the actual outcome was: ${observedVerdict} (you gave this a ${pct}% chance).`;
+
+  if (surpriseBits <= 0.50) {
+    return `${predLine} ${gradedLine} Surprisal is ${bitsStr} bits. Should you be surprised? No — the test confirmed what you already strongly expected, so you can treat this as settled ground rather than re-testing it.`;
+  }
+  if (surpriseBits <= LOG2_3) {
+    return `${predLine} ${gradedLine} Surprisal is ${bitsStr} bits. Should you be surprised? No — you leaned toward ${observedVerdict} and your intuition held up.`;
+  }
+  if (surpriseBits < 2 * LOG2_3) {
+    return `${predLine} ${gradedLine} Surprisal is ${bitsStr} bits. Should you be surprised? Yes — you expected a different outcome, and the independent test went against your intuition. Look closely at the tester's output to see what you missed and adjust your assumptions for the next hypotheses.`;
+  }
+  return `${predLine} ${gradedLine} Surprisal is ${bitsStr} bits. Should you be surprised? Very much so — you were confident ${observedVerdict} would not happen, and the test proved that assumption wrong. Dig into why the test landed on ${observedVerdict} and build your new hypotheses around what actually happened.`;
+}
+
 /**
  * Builds the active note injected before hypothesis generator & proximity heartbeat turns (§7).
  */
@@ -87,8 +120,62 @@ export function buildHypothesisHeartbeatNote(heartbeatNo: number): string {
     `Below is the context for Heartbeat ${heartbeatNo}: the finalized hypotheses from Heartbeat ${prevHb} and their independent test outputs,`,
     `the mapped branch packets showing the current running strategies, their latest corrections, and which hypotheses were routed to which branches,`,
     `the realized hypothesis feedback (your predicted test outcome, observed test outcome, surprise bits, utilization across branches, and critique counterevidence),`,
+    `the ledger of hypotheses finalized and used so far across prior heartbeats,`,
     `and the new DOS synthesis. Now generate the new hypotheses object.`
   ].join(' ');
+}
+
+/**
+ * Builds the <EarlierGradedPredictionsHistory> entries for BSR, clearly stating what BSR
+ * predicted for each window, what actually happened when graded, what the surprisal is,
+ * and whether BSR should be surprised (§6.4, §6.7, §7).
+ */
+export function buildBsrGradedPredictionsHistoryWithNote(
+  earlierGradedPredictions: Array<{
+    windowOutcome: string;
+    surprisalBits: number;
+    predictedProbabilities?: { PROGRESS: number; STALL: number; REGRESS: number };
+    updateNumber?: number;
+  }>
+): string {
+  if (!earlierGradedPredictions || earlierGradedPredictions.length === 0) {
+    return 'No earlier predictions graded yet.';
+  }
+
+  return earlierGradedPredictions.map((g, idx) => {
+    const outcomeKey = g.windowOutcome as 'PROGRESS' | 'STALL' | 'REGRESS';
+    const assignedProb = g.predictedProbabilities?.[outcomeKey] !== undefined
+      ? g.predictedProbabilities[outcomeKey]
+      : Math.min(1, Math.max(0.01, Math.pow(2, -g.surprisalBits)));
+    const pct = (assignedProb * 100).toFixed(0);
+    const bitsStr = g.surprisalBits.toFixed(2);
+    const cred = Math.max(0, Math.min(1, 2 - g.surprisalBits / LOG2_3));
+    const windowNum = g.updateNumber !== undefined ? g.updateNumber : idx + 2;
+    const guLabel = g.updateNumber !== undefined ? `Global Update ${g.updateNumber}` : `Global Update ${idx + 2}`;
+
+    const predLine = g.predictedProbabilities
+      ? `Your prediction for Window ${windowNum} was: PROGRESS ${(g.predictedProbabilities.PROGRESS * 100).toFixed(0)}%, STALL ${(g.predictedProbabilities.STALL * 100).toFixed(0)}%, REGRESS ${(g.predictedProbabilities.REGRESS * 100).toFixed(0)}%.`
+      : `Your prediction for Window ${windowNum} gave ${g.windowOutcome} a ~${pct}% chance.`;
+
+    const gradedLine = `It was graded in ${guLabel} and the actual outcome was: ${g.windowOutcome} (you gave this a ${pct}% chance).`;
+
+    let surpriseLine: string;
+    if (g.surprisalBits <= 0.50) {
+      surpriseLine = `Surprisal is ${bitsStr} bits.\nShould you be surprised? No — you strongly called this outcome and your read of the branch held up, so your forecasting credibility stays at 1.00.`;
+    } else if (g.surprisalBits <= LOG2_3) {
+      surpriseLine = `Surprisal is ${bitsStr} bits.\nShould you be surprised? No — you saw this coming and your read of the branch held up, so your forecasting credibility stays at 1.00.`;
+    } else if (g.surprisalBits < 2 * LOG2_3) {
+      surpriseLine = `Surprisal is ${bitsStr} bits.\nShould you be surprised? Yes — the branch ended in ${g.windowOutcome} when you expected otherwise, which reduced your forecasting credibility to ${cred.toFixed(2)}. Look closely at what you misread in the branch's trajectory before making your next prediction.`;
+    } else {
+      surpriseLine = `Surprisal is ${bitsStr} bits.\nShould you be surprised? Very much so — you were confident ${g.windowOutcome} would not happen, and the window proved that read wrong, dropping your forecasting credibility to 0.00. Re-examine why the branch went the opposite way before making your next prediction.`;
+    }
+
+    return [
+      predLine,
+      gradedLine,
+      surpriseLine,
+    ].join('\n');
+  }).join('\n\n');
 }
 
 /**

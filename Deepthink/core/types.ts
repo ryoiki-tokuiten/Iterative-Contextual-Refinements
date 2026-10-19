@@ -188,6 +188,14 @@ export interface BsrGlobalUpdateRecord {
   branch_id: string;
   report: BsrReport;
   computed: BsrComputedScores;
+  graded_prediction?: {
+    issuedAtUpdate: number;
+    probabilities: {
+      PROGRESS: number;
+      STALL: number;
+      REGRESS: number;
+    };
+  };
 }
 
 // ============================================================================
@@ -235,6 +243,7 @@ export interface RealizedHypothesisFeedback {
   prediction_note: string;
   observed_test_outcome: 'VALIDATED' | 'REJECTED' | 'INCONCLUSIVE';
   surprise_bits: number;
+  surprise_note?: string;
   utilization?: {
     correct_use: number;
     partial_use: number;

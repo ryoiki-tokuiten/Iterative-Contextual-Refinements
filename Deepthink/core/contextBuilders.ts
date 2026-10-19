@@ -18,8 +18,10 @@ import type {
   HeartbeatBlock,
 } from './types.ts';
 import {
+  buildBsrGradedPredictionsHistoryWithNote,
   buildDosStepIiNote,
   buildHypothesisHeartbeatNote,
+  buildHypothesisSurpriseNote,
   buildStrategyGlobalUpdateNote,
   DOS_HEARTBEAT_NOTE,
   DOS_STEP_I_NOTE,
@@ -51,6 +53,13 @@ export function buildContextForStrategySeed(
     ).join('\n\n');
     parts.push('', fence('SeedStrategyProximityTurns', formattedTurns));
   }
+
+  const isProximityTurn = Boolean(
+    currentLoopTurns &&
+    currentLoopTurns.length > 0 &&
+    currentLoopTurns[currentLoopTurns.length - 1].role === 'generator'
+  );
+  parts.push('', isProximityTurn ? 'Immediate Role: Strategy Proximity Reviewer' : 'Immediate Role: Strategy Generator');
 
   return parts.join('\n');
 }
@@ -101,7 +110,7 @@ export function buildContextForStrategyGlobalUpdate(
   )).join('\n');
 
   const parts: string[] = [
-    `# Core Challenge (Global Update ${updateNumber})`,
+    `# Core Challenge`,
     challenge,
     '',
     `Requested Number of Strategies: ${count}`,
@@ -115,6 +124,7 @@ export function buildContextForStrategyGlobalUpdate(
   // 3. Active Note {GU_Note(u)} + [GU-u Context]
   parts.push(
     '',
+    `# Strategy Generation Context for Global Update ${updateNumber}`,
     fence('HarnessNote', note),
     '',
     fence('CurrentActiveStrategies', formattedActiveStrategies),
@@ -134,6 +144,13 @@ export function buildContextForStrategyGlobalUpdate(
     parts.push('', fence('CurrentGlobalUpdateProximityTurns', formattedCurrentTurns));
   }
 
+  const isProximityTurn = Boolean(
+    currentGuTurns &&
+    currentGuTurns.length > 0 &&
+    currentGuTurns[currentGuTurns.length - 1].role === 'generator'
+  );
+  parts.push('', isProximityTurn ? 'Immediate Role: Strategy Proximity Reviewer' : 'Immediate Role: Strategy Generator');
+
   return parts.join('\n\n');
 }
 
@@ -149,7 +166,8 @@ export function buildContextForHypothesisGenerate(
   previousHeartbeat?: HeartbeatBlock,
   priorProximityHistoryText?: string,
   currentHbTurns?: Array<{ role: 'generator' | 'proximity'; content: string; turnNumber?: number }>,
-  hypothesisCount?: number
+  hypothesisCount?: number,
+  hypothesesUsedSoFar?: Array<{ heartbeatNo: number; iterationFinalized: number; hypothesisId: string; text: string }>
 ): string {
   const count = hypothesisCount ?? 1;
   const note = buildHypothesisHeartbeatNote(heartbeatNo);
@@ -188,13 +206,12 @@ export function buildContextForHypothesisGenerate(
     }
   } else {
     // Heartbeat h >= 2:
-    // (1) Final generated hypothesis object from Heartbeat h-1 + independent testing outputs & verdicts
+    // (1) Final generated hypothesis object from Heartbeat h-1 + independent testing outputs
     const prevHypothesesAndTests = previousHeartbeat.hypotheses.map(h => ({
       hypothesis_id: h.id,
       text: h.hypothesisText,
       target_branches: h.targetBranchIds || [],
       predicted_test_outcome: h.predicted_test_outcome,
-      observed_verdict: h.testerVerdict || 'INCONCLUSIVE',
       testing_output: h.testerAttempt || 'None',
     }));
 
@@ -211,10 +228,23 @@ export function buildContextForHypothesisGenerate(
       };
     });
 
-    // (3) Realized hypothesis feedback (predicted test outcome, observed test outcome, surprise bits, utilization, counterevidence)
-    const feedbackText = previousHeartbeat.realized_feedback.length > 0
-      ? JSON.stringify(previousHeartbeat.realized_feedback, null, 2)
+    // (3) Realized hypothesis feedback (predicted test outcome, observed test outcome, surprise bits + dynamic surprise_note, utilization, counterevidence)
+    const enrichedFeedback = previousHeartbeat.realized_feedback.map(rf => ({
+      ...rf,
+      surprise_note: rf.surprise_note || buildHypothesisSurpriseNote(
+        rf.surprise_bits,
+        rf.observed_test_outcome,
+        rf.your_predicted_test_outcome
+      ),
+    }));
+    const feedbackText = enrichedFeedback.length > 0
+      ? JSON.stringify(enrichedFeedback, null, 2)
       : 'No prior feedback recorded.';
+
+    // (4) Hypotheses finalized and used so far across prior heartbeats
+    const formattedUsedSoFar = (hypothesesUsedSoFar || []).map(u => (
+      `- [Heartbeat ${u.heartbeatNo}, Iteration ${u.iterationFinalized}] ${u.hypothesisId}: ${u.text}`
+    )).join('\n');
 
     parts.push(
       '',
@@ -226,9 +256,11 @@ export function buildContextForHypothesisGenerate(
       fence('MappedBranchPackets', JSON.stringify(mappedBranchPackets, null, 2)),
       '',
       fence('RealizedHypothesisFeedback', feedbackText),
+      '',
+      fence('HypothesesFinalizedAndUsedSoFar', formattedUsedSoFar),
     );
 
-    // (4) DOS Core Synthesis for Heartbeat h
+    // (5) DOS Core Synthesis for Heartbeat h
     if (dosOutput?.core_synthesis && Object.keys(dosOutput.core_synthesis).length > 0) {
       parts.push('', fence('DosCoreSynthesis', JSON.stringify(dosOutput.core_synthesis, null, 2)));
     }
@@ -241,6 +273,13 @@ export function buildContextForHypothesisGenerate(
     ).join('\n\n');
     parts.push('', fence('CurrentHeartbeatProximityTurns', formattedCurrentTurns));
   }
+
+  const isProximityTurn = Boolean(
+    currentHbTurns &&
+    currentHbTurns.length > 0 &&
+    currentHbTurns[currentHbTurns.length - 1].role === 'generator'
+  );
+  parts.push('', isProximityTurn ? 'Immediate Role: Hypothesis Proximity Reviewer' : 'Immediate Role: Hypothesis Generator');
 
   return parts.join('\n\n');
 }
@@ -285,10 +324,23 @@ export function buildContextForDos(
     ].join('\n\n');
   }
 
+  const formatPrevHypothesesForDos = (hb?: HeartbeatBlock): string => {
+    if (!hb || !hb.hypotheses || hb.hypotheses.length === 0) return 'None.';
+    return JSON.stringify(
+      hb.hypotheses.map(h => ({
+        hypothesis_id: h.id,
+        text: h.hypothesisText,
+        target_branches: h.targetBranchIds || [],
+        predicted_test_outcome: h.predicted_test_outcome,
+        testing_output: h.testerAttempt || 'None',
+      })),
+      null,
+      2
+    );
+  };
+
   if (kind === 'heartbeat') {
-    const prevHypotheses = options?.previousHeartbeat?.hypotheses.map(h => (
-      `Hypothesis ${h.id}: ${h.hypothesisText}\nVerdict: ${h.testerVerdict || 'INCONCLUSIVE'}\nTesting Output: ${h.testerAttempt || 'None'}\nTarget Branches: ${JSON.stringify(h.targetBranchIds || [])}`
-    )).join('\n\n') || 'None.';
+    const prevHypotheses = formatPrevHypothesesForDos(options?.previousHeartbeat);
 
     return [
       `# Core Challenge`,
@@ -305,9 +357,7 @@ export function buildContextForDos(
 
   // Step-ii DOS
   const note = buildDosStepIiNote(options?.slotStatuses || []);
-  const prevHypotheses = options?.previousHeartbeat?.hypotheses.map(h => (
-    `Hypothesis ${h.id}: ${h.hypothesisText}\nVerdict: ${h.testerVerdict || 'INCONCLUSIVE'}\nTesting Output: ${h.testerAttempt || 'None'}\nTarget Branches: ${JSON.stringify(h.targetBranchIds || [])}`
-  )).join('\n\n') || 'None.';
+  const prevHypotheses = formatPrevHypothesesForDos(options?.previousHeartbeat);
 
   return [
     `# Core Challenge`,
@@ -328,25 +378,38 @@ export function buildContextForDos(
 // Branch History & Correction/Critique Context (§7)
 // ============================================================================
 
+function formatIterationEntry(it: DeepthinkBranchIteration): string {
+  const hasCritique = Boolean(it.critique && it.critique.trim().length > 0);
+  return (
+    `<Iteration n="${it.iterationNumber}">\n` +
+    fence('Correction', it.correctedSolution) +
+    (hasCritique ? '\n' + fence('Critique', it.critique) : '') + '\n' +
+    `</Iteration>`
+  );
+}
+
 export function buildCritiqueCorrectionMemoryBankHistory(
   memoryBank: string | undefined,
-  iterationsInWindow: DeepthinkBranchIteration[]
+  iterationsInWindow: DeepthinkBranchIteration[],
+  preUpdateIteration?: DeepthinkBranchIteration,
+  curatedContextPacket?: string | null
 ): string {
   const parts: string[] = [];
+
+  if (preUpdateIteration) {
+    parts.push(formatIterationEntry(preUpdateIteration));
+  }
 
   if (memoryBank && memoryBank.trim().length > 0) {
     parts.push(fence('DistilledMemoryBank', memoryBank));
   }
 
-  if (iterationsInWindow.length === 0) {
-    parts.push('No prior iteration history in this window.');
-  } else {
-    const formatted = iterationsInWindow.map(it => (
-      `<Iteration n="${it.iterationNumber}">\n` +
-      fence('Correction', it.correctedSolution) + '\n' +
-      fence('Critique', it.critique) + '\n' +
-      `</Iteration>`
-    )).join('\n\n');
+  if (curatedContextPacket) {
+    parts.push(fence('LatestCustomCuratedContext', curatedContextPacket));
+  }
+
+  if (iterationsInWindow.length > 0) {
+    const formatted = iterationsInWindow.map(formatIterationEntry).join('\n\n');
     parts.push(fence('WindowCorrectionCritiqueHistory', formatted));
   }
 
@@ -382,6 +445,22 @@ export function buildContextForCorrectionAgent(
   curatedContextPacket: string | null,
   crossStrategyContext: string | null
 ): string {
+  let effectiveHistory = historyObject;
+  if (curatedContextPacket && !effectiveHistory.includes('<LatestCustomCuratedContext>')) {
+    const winIdx = effectiveHistory.indexOf('<WindowCorrectionCritiqueHistory>');
+    const curatedFence = fence('LatestCustomCuratedContext', curatedContextPacket);
+    if (winIdx >= 0) {
+      effectiveHistory =
+        effectiveHistory.slice(0, winIdx) +
+        curatedFence + '\n\n' +
+        effectiveHistory.slice(winIdx);
+    } else {
+      effectiveHistory = effectiveHistory
+        ? `${effectiveHistory}\n\n${curatedFence}`
+        : curatedFence;
+    }
+  }
+
   const parts: string[] = [
     `# Core Challenge`,
     challenge,
@@ -389,12 +468,8 @@ export function buildContextForCorrectionAgent(
     `Assigned Strategy ID: ${branchId}`,
     `Assigned Strategy Text: ${strategyText}`,
     '',
-    fence('BranchHistoryAndMemory', historyObject),
+    fence('BranchHistoryAndMemory', effectiveHistory),
   ];
-
-  if (curatedContextPacket) {
-    parts.push('', fence('LatestCustomCuratedContext', curatedContextPacket));
-  }
 
   if (crossStrategyContext) {
     parts.push('', fence('CrossStrategyPeerIntelligence', crossStrategyContext));
@@ -407,8 +482,7 @@ export function buildContextForCritiqueAgent(
   challenge: string,
   branchId: string,
   strategyText: string,
-  historyObject: string,
-  latestCorrectionContent: string
+  historyObject: string
 ): string {
   return [
     `# Core Challenge`,
@@ -418,8 +492,6 @@ export function buildContextForCritiqueAgent(
     `Assigned Strategy Text: ${strategyText}`,
     '',
     fence('BranchHistoryAndMemory', historyObject),
-    '',
-    fence('CorrectionToCritique', latestCorrectionContent),
   ].join('\n');
 }
 
@@ -437,6 +509,8 @@ export function buildContextForBsr(
   earlierGradedPredictions: Array<{
     windowOutcome: string;
     surprisalBits: number;
+    predictedProbabilities?: { PROGRESS: number; STALL: number; REGRESS: number };
+    updateNumber?: number;
   }>
 ): string {
   // HIDDEN PREDICTION RULE (§6.7):
@@ -445,9 +519,7 @@ export function buildContextForBsr(
     ? ledgerEntries.map(e => `[Iter ${e.iteration}] ${e.direction.toUpperCase()} (${e.size}): ${e.reason}`).join('\n')
     : 'Empty ledger.';
 
-  const formattedGraded = earlierGradedPredictions.length > 0
-    ? earlierGradedPredictions.map(g => `- Outcome: ${g.windowOutcome}, Surprisal: ${g.surprisalBits.toFixed(2)} bits`).join('\n')
-    : 'No earlier predictions graded yet.';
+  const formattedGraded = buildBsrGradedPredictionsHistoryWithNote(earlierGradedPredictions);
 
   return [
     `# Core Challenge`,
@@ -456,13 +528,13 @@ export function buildContextForBsr(
     `Branch ID: ${branchId}`,
     `Current Strategy: ${strategyText}`,
     '',
-    fence('WindowCorrectionCritiqueHistory', windowHistoryText),
-    '',
-    fence('MemoryBankBeforeWindow', distilledMemoryBeforeWindow || 'None available.'),
-    '',
     fence('StandingEventLedger', formattedLedger),
     '',
     fence('EarlierGradedPredictionsHistory', formattedGraded),
+    '',
+    fence('MemoryBankBeforeWindow', distilledMemoryBeforeWindow || 'None available.'),
+    '',
+    fence('WindowCorrectionCritiqueHistory', windowHistoryText),
   ].join('\n\n');
 }
 
@@ -476,11 +548,13 @@ export function buildContextForFinalJudge(
     branchId: string;
     strategyText: string;
     finalSolution: string;
+    finalCritique?: string;
   }>
 ): string {
   const formattedCandidates = candidates.map(c => (
     `### Candidate ${c.branchId}\nStrategy: ${c.strategyText}\n\n` +
-    fence('FinalSolution', c.finalSolution)
+    fence('FinalSolution', c.finalSolution) + '\n' +
+    fence('FinalCritique', c.finalCritique)
   )).join('\n\n');
 
   return [

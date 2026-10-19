@@ -17,6 +17,9 @@ import {
 import {
     buildDeepthinkSandboxRepositoryAccess,
 } from './sandboxAccess.ts';
+import {
+    buildBsrGradedPredictionsHistoryWithNote,
+} from './harnessNotes.ts';
 
 const base64 = (value: string) => Buffer.from(value).toString('base64');
 const image = (name: string) => ({
@@ -196,7 +199,6 @@ test('repository policy applies feature flags and preserves the pinned revision'
 
 test('the typed registry enforces per-agent maxOutputTokens limits (5000 default, 10000 for correction and memoryBank)', () => {
     assert.equal(DEEPTHINK_AGENT_REGISTRY.initialStrategy.maxOutputTokens, 5000);
-    assert.equal(DEEPTHINK_AGENT_REGISTRY.strategyGeneratorGlobalUpdate.maxOutputTokens, 5000);
     assert.equal(DEEPTHINK_AGENT_REGISTRY.strategyProximity.maxOutputTokens, 5000);
     assert.equal(DEEPTHINK_AGENT_REGISTRY.hypothesisGeneration.maxOutputTokens, 5000);
     assert.equal(DEEPTHINK_AGENT_REGISTRY.hypothesisProximity.maxOutputTokens, 5000);
@@ -209,4 +211,36 @@ test('the typed registry enforces per-agent maxOutputTokens limits (5000 default
     assert.equal(DEEPTHINK_AGENT_REGISTRY.solutionCorrection.maxOutputTokens, 10000);
     assert.equal(DEEPTHINK_AGENT_REGISTRY.memoryBank.maxOutputTokens, 10000);
 });
+
+test('buildBsrGradedPredictionsHistoryWithNote formats Window 2, Window 3, and Window 4 coherently for Global Update 5 without repeating Outcome/Surprisal headers', () => {
+    const historyAtGu5 = buildBsrGradedPredictionsHistoryWithNote([
+        {
+            updateNumber: 2,
+            windowOutcome: 'PROGRESS',
+            surprisalBits: 0.8625,
+            predictedProbabilities: { PROGRESS: 0.55, STALL: 0.30, REGRESS: 0.15 },
+        },
+        {
+            updateNumber: 3,
+            windowOutcome: 'STALL',
+            surprisalBits: 1.3219,
+            predictedProbabilities: { PROGRESS: 0.45, STALL: 0.40, REGRESS: 0.15 },
+        },
+        {
+            updateNumber: 4,
+            windowOutcome: 'REGRESS',
+            surprisalBits: 2.3219,
+            predictedProbabilities: { PROGRESS: 0.50, STALL: 0.30, REGRESS: 0.20 },
+        },
+    ]);
+
+    assert.equal(historyAtGu5.includes('- Outcome:'), false, 'Must not repeat raw "- Outcome:" header line');
+    assert.ok(historyAtGu5.includes('Your prediction for Window 2 was: PROGRESS 55%, STALL 30%, REGRESS 15%.'));
+    assert.ok(historyAtGu5.includes('It was graded in Global Update 2 and the actual outcome was: PROGRESS (you gave this a 55% chance).'));
+    assert.ok(historyAtGu5.includes('Your prediction for Window 3 was: PROGRESS 45%, STALL 40%, REGRESS 15%.'));
+    assert.ok(historyAtGu5.includes('It was graded in Global Update 3 and the actual outcome was: STALL (you gave this a 40% chance).'));
+    assert.ok(historyAtGu5.includes('Your prediction for Window 4 was: PROGRESS 50%, STALL 30%, REGRESS 20%.'));
+    assert.ok(historyAtGu5.includes('It was graded in Global Update 4 and the actual outcome was: REGRESS (you gave this a 20% chance).'));
+});
+
 

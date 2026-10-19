@@ -81,9 +81,7 @@ interface AdaptiveExecutionRequest {
 
 export interface AdaptiveDeepthinkToolPrompts {
     sys_deepthink_initialStrategy: string;
-    sys_deepthink_strategyProximity: string;
     sys_deepthink_hypothesisGeneration: string;
-    sys_deepthink_hypothesisProximity: string;
     sys_deepthink_hypothesisTester: string;
     sys_deepthink_solutionAttempt: string;
     sys_deepthink_solutionCritique: string;
@@ -567,7 +565,7 @@ async function generateStrategyBatch(
     const taskContext = toolCall.specialContext || 'Generate the requested strategy batch.';
     state.strategyGenerationHistory = normalizeProximityHistory(state.strategyGenerationHistory);
     const generatorContext = syncAgentContext(state, context, 'strategy-generator', prompts.sys_deepthink_initialStrategy, undefined, undefined, [], executionGroupId, executionGroupName);
-    const proximityContext = syncAgentContext(state, context, 'strategy-proximity', prompts.sys_deepthink_strategyProximity, undefined, undefined, [], executionGroupId, executionGroupName);
+    const proximityContext = syncAgentContext(state, context, 'strategy-proximity', prompts.sys_deepthink_initialStrategy, undefined, undefined, [], executionGroupId, executionGroupName);
     const result = await refineWithProximity<string>({
         loops: toolCall.proximityLoops ?? DEFAULT_PROXIMITY_LOOPS,
         history: state.strategyGenerationHistory,
@@ -601,7 +599,7 @@ async function generateStrategyBatch(
                     candidates,
                     conversationHistory,
                     taskContext,
-                    prompts.sys_deepthink_strategyProximity,
+                    prompts.sys_deepthink_initialStrategy,
                     proximityContext,
                     images,
                 ),
@@ -650,7 +648,7 @@ async function generateHypothesisBatch(
     const executionGroupName = 'Hypothesis Generation Loop';
     state.hypothesisGenerationHistory = normalizeProximityHistory(state.hypothesisGenerationHistory);
     const generatorContext = syncAgentContext(state, context, 'hypothesis-generator', prompts.sys_deepthink_hypothesisGeneration, undefined, undefined, [], executionGroupId, executionGroupName);
-    const proximityContext = syncAgentContext(state, context, 'hypothesis-proximity', prompts.sys_deepthink_hypothesisProximity, undefined, undefined, [], executionGroupId, executionGroupName);
+    const proximityContext = syncAgentContext(state, context, 'hypothesis-proximity', prompts.sys_deepthink_hypothesisGeneration, undefined, undefined, [], executionGroupId, executionGroupName);
     const result = await refineWithProximity<string>({
         loops: toolCall.proximityLoops ?? DEFAULT_PROXIMITY_LOOPS,
         history: state.hypothesisGenerationHistory,
@@ -693,7 +691,7 @@ async function generateHypothesisBatch(
                     candidates,
                     conversationHistory,
                     baseContext,
-                    prompts.sys_deepthink_hypothesisProximity,
+                    prompts.sys_deepthink_hypothesisGeneration,
                     proximityContext,
                     images,
                 ),

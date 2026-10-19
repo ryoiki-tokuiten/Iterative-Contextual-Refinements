@@ -19,7 +19,7 @@ export const SANDBOX_API_CALL_MULTIPLIER = {
 } as const;
 
 export interface DeepthinkApiCallBreakdown {
-    initialStrategy: number;
+    initialStrategy: { min: number; max: number };
     strategyProximity: { min: number; max: number };
     solutionAttempt: { min: number; max: number };
     solutionCritique: { min: number; max: number };
@@ -29,7 +29,6 @@ export interface DeepthinkApiCallBreakdown {
     hypothesisProximity: number;
     hypothesisTester: number;
     bsr: number;
-    strategyGeneratorGlobalUpdate: { min: number; max: number };
     memoryBank: { min: number; max: number };
     finalJudge: number;
     standaloneHeartbeats: number;
@@ -78,12 +77,9 @@ export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): D
 
     // 2. Baseline Branch Iterations (§3):
     // Iteration 1: S attempts + S critiques = 2S
-    // Iterations 2..i-1: S corrections + S critiques = 2S * (i - 2)
-    // Iteration i: S final corrections ONLY (critique omitted per §3) = S
-    // Total for i >= 2 is (2i - 1) * S; for i = 1 is 2S
-    const branchIterationCalls = i === 1
-        ? 2 * strategiesCount
-        : (2 * i - 1) * strategiesCount;
+    // Iterations 2..i: S corrections + S critiques = 2S * (i - 1)
+    // Total for all i iterations is 2i * S
+    const branchIterationCalls = 2 * i * strategiesCount;
 
     // 3. Heartbeats (§4.5):
     // Per heartbeat with hypotheses: (1 + 2 * hypothesisProximityLoops) + hypothesisCount testers
@@ -151,7 +147,10 @@ export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): D
     const totalHeartbeatsWithHyp = hypothesisCount > 0 ? totalHeartbeats : 0;
 
     const breakdown: DeepthinkApiCallBreakdown = {
-        initialStrategy: 1 + strategyProximityLoops,
+        initialStrategy: {
+            min: 1 + strategyProximityLoops,
+            max: (1 + strategyProximityLoops) + (globalUpdates * (1 + strategyProximityLoops)),
+        },
         strategyProximity: {
             min: strategyProximityLoops,
             max: strategyProximityLoops + (globalUpdates * strategyProximityLoops),
@@ -161,8 +160,8 @@ export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): D
             max: strategiesCount + (globalUpdates * strategiesCount),
         },
         solutionCritique: {
-            min: Math.max(0, i - 1) * strategiesCount,
-            max: (Math.max(0, i - 1) * strategiesCount) + (globalUpdates * strategiesCount),
+            min: i * strategiesCount,
+            max: (i * strategiesCount) + (globalUpdates * strategiesCount),
         },
         solutionCorrection: Math.max(0, i - 1) * strategiesCount,
         dos: (standaloneHeartbeats * (hypothesisCount > 0 ? 1 : 0)) +
@@ -172,10 +171,6 @@ export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): D
         hypothesisProximity: totalHeartbeatsWithHyp * hypothesisProximityLoops,
         hypothesisTester: totalHeartbeatsWithHyp * hypothesisCount,
         bsr: globalUpdates * strategiesCount,
-        strategyGeneratorGlobalUpdate: {
-            min: 0,
-            max: globalUpdates * (1 + strategyProximityLoops),
-        },
         memoryBank: {
             min: globalUpdates * strategiesCount,
             max: 0,

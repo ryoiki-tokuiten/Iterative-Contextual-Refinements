@@ -247,7 +247,7 @@ export class PromptsModal {
             deepthink: [
                 {
                     groupTitle: "1. STRATEGY GENERATION",
-                    prompts: ["deepthink-initial-strategy", "deepthink-strategy-proximity"]
+                    prompts: ["deepthink-initial-strategy"]
                 },
                 {
                     groupTitle: "2. SOLUTION DEVELOPMENT",
@@ -255,11 +255,11 @@ export class PromptsModal {
                 },
                 {
                     groupTitle: "3. HYPOTHESIS EXPLORATION",
-                    prompts: ["deepthink-hypothesis-generation", "deepthink-hypothesis-proximity", "deepthink-hypothesis-tester"]
+                    prompts: ["deepthink-hypothesis-generation", "deepthink-hypothesis-tester"]
                 },
                 {
                     groupTitle: "4. EVALUATION & JUDGMENT",
-                    prompts: ["deepthink-post-quality-filter", "deepthink-memory-bank", "deepthink-final-judge"]
+                    prompts: ["deepthink-memory-bank", "deepthink-dos", "deepthink-bsr", "deepthink-final-judge"]
                 }
             ],
             adaptiveDeepthink: [

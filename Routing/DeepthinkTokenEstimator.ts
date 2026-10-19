@@ -10,7 +10,7 @@ import {
     MAX_DEEPTHINK_DEPTH,
     MAX_DEEPTHINK_STRATEGIES,
 } from './ModelConfig.ts';
-import { calculateLoopSchedule } from '../Deepthink/core/loopController.ts';
+import { determinePostIterationStep } from '../Deepthink/core/loopController.ts';
 import {
     calculateDeepthinkApiCallsFromParams,
     type DeepthinkApiCallBreakdown,
@@ -53,27 +53,56 @@ export interface DeepthinkTokenEstimate {
     apiCalls: ApiCallRange;
 }
 
+/**
+ * Per-role output token caps enforced by the harness (§8.3, agentRegistry.ts):
+ * - 5,000 tokens for Strategy Generator, Strategy Proximity, Hypothesis Generator,
+ *   Hypothesis Proximity, Hypothesis Tester, Solution Attempt, Solution Critique,
+ *   DOS, BSR, and Final Judge.
+ * - 10,000 tokens for Solution Correction and Memory Bank.
+ */
+const DEFAULT_ROLE_MAX_OUTPUT_TOKENS = 5_000;
+const EXTENDED_ROLE_MAX_OUTPUT_TOKENS = 10_000;
+
 interface TokenProfile {
-    branchPairContext: number;
-    solutionContext: number;
-    hypothesisPacketContext: number;
-    initialExecutionInput: number;
-    hypothesisTestInput: number;
-    memoryBankContext: number;
+    /** System instruction + Core Challenge + base XML framing */
     promptBase: number;
-    solutionOutput: number;
-    critiqueOutput: number;
-    hypothesisTestOutput: number;
-    hypothesisGenerationOutputPerHypothesis: number;
+    /** Active harness note ({GU_Note}, {HB_Note}, {dos_*_note}) */
+    harnessNoteTokens: number;
+    /** Compact reframed note ({GU_Reframed_Note}, {HB_Reframed_Note}) */
+    reframedNoteTokens: number;
+    /** Single strategy text size */
     strategyGenerationOutputPerStrategy: number;
+    /** Single hypothesis object entry size */
+    hypothesisGenerationOutputPerHypothesis: number;
+    /** Strategy Proximity Reviewer output (5k cap) */
+    strategyProximityOutput: number;
+    /** Hypothesis Proximity Reviewer output (5k cap) */
+    hypothesisProximityOutput: number;
+    /** Iteration 1 & Pruned replacement first execution output (5k cap) */
+    solutionAttemptOutput: number;
+    /** Iterations 2..i Solution Correction output (10k cap) */
+    solutionCorrectionOutput: number;
+    /** Solution Critique output (5k cap) */
+    critiqueOutput: number;
+    /** Memory Bank distillation output (10k cap) */
     memoryOutput: number;
+    /** Independent Hypothesis Tester output (5k cap) */
+    hypothesisTestOutput: number;
+    /** Step-i DOS output (core_synthesis only, 5k cap) */
+    dosStepIOutput: number;
+    /** Heartbeat DOS & Step-ii DOS output (core_synthesis + hypothesis_feedback, 5k cap) */
+    dosFullOutput: number;
+    /** DOS core_synthesis portion routed into Strategy/Hypothesis generators */
+    dosCoreSynthesisContext: number;
+    /** BSR report output per branch (5k cap) */
     bsrOutput: number;
-    strategyUpdateOutput: number;
+    /** Per-update standing ledger & graded prediction history growth for BSR */
+    bsrLedgerGrowthPerUpdate: number;
+    /** Final Judge output (5k cap) */
     finalJudgeOutput: number;
-    updateBranchShare: number;
+    /** Share of hypotheses routed to each branch in mapped packets */
     branchPacketShare: number;
 }
-const CORRECTOR_CONTEXT_CEILING = 195_000;
 
 export const SANDBOX_PER_CALL = {
     input: {
@@ -96,53 +125,129 @@ export function getRandomSandboxIterationNoise(): number {
 }
 
 const WORST_PROFILE: TokenProfile = {
-    branchPairContext: 20_000,
-    solutionContext: 12_000,
-    hypothesisPacketContext: 8_000,
-    initialExecutionInput: 30_000,
-    hypothesisTestInput: 5_000,
-    memoryBankContext: 4_000,
     promptBase: 5_000,
-    solutionOutput: 12_000,
-    critiqueOutput: 6_000,
-    hypothesisTestOutput: 8_000,
-    hypothesisGenerationOutputPerHypothesis: 500,
-    strategyGenerationOutputPerStrategy: 500,
-    memoryOutput: 4_000,
-    bsrOutput: 1_500,
-    strategyUpdateOutput: 3_000,
-    finalJudgeOutput: 5_000,
-    updateBranchShare: 1,
-    branchPacketShare: 1,
+    harnessNoteTokens: 400,
+    reframedNoteTokens: 250,
+    strategyGenerationOutputPerStrategy: 1_000,
+    hypothesisGenerationOutputPerHypothesis: 800,
+    strategyProximityOutput: DEFAULT_ROLE_MAX_OUTPUT_TOKENS,
+    hypothesisProximityOutput: DEFAULT_ROLE_MAX_OUTPUT_TOKENS,
+    solutionAttemptOutput: DEFAULT_ROLE_MAX_OUTPUT_TOKENS,
+    solutionCorrectionOutput: EXTENDED_ROLE_MAX_OUTPUT_TOKENS,
+    critiqueOutput: DEFAULT_ROLE_MAX_OUTPUT_TOKENS,
+    memoryOutput: EXTENDED_ROLE_MAX_OUTPUT_TOKENS,
+    hypothesisTestOutput: DEFAULT_ROLE_MAX_OUTPUT_TOKENS,
+    dosStepIOutput: DEFAULT_ROLE_MAX_OUTPUT_TOKENS,
+    dosFullOutput: DEFAULT_ROLE_MAX_OUTPUT_TOKENS,
+    dosCoreSynthesisContext: 3_500,
+    bsrOutput: DEFAULT_ROLE_MAX_OUTPUT_TOKENS,
+    bsrLedgerGrowthPerUpdate: 800,
+    finalJudgeOutput: DEFAULT_ROLE_MAX_OUTPUT_TOKENS,
+    branchPacketShare: 1.0,
 };
 
 const AVERAGE_PROFILE: TokenProfile = {
-    branchPairContext: 4_000,
-    solutionContext: 3_500,
-    hypothesisPacketContext: 1_750,
-    initialExecutionInput: 9_000,
-    hypothesisTestInput: 1_800,
-    memoryBankContext: 2_000,
-    promptBase: 4_000,
-    solutionOutput: 3_500,
-    critiqueOutput: 1_200,
-    hypothesisTestOutput: 1_800,
-    hypothesisGenerationOutputPerHypothesis: 300,
-    strategyGenerationOutputPerStrategy: 250,
-    memoryOutput: 1_400,
-    bsrOutput: 600,
-    strategyUpdateOutput: 800,
-    finalJudgeOutput: 1_500,
-    updateBranchShare: 0.2,
+    promptBase: 3_500,
+    harnessNoteTokens: 250,
+    reframedNoteTokens: 150,
+    strategyGenerationOutputPerStrategy: 550,
+    hypothesisGenerationOutputPerHypothesis: 450,
+    strategyProximityOutput: 2_000,
+    hypothesisProximityOutput: 2_000,
+    solutionAttemptOutput: 3_200,
+    solutionCorrectionOutput: 6_000,
+    critiqueOutput: 2_400,
+    memoryOutput: 5_500,
+    hypothesisTestOutput: 2_800,
+    dosStepIOutput: 2_200,
+    dosFullOutput: 3_000,
+    dosCoreSynthesisContext: 1_800,
+    bsrOutput: 1_800,
+    bsrLedgerGrowthPerUpdate: 400,
+    finalJudgeOutput: 2_800,
     branchPacketShare: 0.5,
 };
+
+type SampledBsrDecision = 'CONTINUE' | 'EVOLVE' | 'PRUNE';
+
+/**
+ * Randomly samples BSR branch decisions at a Global Update with a 70% bias
+ * toward surviving (CONTINUE or EVOLVE) and 30% toward PRUNE.
+ */
+function sampleGlobalUpdateDecisions(strategyCount: number): SampledBsrDecision[] {
+    const decisions: SampledBsrDecision[] = [];
+    for (let s = 0; s < strategyCount; s++) {
+        const roll = Math.random();
+        if (roll < 0.35) {
+            decisions.push('CONTINUE');
+        } else if (roll < 0.70) {
+            decisions.push('EVOLVE');
+        } else {
+            decisions.push('PRUNE');
+        }
+    }
+    return decisions;
+}
+
+/**
+ * Computes exact input and output tokens for a Generator ↔ Proximity loop (§4.1, §4.2, §7).
+ * Both Generator and Proximity share the exact same system prompt and base context prefix,
+ * and each subsequent turn re-reads all prior Generator and Proximity turns in the loop.
+ */
+function computeProximityLoopTokens(
+    baseContextInput: number,
+    proximityLoops: number,
+    generatorTurnOutput: number,
+    proximityTurnOutput: number
+): {
+    inputTokens: number;
+    outputTokens: number;
+    transcriptTokens: number;
+} {
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let accumulatedLoopTranscript = 0;
+
+    for (let reviewIdx = 0; reviewIdx <= proximityLoops; reviewIdx++) {
+        // Generator turn (runs proximityLoops + 1 times)
+        inputTokens += baseContextInput + accumulatedLoopTranscript;
+        outputTokens += generatorTurnOutput;
+        accumulatedLoopTranscript += generatorTurnOutput;
+
+        // Proximity review turn (runs proximityLoops times, receives identical context + generator turn)
+        if (reviewIdx < proximityLoops) {
+            inputTokens += baseContextInput + accumulatedLoopTranscript;
+            outputTokens += proximityTurnOutput;
+            accumulatedLoopTranscript += proximityTurnOutput;
+        }
+    }
+
+    return {
+        inputTokens,
+        outputTokens,
+        transcriptTokens: accumulatedLoopTranscript,
+    };
+}
 
 function clampInteger(value: number, min: number, max: number): number {
     if (!Number.isFinite(value)) return min;
     return Math.max(min, Math.min(max, Math.round(value)));
 }
 
-function calculateInputTokens(
+interface BranchSimState {
+    hasMemoryBank: boolean;
+    preUpdatePairTokens: number;
+    windowHistoryTokens: number;
+    latestSolutionTokens: number;
+    latestCritiqueTokens: number;
+    updatesSurvived: number;
+}
+
+/**
+ * Simulates the exact Deepthink pipeline chronologically across iterations 1..i (§3, §4, §5, §6, §7)
+ * to compute accurate input and output token totals.
+ */
+function simulatePipelineTokens(
     profile: TokenProfile,
     strategyCount: number,
     strategyProximityLoops: number,
@@ -151,216 +256,395 @@ function calculateInputTokens(
     i: number,
     j: number,
     k: number,
-    isolateBranches: boolean
-): number {
+    isolateBranches: boolean,
+    sampledDecisionsPerUpdate?: SampledBsrDecision[][]
+): { input: number; output: number } {
+    let totalInput = 0;
+    let totalOutput = 0;
+
+    const strategyTextTokens = profile.strategyGenerationOutputPerStrategy;
+    const hypothesisItemTokens = profile.hypothesisGenerationOutputPerHypothesis;
+
+    // 1. Seed Strategy Generation & Proximity Loop (§4.1, §7)
+    const seedGenTurnOutput = Math.min(
+        DEFAULT_ROLE_MAX_OUTPUT_TOKENS,
+        strategyCount * strategyTextTokens
+    );
+    const seedLoop = computeProximityLoopTokens(
+        profile.promptBase,
+        strategyProximityLoops,
+        seedGenTurnOutput,
+        profile.strategyProximityOutput
+    );
+    totalInput += seedLoop.inputTokens;
+    totalOutput += seedLoop.outputTokens;
+
+    // Track strategy proximity history for Global Updates: starts with [Seed G↔P]
+    let priorStrategyProximityHistoryTokens = seedLoop.transcriptTokens;
+    let strategiesFinalizedAndUsedCount = strategyCount;
+
+    // Track hypothesis proximity history across Heartbeats
+    let priorHypothesisProximityHistoryTokens = 0;
+    let hypothesesFinalizedAndUsedCount = 0;
+
+    // Initialize N active branch states
+    const branches: BranchSimState[] = Array.from({ length: strategyCount }, () => ({
+        hasMemoryBank: false,
+        preUpdatePairTokens: 0,
+        windowHistoryTokens: 0,
+        latestSolutionTokens: 0,
+        latestCritiqueTokens: 0,
+        updatesSurvived: 0,
+    }));
+
     const curatedContextEnabled = hypothesisCount > 0;
-    const schedule = calculateLoopSchedule(i, j, k, curatedContextEnabled);
-    const { standaloneHeartbeats, globalUpdates, totalHeartbeats } = schedule;
+    let sinceHeartbeat = 0;
+    let heartbeatNo = 0;
+    let globalUpdateNo = 0;
 
-    // 1. Seed Strategy Generation (§4.1):
-    // Generator runs (1 + strategyProximityLoops) turns, Proximity runs strategyProximityLoops turns
-    const seedGenTurns = 1 + strategyProximityLoops;
-    let seedGenInput = 0;
-    for (let t = 0; t < seedGenTurns; t++) {
-        seedGenInput += profile.promptBase + (strategyCount * 500) + (t * strategyCount * 900);
-    }
-    const seedProxInput = strategyProximityLoops * (profile.promptBase + (strategyCount * 500));
-    const seedInput = seedGenInput + seedProxInput;
+    // Helper to execute a Hypothesis Generation ↔ Proximity + Independent Testing heartbeat (§4.2, §4.3, §4.4, §7)
+    const runHeartbeatHypothesesAndTesters = (currentHbNo: number) => {
+        // [HB-h Context] (§7 context_for_hypothesis_generate)
+        let hbActiveContextTokens = profile.harnessNoteTokens;
+        if (currentHbNo === 1) {
+            // Heartbeat 1: ActiveRunningStrategies (strategy + latest correction) + DosCoreSynthesis
+            const activeStrategiesTokens = branches.reduce(
+                (acc, b) => acc + strategyTextTokens + b.latestSolutionTokens,
+                0
+            );
+            hbActiveContextTokens += activeStrategiesTokens + profile.dosCoreSynthesisContext;
+        } else {
+            // Heartbeat h >= 2:
+            // (1) PreviousHeartbeatHypothesesAndTests (H hypotheses + H independent testing outputs)
+            const prevHypAndTestsTokens = hypothesisCount * (hypothesisItemTokens + profile.hypothesisTestOutput);
+            // (2) MappedBranchPackets (S strategies + latest corrections + mapped IDs)
+            const mappedPacketsSchemaTokens = branches.reduce(
+                (acc, b) => acc + strategyTextTokens + b.latestSolutionTokens + 80,
+                0
+            );
+            // (3) RealizedHypothesisFeedback (predicted, observed, surprise_bits, surprise_note, utilization, counterevidence)
+            const realizedFeedbackTokens = hypothesisCount * 350;
+            // (4) HypothesesFinalizedAndUsedSoFar
+            const usedSoFarTokens = hypothesesFinalizedAndUsedCount * hypothesisItemTokens;
+            // (5) DosCoreSynthesis
+            hbActiveContextTokens +=
+                prevHypAndTestsTokens +
+                mappedPacketsSchemaTokens +
+                realizedFeedbackTokens +
+                usedSoFarTokens +
+                profile.dosCoreSynthesisContext;
+        }
 
-    // 2. Branch Iterations (§3):
-    let branchInput = 0;
-    const branchPacketContext = hypothesisCount > 0
-        ? hypothesisCount * profile.hypothesisPacketContext * profile.branchPacketShare
-        : 0;
+        const hbBaseInput =
+            profile.promptBase +
+            priorHypothesisProximityHistoryTokens +
+            hbActiveContextTokens;
 
+        const hypGenTurnOutput = Math.min(
+            DEFAULT_ROLE_MAX_OUTPUT_TOKENS,
+            hypothesisCount * hypothesisItemTokens
+        );
+
+        const hypLoop = computeProximityLoopTokens(
+            hbBaseInput,
+            hypothesisProximityLoops,
+            hypGenTurnOutput,
+            profile.hypothesisProximityOutput
+        );
+        totalInput += hypLoop.inputTokens;
+        totalOutput += hypLoop.outputTokens;
+
+        // Once Heartbeat h is in the past, {HB_Note(h)} + [HB-h Context] is replaced by {HB_Reframed_Note(h)} + [HB-h G↔P]
+        priorHypothesisProximityHistoryTokens += profile.reframedNoteTokens + hypLoop.transcriptTokens;
+        hypothesesFinalizedAndUsedCount += hypothesisCount;
+
+        // Independent Hypothesis Testers (H calls in parallel, §4.3)
+        // Each tester receives Challenge + its single assigned hypothesis
+        const testerInputPerHyp = profile.promptBase + hypothesisItemTokens;
+        totalInput += hypothesisCount * testerInputPerHyp;
+        totalOutput += hypothesisCount * profile.hypothesisTestOutput;
+    };
+
+    // 2. Main Iteration Loop (1 .. i) (§3)
     for (let n = 1; n <= i; n++) {
         if (n === 1) {
-            // Iteration 1: Solution Attempt + Critique
-            const attemptInput = strategyCount * (profile.initialExecutionInput + branchPacketContext);
-            const critiqueInput = strategyCount * (profile.solutionContext + profile.solutionOutput);
-            branchInput += attemptInput + critiqueInput;
+            // Iteration 1: Solution Attempt + Solution Critique in parallel across all S branches (§3, §7)
+            // Note: No heartbeat has run before Iteration 1, so no curated context packet exists.
+            for (const branch of branches) {
+                // Solution Attempt receives Challenge + Assigned Strategy
+                const attemptInput = profile.promptBase + strategyTextTokens;
+                const attemptOutput = profile.solutionAttemptOutput;
+                totalInput += attemptInput;
+                totalOutput += attemptOutput;
+
+                // Solution Critique receives Challenge + Assigned Strategy + Iteration 1 Solution Attempt
+                const critiqueInput = profile.promptBase + strategyTextTokens + attemptOutput;
+                const critiqueOutput = profile.critiqueOutput;
+                totalInput += critiqueInput;
+                totalOutput += critiqueOutput;
+
+                branch.latestSolutionTokens = attemptOutput;
+                branch.latestCritiqueTokens = critiqueOutput;
+                branch.windowHistoryTokens = attemptOutput + critiqueOutput;
+            }
         } else {
-            // Window history pairs: iterations since window start (window length j)
-            const windowPairs = Math.min((n - 1) % j, j);
-            const windowContext = windowPairs * profile.branchPairContext;
-            const memBankContext = n > j ? profile.memoryBankContext : 0;
-            const peerContext = isolateBranches ? 0 : (strategyCount - 1) * profile.branchPairContext;
-
-            const correctionPerBranch = Math.min(
-                profile.branchPairContext + windowContext + memBankContext + peerContext + branchPacketContext,
-                CORRECTOR_CONTEXT_CEILING
+            // Iterations 2 .. i: Solution Correction + Solution Critique in parallel (§3, §7)
+            // Snapshot peer intelligence before parallel execution (latest correction + critique from n - 1)
+            const totalAllBranchesLatestPairs = branches.reduce(
+                (acc, b) => acc + strategyTextTokens + b.latestSolutionTokens + b.latestCritiqueTokens,
+                0
             );
-            branchInput += strategyCount * correctionPerBranch;
 
-            // Critique runs only for n < i (iteration i has NO critique per §3)
-            if (n < i) {
-                const critiquePerBranch = profile.solutionContext + windowContext + memBankContext + profile.solutionOutput;
-                branchInput += strategyCount * critiquePerBranch;
+            // Mapped curated context packet exists ONLY after at least one heartbeat has completed
+            const mappedPacketTokens = (curatedContextEnabled && heartbeatNo >= 1)
+                ? hypothesisCount * profile.branchPacketShare * (hypothesisItemTokens + profile.hypothesisTestOutput)
+                : 0;
+
+            for (const branch of branches) {
+                const ownLatestPair = strategyTextTokens + branch.latestSolutionTokens + branch.latestCritiqueTokens;
+                const peerContextTokens = isolateBranches
+                    ? 0
+                    : Math.max(0, totalAllBranchesLatestPairs - ownLatestPair);
+
+                const memBankTokens = branch.hasMemoryBank ? profile.memoryOutput : 0;
+                const preUpdateTokens = branch.preUpdatePairTokens;
+                const windowTokens = branch.windowHistoryTokens;
+
+                // Correction Agent (§7 context_for_correction_agent):
+                // Challenge + Strategy + <BranchHistoryAndMemory> (preUpdateIteration + DistilledMemoryBank +
+                // LatestCustomCuratedContext + WindowCorrectionCritiqueHistory) + CrossStrategyPeerIntelligence
+                const correctionInput =
+                    profile.promptBase +
+                    strategyTextTokens +
+                    preUpdateTokens +
+                    memBankTokens +
+                    mappedPacketTokens +
+                    windowTokens +
+                    peerContextTokens;
+                const correctionOutput = profile.solutionCorrectionOutput;
+                totalInput += correctionInput;
+                totalOutput += correctionOutput;
+
+                // Critique Agent (§7 context_for_critique_agent):
+                // Challenge + Strategy + <BranchHistoryAndMemory> (preUpdateIteration + DistilledMemoryBank +
+                // WindowCorrectionCritiqueHistory + newly produced iteration-n Correction).
+                // Receives NO hypothesis packets and NO cross-strategy peer context.
+                const critiqueInput =
+                    profile.promptBase +
+                    strategyTextTokens +
+                    preUpdateTokens +
+                    memBankTokens +
+                    windowTokens +
+                    correctionOutput;
+                const critiqueOutput = profile.critiqueOutput;
+                totalInput += critiqueInput;
+                totalOutput += critiqueOutput;
+
+                branch.latestSolutionTokens = correctionOutput;
+                branch.latestCritiqueTokens = critiqueOutput;
+                branch.windowHistoryTokens += correctionOutput + critiqueOutput;
             }
         }
-    }
 
-    // 3. Heartbeats (§4.5):
-    let heartbeatInput = 0;
-
-    // Standalone heartbeats run Heartbeat DOS when hypotheses enabled (§5.1)
-    if (hypothesisCount > 0 && standaloneHeartbeats > 0) {
-        const hbDosInput = profile.promptBase +
-            strategyCount * (profile.solutionContext + profile.critiqueOutput) +
-            (hypothesisCount * profile.hypothesisPacketContext);
-        heartbeatInput += standaloneHeartbeats * hbDosInput;
-    }
-
-    // Every heartbeat (standalone + GU) runs hypothesis generator + proximity + testers (when hypotheses enabled)
-    if (hypothesisCount > 0 && totalHeartbeats > 0) {
-        const hypGenTurns = 1 + hypothesisProximityLoops;
-        let hypGenTotalInput = 0;
-        const hypGenBaseInput = profile.promptBase +
-            (strategyCount * profile.solutionContext) +
-            1500 +
-            (hypothesisCount * profile.hypothesisPacketContext);
-        for (let t = 0; t < hypGenTurns; t++) {
-            hypGenTotalInput += hypGenBaseInput + (t * 800);
-        }
-        const hypProxInput = hypothesisProximityLoops * (profile.promptBase + (hypothesisCount * 500));
-        const hypTestersInput = hypothesisCount * (profile.hypothesisTestInput + 300);
-
-        heartbeatInput += totalHeartbeats * (hypGenTotalInput + hypProxInput + hypTestersInput);
-    }
-
-    // 4. Global Updates (§4.6):
-    let globalUpdateInput = 0;
-    if (globalUpdates > 0) {
-        // Step-i DOS: challenge + latest correction & critique of every branch
-        const stepIDosInput = profile.promptBase + strategyCount * (profile.solutionContext + profile.critiqueOutput);
-
-        // BSR: per branch judges window of j iterations
-        const bsrInputPerBranch = profile.promptBase + (j * profile.branchPairContext) + profile.memoryBankContext;
-        const bsrTotalInput = strategyCount * bsrInputPerBranch;
-
-        // Step iii: Surgical strategy generator update + proximity
-        const stratGuTurns = 1 + strategyProximityLoops;
-        let stratUpdateInput = 0;
-        const stratBaseInput = profile.promptBase + (strategyCount * profile.solutionContext) + 1200;
-        for (let t = 0; t < stratGuTurns; t++) {
-            stratUpdateInput += stratBaseInput + (t * 800);
-        }
-        const stratUpdateProxInput = strategyProximityLoops * (profile.promptBase + 1200);
-
-        // Step v: Memory bank distillation on surviving branches
-        const survivingRatio = profile === WORST_PROFILE ? 1 : Math.max(0, 1 - profile.updateBranchShare);
-        const memDistillInput = strategyCount * survivingRatio * (profile.promptBase + (j * profile.branchPairContext) + profile.memoryBankContext);
-
-        // Replaced/evolved branch first execution & critique
-        const updatedBranches = strategyCount * profile.updateBranchShare;
-        const reseedInput = updatedBranches * (profile.initialExecutionInput + profile.solutionContext + profile.solutionOutput);
-
-        // Step vi: Step-ii DOS (runs only if hypotheses enabled)
-        const stepIiDosInput = hypothesisCount > 0
-            ? profile.promptBase + strategyCount * (profile.solutionContext + profile.critiqueOutput) + 1200 + (hypothesisCount * profile.hypothesisPacketContext)
-            : 0;
-
-        globalUpdateInput += globalUpdates * (
-            stepIDosInput +
-            bsrTotalInput +
-            stratUpdateInput +
-            stratUpdateProxInput +
-            memDistillInput +
-            reseedInput +
-            stepIiDosInput
+        // Post-iteration barrier step (§3)
+        const step = determinePostIterationStep(
+            n,
+            sinceHeartbeat,
+            i,
+            j,
+            k,
+            curatedContextEnabled
         );
+        sinceHeartbeat = step.nextSinceHeartbeat;
+
+        if (step.action.type === 'FINAL_JUDGE') {
+            // Final Judge (§7, §9): receives Challenge + each active branch's strategy, final solution, and final critique
+            const candidatesTokens = branches.reduce(
+                (acc, b) => acc + strategyTextTokens + b.latestSolutionTokens + b.latestCritiqueTokens,
+                0
+            );
+            totalInput += profile.promptBase + candidatesTokens;
+            totalOutput += profile.finalJudgeOutput;
+            break;
+        } else if (step.action.type === 'HEARTBEAT') {
+            // Standalone Curated Context Heartbeat (§4.4, §5.1, §7)
+            heartbeatNo++;
+
+            if (curatedContextEnabled) {
+                // 1. Standalone Heartbeat DOS
+                const activeBranchesTokens = branches.reduce(
+                    (acc, b) => acc + strategyTextTokens + b.latestSolutionTokens + b.latestCritiqueTokens,
+                    0
+                );
+                // PreviousHeartbeatHypothesesAndTests is only present when a previous heartbeat exists (heartbeatNo >= 2)
+                const prevHypAndTestsForDos = heartbeatNo >= 2
+                    ? hypothesisCount * (hypothesisItemTokens + profile.hypothesisTestOutput)
+                    : 0;
+
+                const hbDosInput =
+                    profile.promptBase +
+                    profile.harnessNoteTokens +
+                    activeBranchesTokens +
+                    prevHypAndTestsForDos;
+                totalInput += hbDosInput;
+                totalOutput += profile.dosFullOutput;
+
+                // 2. Hypothesis Generation ↔ Proximity + Testers
+                runHeartbeatHypothesesAndTesters(heartbeatNo);
+            }
+            sinceHeartbeat = 0;
+        } else if (step.action.type === 'GLOBAL_UPDATE') {
+            // Global Update (§4.5, §5.1, §6, §7)
+            globalUpdateNo++;
+            const decisions = sampledDecisionsPerUpdate?.[globalUpdateNo - 1] ??
+                sampleGlobalUpdateDecisions(strategyCount);
+
+            // Step i: Step-i DOS and S BSR agents in parallel
+            const activeBranchesTokens = branches.reduce(
+                (acc, b) => acc + strategyTextTokens + b.latestSolutionTokens + b.latestCritiqueTokens,
+                0
+            );
+            const stepIDosInput =
+                profile.promptBase +
+                profile.harnessNoteTokens +
+                activeBranchesTokens;
+            totalInput += stepIDosInput;
+            totalOutput += profile.dosStepIOutput;
+
+            for (const branch of branches) {
+                // BSR receives Challenge + Strategy + StandingEventLedger + EarlierGradedPredictionsHistory +
+                // MemoryBankBeforeWindow (only if branch already distilled a memory bank before this window) +
+                // WindowCorrectionCritiqueHistory
+                const memBeforeWindowTokens = branch.hasMemoryBank ? profile.memoryOutput : 0;
+                const ledgerAndGradedTokens = branch.updatesSurvived * profile.bsrLedgerGrowthPerUpdate;
+                const bsrInput =
+                    profile.promptBase +
+                    strategyTextTokens +
+                    memBeforeWindowTokens +
+                    ledgerAndGradedTokens +
+                    branch.windowHistoryTokens;
+                totalInput += bsrInput;
+                totalOutput += profile.bsrOutput;
+            }
+
+            // Step ii & iii: Surgical Strategy Generation for Changed Slots (EVOLVE or PRUNE) (§4.1, §4.5 iii, §7)
+            const changedCount = decisions.filter(d => d !== 'CONTINUE').length;
+            if (changedCount > 0) {
+                const activeStrategiesAndLatestCorrections = branches.reduce(
+                    (acc, b) => acc + strategyTextTokens + b.latestSolutionTokens,
+                    0
+                );
+                const consolidatedBsrDecisionsTokens = strategyCount * 250;
+                const strategiesUsedSoFarTokens = strategiesFinalizedAndUsedCount * strategyTextTokens;
+
+                const guContextTokens =
+                    profile.harnessNoteTokens +
+                    activeStrategiesAndLatestCorrections +
+                    consolidatedBsrDecisionsTokens +
+                    profile.dosCoreSynthesisContext +
+                    strategiesUsedSoFarTokens;
+
+                const guStratBaseInput =
+                    profile.promptBase +
+                    priorStrategyProximityHistoryTokens +
+                    guContextTokens;
+
+                const guStratGenTurnOutput = Math.min(
+                    DEFAULT_ROLE_MAX_OUTPUT_TOKENS,
+                    changedCount * strategyTextTokens
+                );
+
+                const guStratLoop = computeProximityLoopTokens(
+                    guStratBaseInput,
+                    strategyProximityLoops,
+                    guStratGenTurnOutput,
+                    profile.strategyProximityOutput
+                );
+                totalInput += guStratLoop.inputTokens;
+                totalOutput += guStratLoop.outputTokens;
+
+                // Replace {GU_Note(u)} + [GU-u Context] with {GU_Reframed_Note(u)} + [GU-u G↔P] for future updates
+                priorStrategyProximityHistoryTokens += profile.reframedNoteTokens + guStratLoop.transcriptTokens;
+                strategiesFinalizedAndUsedCount += changedCount;
+            }
+
+            // Step iv & v: Apply decisions, run Memory Bank Distillation on survivors (CONTINUE / EVOLVE)
+            // and First Execution + Critique on replacement branches (PRUNE) in parallel (§4.5 iv-v)
+            for (let s = 0; s < strategyCount; s++) {
+                const branch = branches[s];
+                const decision = decisions[s];
+
+                if (decision === 'CONTINUE' || decision === 'EVOLVE') {
+                    // Surviving branch distills window history + previous memory bank into new memory bank
+                    const prevMemTokens = branch.hasMemoryBank ? profile.memoryOutput : 0;
+                    const distillInput =
+                        profile.promptBase +
+                        strategyTextTokens +
+                        prevMemTokens +
+                        branch.windowHistoryTokens;
+                    totalInput += distillInput;
+                    totalOutput += profile.memoryOutput;
+
+                    branch.hasMemoryBank = true;
+                    branch.preUpdatePairTokens = branch.latestSolutionTokens + branch.latestCritiqueTokens;
+                    branch.windowHistoryTokens = 0;
+                    branch.updatesSurvived += 1;
+                } else {
+                    // PRUNE: old branch archived, replacement branch runs First Execution + First Critique
+                    const attemptInput = profile.promptBase + strategyTextTokens;
+                    const attemptOutput = profile.solutionAttemptOutput;
+                    totalInput += attemptInput;
+                    totalOutput += attemptOutput;
+
+                    const critiqueInput = profile.promptBase + strategyTextTokens + attemptOutput;
+                    const critiqueOutput = profile.critiqueOutput;
+                    totalInput += critiqueInput;
+                    totalOutput += critiqueOutput;
+
+                    branch.hasMemoryBank = false;
+                    branch.latestSolutionTokens = attemptOutput;
+                    branch.latestCritiqueTokens = critiqueOutput;
+                    // First execution + critique at iteration n acts as pre-update baseline for n + 1
+                    branch.preUpdatePairTokens = attemptOutput + critiqueOutput;
+                    branch.windowHistoryTokens = 0;
+                    branch.updatesSurvived = 0;
+                }
+            }
+
+            // Step vi & vii: Step-ii DOS (when hypotheses enabled) + Ending Heartbeat reusing Step-ii DOS (§4.5 vi-vii)
+            heartbeatNo++;
+            if (curatedContextEnabled) {
+                const postUpdateBranchesTokens = branches.reduce(
+                    (acc, b) => acc + strategyTextTokens + b.latestSolutionTokens + b.latestCritiqueTokens,
+                    0
+                );
+                // PreviousHeartbeatHypothesesAndTests is included if at least one heartbeat ran before this GU
+                const prevHypAndTestsForStepIi = heartbeatNo >= 2
+                    ? hypothesisCount * (hypothesisItemTokens + profile.hypothesisTestOutput)
+                    : 0;
+                const slotStatusesTokens = strategyCount * 80;
+
+                const stepIiDosInput =
+                    profile.promptBase +
+                    profile.harnessNoteTokens +
+                    slotStatusesTokens +
+                    profile.dosStepIOutput +
+                    prevHypAndTestsForStepIi +
+                    postUpdateBranchesTokens;
+                totalInput += stepIiDosInput;
+                totalOutput += profile.dosFullOutput;
+
+                // Ending Heartbeat reuses Step-ii DOS output and runs Hypothesis G↔P + Testers
+                runHeartbeatHypothesesAndTesters(heartbeatNo);
+            }
+            sinceHeartbeat = 0;
+        }
     }
 
-    // 5. Final Judge (§7, §9):
-    const finalJudgeInput = profile.promptBase + (strategyCount * profile.solutionContext);
-
-    return Math.round(seedInput + branchInput + heartbeatInput + globalUpdateInput + finalJudgeInput);
-}
-
-function calculateOutputTokens(
-    profile: TokenProfile,
-    strategyCount: number,
-    strategyProximityLoops: number,
-    hypothesisCount: number,
-    hypothesisProximityLoops: number,
-    i: number,
-    j: number,
-    k: number
-): number {
-    const curatedContextEnabled = hypothesisCount > 0;
-    const schedule = calculateLoopSchedule(i, j, k, curatedContextEnabled);
-    const { standaloneHeartbeats, globalUpdates, totalHeartbeats } = schedule;
-
-    // 1. Seed Strategy Generation:
-    const seedGenTurns = 1 + strategyProximityLoops;
-    const seedGenOutput = seedGenTurns * strategyCount * profile.strategyGenerationOutputPerStrategy;
-    const seedProxOutput = strategyProximityLoops * (profile === WORST_PROFILE ? 1500 : 600);
-    const seedOutput = seedGenOutput + seedProxOutput;
-
-    // 2. Branch Iterations:
-    // Iteration 1: S attempts + S critiques
-    // Iterations 2..i-1: S corrections + S critiques
-    // Iteration i: S corrections ONLY (no critique per §3)
-    const totalCorrections = i * strategyCount; // 1 attempt + (i-1) corrections
-    const totalCritiques = Math.max(0, i - 1) * strategyCount; // critique omitted at i
-    const branchOutput = (totalCorrections * profile.solutionOutput) + (totalCritiques * profile.critiqueOutput);
-
-    // 3. Heartbeats:
-    let heartbeatOutput = 0;
-
-    // Standalone Heartbeat DOS (when hypotheses enabled)
-    if (hypothesisCount > 0 && standaloneHeartbeats > 0) {
-        heartbeatOutput += standaloneHeartbeats * (profile === WORST_PROFILE ? 3000 : 1500);
-    }
-
-    // Every heartbeat runs hypothesis generator + proximity + testers (when hypotheses enabled)
-    if (hypothesisCount > 0 && totalHeartbeats > 0) {
-        const hypGenTurns = 1 + hypothesisProximityLoops;
-        const hypGenOutput = hypGenTurns * hypothesisCount * profile.hypothesisGenerationOutputPerHypothesis;
-        const hypProxOutput = hypothesisProximityLoops * (profile === WORST_PROFILE ? 2000 : 800);
-        const hypTestersOutput = hypothesisCount * profile.hypothesisTestOutput;
-        heartbeatOutput += totalHeartbeats * (hypGenOutput + hypProxOutput + hypTestersOutput);
-    }
-
-    // 4. Global Updates:
-    let globalUpdateOutput = 0;
-    if (globalUpdates > 0) {
-        // Step-i DOS
-        const stepIDosOutput = profile === WORST_PROFILE ? 2500 : 1200;
-
-        // BSR
-        const bsrOutput = strategyCount * profile.bsrOutput;
-
-        // Step iii: Surgical strategy generator update + proximity
-        const stratGuTurns = 1 + strategyProximityLoops;
-        const stratUpdateOutput = (stratGuTurns * profile.strategyUpdateOutput) +
-            (strategyProximityLoops * (profile === WORST_PROFILE ? 1500 : 600));
-
-        // Step v: Memory bank distillation on surviving branches
-        const survivingRatio = profile === WORST_PROFILE ? 1 : Math.max(0, 1 - profile.updateBranchShare);
-        const memDistillOutput = strategyCount * survivingRatio * profile.memoryOutput;
-
-        // Replaced/evolved branch first execution & critique
-        const updatedBranches = strategyCount * profile.updateBranchShare;
-        const reseedOutput = updatedBranches * (profile.solutionOutput + profile.critiqueOutput);
-
-        // Step vi: Step-ii DOS (when hypotheses enabled)
-        const stepIiDosOutput = hypothesisCount > 0 ? (profile === WORST_PROFILE ? 3500 : 1600) : 0;
-
-        globalUpdateOutput += globalUpdates * (
-            stepIDosOutput +
-            bsrOutput +
-            stratUpdateOutput +
-            memDistillOutput +
-            reseedOutput +
-            stepIiDosOutput
-        );
-    }
-
-    // 5. Final Judge:
-    const finalJudgeOutput = profile.finalJudgeOutput;
-
-    return Math.round(seedOutput + branchOutput + heartbeatOutput + globalUpdateOutput + finalJudgeOutput);
+    return {
+        input: Math.round(totalInput),
+        output: Math.round(totalOutput),
+    };
 }
 
 export function calculateDeepthinkTokenEstimate(args: DeepthinkTokenEstimateInput): DeepthinkTokenEstimate {
@@ -374,7 +658,13 @@ export function calculateDeepthinkTokenEstimate(args: DeepthinkTokenEstimateInpu
     const k = clampInteger(args.k ?? 3, 2, j);
     const isolateBranches = args.isolateBranches === true;
 
-    const averageInput = calculateInputTokens(
+    // Pre-sample biased Global Update decisions (70% CONTINUE/EVOLVE, 30% PRUNE)
+    const maxUpdates = Math.floor(Math.max(0, i - 1) / j);
+    const sampledDecisionsPerUpdate = Array.from({ length: maxUpdates }, () =>
+        sampleGlobalUpdateDecisions(strategiesCount)
+    );
+
+    const averageSim = simulatePipelineTokens(
         AVERAGE_PROFILE,
         strategiesCount,
         strategyProximityLoops,
@@ -383,9 +673,11 @@ export function calculateDeepthinkTokenEstimate(args: DeepthinkTokenEstimateInpu
         i,
         j,
         k,
-        isolateBranches
+        isolateBranches,
+        sampledDecisionsPerUpdate
     );
-    const worstInput = calculateInputTokens(
+
+    const worstSim = simulatePipelineTokens(
         WORST_PROFILE,
         strategiesCount,
         strategyProximityLoops,
@@ -394,28 +686,14 @@ export function calculateDeepthinkTokenEstimate(args: DeepthinkTokenEstimateInpu
         i,
         j,
         k,
-        isolateBranches
+        isolateBranches,
+        sampledDecisionsPerUpdate
     );
-    const averageOutput = calculateOutputTokens(
-        AVERAGE_PROFILE,
-        strategiesCount,
-        strategyProximityLoops,
-        hypothesisCount,
-        hypothesisProximityLoops,
-        i,
-        j,
-        k
-    );
-    const worstOutput = calculateOutputTokens(
-        WORST_PROFILE,
-        strategiesCount,
-        strategyProximityLoops,
-        hypothesisCount,
-        hypothesisProximityLoops,
-        i,
-        j,
-        k
-    );
+
+    const averageInput = averageSim.input;
+    const worstInput = worstSim.input;
+    const averageOutput = averageSim.output;
+    const worstOutput = worstSim.output;
 
     const apiCalls = calculateDeepthinkApiCallsFromParams({
         strategiesCount,
@@ -428,6 +706,11 @@ export function calculateDeepthinkTokenEstimate(args: DeepthinkTokenEstimateInpu
         codeExecutionEnabled: args.codeExecutionEnabled,
         deepthinkCodeExecutionEnabled: args.codeExecutionEnabled,
     } as any);
+
+    // When sandbox code execution is enabled, every agent invocation runs a multi-turn tool loop
+    // (12x to 36x calls), re-sending its prompt context on every turn plus accumulating tool trace tokens.
+    const minMultiplier = args.codeExecutionEnabled ? (apiCalls.sandboxMultiplier?.min ?? 12) : 1;
+    const maxMultiplier = args.codeExecutionEnabled ? (apiCalls.sandboxMultiplier?.max ?? 36) : 1;
 
     const sandboxInputAvg = args.codeExecutionEnabled && apiCalls.baseMin ? apiCalls.baseMin * SANDBOX_PER_CALL.input.average : 0;
     const sandboxInputWorst = args.codeExecutionEnabled && apiCalls.baseMax ? apiCalls.baseMax * SANDBOX_PER_CALL.input.worst : 0;
@@ -448,8 +731,8 @@ export function calculateDeepthinkTokenEstimate(args: DeepthinkTokenEstimateInpu
         }
     }
 
-    const totalAverageInput = averageInput + sandboxInputAvg + sandboxIterationNoiseAvg;
-    const totalWorstInput = worstInput + sandboxInputWorst + sandboxIterationNoiseWorst;
+    const totalAverageInput = (averageInput * minMultiplier) + sandboxInputAvg + sandboxIterationNoiseAvg;
+    const totalWorstInput = (worstInput * maxMultiplier) + sandboxInputWorst + sandboxIterationNoiseWorst;
     const totalAverageOutput = averageOutput + sandboxOutputAvg;
     const totalWorstOutput = worstOutput + sandboxOutputWorst;
 

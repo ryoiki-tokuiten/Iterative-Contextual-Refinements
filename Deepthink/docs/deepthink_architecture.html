@@ -145,7 +145,7 @@ s+=L('t',270,746,200,44,'Final judge');
 
 // Legend
 const lg=(x,y,k,t)=>node(x,y,k)+T(x+14,y,t,'start');
-s+=lg(40,816,'f','execution + critique (first run)')+lg(250,816,'n','correction + critique')+lg(460,816,'z','correction only (final)');
+s+=lg(40,816,'f','execution + critique (first run)')+lg(250,816,'n','correction + critique')+lg(460,816,'z','correction + critique (final)');
 s+=lg(40,842,'v','new branch in a freed slot')+lg(250,842,'x','discarded by rollback')+`<path d="M454 836L466 848M466 836L454 848" stroke="${R}" stroke-width="2"/>`+T(474,842,'pruned, archived','start');
 s+=`<rect x="33" y="861" width="14" height="14" rx="2" fill="#E1F5EE" stroke="${G}" stroke-width=".9" stroke-dasharray="3 2"/>`+T(54,868,'heartbeat','start')+`<rect x="243" y="861" width="14" height="14" rx="2" fill="#FBF1EC" stroke="${R}" stroke-width="1.2"/>`+T(264,868,'global update','start')+lg(460,868,'d','distillation run');
 return [890,'Deepthink overview',s,''];})();
@@ -225,7 +225,7 @@ const by=ty2+44;
 [['i ∈ [5, 20] (default 10)','#F1EFE8','#5F5E5A','#2C2C2A'],
  ['j ∈ [3, 8] (default 5)','#FAECE7',R,'#4A1B0C'],
  ['k ∈ [2, j] (default 3)','#E1F5EE',G,'#04342C'],
- ['Final iter i: correction only','#EEEDFE',V,'#26215C']].forEach(([txt,fi,st,tc],idx)=>{
+ ['All iters 2…i: corr + critique','#EEEDFE',V,'#26215C']].forEach(([txt,fi,st,tc],idx)=>{
  s+=badge(30+156*idx,by,148,20,txt,fi,st,tc,9.2);
 });
 
@@ -327,7 +327,7 @@ let curY=48;
 const colsA=[
  ['Attempt','Iter 1 & New',R],
  ['Correction','Iter 2…i',R],
- ['Critique','Iter 1…i−1','#854F0B'],
+ ['Critique','Iter 1…i','#854F0B'],
  ['BSR Agent','Global Update',GY],
  ['Mem Bank','Global Update','#6250d6'],
  ['Final Judge','After Iter i','#26215C']
@@ -342,14 +342,8 @@ const rowsA=[
   [4,'Slot + Strategy','','t'],
   [5,'All Strategies','','t']
  ]],
- ['<CorrectionToCritique>','solution produced in current iteration',[
-  [2,'Current Solution','','c']
- ]],
- ['<WindowCorrectionCritiqueHistory>','uncompressed pairs from current window',[
-  [1,'Past j Iterations','','t'],
-  [2,'Past j Iterations','','t'],
-  [3,'Past j Iterations','','t'],
-  [4,'Past j Iterations','','t']
+ ['<StandingEventLedger> & Graded Preds','standing event ledger & graded predictions',[
+  [3,'Previous Output(s)','','t']
  ]],
  ['<DistilledMemoryBank>','compressed memory from prior Global Update',[
   [1,'Distilled Bank','','a'],
@@ -357,17 +351,20 @@ const rowsA=[
   [3,'Distilled Bank','','a'],
   [4,'Distilled Bank','','a']
  ]],
- ['<StandingEventLedger> & Graded Preds','standing event ledger & graded predictions',[
-  [3,'Previous Output(s)','','t']
- ]],
  ['<LatestCustomCuratedContext>','mapped hypothesis packet (global + branch)',[
   [1,'Mapped Packet','until next heartbeat','a']
+ ]],
+ ['<WindowCorrectionCritiqueHistory>','uncompressed pairs from current window',[
+  [1,'Past j Iterations','','t'],
+  [2,'Past j Iterations','','t'],
+  [3,'Past j Iterations','','t'],
+  [4,'Past j Iterations','','t']
  ]],
  ['<CrossStrategyPeerIntelligence>','peers’ strategy + <LatestCorrection> & <Critique>',[
   [1,'Latest Pair','isolation OFF','p']
  ]],
- ['# Competing Candidate Solutions','<FinalSolution> from each surviving branch',[
-  [5,'All Solutions','','t']
+ ['# Competing Candidate Solutions','<FinalSolution> + <FinalCritique> per branch',[
+  [5,'Solution + Critique','','t']
  ]]
 ];
 
@@ -394,38 +391,39 @@ const rowsB=[
   [1,'Count Target','','t'],
   [4,'Count Target','','t']
  ]],
- ['Current Loop Gen ⇄ Proximity Turns','back-and-forth turns in active loop',[
-  [0,'Seed Turns','Gen ⇄ Prox','a'],
-  [1,'Update Turns','Gen ⇄ Prox','a'],
-  [4,'HB Turns','Gen ⇄ Prox','a']
- ]],
  ['<ProximityHistory> (Reframed)','prior seed/update/HB turns + reframed notes',[
   [1,'Reframed History','','t'],
   [4,'Reframed History','','t']
  ]],
- ['<StrategiesFinalizedAndUsedSoFar>','ledger of all finalized strategies so far',[
-  [1,'Used Ledger','','t']
+ ['<ActiveBranchesState> (Corr + Crit)','all active strategies + Latest Corr & Crit',[
+  [2,'All Branches','corr + critique','t'],
+  [3,'All Branches','corr + critique','t']
  ]],
- ['<ConsolidatedBsrDecisions>','CONTINUE / EVOLVE / PRUNE + event reasons',[
-  [1,'BSR Decisions','','t'],
-  [3,'Slot Statuses','Step-ii only','a']
+ ['Prior HB Hypotheses, Tests & Feedback','prior HB claims, tests & realized feedback',[
+  [3,'Prior HB Tests','','a'],
+  [4,'Tests + Feedback','surprise & util','a']
  ]],
  ['<CurrentActiveStrategies>','active strategies + Latest Corr (+ Map in HB)',[
   [1,'Active Strategies','+ Latest Correction','t'],
   [4,'Active + Mapped','+ Latest Correction','t']
  ]],
- ['<ActiveBranchesState> (Corr + Crit)','all active strategies + Latest Corr & Crit',[
-  [2,'All Branches','corr + critique','t'],
-  [3,'All Branches','corr + critique','t']
+ ['<ConsolidatedBsrDecisions>','CONTINUE / EVOLVE / PRUNE + event reasons',[
+  [1,'BSR Decisions','','t'],
+  [3,'Slot Statuses','Step-ii only','a']
  ]],
  ['<DosCoreSynthesis> / <StepIOutput…>','structured cross-branch synthesis JSON',[
   [1,'Step-i DOS','','t'],
   [3,'Step-i Baseline','Step-ii only','a'],
   [4,'DOS Synthesis','','t']
  ]],
- ['Prior HB Hypotheses, Tests & Feedback','prior HB claims, tests & realized feedback',[
-  [3,'Prior HB Tests','','a'],
-  [4,'Tests + Feedback','surprise & util','a']
+ ['<ActuallyFinalizedAndUsedSoFar>','ledger of finalized strategies / hypotheses so far',[
+  [1,'Used Strategies Ledger','','t'],
+  [4,'Used Hypothesis Ledger','','t']
+ ]],
+ ['Current Loop Turns + Immediate Role','active Gen ⇄ Prox turns + Immediate Role footer',[
+  [0,'Seed Turns','+ Immediate Role','a'],
+  [1,'Update Turns','+ Immediate Role','a'],
+  [4,'HB Turns','+ Immediate Role','a']
  ]]
 ];
 
@@ -450,7 +448,7 @@ let s='';
 
 // (a) Sawtooth history in prompt across i=15, j=5, k=3
 s+=T(30,20,'(a) Shared <BranchHistoryAndMemory> window and curated context schedule (i = 15, j = 5, k = 3)','start','th');
-s+=T(30,38,'Both Correction and Critique receive the exact same history block: DistilledMemoryBank + past j iterations in the window.','start','ts',gray);
+s+=T(30,38,'Both Correction and Critique receive the exact same history block: pre-update pair + DistilledMemoryBank + window iterations.','start','ts',gray);
 
 const base=236;
 // Global update distillation lines after 5 and 10
@@ -470,8 +468,8 @@ for(let n=1;n<=15;n++){
  const anchorLbl=n>=11?'10':'5';
  const tiles=[];
  if(hasBank){
-  tiles.push({lbl:bankLbl,kind:'m'});
   tiles.push({lbl:anchorLbl,kind:'a'});
+  tiles.push({lbl:bankLbl,kind:'m'});
  }
  for(let m=w;m<n;m++)tiles.push({lbl:String(m),kind:'n'});
  if(tiles.length===0){
@@ -493,7 +491,7 @@ for(let n=1;n<=15;n++){
  else if(n>=6&&n<=8){hb='HB2';hbc=R;hbf='#FAECE7'}
  else if(n==9||n==10){hb='HB3';hbc=G;hbf='#E1F5EE'}
  else if(n>=11&&n<=13){hb='HB4';hbc=R;hbf='#FAECE7'}
- else if(n==14){hb='HB5';hbc=G;hbf='#E1F5EE'}
+ else if(n>=14){hb='HB5';hbc=G;hbf='#E1F5EE'}
  s+=`<rect x="${X(n)-15}" y="${base+28}" width="30" height="16" rx="2" fill="${hbf}" stroke="${hbc}" stroke-width=".7"/>`+
   T(X(n),base+36,hb,'middle','ts m','font-size:8.5px;font-weight:600');
 }

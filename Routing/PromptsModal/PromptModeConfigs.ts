@@ -13,6 +13,7 @@ function paneSlug(agentKind: DeepthinkAgentKind): string {
 
 export const DEEPTHINK_PROMPT_PANES: readonly PromptPaneConfig<CustomizablePromptsDeepthink>[] =
     (Object.keys(DEEPTHINK_AGENT_REGISTRY) as DeepthinkAgentKind[])
+        .filter(agentKind => agentKind !== 'strategyProximity' && agentKind !== 'hypothesisProximity')
         .map(agentKind => {
             const metadata = DEEPTHINK_AGENT_REGISTRY[agentKind];
             const slug = paneSlug(agentKind);
@@ -31,9 +32,7 @@ export const DEEPTHINK_PROMPT_PANES: readonly PromptPaneConfig<CustomizablePromp
 export const ADAPTIVE_PROMPT_PANES: readonly PromptPaneConfig<CustomizablePromptsAdaptiveDeepthink>[] = [
     { key: 'adaptive-main', title: 'Main Orchestrator', modelKey: 'model_main', promptKey: 'sys_adaptiveDeepthink_main', textareaId: 'sys-adaptive-main', agentName: 'adaptive-main', rows: 12, placeholder: 'Main Adaptive Deepthink orchestrator system prompt...' },
     { key: 'adaptive-strategy-gen', title: 'Strategy Generator', modelKey: 'model_strategyGeneration', promptKey: 'sys_adaptiveDeepthink_strategyGeneration', textareaId: 'sys-adaptive-strategy-gen', agentName: 'adaptive-strategy-gen', rows: 10, placeholder: 'Strategy generation agent system prompt...' },
-    { key: 'adaptive-strategy-proximity', title: 'Strategies Proximity (Adversarial Reviewer)', modelKey: 'model_strategyProximity', promptKey: 'sys_adaptiveDeepthink_strategyProximity', textareaId: 'sys-adaptive-strategy-proximity', agentName: 'adaptive-strategy-proximity', rows: 10, placeholder: 'Strategies proximity agent system prompt (adversarial reviewer)...' },
     { key: 'adaptive-hypothesis-gen', title: 'Hypothesis Generator', modelKey: 'model_hypothesisGeneration', promptKey: 'sys_adaptiveDeepthink_hypothesisGeneration', textareaId: 'sys-adaptive-hypothesis-gen', agentName: 'adaptive-hypothesis-gen', rows: 10, placeholder: 'Hypothesis generation agent system prompt...' },
-    { key: 'adaptive-hypothesis-proximity', title: 'Hypothesis Proximity (Adversarial Reviewer)', modelKey: 'model_hypothesisProximity', promptKey: 'sys_adaptiveDeepthink_hypothesisProximity', textareaId: 'sys-adaptive-hypothesis-proximity', agentName: 'adaptive-hypothesis-proximity', rows: 10, placeholder: 'Hypothesis proximity agent system prompt (adversarial reviewer)...' },
     { key: 'adaptive-hypothesis-test', title: 'Hypothesis Testing', modelKey: 'model_hypothesisTesting', promptKey: 'sys_adaptiveDeepthink_hypothesisTesting', textareaId: 'sys-adaptive-hypothesis-test', agentName: 'adaptive-hypothesis-test', rows: 10, placeholder: 'Hypothesis testing agent system prompt...' },
     { key: 'adaptive-execution', title: 'Execution Agent', modelKey: 'model_execution', promptKey: 'sys_adaptiveDeepthink_execution', textareaId: 'sys-adaptive-execution', agentName: 'adaptive-execution', rows: 10, placeholder: 'Execution agent system prompt...' },
     { key: 'adaptive-critique', title: 'Solution Critique', modelKey: 'model_solutionCritique', promptKey: 'sys_adaptiveDeepthink_solutionCritique', textareaId: 'sys-adaptive-critique', agentName: 'adaptive-critique', rows: 10, placeholder: 'Solution critique agent system prompt...' },

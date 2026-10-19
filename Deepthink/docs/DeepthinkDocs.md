@@ -52,12 +52,11 @@ Each agent has an editable system prompt and an optional model override. The ove
 ```text
 Seed strategies
 Iteration 1            every branch writes a first solution, then it is critiqued
-Iterations 2 to i-1    every branch corrects its solution, then the correction is critiqued
-Iteration i            every branch corrects its solution, with no critique
+Iterations 2 to i      every branch corrects its solution, then the correction is critiqued
 Final judge
 ```
 
-Inside an iteration, all branches run in parallel and the system waits for every one of them to finish. The final iteration has no critique because nothing would read it: the judge sees only solutions, and BSR does not run after the last iteration. There are no hypotheses before iteration 1, because hypotheses are generated from critiques.
+Inside an iteration, all branches run in parallel and the system waits for every one of them to finish. Every iteration from 2 through `i` runs correction and critique with its natural context, and the final judge receives each active branch's final correction-critique pair. There are no hypotheses before iteration 1, because hypotheses are generated from critiques.
 
 After iteration `n` finishes, exactly one of these happens:
 
@@ -84,7 +83,7 @@ Whatever runs after iteration `n` is what the corrections in iteration `n + 1` a
 | 11, 12 | nothing |
 | 13 | heartbeat |
 | 14 | nothing |
-| 15 | final iteration (correction only), then the final judge |
+| 15 | final iteration (correction + critique), then the final judge |
 
 **Example of a skipped heartbeat: `i = 14`, `j = 6`, `k = 5`.** After iteration 5 the counter reaches `k`, but the global update comes right after iteration 6, so a heartbeat would serve only one correction. It is skipped, and the global update's heartbeat refreshes everything.
 
@@ -247,6 +246,7 @@ When DOS returns feedback, the harness turns it into a record for each hypothesi
   "prediction_note": "What you predicted about this hypothesis when you generated it.",
   "observed_test_outcome": "VALIDATED",
   "surprise_bits": 2.0,
+  "surprise_note": "Your prediction for this hypothesis was: VALIDATED 25%, REJECTED 60%, INCONCLUSIVE 15%. When graded against the independent test, the actual outcome was: VALIDATED (you gave this a 25% chance). Surprisal is 2.00 bits. Should you be surprised? Yes — you expected a different outcome, and the independent test went against your intuition. Look closely at the tester's output to see what you missed and adjust your assumptions for the next hypotheses.",
   "utilization": { "correct_use": 0.50, "partial_use": 0.25, "not_used": 0.25, "misused": 0.00 },
   "utilization_note": "Calculated from DOS's observations.",
   "critique_counterevidence": [{ "branch_id": "main1", "classification": "STRONG", "reason": "..." }]
@@ -403,11 +403,10 @@ Each call has a system instruction and a user prompt. The system instruction is 
 
 | Agent | System prompt | Output | Working directory |
 |---|---|---|---|
-| Strategy generator (seed) | `initialStrategy` | JSON | none, read-only |
-| Strategy generator (global update) | `strategyGeneratorGlobalUpdate` | JSON | none, read-only |
-| Strategy proximity (seed and update) | `strategyProximity` | text | none, read-only |
+| Strategy generator | `initialStrategy` | JSON | none, read-only |
+| Strategy proximity (seed and update) | `initialStrategy` | text | none, read-only |
 | Hypothesis generator | `hypothesisGeneration` | JSON | none, read-only |
-| Hypothesis proximity | `hypothesisProximity` | text | none, read-only |
+| Hypothesis proximity | `hypothesisGeneration` | text | none, read-only |
 | Hypothesis tester | `hypothesisTester` | text | `Hypothesis-M/` |
 | Solution attempt | `solutionAttempt` | text | `Strategy-N/` |
 | Critique | `solutionCritique` | text | `Strategy-N/` |
@@ -454,43 +453,41 @@ Prompts are rebuilt from stored fields every time. Nothing is carried over insid
 | First solution | Iteration 1, and a replacement branch's first execution | Set once per branch | Fallback when there is no latest solution |
 | Latest solution | Iteration 1, then every correction | Replaced | Peers' context, DOS, hypothesis generator and proximity, strategy generator and proximity, final judge |
 | Latest critique | Every critique | Replaced | Peers' context, DOS |
-| Iteration history | After the critique of each iteration (after the correction in the final iteration) | Added to | History windows, BSR, memory bank |
+| Iteration history | After the critique of each iteration | Added to | History windows, BSR, memory bank |
 | Memory bank | Each distillation | Replaced | History window of correction and critique, BSR, next memory bank |
-| Heartbeat blocks & hypothesis exchanges | End of each heartbeat | Added to | Corrections read only the newest mapped packet. DOS reads the previous block. Hypothesis generator and proximity read the reframed history of all prior heartbeats plus the previous block's hypotheses, test outputs, mapped packets, and realized feedback |
+| Heartbeat blocks & hypothesis exchanges | End of each heartbeat | Added to | Corrections read only the newest mapped packet. DOS reads the previous block. Hypothesis generator and proximity read the reframed history of all prior heartbeats plus the previous block's hypotheses, test outputs, mapped packets, realized feedback, and the ledger of hypotheses finalized and used so far |
 | Seed strategy exchange | End of seed generation | Set once | Strategy generator and proximity at every update |
 | Update strategy exchanges | After each update's strategy step | Added to | Strategy generator and proximity at later updates (with prior update contexts replaced by reframed notes) |
-| Strategies used so far | Seed; each EVOLVE or new strategy | Added to | Strategy generator and proximity at every update |
+| Strategies & hypotheses used so far | Seed; each EVOLVE or new strategy; each heartbeat | Added to | Strategy generator/proximity at every update (`StrategiesFinalizedAndUsedSoFar`); hypothesis generator/proximity at every heartbeat after the first (`HypothesesFinalizedAndUsedSoFar`) |
 | Ledger, open prediction, graded predictions | After each update's decisions | Ledger added to; open prediction replaced | BSR |
 | DOS outputs | Each DOS call | Added to | Step-i feeds strategy generator/proximity and step-ii; Heartbeat DOS and step-ii DOS feed hypothesis generator/proximity |
 
-Within one iteration all branches run in parallel and prompts are built from live fields. A branch's prompt can therefore see a peer's field after that peer has already finished its own step in the same phase (see Stage 3).
-
 ### One branch across a run
 
-`i = 15`, `j = 5`, `k = 3`, hypotheses on, isolation off. Each row shows what the correction in that iteration receives for one branch.
+`i = 15`, `j = 5`, `k = 3`, hypotheses on, isolation off. Each row shows what the correction in that iteration receives for one surviving branch.
 
-| Correction in iteration | History shows iterations | Memory bank | Curated context comes from |
-|---|---|---|---|
-| 2 | 1 | none | none yet |
-| 3 | 1, 2 | none | none yet |
-| 4 | 1 to 3 | none | heartbeat 1 (after iteration 3) |
-| 5 | 1 to 4 | none | heartbeat 1 |
-| 6 | none | bank 1 (iterations 1 to 5) | heartbeat 2 (end of update 1) |
-| 7 | 6 | bank 1 | heartbeat 2 |
-| 8 | 6, 7 | bank 1 | heartbeat 2 |
-| 9 | 6 to 8 | bank 1 | heartbeat 3 (after iteration 8) |
-| 10 | 6 to 9 | bank 1 | heartbeat 3 |
-| 11 | none | bank 2 (bank 1 merged with 6 to 10) | heartbeat 4 (end of update 2) |
-| 12 | 11 | bank 2 | heartbeat 4 |
-| 13 | 11, 12 | bank 2 | heartbeat 4 |
-| 14 | 11 to 13 | bank 2 | heartbeat 5 (after iteration 13) |
-| 15 (final) | 11 to 14 | bank 2 | none |
+| Correction in iteration | `<BranchHistoryAndMemory>` contents | Curated context comes from |
+|---|---|---|
+| 2 | `[Iter 1]` | none yet |
+| 3 | `[Iter 1, Iter 2]` | none yet |
+| 4 | `[Iter 1 .. Iter 3]` | heartbeat 1 (after iteration 3) |
+| 5 | `[Iter 1 .. Iter 4]` | heartbeat 1 |
+| 6 | `[Iter 5] + bank 1 (iterations 1 to 5)` | heartbeat 2 (end of update 1) |
+| 7 | `[Iter 5] + bank 1 + [Iter 6]` | heartbeat 2 |
+| 8 | `[Iter 5] + bank 1 + [Iter 6, Iter 7]` | heartbeat 2 |
+| 9 | `[Iter 5] + bank 1 + [Iter 6 .. Iter 8]` | heartbeat 3 (after iteration 8) |
+| 10 | `[Iter 5] + bank 1 + [Iter 6 .. Iter 9]` | heartbeat 3 |
+| 11 | `[Iter 10] + bank 2 (bank 1 merged with 6 to 10)` | heartbeat 4 (end of update 2) |
+| 12 | `[Iter 10] + bank 2 + [Iter 11]` | heartbeat 4 |
+| 13 | `[Iter 10] + bank 2 + [Iter 11, Iter 12]` | heartbeat 4 |
+| 14 | `[Iter 10] + bank 2 + [Iter 11 .. Iter 13]` | heartbeat 5 (after iteration 13) |
+| 15 (final) | `[Iter 10] + bank 2 + [Iter 11 .. Iter 14]` | heartbeat 5 |
 
 The critique in iteration `k` gets the same history and memory bank as the correction in iteration `k`, plus that correction itself. BSR in update 1 sees iterations 1 to 5 and no memory bank. In update 2 it sees iterations 6 to 10 and bank 1. The hypothesis generator in heartbeats 1, 3, and 5 uses a heartbeat DOS. In heartbeats 2 and 4 it uses the DOS call that ended the update.
 
 ### Stage 1: seed strategies (Strategy Generator & Strategy Proximity)
 
-Both **Strategy Generator (SG)** and **Strategy Proximity (SP)** receive the **exact same user prompt** at every turn of the seed loop (differing only in their system prompt and output schema, and with each turn's output appended to the bottom for the next turn).
+Both **Strategy Generator (SG)** and **Strategy Proximity (SP)** share the same system prompt (`initialStrategy`) and receive the **exact same user prompt** prefix at every turn of the seed loop, with each completed turn appended to `<SeedStrategyProximityTurns>` and the active role indicated on the final line (`Immediate Role: Strategy Generator` or `Immediate Role: Strategy Proximity Reviewer`, with JSON output for SG and text output for SP).
 
 - **`[Challenge + Count]`**:
   ```text
@@ -504,24 +501,29 @@ With `strategyProximityLoops = L`, there are `L + 1` generator turns and `L` pro
 
 - **SG — Turn 1:**
   1. `[Challenge + Count]`
+  2. `Immediate Role: Strategy Generator`
 - **SP — Turn 1:**
   1. `[Challenge + Count]`
   2. `SG-seed-1`
+  3. `Immediate Role: Strategy Proximity Reviewer`
 - **SG — Turn 2:**
   1. `[Challenge + Count]`
   2. `SG-seed-1`
   3. `SP-seed-1`
+  4. `Immediate Role: Strategy Generator`
 - **SP — Turn 2:**
   1. `[Challenge + Count]`
   2. `SG-seed-1`
   3. `SP-seed-1`
   4. `SG-seed-2`
+  5. `Immediate Role: Strategy Proximity Reviewer`
 - **SG — Turn 3 (Final Seed Output):**
   1. `[Challenge + Count]`
   2. `SG-seed-1`
   3. `SP-seed-1`
   4. `SG-seed-2`
   5. `SP-seed-2`
+  6. `Immediate Role: Strategy Generator`
 
 When `SG — Turn 3` outputs `SG-seed-3`, the harness extracts the strategies as `main1`…`mainN` and stores the full 5-turn transcript `[Seed G↔P]`.
 
@@ -553,17 +555,19 @@ Assigned Strategy ID: main1
 Assigned Strategy Text: {strategy text}
 
 <BranchHistoryAndMemory>
-No prior iteration history in this window.
-</BranchHistoryAndMemory>
-
-<CorrectionToCritique>
+<WindowCorrectionCritiqueHistory>
+<Iteration n="1">
+<Correction>
 {the first solution}
-</CorrectionToCritique>
+</Correction>
+</Iteration>
+</WindowCorrectionCritiqueHistory>
+</BranchHistoryAndMemory>
 ```
 
-After the critique, iteration 1 is added to the branch's history (solution and critique) and the critique becomes the latest critique.
+After the critique finishes, the critique is recorded on iteration 1 in the branch's history and becomes the latest critique.
 
-### Stage 3: iterations 2 to i-1
+### Stage 3: iterations 2 to i
 
 All corrections finish first. Then all critiques run.
 
@@ -580,10 +584,6 @@ Assigned Strategy Text: {current strategy text}
 {history, below}
 </BranchHistoryAndMemory>
 
-<LatestCustomCuratedContext>              only when there is a packet
-{the branch's hypothesis packet}
-</LatestCustomCuratedContext>
-
 <CrossStrategyPeerIntelligence>           only when isolation is off and other branches exist
 {peers, below}
 </CrossStrategyPeerIntelligence>
@@ -591,14 +591,27 @@ Assigned Strategy Text: {current strategy text}
 
 The branch's own latest solution and critique do not appear as separate blocks. They reach the correction only through the history.
 
-**History.** Built the same way for the correction and the critique.
+**History.** Built for the correction and the critique as follows (with `<LatestCustomCuratedContext>` included only for the correction when a mapped packet exists):
 
 ```text
+<Iteration n="5">                         only after a global update (the last pair before the update)
+<Correction>
+{solution of iteration 5}
+</Correction>
+<Critique>
+{critique of iteration 5}
+</Critique>
+</Iteration>
+
 <DistilledMemoryBank>                     only when the branch has a memory bank
 {memory bank}
 </DistilledMemoryBank>
 
-<WindowCorrectionCritiqueHistory>
+<LatestCustomCuratedContext>              only in correction prompts when there is a packet
+{the branch's hypothesis packet}
+</LatestCustomCuratedContext>
+
+<WindowCorrectionCritiqueHistory>         when completed iterations exist in the current window
 <Iteration n="6">
 <Correction>
 {solution of iteration 6}
@@ -614,18 +627,16 @@ The branch's own latest solution and critique do not appear as separate blocks. 
 </WindowCorrectionCritiqueHistory>
 ```
 
-When no iterations qualify, the whole `WindowCorrectionCritiqueHistory` block is replaced by the sentence `No prior iteration history in this window.` The memory bank, if any, still comes first.
-
-- **Which iterations.** For a prompt in iteration `k`, the history shows every stored iteration `n` with `w <= n < k`, where `w = floor((k - 1) / j) * j + 1`. So `w` is the first iteration of the current block of `j` iterations (1, 6, 11, and so on for `j = 5`), and the history grows by one entry per iteration, then empties when the next block starts. Because `n < k`, the first iteration of each block after the first sees an empty history. That is why rows 6 and 11 of the table above show none.
+- **Which iterations.** For a prompt in iteration `k`, let `w = floor((k - 1) / j) * j + 1` be the first iteration of the current window of `j` iterations (1, 6, 11, and so on for `j = 5`). In the first window (`w = 1`), `<WindowCorrectionCritiqueHistory>` contains every completed iteration `1 <= n < k`. After a global update (`w > 1`), the history starts with the branch's latest correction-critique pair from before the update (iteration `w - 1`), followed by `<DistilledMemoryBank>`, followed (for correction calls when a packet exists) by `<LatestCustomCuratedContext>`, followed by `<WindowCorrectionCritiqueHistory>` containing every completed iteration `w <= n < k` in the current window.
 - **The memory bank** is the branch's current bank. It is replaced, not accumulated, at each update.
-- **Replacement branches** are cleared when they are created, so the memory bank is empty and the history follows the same rule.
+- **Replacement branches** created at a global update have no memory bank and start from the first execution and critique they ran during that update.
 
 **Packet.** The newest heartbeat block's hypotheses that were marked for all branches or that target this branch, each as:
 
 ```text
 Hypothesis {id}: {text}
-Verdict: {VALIDATED | REJECTED | INCONCLUSIVE}
-Result: {the tester's complete output}
+Testing of that Hypothesis:
+{the tester's complete output}
 
 Hypothesis {id}: {text}
 ...
@@ -648,9 +659,9 @@ Strategy main3: {strategy text}
 ...
 ```
 
-The values are read from each peer's stored fields when this branch's prompt is built. Corrections run in parallel, so a peer that has already finished its correction in this iteration shows that new solution here, next to a critique that is still from the previous iteration.
+For a correction in iteration `k`, each peer's latest solution and latest critique are from iteration `k - 1`, captured at the start of the iteration before parallel corrections run.
 
-**Critique, iteration 2 and later.** Same template as the iteration 1 critique, with the history above, and `CorrectionToCritique` holding the correction that was just written. The critique runs after every branch has corrected, so the history never contains the iteration being critiqued. After it finishes, the iteration is added to the branch's history.
+**Critique, iteration 2 and later.** Same template as the iteration 1 critique, with `<BranchHistoryAndMemory>` above, where `<WindowCorrectionCritiqueHistory>` includes `<Iteration n="k">` at the end containing `<Correction>{the correction that was just written}</Correction>` (with no `<Critique>` tag yet, since that is what the critique agent is producing). After it finishes, the critique is recorded on iteration `k` in the branch's history.
 
 ### Stage 4: heartbeat
 
@@ -668,13 +679,15 @@ Order of calls: DOS (a heartbeat that does not end an update, hypotheses on), hy
 </HarnessNote>
 
 <PreviousHeartbeatHypothesesAndTests>
-Hypothesis {id}: {text}
-Verdict: {verdict, INCONCLUSIVE when missing}
-Testing Output: {the tester's complete output}
-Target Branches: ["main1","main3"]
-
-Hypothesis {id}: {text}
-...
+[
+  {
+    "hypothesis_id": "{id}",
+    "text": "{text}",
+    "target_branches": ["main1", "main3"],
+    "predicted_test_outcome": { ... },
+    "testing_output": "{the tester's complete output}"
+  }
+]
 </PreviousHeartbeatHypothesesAndTests>
 
 <ActiveBranchesState>
@@ -700,7 +713,7 @@ If the DOS returns feedback, it is attached to the previous heartbeat's records 
 
 **Hypothesis Generator & Hypothesis Proximity (Heartbeat 1, Heartbeat 2, Heartbeat $h$).**
 
-Both **Hypothesis Generator (HG)** and **Hypothesis Proximity (HP)** receive the **exact same user prompt** at every turn of a heartbeat loop (differing only in their system prompt and output schema, and with each turn's output appended to the bottom for the next turn).
+Both **Hypothesis Generator (HG)** and **Hypothesis Proximity (HP)** share the same system prompt (`hypothesisGeneration`) and receive the **exact same user prompt** prefix at every turn of a heartbeat loop, with each completed turn appended to `<CurrentHeartbeatProximityTurns>` and the active role indicated on the final line (`Immediate Role: Hypothesis Generator` or `Immediate Role: Hypothesis Proximity Reviewer`, with JSON output for HG and text output for HP).
 
 **Short forms:**
 - **`[Challenge + Count]`**:
@@ -717,12 +730,13 @@ Both **Hypothesis Generator (HG)** and **Hypothesis Proximity (HP)** receive the
   1. Current running strategies (`main1`…`mainN`) + latest correction from each active branch
   2. DOS core synthesis for Heartbeat 1 (`DOS_heartbeat_01`)
 - **`{HB_Note(h)}`** (for $h \ge 2$): Active note before Heartbeat $h$:
-  > *"The hypotheses from Heartbeat `h-1` were finalized, tested independently by dedicated tester agents, and mapped as packets to the target branches, which then executed corrections with them. Below is the context for Heartbeat `h`: the finalized hypotheses from Heartbeat `h-1` and their independent test outputs, the mapped branch packets showing the current running strategies, their latest corrections, and which hypotheses were routed to which branches, the realized hypothesis feedback (your predicted test outcome, observed test outcome, surprise bits, utilization across branches, and critique counterevidence), and the new DOS synthesis. Now generate the new hypotheses object."*
-- **`[HB-h Context]`** (for $h \ge 2$): Strictly these items (no raw branch critiques, and no `hypotheses_finalized_and_used_so_far`):
-  1. Final generated hypothesis object from Heartbeat $h-1$ + corresponding independent testing outputs & verdicts
+  > *"The hypotheses from Heartbeat `h-1` were finalized, tested independently by dedicated tester agents, and mapped as packets to the target branches, which then executed corrections with them. Below is the context for Heartbeat `h`: the finalized hypotheses from Heartbeat `h-1` and their independent test outputs, the mapped branch packets showing the current running strategies, their latest corrections, and which hypotheses were routed to which branches, the realized hypothesis feedback (your predicted test outcome, observed test outcome, surprise bits, utilization across branches, and critique counterevidence), the ledger of hypotheses finalized and used so far across prior heartbeats, and the new DOS synthesis. Now generate the new hypotheses object."*
+- **`[HB-h Context]`** (for $h \ge 2$): Strictly these items (no raw branch critiques):
+  1. Final generated hypothesis object from Heartbeat $h-1$ + corresponding independent testing outputs
   2. Mapped branch packets (schema showing current running strategies `main1`…`mainN`, their latest corrections, and which hypotheses from Heartbeat $h-1$ were mapped to which branches)
-  3. Realized hypothesis feedback for Heartbeat $h-1$ (`your_predicted_test_outcome`, `observed_test_outcome`, `surprise_bits`, `utilization` vector `[C/T, P/T, N/T, M/T]`, and `critique_counterevidence`)
-  4. DOS core synthesis for Heartbeat $h$
+  3. Realized hypothesis feedback for Heartbeat $h-1$ (`your_predicted_test_outcome`, `observed_test_outcome`, `surprise_bits`, dynamic `surprise_note`, `utilization` vector `[C/T, P/T, N/T, M/T]`, and `critique_counterevidence`)
+  4. `<HypothesesFinalizedAndUsedSoFar>`: Ledger of every hypothesis finalized and tested across prior heartbeats (`Custom_Curated_Context/hypotheses_finalized_and_used_so_far.md`)
+  5. DOS core synthesis for Heartbeat $h$
 - **`{HB_Reframed_Note(h)}`**: Compact note that **replaces** `{HB_Note(h)} + [HB-h Context]` once Heartbeat $h$ is in the past:
   - For $h = 1$:
     > *"In Heartbeat 1, you received the initial DOS synthesis (`{dosFilePath}`), the active strategies, and their latest corrections, and went back and forth with your proximity friend:"*
@@ -805,6 +819,22 @@ BSR, one call per branch:
 Branch ID: main1
 Current Strategy: {strategy text}
 
+<StandingEventLedger>
+[Iter 6] PROGRESS (large): {reason}
+[Iter 9] REGRESSION (large): {reason}
+</StandingEventLedger>
+
+<EarlierGradedPredictionsHistory>
+Your prediction for Window 2 was: PROGRESS 55%, STALL 30%, REGRESS 15%.
+It was graded in Global Update 2 and the actual outcome was: PROGRESS (you gave this a 55% chance).
+Surprisal is 0.86 bits.
+Should you be surprised? No — you saw this coming and your read of the branch held up, so your forecasting credibility stays at 1.00.
+</EarlierGradedPredictionsHistory>
+
+<MemoryBankBeforeWindow>
+{memory bank, or "None available."}
+</MemoryBankBeforeWindow>
+
 <WindowCorrectionCritiqueHistory>
 Iteration 6:
 Correction: {solution of iteration 6}
@@ -814,29 +844,16 @@ Iteration 7:
 Correction: {...}
 Critique: {...}
 </WindowCorrectionCritiqueHistory>
-
-<MemoryBankBeforeWindow>
-{memory bank, or "None available."}
-</MemoryBankBeforeWindow>
-
-<StandingEventLedger>
-[Iter 6] PROGRESS (large): {reason}
-[Iter 9] REGRESSION (large): {reason}
-</StandingEventLedger>
-
-<EarlierGradedPredictionsHistory>
-- Outcome: PROGRESS, Surprisal: 0.86 bits
-</EarlierGradedPredictionsHistory>
 ```
 
+- `<StandingEventLedger>` and `<EarlierGradedPredictionsHistory>` appear first (since they are append-only across windows), followed by `<MemoryBankBeforeWindow>` (the distilled state prior to the window, read before this update's distillation) and `<WindowCorrectionCritiqueHistory>`.
 - The window is iterations `n - j + 1` through `n`, inclusive: 1 to 5 for the first update and 6 to 10 for the second. It uses plain `Iteration x:` headings, not the tags used in the correction history.
-- The memory bank is read before this update's distillation, so it is the bank from the previous update.
-- The ledger has only events from earlier windows. This window's events are added after the decisions are made. An empty ledger prints `Empty ledger.`, and no graded predictions prints `No earlier predictions graded yet.`.
-- Graded predictions are looked up by slot name. The open prediction for the window being judged is never passed.
+- The ledger has only events from earlier windows. This window's events are added after the decisions are made. An empty ledger prints `Empty ledger.`.
+- `<EarlierGradedPredictionsHistory>` states for each graded window what BSR predicted, when it was graded and what the actual outcome was, the surprisal in bits, and whether BSR should be surprised along with the resulting forecasting credibility (or `No earlier predictions graded yet.` when none exist). The open prediction for the window being judged is never passed.
 
 **Step 3: Strategy Generator & Strategy Proximity (Global Update 1, Global Update 2, Global Update $u$).** Runs only when at least one branch is EVOLVE or PRUNE.
 
-Both **Strategy Generator (SG)** and **Strategy Proximity (SP)** receive the **exact same user prompt** at every turn of a global update loop (differing only in their system prompt and output schema, and with each turn's output appended to the bottom for the next turn).
+Both **Strategy Generator (SG)** and **Strategy Proximity (SP)** share the same system prompt (`initialStrategy`) and receive the **exact same user prompt** prefix at every turn of a global update loop, with each completed turn appended to `<CurrentGlobalUpdateProximityTurns>` and the active role indicated on the final line (`Immediate Role: Strategy Generator` or `Immediate Role: Strategy Proximity Reviewer`, with JSON output for SG and text output for SP).
 
 **Short forms:**
 - **`[Challenge + Count]`**:
@@ -927,7 +944,7 @@ Assigned Strategy: main4
 First execution for replacement branch in slot main4.
 ```
 
-Then its critique uses the iteration 1 critique template with the history block holding only `First execution of new branch.` The result is stored as iteration `n`.
+Then its critique uses the critique template with `<WindowCorrectionCritiqueHistory>` holding `<Iteration n="{n}"><Correction>{first execution}</Correction></Iteration>`. Once the critique completes, the pair is stored as iteration `n`.
 
 Every active strategy folder is then committed as the next window's starting state.
 
@@ -994,7 +1011,7 @@ During this post-update Heartbeat $h$, **HG & HP** receive the exact same chrono
 
 ### Stage 6: final iteration
 
-Corrections use the Stage 3 correction template without the `LatestCustomCuratedContext` block. There are no critiques. Each branch's history entry for iteration `i` holds the correction and a placeholder where the critique would be.
+Iteration `i` uses the exact same Stage 3 correction and critique templates and context as iterations `2` to `i-1`, including `LatestCustomCuratedContext` when a heartbeat has run. Each branch's history entry for iteration `i` holds both the final correction and its final critique.
 
 ### Stage 7: final judge
 
@@ -1010,12 +1027,15 @@ Strategy: {strategy text}
 <FinalSolution>
 {latest solution}
 </FinalSolution>
+<FinalCritique>
+{latest critique}
+</FinalCritique>
 
 ### Candidate main2
 {...}
 ```
 
-One candidate per active branch. No critique, memory bank, hypothesis, or archived branch is included.
+One candidate per active branch, including its final solution and final critique pair. No memory bank, hypothesis history, or archived branch is included.
 
 ## Repository
 
@@ -1034,6 +1054,7 @@ repo/
 │   ├── strategies_global_update01.md (+ .jsonl trajectory)
 │   └── strategies_finalized_and_used_so_far.md (+ .jsonl trajectory)
 ├── Custom_Curated_Context/
+│   ├── hypotheses_finalized_and_used_so_far.md (+ .jsonl trajectory)
 │   ├── Heartbeat-1/
 │   │   └── Hypotheses/
 │   │       ├── generation_history.md (+ .jsonl trajectory)
@@ -1050,7 +1071,7 @@ repo/
 └── Strategy-2/
 ```
 
-File numbers in `history/` are global iteration numbers. Every durable `.md` output file written by the harness is accompanied in the same directory by a `.jsonl` file containing the raw agent trajectory for that invoke. The final iteration's file holds the solution only. Heartbeat folders are never deleted. File and folder names are indicative.
+File numbers in `history/` are global iteration numbers. Every durable `.md` output file written by the harness is accompanied in the same directory by a `.jsonl` file containing the raw agent trajectory for that invoke. Heartbeat folders are never deleted. File and folder names are indicative.
 
 ### Git
 
@@ -1138,7 +1159,7 @@ The saved state also holds BSR records, ledgers, open predictions, DOS outputs, 
 | Live | Each agent's lifecycle, prompts, responses, traces, retries, and failures |
 | Filesystem | The run's repository |
 
-The configuration panel has only the settings listed above. The prompt editor lists these agents: Strategy Generator, Strategy Generator (Global Update), Strategies Proximity, Hypothesis Generation, Hypothesis Proximity, Hypothesis Testing, Solution Attempt, Solution Critique, Solution Correction, Memory Bank, DOS, BSR, and Final Judge.
+The configuration panel has only the settings listed above. The prompt editor lists these agents: Strategy Generator, Hypothesis Generation, Hypothesis Testing, Solution Attempt, Solution Critique, Solution Correction, Memory Bank, DOS, BSR, and Final Judge.
 
 ## Code map
 

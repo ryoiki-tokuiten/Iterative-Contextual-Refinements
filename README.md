@@ -1,101 +1,41 @@
-# Iterative Studio
+## Deepthink Pipeline Flow
 
-Highly specific & carefully thought multi-agent pipelines. The goal is to scale the inference test-time compute for any kind of problem/benchmark and push the frontier. All major providers are supported + local model support fully.
-
-## Operational Modes
-
-### 1. Deepthink Mode (huge refactoring in progress)
-
-Deepthink is a multi-agentic system that co-ordinates agents with highly focused roles by routing very precise and surgical context to explore the solution search space. More broadly, it explores diverse "correct trajectories" or "implementations" or "executions" in parallel for any given user request. The system is based on the following ideas: "strategies proximity", "hypothesis proximity", "parallel exploration", "iterative corrections/refinements", "cross-strategy-learning through curated context", "independent hypothesis generation & testing", and a "meta strategies evolving loop (pruning)". Each agent role can be steered surgically by the user as needed.
+Deepthink is a carefully thought multi-agent pipeline that co-ordinates agents with highly focused roles by routing very precise and surgical context to explore the solution search space. More broadly, it explores diverse "correct trajectories" or "implementations" or "executions" in parallel for any given user request. The system is based on the following ideas: "strategies proximity", "hypothesis proximity", "parallel exploration", "iterative corrections/refinements", "cross-strategy-learning through curated context", "independent hypothesis generation & testing", and a "meta strategies evolving loop (pruning)". Each agent role can be steered surgically by the user as needed.
 
 **Full Deepthink Flow:**
-User provides the core challenge or put some files in your virtual environment and start the process. The system first generates high-level, distinct ways to approach the core challenge(strategies): in a global context, these are like parallel branches that tries to execute the given user core challenge using the provided approach (the strategy).
 
-In parallel, various hypothesis are generated about the core user challenge and each one is tested independently. Hypotheses may include testing pivotal uncertainties or solving a problem for a smaller case and test if they can be transferred for a larger network etc. This is extremely useful context since it was tested with full attention by an independent agent and the agents further don't have to spend their tokens again thinking about that.
+The user provides the problem or attaches files into the virtual environment and starts the run. The system first generates high-level, distinct ways to approach the core challenge (strategies). In a global context, these act as parallel branches where each branch tries to solve the challenge using its assigned approach. Strategies are not generated in a single shot: a Strategy Generator and a Strategy Proximity Reviewer go back and forth for a few rounds so that surface-level variations, overlapping ideas, or blind spots are caught and refined before any execution starts.
 
-Most of the times, hypothesis are aware about the strategies i.e. they know exactly what strategies will be executed in the system later. So the hypotheses here are generated so that the agents executing those strategies can benefit., these are also resolved in advanced i.e. exactly what hypothesis testing should this strategy / branch agents should see to keep the context focused. Hypothesis generation and testing organically produce useful context and information that can be integrated into the branches. These are called information packet (or sub-packets if they are strategy-resolved).
+In Iteration 1, every branch runs in parallel to produce its initial work. Once all branches finish, a Critique agent runs on each branch in parallel to evaluate the solution for correctness, completeness, broken constraints, structural weaknesses, and whether the strategy itself still looks viable. The critique diagnoses issues without rewriting the solution.
 
-Now, the execution agent (actual work-producing agent) receives the core challenge + its assigned strategy + available information packet. It produce its work. Its work is then critiqued. this happens in each and every branch in parallel. The correction agent receives the previous work + critique + available information packet + curated cross-strategy context and it produces an improved work product.
+From the second iteration onward, every branch runs a Correction agent followed by a Critique agent in parallel. The Correction agent receives the core challenge, its assigned strategy, the back-and-forth correction and critique history of its branch, any tested hypothesis packets routed to it, and the latest work and critiques from the other active branches so it can learn from what worked or failed across peer strategies. It produces an improved solution, which is then critiqued again.
 
-and that's pretty much all. on top of this loop, there is an extra highly precise engineering to refresh the hypothesis (and thus information packets) after every k iteration., or after certain iterations distill the history into memory banks(what worked, what improved, what critique patterns persisted etc), or update the main strategies themselves (post-quality filter) after some point based on the degree to which critique-correction go back in a loop without a big delta (i.e. is the branch stuck? or the strategy is flawed? etc). post quality filter decides whether a branch should continue, be refined, or be replaced with an updated strategy.
-after certain iterations, the final corrections are collected and sent to the final judge. it selects the best execution.
+On top of this core loop, two periodic mechanisms keep the branches sharp and prevent wasted compute:
 
-**Sandbox Environment and Artifact Submission**:
-Deepthink integrates a secure sandbox virtual environment for execution and verification.
-- **Repository Visibility**: Every Deepthink role receives `sandbox_exec` and `final_output` when the Sandbox Terminal Environment is enabled. Active branches use `Strategy-N/Critique`: execution and correction write direct branch files, and critique owns `Critique`. PQF replacements archive the complete old branch under `Pruned_Strategies/Strategy-N_First_PQF` (then ordinal successors) before recreating fresh active slot directories. Hypothesis tests are organized by `Hypothesis-vN`, while only current selectively routed tests are mounted to branch workers. (this is largely a scaffolding and I am currently working on a cleaner solution.)
-- **Submit Final Artifact**: Sandbox-enabled agents use `sandbox_exec` for iterative exploration and testing, then use `final_output` to submit their completed work. JSON-producing roles submit their existing role-specific JSON object directly through `final_output`; the environment validates that contract in the tool loop and returns a correction error without discarding the agent's research. Downstream agents and the central system receive only the submitted artifact, filtering out intermediate command transcripts and scratchpad data.
+**Heartbeats (Hypothesis Generation and Testing):**
+After every few iterations, a heartbeat runs to refresh the curated evidence fed into the branches. First, an observation synthesis agent (DOS) reads the latest work and critiques across all branches to summarize where every branch stands and how well earlier hypotheses were actually used. Next, a Hypothesis Generator and a Hypothesis Proximity Reviewer go back and forth to propose falsifiable hypotheses about key uncertainties, bottlenecks, or smaller cases worth verifying. When generating new hypotheses, they also see how surprising the previous test verdicts were compared to their own predictions and whether branches actually benefited from them. Each hypothesis is then tested independently in parallel by a dedicated tester agent with full attention, so the branch execution agents do not have to spend their own tokens testing those ideas. The verified results are mapped back as focused information packets to the specific branches that need them.
 
+**Global Updates (Branch Evaluation, Rollbacks, Pruning, and Memory Distillation):**
+After a fuller window of iterations, a global update runs to evaluate how each branch has been trending as a whole trajectory. A Branch State Representation (BSR) agent reviews the window for each branch and reports confirmed progress events, confirmed regressions, how well corrections followed critiques, and a forecast for the next window. Information-theoretic formulas turn that report and the branch's standing history into one of four outcomes:
+- **Continue:** The branch is making real progress and keeps going.
+- **Evolve in place:** The branch has built strong progress that is worth keeping, but its current angle has plateaued. Its strategy is updated to push further while keeping its work intact.
+- **Evolve with rollback:** The branch started well earlier in the window and then regressed into a worse trajectory. The system reverts the branch back to its last good iteration and updates its strategy so it does not repeat the same dead end.
+- **Prune:** The branch is stuck or failing with little standing progress. It is archived and replaced by a brand new strategy, which runs its first execution and critique before the next window begins.
 
-See [Deepthink architecture and context flow](Deepthink/DeepthinkDocs.md) for the complete agent contracts, repository schemas, mode behavior, iteration synchronization, and failure policy. The previous diagram remains archived at `Deepthink/OldSystemArchitecture.png`.
+At the same time, every surviving branch distills its window history into a compact memory bank (what worked, what improved, and what critique patterns kept recurring) so future iterations stay focused without losing hard-won lessons.
 
+After all iterations complete, the final solutions and critiques from the surviving branches are sent to the Final Judge, which evaluates the candidates and selects the best execution.
 
-### 2. Adaptive Deepthink Mode
+**Sandbox Environment and Shared Workspace:**
+When the sandbox environment is enabled, every agent works inside a shared git-backed repository. Each branch writes inside its own strategy directory, hypothesis testers work in their own dedicated test directories, and every agent can read across the repository, use a shared scratch directory for verification scripts, and read or update a live shared workspace document to pass verified findings to other agents. Agents run their experiments using the sandbox execution tool and submit their clean final artifact through a validated output tool, so raw command logs and scratch work never pollute downstream prompts.
 
-**Purpose**: An orchestrator-directed, pass-based Deepthink workflow for divergent strategic search without a separate final judge.
+See the full documentation for complete details:
+- [Deepthink Architecture and Context Flow](Deepthink/docs/DeepthinkDocs.md)
+- [Architecture Visuals](Deepthink/docs/deepthink_architecture.html)
 
-**Worker topology**:
-- Strategy Generator ↔ Strategies Proximity
-- Hypothesis Generator ↔ Hypothesis Proximity
-- Test Hypothesis
-- Execution → Critique → Correction for each selected strategy
+## Adaptive Deepthink
 
-Each generation/proximity pair runs a bounded three-round internal revision loop. The orchestrator remains responsible for judging evidence, selectively routing tested hypotheses, saving successful strategies, replacing failed unsaved slots, and submitting the final answer.
-
-**Tool system**:
-- `generate_strategies` — generates or updates up to five unsaved strategies.
-- `generate_hypothesis` and `test_hypothesis` — create critique-driven, non-strategy-aware hypotheses and test them independently.
-- `execute` — parallel per-strategy Execution → Critique → Correction, with optional per-branch `specialContext`.
-- `save` — permanently reserves a strategy and its corrected branch state.
-- `finalize_pass_and_execute` — compacts the completed pass into Markdown/trace files, advances the pass, then executes the requested next branches.
-- `read_files`, `virtual_environment`, and `submit_final_output` — restore compacted evidence, use the shared sandbox repository, and let the orchestrator submit the final answer.
-
-**Filesystem and UI**:
-Adaptive runs project directly into the Deepthink Live and Filesystem tabs. When the Sandbox Terminal Environment is enabled, every worker receives the corresponding Deepthink role permissions and `final_output`; the orchestrator receives an explicit root read/write virtual-environment tool. Full agent outputs and JSON traces are written to the Results repository. Before an unsaved branch's correction runs, its strategy directory is checkpointed; the checkpoint is restored before a later pass reuses that strategy, so discarded corrections cannot leak into future executions.
-
-
-### 3. Contextual Mode
-
-**Purpose**: Iterative refinement through specialized agent collaboration.
-
-This can work stable upto 2 Hours without human intervention for difficult problems and actually yield high quality insights and results.
-
-**Architecture**:
-- Three-agent system with distinct responsibilities:
-  1. **Main Generator**: Produces content based on user requirements
-  2. **Iterative Agent**: Suggests improvements and corrections
-  3. **Memory Agent**: Works like a long term memory.
-
-**Key Components**:
-- `ContextualCore.ts`: State management and history tracking
-- Separate history managers for each agent type
-- Automated context window management
-
-**Agent Interaction**:
-```
-User Request → Main Generator → Generated Content
-                      ↓
-              Iterative Agent → Suggestions
-                      ↓
-              Main Generator → Refined Content
-                      ↓
-              [Repeat until complete]
-                      ↓
-              Memory Agent → History Compression
-```
-
-**Key Features**:
-- Automatic history condensation when context limits approached
-- Iterative refinement through suggestion-response cycles
-- Clean separation of concerns between agents
-- Real-time visualization of agent interactions
-
-**Workflow**:
-1. Main generator creates initial content
-2. Iterative agent analyzes and suggests improvements
-3. Main generator applies suggestions
-4. Memory agent compresses history when needed
-5. Cycle continues until completion criteria met
-
+Adaptive Deepthink is an orchestrator-directed, pass-based workflow that uses the same core worker pairs without a fixed schedule or a separate final judge. Basically it is like giving access of the deepthink mode to an agent. A central orchestrator decides at each pass when to generate or replace strategies, when to formulate and independently test hypotheses from critiques, which branches to execute, critique, and correct in parallel, which promising branches to save permanently, and when to compact a completed pass and submit the final answer.
 
 ## License
 
