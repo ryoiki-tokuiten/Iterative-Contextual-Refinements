@@ -654,8 +654,8 @@ export function calculateDeepthinkTokenEstimate(args: DeepthinkTokenEstimateInpu
     const hypothesisProximityLoops = clampInteger(args.hypothesisProximityLoops ?? 1, 0, MAX_HYPOTHESIS_PROXIMITY_LOOPS);
     const depth = clampInteger(args.i ?? args.deepthinkDepth ?? 10, 1, MAX_DEEPTHINK_DEPTH);
     const i = depth;
-    const j = clampInteger(args.j ?? 5, 3, 8);
-    const k = clampInteger(args.k ?? 3, 2, j);
+    const j = clampInteger(args.j ?? 4, 3, 8);
+    const k = clampInteger(args.k ?? 4, 2, j);
     const isolateBranches = args.isolateBranches === true;
 
     // Pre-sample biased Global Update decisions (70% CONTINUE/EVOLVE, 30% PRUNE)

@@ -1,13 +1,12 @@
 /** LangGraph shell for the Adaptive Deepthink orchestrator. */
 
 import type { ToolDefinition } from '@langchain/core/language_models/base';
-import { AIMessage, BaseMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessage, BaseMessage, ToolMessage } from '@langchain/core/messages';
 import { Annotation, END, START, StateGraph, messagesStateReducer } from '@langchain/langgraph/web';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import {
-    createToolCallingAgentModel,
-    invokeGeminiToolAgentTurn,
+    invokeToolCallingAgentTurn,
     resolveProviderForModel,
 } from '../Core/LangGraphToolRuntime';
 import {
@@ -18,7 +17,10 @@ import {
     type AdaptiveDeepthinkToolExecutionContext,
     type AdaptiveDeepthinkToolPrompts,
 } from './AdaptiveDeepthinkCore';
-import { normalizeOpenAICompatibleProviderError } from '../Core/ProviderError';
+import {
+    isTerminalInferenceError,
+    isUserAbortError,
+} from '../Core/ProviderError';
 
 const boundedCount = z.number().int().min(1).max(5);
 const optionalProximityLoops = z.number().int().min(1).max(5).optional();
@@ -114,6 +116,7 @@ interface AdaptiveDeepthinkGraphOptions {
     deepthinkPrompts: AdaptiveDeepthinkToolPrompts;
     createExecutionContext: (toolCall: AdaptiveDeepthinkToolCall) => AdaptiveDeepthinkToolExecutionContext;
     images?: Array<{ base64: string; mimeType: string }>;
+    abortSignal?: AbortSignal;
 }
 
 interface ToolExecutionResult {
@@ -209,6 +212,9 @@ async function executeToolsNode(state: AdaptiveDeepthinkGraphState, options: Ada
         try {
             result = await executeToolCall(workingState, invocation.name, invocation.args, options);
         } catch (error) {
+            if (isTerminalInferenceError(error) || isUserAbortError(error) || options.abortSignal?.aborted) {
+                throw error;
+            }
             result = { content: `[TOOL_ERROR: ${error instanceof Error ? error.message : 'Unknown tool error'}]`, status: 'error', artifact: artifact(invocation.name) };
         }
         workingState = { ...workingState, ...result.statePatch };
@@ -236,27 +242,26 @@ function shouldRunTools(state: AdaptiveDeepthinkGraphState) {
 }
 
 export function createAdaptiveDeepthinkGraph(options: AdaptiveDeepthinkGraphOptions) {
-    const { providerName, providerConfig, modelName } = resolveProviderForModel(options.modelName);
+    const provider = resolveProviderForModel(options.modelName);
+    const { providerName, providerConfig, modelName } = provider;
     if (!providerConfig?.isConfigured || (providerName === 'openai-compatible' ? !providerConfig.baseURL : !providerConfig.apiKey)) {
         throw new Error(`No configured provider found for model: ${options.modelName}`);
     }
-    const model = providerName === 'gemini'
-        ? null
-        : createToolCallingAgentModel(providerName, providerConfig, { ...options, modelName }).bindTools(tools);
     const agentNode = async (state: AdaptiveDeepthinkGraphState) => {
         const systemPrompt = buildAdaptiveDeepthinkSystemPrompt(state, options.systemPrompt);
         const messages = messagesForOrchestrator(state);
-        try {
-            const response = providerName === 'gemini'
-                ? await invokeGeminiToolAgentTurn(providerConfig, messages, systemPrompt, tools, { ...options, modelName })
-                : await model!.invoke([new SystemMessage(systemPrompt), ...messages]);
-            return { messages: [response] };
-        } catch (error) {
-            if (providerName === 'openai-compatible' && providerConfig.baseURL) {
-                throw normalizeOpenAICompatibleProviderError(error, providerConfig.baseURL, modelName);
+        const response = await invokeToolCallingAgentTurn(
+            provider,
+            messages,
+            systemPrompt,
+            tools,
+            {
+                modelName,
+                abortSignal: options.abortSignal,
+                label: `Adaptive Deepthink Orchestrator (${providerName}:${modelName})`,
             }
-            throw error;
-        }
+        );
+        return { messages: [response] };
     };
     const afterTools = (state: AdaptiveDeepthinkGraphState) => state.shouldExit ? END : 'agent';
     return new StateGraph(AdaptiveDeepthinkGraphAnnotation)

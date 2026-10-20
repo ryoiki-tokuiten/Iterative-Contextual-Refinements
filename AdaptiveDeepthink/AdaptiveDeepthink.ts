@@ -4,7 +4,11 @@ import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages';
 import { nanoid } from 'nanoid';
 import { AdaptiveMessage, ResponseSegment, SystemBlock } from './AdaptiveTypes';
 import { messageContentToText, resolveProviderForModel } from '../Core/LangGraphToolRuntime';
-import { describeProviderError } from '../Core/ProviderError';
+import {
+    describeProviderError,
+    isTerminalInferenceError,
+    isUserAbortError,
+} from '../Core/ProviderError';
 import { globalState } from '../Core/State';
 import type { DeepthinkPipelineState } from '../Deepthink/core/deepthinkCore';
 import { setActiveDeepthinkPipelineForImport } from '../Deepthink/ui/Deepthink';
@@ -144,7 +148,8 @@ function buildSystemMessage(message: ToolMessage): AdaptiveMessage {
 }
 
 function isAbortError(error: unknown): boolean {
-    return error instanceof Error && (error.name === 'AbortError' || error.message === 'Aborted');
+    if (isTerminalInferenceError(error)) return false;
+    return isUserAbortError(error) || (error instanceof Error && (error.name === 'AbortError' || error.message === 'Aborted'));
 }
 
 function createInitialDeepthinkPipelineState(id: string, question: string): DeepthinkPipelineState {
@@ -285,6 +290,7 @@ async function runAdaptiveDeepthinkGraph(question: string, customPrompts: Custom
             systemPrompt: customPrompts.sys_adaptiveDeepthink_main,
             deepthinkPrompts: createDeepthinkPrompts(customPrompts),
             images,
+            abortSignal: abortController?.signal,
             createExecutionContext: () => createToolExecutionContext(pipeline, customPrompts),
         });
         const directTextContext = getDirectTextContext();
@@ -335,8 +341,8 @@ async function runAdaptiveDeepthinkGraph(question: string, customPrompts: Custom
         if (submitted) pipeline.status = 'completed';
         notifyAdaptiveDeepthinkListeners();
     } catch (error) {
-        if (!isAbortError(error) && !abortController?.signal.aborted && activeAdaptiveDeepthinkState) {
-            const message = describeProviderError(error);
+        if ((!isAbortError(error) || isTerminalInferenceError(error)) && !abortController?.signal.aborted && activeAdaptiveDeepthinkState) {
+            const message = error instanceof Error ? error.message : describeProviderError(error);
             activeAdaptiveDeepthinkState.messages.push({ id: newMsgId('system'), role: 'system', content: message, timestamp: Date.now(), status: 'error', blocks: [{ kind: 'error', message }] });
             activeAdaptiveDeepthinkState.coreState.status = 'error';
             activeAdaptiveDeepthinkState.coreState.error = message;

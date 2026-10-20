@@ -182,30 +182,11 @@ function getContextualSandboxRepositoryAccess(agentName: string): SandboxReposit
     }
 }
 
-const RETRY_DELAYS_MS = [30_000, 60_000, 5 * 60_000] as const;
-const MAX_RETRIES = RETRY_DELAYS_MS.length;
-const STANDARD_AGENT_TIMEOUT_MS = 30 * 60_000;
-const SANDBOX_AGENT_TIMEOUT_MS = 30 * 60_000;
-
 let mainGeneratorMessages: BaseMessage[] = [];
 let iterativeAgentMessages: BaseMessage[] = [];
 let strategicPoolMessages: BaseMessage[] = [];
 let turnsSinceLastCondense = 0;
 let condenseCount = 0;
-
-function getContextualRetryDelay(attempt: number): number {
-    return RETRY_DELAYS_MS[attempt] ?? 0;
-}
-
-function withContextualTimeout<T>(promise: Promise<T>, timeoutMs: number, agentName: string): Promise<T> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<T>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`Timeout after ${Math.round(timeoutMs / 60_000)} minutes: ${agentName}`)), timeoutMs);
-    });
-    return Promise.race([promise, timeout]).finally(() => {
-        if (timer) clearTimeout(timer);
-    });
-}
 
 export async function startContextualProcess(
     initialUserRequest: string,
@@ -549,21 +530,28 @@ async function runContextualLoop() {
             mainGeneratorMessages.push(new HumanMessage("Now implement the next iteration of the solution based on the critique and the strategies you just generated above. Ensure you fully resolve the issues raised in the critique."));
 
         } catch (error) {
-            const errMsg = error instanceof Error ? error.message : 'Unknown error';
-            const errorMsg: ContextualMessage = {
-                id: newMessageId('system'),
-                role: 'system',
-                content: `Error: ${errMsg}`,
-                timestamp: Date.now(),
-                iterationNumber: activeContextualState?.iterationCount || 0,
-                status: 'error',
-                blocks: [{ kind: 'error', message: errMsg }]
-            };
-            if (activeContextualState) {
-                activeContextualState.messages.push(errorMsg);
-                activeContextualState.isProcessing = false;
+            if (!abortController?.signal.aborted) {
+                const errMsg = error instanceof Error ? error.message : describeProviderError(error);
+                const errorMsg: ContextualMessage = {
+                    id: newMessageId('system'),
+                    role: 'system',
+                    content: `Error: ${errMsg}`,
+                    timestamp: Date.now(),
+                    iterationNumber: activeContextualState?.iterationCount || 0,
+                    status: 'error',
+                    blocks: [{ kind: 'error', message: errMsg }]
+                };
+                if (activeContextualState) {
+                    activeContextualState.messages.push(errorMsg);
+                }
             }
-            if (onStateUpdated && activeContextualState) onStateUpdated({ ...activeContextualState });
+            globalState.isContextualRunning = false;
+            if (activeContextualState) {
+                activeContextualState.isRunning = false;
+                activeContextualState.isProcessing = false;
+                if (onStateUpdated) onStateUpdated({ ...activeContextualState });
+            }
+            updateControlsState();
             break;
         }
     }
@@ -577,95 +565,72 @@ async function callContextualAgent(
 ): Promise<ContextualAgentCallResult | null> {
     if (!activeContextualState) return null;
 
-    const modelName = (agentModel && agentModel.trim()) || getSelectedModel();
-    const sandboxEnabled = isContextualSandboxToolEnabled();
-    const responseTimeoutMs = sandboxEnabled ? SANDBOX_AGENT_TIMEOUT_MS : STANDARD_AGENT_TIMEOUT_MS;
-    const startedAt = Date.now();
-
-    let lastError: Error | null = null;
-
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        if (abortController?.signal.aborted || !globalState.isContextualRunning) {
-            throw new Error('Process stopped by user');
-        }
-
-        try {
-            if (attempt > 0) {
-                const delay = Math.min(getContextualRetryDelay(attempt - 1), Math.max(0, responseTimeoutMs - (Date.now() - startedAt)));
-                await new Promise((resolve, reject) => {
-                    const timeout = setTimeout(resolve, delay);
-                    if (abortController) {
-                        abortController.signal.addEventListener('abort', () => {
-                            clearTimeout(timeout);
-                            reject(new Error('Process stopped by user'));
-                        });
-                    }
-                }).catch(() => { throw new Error('Process stopped by user'); });
-            }
-
-            if (!globalState.isContextualRunning) throw new Error('Process stopped by user');
-
-            const remaining = Math.max(1, responseTimeoutMs - (Date.now() - startedAt));
-            if (sandboxEnabled) {
-                return await withContextualTimeout(runContextualSandboxToolAgent({
-                    agentName,
-                    sessionId: getContextualSandboxSessionId(agentName),
-                    messages,
-                    systemPrompt,
-                    modelName,
-                    repositoryAccess: getContextualSandboxRepositoryAccess(agentName)
-                }), remaining, agentName);
-            }
-
-            // Fallback: convert BaseMessage[] to StructuredMessage[] for standard callAI
-            const structuredMessages: any[] = messages.map(m => {
-                let role: 'user' | 'assistant' | 'system' = 'user';
-                if (m instanceof AIMessage) role = 'assistant';
-                if (m instanceof SystemMessage) role = 'system';
-                return {
-                    role,
-                    content: typeof m.content === 'string' ? m.content : messageContentToText(m.content)
-                };
-            });
-
-            const result = await withContextualTimeout(callAI(
-                structuredMessages,
-                modelName,
-                systemPrompt,
-                false
-            ), remaining, agentName);
-
-            const text = result.text || '';
-            return {
-                text,
-                promptText: text,
-                finalText: text,
-                geminiContent: undefined
-            };
-
-        } catch (error) {
-            const providerErrorMessage = describeProviderError(error);
-            lastError = new Error(providerErrorMessage);
-            console.warn(`${agentName} call attempt ${attempt + 1}/${MAX_RETRIES + 1} failed:`, lastError.message);
-            const deadlineReached = Date.now() - startedAt >= responseTimeoutMs;
-
-            if (attempt < MAX_RETRIES && !deadlineReached && activeContextualState) {
-                const retryMsg: ContextualMessage = {
-                    id: newMessageId('system'),
-                    role: 'system',
-                    content: `${agentName} call failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}): ${lastError.message}. Retrying in ${getContextualRetryDelay(attempt) / 1000}s...`,
-                    timestamp: Date.now(),
-                    iterationNumber: activeContextualState.iterationCount,
-                    status: 'error',
-                    blocks: [{ kind: 'error', message: `Retry ${attempt + 1}/${MAX_RETRIES + 1}: ${lastError.message}` }]
-                };
-                activeContextualState.messages.push(retryMsg);
-                if (onStateUpdated) onStateUpdated({ ...activeContextualState });
-            }
-
-            if (attempt === MAX_RETRIES || deadlineReached) break;
-        }
+    if (abortController?.signal.aborted || !globalState.isContextualRunning) {
+        throw new Error('Process stopped by user');
     }
 
-    throw lastError || new Error(`Failed to get response from ${agentName}`);
+    const modelName = (agentModel && agentModel.trim()) || getSelectedModel();
+    const sandboxEnabled = isContextualSandboxToolEnabled();
+
+    const handleRetry = (attempt: number, maxRetries: number, delayMs: number, error: unknown) => {
+        if (!activeContextualState) return;
+        const errMessage = describeProviderError(error);
+        const delayMins = Math.round((delayMs / 60_000) * 10) / 10;
+        const retryMsg: ContextualMessage = {
+            id: newMessageId('system'),
+            role: 'system',
+            content: `${agentName} call failed (attempt ${attempt}/${maxRetries + 1}): ${errMessage}. Retrying in ${delayMins}m...`,
+            timestamp: Date.now(),
+            iterationNumber: activeContextualState.iterationCount,
+            status: 'error',
+            blocks: [{ kind: 'error', message: `Retry ${attempt}/${maxRetries} in ${delayMins}m: ${errMessage}` }]
+        };
+        activeContextualState.messages.push(retryMsg);
+        if (onStateUpdated) onStateUpdated({ ...activeContextualState });
+    };
+
+    if (sandboxEnabled) {
+        return await runContextualSandboxToolAgent({
+            agentName,
+            sessionId: getContextualSandboxSessionId(agentName),
+            messages,
+            systemPrompt,
+            modelName,
+            repositoryAccess: getContextualSandboxRepositoryAccess(agentName),
+            abortSignal: abortController?.signal,
+            onRetry: handleRetry,
+        });
+    }
+
+    // Fallback: convert BaseMessage[] to StructuredMessage[] for standard callAI
+    const structuredMessages: any[] = messages.map(m => {
+        let role: 'user' | 'assistant' | 'system' = 'user';
+        if (m instanceof AIMessage) role = 'assistant';
+        if (m instanceof SystemMessage) role = 'system';
+        return {
+            role,
+            content: typeof m.content === 'string' ? m.content : messageContentToText(m.content)
+        };
+    });
+
+    const result = await callAI(
+        structuredMessages,
+        modelName,
+        systemPrompt,
+        false,
+        undefined,
+        {
+            abortSignal: abortController?.signal,
+            label: `${agentName} (${modelName})`,
+            onRetry: handleRetry,
+        }
+    );
+
+    const text = result.text || '';
+    return {
+        text,
+        promptText: text,
+        finalText: text,
+        geminiContent: undefined
+    };
 }

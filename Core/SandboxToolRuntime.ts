@@ -5,17 +5,17 @@
 
 import type { ToolDefinition } from '@langchain/core/language_models/base';
 import { AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
+import { DEFAULT_NORMALIZATION_BOUNDS, normalizeTranscript, validateTranscript } from '@letta-ai/trajectory';
+import { parse as parseBashAst } from 'just-bash';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
 import { globalState } from './State';
 import {
-    createToolCallingAgentModel,
-    invokeGeminiToolAgentTurn,
+    invokeToolCallingAgentTurn,
     messageContentToText,
     resolveProviderForModel,
     type ResolvedProvider
 } from './LangGraphToolRuntime';
-import { normalizeOpenAICompatibleProviderError } from './ProviderError';
 import {
     SHARED_WORKSPACE_TOOL_NAME,
     SHARED_WORKSPACE_MAX_TOKENS,
@@ -28,8 +28,10 @@ import {
 import {
     buildFinalOutputTokenGateHarnessNote,
     buildOvertimeFinalSubmitHarnessNote,
+    buildRemainingSandboxTimeHarnessNote,
     buildRemainingToolCallsHarnessNote,
     buildRevokedToolsFinalSubmitHarnessNote,
+    buildSandboxTimeExpiredFinalSubmitHarnessNote,
     buildSharedWorkspaceTokenGateHarnessNote,
 } from '../Deepthink/core/harnessNotes';
 
@@ -59,6 +61,11 @@ interface SandboxToolAgentOptions {
      */
     maxToolTurns?: number;
     /**
+     * Maximum wall-clock duration in milliseconds before revoking tools and forcing final_output.
+     * Defaults to MAX_SANDBOX_DURATION_MS (60 minutes).
+     */
+    maxDurationMs?: number;
+    /**
      * Maximum allowed output tokens in final_output submission.
      * Defaults to 5000 (10000 for Solution Correction and Memory Bank).
      */
@@ -74,6 +81,10 @@ interface SandboxToolAgentOptions {
      * Optional handler for real-time shared_workspace tool calls (§8.4).
      */
     sharedWorkspaceHandler?: (input: SharedWorkspaceToolInput) => Promise<string>;
+    abortSignal?: AbortSignal;
+    retryDelaysMs?: readonly number[];
+    silenceTimeoutMs?: number;
+    onRetry?: (attempt: number, maxRetries: number, delayMs: number, error: unknown) => void;
 }
 
 type ContextualSandboxToolAgentOptions = SandboxToolAgentOptions;
@@ -380,6 +391,7 @@ interface SandboxToolResponse {
     error?: string | null;
     durationMs: number;
     timedOut?: boolean;
+    readOnlyCommand?: boolean;
     images?: SandboxToolImage[];
     visibleFiles?: SandboxToolImage[];
 }
@@ -404,18 +416,90 @@ const FINAL_OUTPUT_TOOL_NAME = 'final_output';
 const MAX_TOOL_TURNS = 64;
 const OVERTIME_GRACE_TURNS = 5;
 const FORCED_FINAL_OUTPUT_TURNS = 5;
+const MAX_SANDBOX_DURATION_MS = 60 * 60_000; // 1 hour wall-clock budget
+const SANDBOX_WARNING_10_MIN_MS = 10 * 60_000;
+const SANDBOX_WARNING_5_MIN_MS = 5 * 60_000;
 const DEFAULT_MAX_OUTPUT_TOKENS = 5000;
 const OMIT_TRACE_VALUE = Symbol('omitTraceValue');
 const REDACTED_THOUGHT_TRACE = '[thought content omitted from shared execution trace]';
 let sandboxEnvironmentProfilePromise: Promise<SandboxEnvironmentProfile | null> | null = null;
+
+const READ_ONLY_BASH_COMMANDS = new Set([
+    'ls', 'cat', 'rg', 'grep', 'egrep', 'fgrep', 'find', 'head', 'tail',
+    'wc', 'stat', 'file', 'tree', 'pwd', 'which', 'type', 'realpath', 'dirname', 'basename', 'du', 'df',
+]);
+const READ_ONLY_GIT_SUBCOMMANDS = new Set([
+    'status', 'log', 'diff', 'show', 'branch', 'rev-parse', 'ls-files', 'ls-tree',
+]);
+const FILE_WRITE_REDIRECT_OPERATORS = new Set(['>', '>>', '>|', '&>', '&>>', '<>']);
+const MUTATING_FIND_FLAGS = new Set(['-delete', '-exec', '-execdir', '-ok', '-okdir', '-fprint', '-fprint0', '-fls']);
+
+function extractBashWordText(word: any): string {
+    if (!word || !Array.isArray(word.parts)) return '';
+    return word.parts
+        .map((part: any) => (part.type === 'Literal' || part.type === 'SingleQuoted') ? String(part.value ?? '') : '')
+        .join('');
+}
+
+function isReadOnlySimpleCommandWords(words: string[]): boolean {
+    const tokens = words.filter(Boolean);
+    if (tokens.length === 0) return false;
+    const [first, ...rest] = tokens[0] === 'rtk' ? tokens.slice(1) : tokens;
+    if (!first) return false;
+    if (first === 'read' && tokens[0] === 'rtk') return true;
+    if (first === 'find') {
+        return !rest.some(arg => MUTATING_FIND_FLAGS.has(arg));
+    }
+    if (READ_ONLY_BASH_COMMANDS.has(first)) return true;
+    if (first === 'git') {
+        const subcommand = rest.find(arg => !arg.startsWith('-'));
+        return !!subcommand && READ_ONLY_GIT_SUBCOMMANDS.has(subcommand);
+    }
+    return false;
+}
+
+/**
+ * Parses a shell command string into a Bash AST using `just-bash` and returns
+ * true when the AST contains no file-write redirections (`>`, `>>`, etc.) and
+ * every command node sits in the read-only inspection allowlist.
+ */
+export function isReadOnlyBashCommand(command: string): boolean {
+    try {
+        const ast = parseBashAst(command);
+        let sawCommand = false;
+        const checkCommand = (cmd: any): boolean => {
+            if ((cmd.redirections || []).some((r: any) => FILE_WRITE_REDIRECT_OPERATORS.has(r.operator))) {
+                return false;
+            }
+            if (cmd.type === 'SimpleCommand') {
+                sawCommand = true;
+                const words = [extractBashWordText(cmd.name), ...(cmd.args || []).map(extractBashWordText)];
+                if (!isReadOnlySimpleCommandWords(words)) return false;
+                return ![cmd.name, ...(cmd.args || [])].filter(Boolean).some((w: any) =>
+                    Array.isArray(w.parts) && w.parts.some((p: any) => p.type === 'CommandSubstitution' || p.type === 'ProcessSubstitution')
+                );
+            }
+            if (cmd.type === 'Subshell' || cmd.type === 'Group') {
+                return Array.isArray(cmd.body) && cmd.body.every(checkStatement);
+            }
+            return false;
+        };
+        const checkStatement = (stmt: any): boolean =>
+            Array.isArray(stmt.pipelines) && stmt.pipelines.every((p: any) => Array.isArray(p.commands) && p.commands.every(checkCommand));
+        return Array.isArray(ast.statements) && ast.statements.every(checkStatement) && sawCommand;
+    } catch {
+        return false;
+    }
+}
 
 const sandboxToolDefinition: ToolDefinition = {
     type: 'function',
     function: {
         name: SANDBOX_TOOL_NAME,
         description: [
-            'Execute a non-interactive bash command inside the agent sandbox workspace.',
+            'Execute non-interactive bash commands inside the agent sandbox workspace.',
             'Use this like a real sandboxed terminal: create/read/search/edit/delete files, write and run scripts or programs, install workspace-local dependencies, run tests, use available CLI tools, and generate artifacts.',
+            'You can execute multiple commands in three ways: (1) sequentially in a single sandbox_exec() call using `&&` (stop on first error, e.g. `mkdir -p build && pytest -q`) or `;` (continue regardless of exit code) or multi-line scripts; (2) concurrently in parallel within a single sandbox_exec() call by backgrounding jobs with `&` and synchronizing with `wait` (e.g. `python3 job1.py > job1.log 2>&1 & python3 job2.py > job2.log 2>&1 & wait`); or (3) by emitting multiple sandbox_exec() tool calls in a single turn, which the harness executes concurrently in parallel.',
             'Files persist in the workspace across this agent session.',
             `When the work is complete, submit the answer with ${FINAL_OUTPUT_TOOL_NAME}.`
         ].join(' '),
@@ -424,7 +508,7 @@ const sandboxToolDefinition: ToolDefinition = {
             properties: {
                 command: {
                     type: 'string',
-                    description: 'Bash command to run from the sandbox workspace. Use relative paths or /workspace paths for persistent files.'
+                    description: 'Bash command string to run from the sandbox workspace. Supports single commands, sequential chains (`cmd1 && cmd2` or `cmd1; cmd2`), and parallel concurrent jobs (`cmd1 & cmd2 & wait`) in a single call. Use relative paths or /workspace paths for persistent files.'
                 },
                 timeout_ms: {
                     type: 'number',
@@ -754,8 +838,12 @@ function buildSystemPrompt(
         options.sharedWorkspaceHandler
             ? `You have three tools: ${SANDBOX_TOOL_NAME} for private terminal work, ${SHARED_WORKSPACE_TOOL_NAME} for real-time collaboration with peer agents via shared_workspace.md, and ${FINAL_OUTPUT_TOOL_NAME} for the submitted answer.`
             : `You have two tools: ${SANDBOX_TOOL_NAME} for private terminal work and ${FINAL_OUTPUT_TOOL_NAME} for the submitted answer.`,
-        `${SANDBOX_TOOL_NAME} runs one non-interactive bash command inside your sandboxed Linux workspace.`,
+        `${SANDBOX_TOOL_NAME} runs non-interactive bash commands inside your sandboxed Linux workspace.`,
         'Treat this as a real terminal in a real but sandboxed project directory. You can create directories and files, write scripts or source code, run programs, inspect outputs, read files with cat/sed, search with grep/find, edit or delete workspace files, install dependencies into the workspace when possible, and generate data, plots, images, or other artifacts.',
+        `Running sequential or parallel commands with ${SANDBOX_TOOL_NAME}:`,
+        `- Sequential commands in a single ${SANDBOX_TOOL_NAME}() call: chain dependent commands with \`&&\` (stops on first non-zero exit, e.g. \`mkdir -p build && g++ -O2 solve.cpp -o build/solve && ./build/solve\`) or chain independent commands with \`;\` or newlines (runs one after another regardless of previous exit codes, e.g. \`python3 check_a.py; python3 check_b.py\`).`,
+        `- Parallel concurrent commands in a single ${SANDBOX_TOOL_NAME}() call: background independent commands with \`&\` and synchronize with \`wait\` (e.g. \`python3 sim1.py > sim1.out 2>&1 & python3 sim2.py > sim2.out 2>&1 & wait && cat sim1.out sim2.out\`) to run multiple tasks concurrently in one shell invocation.`,
+        `- Parallel ${SANDBOX_TOOL_NAME}() tool calls in a single turn: you may also emit multiple ${SANDBOX_TOOL_NAME}() tool calls in the same assistant turn; the harness executes all ${SANDBOX_TOOL_NAME}() calls in that turn concurrently in parallel and returns each command's separate output.`,
         `${commandStartRule} Files and directories you create persist across your own tool calls and future iterations in the ${runScopeDescription}. Process memory, shell variables, and language REPL variables do not persist between separate commands; write durable state to files.`,
         'Use standard terminal practice: write scripts when commands become complex, check tool availability with command -v or --version when a runtime matters, and adapt if a language, package, or network access is unavailable.',
         '',
@@ -829,7 +917,8 @@ async function invokeAgentTurn(
     messages: BaseMessage[],
     systemPrompt: string,
     options: SandboxToolAgentOptions,
-    onlyFinalOutputTool = false
+    onlyFinalOutputTool = false,
+    turnNumber = 1
 ): Promise<AIMessage> {
     const finalOutputToolDefinition = createFinalOutputToolDefinition(options.finalOutputContract);
     const tools: ToolDefinition[] = onlyFinalOutputTool
@@ -839,37 +928,21 @@ async function invokeAgentTurn(
             finalOutputToolDefinition,
             ...(options.sharedWorkspaceHandler ? [sharedWorkspaceToolDefinition] : []),
         ];
-    if (provider.providerName === 'gemini') {
-        return invokeGeminiToolAgentTurn(
-            provider.providerConfig,
-            messages,
-            systemPrompt,
-            tools,
-            {
-                modelName: provider.modelName
-            }
-        );
-    }
 
-    const model = createToolCallingAgentModel(
-        provider.providerName,
-        provider.providerConfig,
+    return invokeToolCallingAgentTurn(
+        provider,
+        messages,
+        systemPrompt,
+        tools,
         {
-            modelName: provider.modelName
+            modelName: provider.modelName,
+            abortSignal: options.abortSignal,
+            retryDelaysMs: options.retryDelaysMs,
+            silenceTimeoutMs: options.silenceTimeoutMs,
+            label: `${options.agentName} (turn ${turnNumber}, ${provider.providerName}:${provider.modelName})`,
+            onRetry: options.onRetry,
         }
-    ).bindTools(tools);
-
-    try {
-        return await model.invoke([
-            new SystemMessage(systemPrompt),
-            ...messages
-        ]);
-    } catch (error) {
-        if (provider.providerName === 'openai-compatible' && provider.providerConfig.baseURL) {
-            throw normalizeOpenAICompatibleProviderError(error, provider.providerConfig.baseURL, provider.modelName);
-        }
-        throw error;
-    }
+    );
 }
 
 async function executeSandboxTool(
@@ -1345,27 +1418,210 @@ export function isContextualSandboxToolEnabled(): boolean {
         || globalState.filesystemContextFiles.length > 0;
 }
 
-function buildRawTrajectoryJsonl(allMessages: BaseMessage[]): string {
-    return allMessages
-        .map(message => {
-            const raw = message as any;
-            const messageType = messageTypeForTrace(message);
-            return JSON.stringify({
-                role: messageRoleForTrace(messageType),
-                message_type: messageType,
-                content: raw.content,
-                ...(raw.tool_calls !== undefined ? { tool_calls: raw.tool_calls } : {}),
-                ...(raw.invalid_tool_calls !== undefined ? { invalid_tool_calls: raw.invalid_tool_calls } : {}),
-                ...(raw.tool_call_id !== undefined ? { tool_call_id: raw.tool_call_id } : {}),
-                ...(raw.name !== undefined ? { name: raw.name } : {}),
-                ...(raw.status !== undefined ? { status: raw.status } : {}),
-                ...(raw.additional_kwargs !== undefined ? { additional_kwargs: raw.additional_kwargs } : {}),
-                ...(raw.response_metadata !== undefined ? { response_metadata: raw.response_metadata } : {}),
-                ...(raw.id !== undefined ? { id: raw.id } : {}),
-                ...(raw.artifact !== undefined ? { artifact: raw.artifact } : {}),
+function extractReasoningTextsFromMessage(message: BaseMessage): string[] {
+    const raw = message as any;
+    const texts: string[] = [];
+
+    if (Array.isArray(raw.content)) {
+        for (const part of raw.content) {
+            if (!part || typeof part !== 'object') continue;
+            const record = part as Record<string, unknown>;
+            if (isProviderThinkingRecord(record)) {
+                const candidate = typeof record.thinking === 'string'
+                    ? record.thinking
+                    : typeof record.text === 'string'
+                        ? record.text
+                        : typeof record.summary === 'string'
+                            ? record.summary
+                            : '';
+                if (candidate.trim()) texts.push(candidate.trim());
+            }
+        }
+    }
+
+    const kwargsReasoning = raw.additional_kwargs?.reasoning_content ?? raw.additional_kwargs?.thinking;
+    if (typeof kwargsReasoning === 'string' && kwargsReasoning.trim()) {
+        texts.push(kwargsReasoning.trim());
+    }
+    return texts;
+}
+
+function isHarnessReminderText(text: string): boolean {
+    const trimmed = text.trimStart();
+    return trimmed.startsWith('<harness_note>') ||
+        trimmed.startsWith('Your previous response was ordinary prose, so it was not submitted.');
+}
+
+/**
+ * Formats a simple system/user/assistant exchange (or single-message fallback)
+ * into `@letta-ai/trajectory` validated `.jsonl` records.
+ */
+export function formatTrajectoryWithLetta(args: {
+    systemInstruction?: string;
+    userPrompt?: string;
+    assistantResponse: string;
+    reasoningText?: string;
+}): string {
+    const messages: BaseMessage[] = [];
+    if (args.systemInstruction?.trim()) {
+        messages.push(new SystemMessage(args.systemInstruction));
+    }
+    if (args.userPrompt?.trim()) {
+        messages.push(new HumanMessage(args.userPrompt));
+    } else {
+        messages.push(new HumanMessage('[agent invocation]'));
+    }
+    const aiMsg = new AIMessage(args.assistantResponse || '[empty response]');
+    if (args.reasoningText?.trim()) {
+        (aiMsg as any).additional_kwargs = { reasoning_content: args.reasoningText.trim() };
+    }
+    messages.push(aiMsg);
+    return buildRawTrajectoryJsonl(messages);
+}
+
+export function buildRawTrajectoryJsonl(allMessages: BaseMessage[]): string {
+    const toolResultByCallId = new Map<string, { content: string; ok: boolean }>();
+    for (const message of allMessages) {
+        if (messageTypeForTrace(message) !== 'tool') continue;
+        const raw = message as any;
+        const callId = typeof raw.tool_call_id === 'string' ? raw.tool_call_id : '';
+        if (!callId) continue;
+        const content = typeof raw.content === 'string'
+            ? raw.content
+            : JSON.stringify(scrubTraceValue(raw.content));
+        const ok = raw.status !== 'error';
+        toolResultByCallId.set(callId, { content, ok });
+    }
+
+    let systemText = '';
+    const lettaRows: Array<Record<string, unknown>> = [];
+    const baseMs = Date.now();
+    let stepIdx = 0;
+    const nextTimestamp = () => new Date(baseMs + stepIdx++ * 1_000).toISOString();
+
+    for (const message of allMessages) {
+        const raw = message as any;
+        const messageType = messageTypeForTrace(message);
+
+        if (messageType === 'system') {
+            const text = messageContentToText(raw.content).trim();
+            if (text && !systemText) {
+                systemText = text;
+            }
+            continue;
+        }
+
+        if (messageType === 'human') {
+            const text = messageContentToText(raw.content).trim();
+            if (!text || isHarnessReminderText(text)) continue;
+            lettaRows.push({
+                kind: 'user',
+                text,
+                captured_at: nextTimestamp(),
             });
-        })
-        .join('\n');
+            continue;
+        }
+
+        if (messageType === 'ai') {
+            const msgId = typeof raw.id === 'string' && raw.id ? raw.id : `msg_${stepIdx}`;
+            const reasoningTexts = extractReasoningTextsFromMessage(message);
+            for (const reasoning of reasoningTexts) {
+                lettaRows.push({
+                    kind: 'reasoning',
+                    source_message_id: msgId,
+                    text: reasoning,
+                    captured_at: nextTimestamp(),
+                });
+            }
+
+            const text = messageContentToText(raw.content).trim();
+            if (text) {
+                lettaRows.push({
+                    kind: 'assistant',
+                    source_message_id: msgId,
+                    text,
+                    captured_at: nextTimestamp(),
+                });
+            }
+
+            const toolCalls = Array.isArray(raw.tool_calls) ? raw.tool_calls : [];
+            for (let i = 0; i < toolCalls.length; i++) {
+                const call = toolCalls[i] ?? {};
+                const callId = typeof call.id === 'string' && call.id ? call.id : `${msgId}_call_${i + 1}`;
+                const toolName = typeof call.name === 'string' && call.name ? call.name : 'unknown_tool';
+                const callArgs = call.args ?? {};
+                const command = toolName === SANDBOX_TOOL_NAME && typeof callArgs?.command === 'string'
+                    ? callArgs.command
+                    : '';
+
+                const matchedResult = toolResultByCallId.get(callId);
+                let resultText = matchedResult?.content ?? '';
+                const resultOk = matchedResult?.ok ?? true;
+
+                // Pass 2 (just-bash AST classification): mask output of read-only commands when exit_code === 0
+                if (toolName === SANDBOX_TOOL_NAME && resultOk && command && isReadOnlyBashCommand(command)) {
+                    resultText = 'exit_code=0 [read-only command output masked]';
+                }
+
+                lettaRows.push({
+                    kind: 'tool_call',
+                    source_line_id: callId,
+                    name: toolName,
+                    argsText: typeof callArgs === 'string' ? callArgs : JSON.stringify(callArgs),
+                    resultText,
+                    resultOk,
+                    captured_at: nextTimestamp(),
+                });
+            }
+        }
+    }
+
+    if (!lettaRows.some(row => row.kind === 'user')) {
+        lettaRows.unshift({
+            kind: 'user',
+            text: '[sandbox invocation]',
+            captured_at: new Date(baseMs - 1_000).toISOString(),
+        });
+    }
+    if (!lettaRows.some(row => row.kind === 'assistant' || row.kind === 'tool_call')) {
+        lettaRows.push({
+            kind: 'assistant',
+            text: '[completed]',
+            captured_at: nextTimestamp(),
+        });
+    }
+
+    try {
+        const normalized = normalizeTranscript({
+            source: 'letta-code',
+            transcript: lettaRows.map(row => JSON.stringify(row)).join('\n'),
+            bounds: {
+                ...DEFAULT_NORMALIZATION_BOUNDS,
+                toolResults: { maxCharacters: null, strategy: 'head-tail' },
+            },
+            filters: {
+                systemMessages: 'include',
+                toolResults: 'include',
+            },
+        });
+
+        const records = systemText
+            ? [
+                normalized.records[0],
+                {
+                    role: 'system' as const,
+                    content: systemText,
+                    timestamp: new Date(baseMs).toISOString(),
+                },
+                ...normalized.records.slice(1),
+            ]
+            : normalized.records;
+
+        validateTranscript(records);
+        return records.map(record => JSON.stringify(record)).join('\n');
+    } catch {
+        return lettaRows.map(row => JSON.stringify(row)).join('\n');
+    }
 }
 
 export async function runSandboxToolAgent(
@@ -1391,8 +1647,15 @@ export async function runSandboxToolAgent(
     let shouldSeedBackend = true;
 
     const maxToolTurns = Math.max(1, options.maxToolTurns ?? MAX_TOOL_TURNS);
+    const maxDurationMs = Math.max(1, options.maxDurationMs ?? MAX_SANDBOX_DURATION_MS);
     const maxOutputTokens = Math.max(1, options.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS);
     const totalAllowedTurns = maxToolTurns + OVERTIME_GRACE_TURNS + FORCED_FINAL_OUTPUT_TURNS;
+    const maxMinutes = Math.max(1, Math.round(maxDurationMs / 60_000));
+    const sandboxStartedAt = Date.now();
+    let warned10MinRemaining = false;
+    let warned5MinRemaining = false;
+    let timeExpiredRevoked = false;
+    let forcedTimeExpiredTurnsUsed = 0;
 
     const uploadedFileMessage = buildUploadedFileMessage(provider.providerName, seedFiles);
     if (uploadedFileMessage) {
@@ -1403,8 +1666,25 @@ export async function runSandboxToolAgent(
     const loopStartIndex = messages.length;
 
     for (let turn = 0; turn < totalAllowedTurns; turn++) {
-        const onlyFinalOutputTool = turn >= maxToolTurns + OVERTIME_GRACE_TURNS;
-        const response = await invokeAgentTurn(provider, messages, systemPrompt, options, onlyFinalOutputTool);
+        if (options.abortSignal?.aborted) {
+            throw options.abortSignal.reason ?? new Error('Process stopped by user');
+        }
+
+        const elapsedBeforeTurn = Date.now() - sandboxStartedAt;
+        const remainingBeforeTurn = maxDurationMs - elapsedBeforeTurn;
+        if (!timeExpiredRevoked && remainingBeforeTurn <= 0) {
+            timeExpiredRevoked = true;
+            messages.push(new HumanMessage(buildSandboxTimeExpiredFinalSubmitHarnessNote(maxMinutes)));
+        }
+        if (timeExpiredRevoked) {
+            if (forcedTimeExpiredTurnsUsed >= FORCED_FINAL_OUTPUT_TURNS) {
+                break;
+            }
+            forcedTimeExpiredTurnsUsed++;
+        }
+
+        const onlyFinalOutputTool = timeExpiredRevoked || turn >= maxToolTurns + OVERTIME_GRACE_TURNS;
+        const response = await invokeAgentTurn(provider, messages, systemPrompt, options, onlyFinalOutputTool, turn + 1);
         messages.push(response);
 
         const modelText = getFinalText(response);
@@ -1468,12 +1748,18 @@ export async function runSandboxToolAgent(
             for (const revokedCall of [...sandboxToolCalls, ...sharedWorkspaceToolCalls]) {
                 messages.push(new ToolMessage({
                     name: revokedCall.name,
-                    content: `Tool Error: Access to ${revokedCall.name} has been revoked after exceeding the maximum tool call budget and grace window. Only ${FINAL_OUTPUT_TOOL_NAME} is available.`,
+                    content: timeExpiredRevoked
+                        ? `Tool Error: Access to ${revokedCall.name} has been revoked after reaching the ${maxMinutes}-minute sandbox time limit. Only ${FINAL_OUTPUT_TOOL_NAME} is available.`
+                        : `Tool Error: Access to ${revokedCall.name} has been revoked after exceeding the maximum tool call budget and grace window. Only ${FINAL_OUTPUT_TOOL_NAME} is available.`,
                     tool_call_id: revokedCall.id ?? nanoid(8),
                     status: 'error',
                 }));
             }
-            messages.push(new HumanMessage(buildRevokedToolsFinalSubmitHarnessNote()));
+            messages.push(new HumanMessage(
+                timeExpiredRevoked
+                    ? buildSandboxTimeExpiredFinalSubmitHarnessNote(maxMinutes)
+                    : buildRevokedToolsFinalSubmitHarnessNote()
+            ));
         } else {
             if (sharedWorkspaceToolCalls.length > 0) {
                 for (const toolCall of sharedWorkspaceToolCalls) {
@@ -1525,66 +1811,78 @@ export async function runSandboxToolAgent(
                 ));
             }
 
-            for (const toolCall of sandboxToolCalls) {
-                let parsedCommand = '';
-                let toolResponse: SandboxToolResponse;
+            if (sandboxToolCalls.length > 0) {
+                const seedFilesForBatch = shouldSeedBackend
+                    ? [...directContextSandboxFiles, ...filesystemFiles]
+                    : null;
+                shouldSeedBackend = false;
 
-                try {
-                    const parsed = sandboxToolSchema.parse(toolCall.args ?? {});
-                    parsedCommand = parsed.command;
-                    toolResponse = await executeSandboxTool(
-                        sessionId,
-                        parsedCommand,
-                        shouldSeedBackend ? [...directContextSandboxFiles, ...filesystemFiles] : null,
-                        options.repositoryAccess,
-                        parsed.timeout_ms
-                    );
-                    shouldSeedBackend = false;
-                } catch (error) {
-                    toolResponse = {
-                        ok: false,
-                        exitCode: 1,
-                        stdout: '',
-                        stderr: '',
-                        error: error instanceof Error ? error.message : 'Sandbox tool call failed.',
-                        durationMs: 0,
-                        images: [],
-                        visibleFiles: []
-                    };
-                }
+                const batchResults = await Promise.all(
+                    sandboxToolCalls.map(async (toolCall, index) => {
+                        let parsedCommand = '';
+                        let toolResponse: SandboxToolResponse;
 
-                transcriptParts.push(formatToolTranscript(parsedCommand || '[Invalid or missing sandbox command]', toolResponse));
-                (toolResponse.images ?? []).forEach(image => {
-                    if (image.base64) {
-                        historyImages.set(image.filename, image);
+                        try {
+                            const parsed = sandboxToolSchema.parse(toolCall.args ?? {});
+                            parsedCommand = parsed.command;
+                            toolResponse = await executeSandboxTool(
+                                sessionId,
+                                parsedCommand,
+                                index === 0 ? seedFilesForBatch : null,
+                                options.repositoryAccess,
+                                parsed.timeout_ms
+                            );
+                        } catch (error) {
+                            toolResponse = {
+                                ok: false,
+                                exitCode: 1,
+                                stdout: '',
+                                stderr: '',
+                                error: error instanceof Error ? error.message : 'Sandbox tool call failed.',
+                                durationMs: 0,
+                                images: [],
+                                visibleFiles: []
+                            };
+                        }
+
+                        return { toolCall, parsedCommand, toolResponse };
+                    })
+                );
+
+                for (const { toolCall, parsedCommand, toolResponse } of batchResults) {
+                    transcriptParts.push(formatToolTranscript(parsedCommand || '[Invalid or missing sandbox command]', toolResponse));
+                    (toolResponse.images ?? []).forEach(image => {
+                        if (image.base64) {
+                            historyImages.set(image.filename, image);
+                        }
+                    });
+
+                    const toolContent = [
+                        `Sandbox command ${toolResponse.ok ? 'completed' : 'failed'}.`,
+                        `exit_code=${toolResponse.exitCode}`,
+                        `duration_ms=${toolResponse.durationMs}`,
+                        toolResponse.stdout?.trim() ? `stdout:\n${toolResponse.stdout.trimEnd()}` : '',
+                        toolResponse.stderr?.trim() ? `stderr:\n${toolResponse.stderr.trimEnd()}` : '',
+                        toolResponse.error ? `error:\n${toolResponse.error.trimEnd()}` : '',
+                        toolResponse.visibleFiles?.length
+                            ? `visible_image_files:\n${toolResponse.visibleFiles.map(file => `- ${file.filename} (${file.mimeType})`).join('\n')}`
+                            : 'visible_image_files: none',
+                    ].filter(Boolean).join('\n\n');
+
+                    messages.push(new ToolMessage({
+                        name: SANDBOX_TOOL_NAME,
+                        content: toolContent,
+                        tool_call_id: toolCall.id ?? nanoid(8),
+                        status: toolResponse.ok ? 'success' : 'error',
+                        artifact: {
+                            images: (toolResponse.images ?? []).map(({ filename, mimeType, url }) => ({ filename, mimeType, url })),
+                        },
+                    }));
+
+                    const generatedImageMessage = buildGeneratedImageMessage(provider.providerName, toolResponse.images ?? []);
+                    if (generatedImageMessage) {
+                        messages.push(generatedImageMessage);
                     }
-                });
-
-                const toolContent = [
-                    `Sandbox command ${toolResponse.ok ? 'completed' : 'failed'}.`,
-                    `exit_code=${toolResponse.exitCode}`,
-                    `duration_ms=${toolResponse.durationMs}`,
-                    toolResponse.stdout?.trim() ? `stdout:\n${toolResponse.stdout.trimEnd()}` : '',
-                    toolResponse.stderr?.trim() ? `stderr:\n${toolResponse.stderr.trimEnd()}` : '',
-                    toolResponse.error ? `error:\n${toolResponse.error.trimEnd()}` : '',
-                    toolResponse.visibleFiles?.length
-                        ? `visible_image_files:\n${toolResponse.visibleFiles.map(file => `- ${file.filename} (${file.mimeType})`).join('\n')}`
-                        : 'visible_image_files: none',
-                ].filter(Boolean).join('\n\n');
-
-                messages.push(new ToolMessage({
-                    name: SANDBOX_TOOL_NAME,
-                    content: toolContent,
-                    tool_call_id: toolCall.id ?? nanoid(8),
-                    status: toolResponse.ok ? 'success' : 'error',
-                    artifact: {
-                        images: (toolResponse.images ?? []).map(({ filename, mimeType, url }) => ({ filename, mimeType, url })),
-                    },
-                }));
-
-                const generatedImageMessage = buildGeneratedImageMessage(provider.providerName, toolResponse.images ?? []);
-                if (generatedImageMessage) {
-                    messages.push(generatedImageMessage);
                 }
             }
         }
@@ -1592,18 +1890,40 @@ export async function runSandboxToolAgent(
         // Inject tool-call budget countdown notes and overtime transitions (§8.5)
         const completedTurns = turn + 1;
         const remainingInMainBudget = maxToolTurns - completedTurns;
-        if (remainingInMainBudget === 10) {
-            messages.push(new HumanMessage(buildRemainingToolCallsHarnessNote(10, maxToolTurns)));
-        } else if (remainingInMainBudget === 5) {
-            messages.push(new HumanMessage(buildRemainingToolCallsHarnessNote(5, maxToolTurns)));
-        } else if (completedTurns === maxToolTurns) {
-            messages.push(new HumanMessage(buildOvertimeFinalSubmitHarnessNote(maxToolTurns, OVERTIME_GRACE_TURNS)));
-        } else if (completedTurns === maxToolTurns + OVERTIME_GRACE_TURNS) {
-            messages.push(new HumanMessage(buildRevokedToolsFinalSubmitHarnessNote()));
+        if (!timeExpiredRevoked) {
+            if (remainingInMainBudget === 10) {
+                messages.push(new HumanMessage(buildRemainingToolCallsHarnessNote(10, maxToolTurns)));
+            } else if (remainingInMainBudget === 5) {
+                messages.push(new HumanMessage(buildRemainingToolCallsHarnessNote(5, maxToolTurns)));
+            } else if (completedTurns === maxToolTurns) {
+                messages.push(new HumanMessage(buildOvertimeFinalSubmitHarnessNote(maxToolTurns, OVERTIME_GRACE_TURNS)));
+            } else if (completedTurns === maxToolTurns + OVERTIME_GRACE_TURNS) {
+                messages.push(new HumanMessage(buildRevokedToolsFinalSubmitHarnessNote()));
+            }
+        }
+
+        // Inject wall-clock time countdown notes at <= 10 minutes and <= 5 minutes remaining, and enforce 60-minute cutoff
+        const elapsedAfterTurn = Date.now() - sandboxStartedAt;
+        const remainingTimeMs = maxDurationMs - elapsedAfterTurn;
+        if (remainingTimeMs <= 0) {
+            if (!timeExpiredRevoked) {
+                timeExpiredRevoked = true;
+                messages.push(new HumanMessage(buildSandboxTimeExpiredFinalSubmitHarnessNote(maxMinutes)));
+            }
+        } else if (remainingTimeMs <= SANDBOX_WARNING_5_MIN_MS && !warned5MinRemaining) {
+            warned5MinRemaining = true;
+            warned10MinRemaining = true;
+            messages.push(new HumanMessage(buildRemainingSandboxTimeHarnessNote(5, maxMinutes)));
+        } else if (remainingTimeMs <= SANDBOX_WARNING_10_MIN_MS && !warned10MinRemaining) {
+            warned10MinRemaining = true;
+            messages.push(new HumanMessage(buildRemainingSandboxTimeHarnessNote(10, maxMinutes)));
         }
     }
 
     if (!finalText) {
+        if (timeExpiredRevoked) {
+            throw new Error(`${options.agentName} exceeded the ${maxMinutes}-minute sandbox wall-clock time budget (plus ${FORCED_FINAL_OUTPUT_TURNS} forced-submit turns) without submitting final_output.`);
+        }
         throw new Error(`${options.agentName} exceeded ${maxToolTurns} sandbox tool turns (plus ${OVERTIME_GRACE_TURNS} grace turns and ${FORCED_FINAL_OUTPUT_TURNS} forced-submit turns) without submitting final_output.`);
     }
 

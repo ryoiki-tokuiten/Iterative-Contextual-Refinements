@@ -18,6 +18,8 @@ import {
 import { parsePromptToGeminiParts } from './contextBuilders';
 import { CURRENT_STATE_VERSION, type VersionedState } from '../../Core/StateSerializer/StateVersion';
 import { globalState } from '../../Core/State';
+import { isTerminalInferenceError } from '../../Core/ProviderError';
+import type { CallAIOptions } from '../../Routing';
 import type {
     DeepthinkRunConfig,
     BsrGlobalUpdateRecord,
@@ -185,7 +187,14 @@ let setActiveDeepthinkPipeline: ((pipeline: DeepthinkPipelineState | null) => vo
 let render: () => void = () => { };
 
 export interface DeepthinkCoreDeps {
-    callAI: (parts: Part[], modelToUse: string, systemInstruction?: string, isJson?: boolean, thinkingConfig?: ThinkingConfig) => Promise<GenerateContentResponse>;
+    callAI: (
+        parts: Part[],
+        modelToUse: string,
+        systemInstruction?: string,
+        isJson?: boolean,
+        thinkingConfig?: ThinkingConfig,
+        options?: CallAIOptions
+    ) => Promise<GenerateContentResponse>;
     parseJsonSafe: (raw: string, context: string) => any;
     getSelectedModel: () => string;
     getSelectedStrategiesCount: () => number;
@@ -213,12 +222,12 @@ let deps: DeepthinkCoreDeps = null!;
 
 function captureRunConfig(): DeepthinkRunConfig {
     const rawI = (deps as any).getI?.() ?? (deps.getDeepthinkDepth ? deps.getDeepthinkDepth() : 10);
-    const rawJ = (deps as any).getJ?.() ?? 5;
-    const rawK = (deps as any).getK?.() ?? 3;
+    const rawJ = (deps as any).getJ?.() ?? 4;
+    const rawK = (deps as any).getK?.() ?? 4;
 
     const i = Math.round(rawI || 10);
-    const j = Math.round(rawJ || 5);
-    const k = Math.round(rawK || 3);
+    const j = Math.round(rawJ || 4);
+    const k = Math.round(rawK || 4);
 
     const model = deps.getSelectedModel();
     if (!model || !model.trim()) {
@@ -342,9 +351,9 @@ export async function saveLatestDeepthinkState(pipeline: DeepthinkPipelineState)
                 modelParameters: {
                     strategiesCount: pipeline.runConfig?.strategiesCount ?? (deps?.getSelectedStrategiesCount ? deps.getSelectedStrategiesCount() : 3),
                     strategyProximityLoops: pipeline.runConfig?.strategyProximityLoops ?? (deps?.getStrategyProximityLoops ? deps.getStrategyProximityLoops() : 1),
-                    hypothesisCount: pipeline.runConfig?.hypothesisCount ?? (deps?.getSelectedHypothesisCount ? deps.getSelectedHypothesisCount() : 3),
+                    hypothesisCount: pipeline.runConfig?.hypothesisCount ?? (deps?.getSelectedHypothesisCount ? deps.getSelectedHypothesisCount() : 4),
                     hypothesisProximityLoops: pipeline.runConfig?.hypothesisProximityLoops ?? (deps?.getHypothesisProximityLoops ? deps.getHypothesisProximityLoops() : 1),
-                    deepthinkDepth: pipeline.runConfig?.i ?? (deps?.getDeepthinkDepth ? deps.getDeepthinkDepth() : 5),
+                    deepthinkDepth: pipeline.runConfig?.i ?? (deps?.getDeepthinkDepth ? deps.getDeepthinkDepth() : 10),
                     isolateBranches: pipeline.runConfig?.isolateBranches ?? (deps?.getIsolateBranchesEnabled ? deps.getIsolateBranchesEnabled() : false),
                     deepthinkCodeExecutionEnabled: pipeline.runConfig?.deepthinkCodeExecutionEnabled ?? (deps?.getDeepthinkCodeExecutionEnabled ? deps.getDeepthinkCodeExecutionEnabled() : false),
                     thinkingLevel: pipeline.runConfig?.thinkingLevel ?? (deps?.getSelectedThinkingLevel ? deps.getSelectedThinkingLevel() : 'high'),
@@ -565,7 +574,14 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, direc
                 args.model,
                 args.systemInstruction,
                 Boolean(args.responseSchema),
-                args.thinkingConfig ? { thinkingLevel: args.thinkingConfig.thinkingLevel as any } : undefined
+                args.thinkingConfig ? { thinkingLevel: args.thinkingConfig.thinkingLevel as any } : undefined,
+                {
+                    abortSignal: args.abortSignal,
+                    retryDelaysMs: args.retryDelaysMs,
+                    silenceTimeoutMs: args.silenceTimeoutMs,
+                    label: args.stepDescription || `${args.agentKind || 'agent'}:${args.model}`,
+                    onRetry: args.onRetry,
+                }
             );
             return response.text || '';
         },
@@ -589,7 +605,12 @@ export async function startDeepthinkAnalysisProcess(challengeText: string, direc
         pipeline.status = 'completed';
         await saveLatestDeepthinkState(pipeline);
     } catch (error: any) {
-        if (error instanceof PipelineStopRequestedError || error instanceof OrchestratorStopRequestedError || error.name === 'PipelineStopRequestedError') {
+        if (
+            error instanceof PipelineStopRequestedError ||
+            error instanceof OrchestratorStopRequestedError ||
+            error?.name === 'PipelineStopRequestedError' ||
+            isTerminalInferenceError(error)
+        ) {
             pipeline.status = 'stopped';
             pipeline.isStopRequested = false;
             resetInFlightPipelineExecution(pipeline);
@@ -637,7 +658,14 @@ export async function resumeDeepthinkAnalysisProcess() {
                 args.model,
                 args.systemInstruction,
                 Boolean(args.responseSchema),
-                args.thinkingConfig ? { thinkingLevel: args.thinkingConfig.thinkingLevel as any } : undefined
+                args.thinkingConfig ? { thinkingLevel: args.thinkingConfig.thinkingLevel as any } : undefined,
+                {
+                    abortSignal: args.abortSignal,
+                    retryDelaysMs: args.retryDelaysMs,
+                    silenceTimeoutMs: args.silenceTimeoutMs,
+                    label: args.stepDescription || `${args.agentKind || 'agent'}:${args.model}`,
+                    onRetry: args.onRetry,
+                }
             );
             return response.text || '';
         },
@@ -661,7 +689,12 @@ export async function resumeDeepthinkAnalysisProcess() {
         pipeline.status = 'completed';
         await saveLatestDeepthinkState(pipeline);
     } catch (error: any) {
-        if (error instanceof PipelineStopRequestedError || error instanceof OrchestratorStopRequestedError || error.name === 'PipelineStopRequestedError') {
+        if (
+            error instanceof PipelineStopRequestedError ||
+            error instanceof OrchestratorStopRequestedError ||
+            error?.name === 'PipelineStopRequestedError' ||
+            isTerminalInferenceError(error)
+        ) {
             pipeline.status = 'stopped';
             pipeline.isStopRequested = false;
             resetInFlightPipelineExecution(pipeline);

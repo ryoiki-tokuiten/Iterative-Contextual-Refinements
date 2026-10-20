@@ -243,4 +243,32 @@ test('buildBsrGradedPredictionsHistoryWithNote formats Window 2, Window 3, and W
     assert.ok(historyAtGu5.includes('It was graded in Global Update 4 and the actual outcome was: REGRESS (you gave this a 20% chance).'));
 });
 
+test('just-bash AST classification identifies read-only inspection commands and rejects redirections or mutations', async () => {
+    const { isReadOnlyBashCommand } = await import('../../Backend/sandboxToolBackend.ts');
+    assert.equal(isReadOnlyBashCommand('ls -la && git status | grep main'), true);
+    assert.equal(isReadOnlyBashCommand('cat README.md && rg "pattern" src/ && find . -name "*.ts"'), true);
+    assert.equal(isReadOnlyBashCommand('rtk ls -la && rtk read foo.txt'), true);
+    assert.equal(isReadOnlyBashCommand('cat foo.txt > bar.txt'), false);
+    assert.equal(isReadOnlyBashCommand('ls -la >> out.log'), false);
+    assert.equal(isReadOnlyBashCommand('find . -name "*.tmp" -delete'), false);
+    assert.equal(isReadOnlyBashCommand('python3 script.py'), false);
+    assert.equal(isReadOnlyBashCommand('git checkout -b test'), false);
+});
 
+test('@letta-ai/trajectory normalizes and validates .jsonl trajectories with structured role records', async () => {
+    const { formatDirectCallTrajectoryJsonl } = await import('./pipelineOrchestrator.ts');
+    const jsonl = formatDirectCallTrajectoryJsonl({
+        systemInstruction: 'You are a Deepthink agent.',
+        userPrompt: 'Solve the recurrence.',
+        assistantResponse: 'The closed form is 2^n - 1.',
+    });
+    const records = jsonl.trim().split('\n').map(line => JSON.parse(line));
+    assert.equal(records[0].role, 'meta');
+    assert.equal(records[0].source, 'letta-code');
+    assert.equal(records[1].role, 'system');
+    assert.equal(records[1].content, 'You are a Deepthink agent.');
+    assert.equal(records[2].role, 'user');
+    assert.equal(records[2].content, 'Solve the recurrence.');
+    assert.equal(records[3].role, 'assistant');
+    assert.equal(records[3].content, 'The closed form is 2^n - 1.');
+});

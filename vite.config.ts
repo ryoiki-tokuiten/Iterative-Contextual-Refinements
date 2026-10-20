@@ -31,11 +31,53 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [{
       name: 'iterative-studio-sandbox-backend',
+      enforce: 'pre',
       configureServer(server) {
         installBackendMiddleware(server);
       },
       configurePreviewServer(server) {
         installBackendMiddleware(server);
+      },
+      resolveId(source, _importer, options) {
+        if (options?.ssr) return null;
+        if (source === 'just-bash') {
+          return path.resolve(__dirname, 'node_modules/just-bash/dist/bundle/index.js');
+        }
+        if (source.startsWith('node:')) {
+          return `\0browser-node-shim:${source}`;
+        }
+        return null;
+      },
+      load(id) {
+        if (!id.startsWith('\0browser-node-shim:')) return null;
+        return [
+          'export const spawn = () => { throw new Error("Not supported in browser"); };',
+          'export const accessSync = () => {};',
+          'export const existsSync = () => false;',
+          'export const readdirSync = () => [];',
+          'export const statSync = () => ({ isDirectory: () => false, isFile: () => false, mtimeMs: 0 });',
+          'export const readFileSync = () => "";',
+          'export const writeFileSync = () => {};',
+          'export const open = async () => { throw new Error("Not supported in browser"); };',
+          'export const constants = { R_OK: 4 };',
+          'export const homedir = () => "/";',
+          'export const join = (...parts) => parts.filter(Boolean).join("/");',
+          'export const dirname = (p) => String(p || "").split("/").slice(0, -1).join("/") || "/";',
+          'export const basename = (p) => String(p || "").split("/").pop() || "";',
+          'export const sep = "/";',
+          'export const fileURLToPath = (u) => String(u || "");',
+          'export const createRequire = () => () => ({});',
+          'export const createHash = () => ({ update() { return this; }, digest() { return ""; } });',
+          'export const randomBytes = (n) => new Uint8Array(n || 0);',
+          'export const gunzipSync = (buf) => buf;',
+          'export const gzipSync = (buf) => buf;',
+          'export class Worker {}',
+          'export const parentPort = null;',
+          'export const workerData = null;',
+          'export class AsyncLocalStorage { run(_store, fn, ...args) { return fn(...args); } getStore() { return undefined; } }',
+          'export const Buffer = globalThis.Buffer || Uint8Array;',
+          'export default {};',
+        ].join('\n');
       },
     }],
     define: {

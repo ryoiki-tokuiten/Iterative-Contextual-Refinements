@@ -61,8 +61,8 @@ export function formatApiCallCount(value: number): string {
 export function calculateDeepthinkApiCallsFromParams(params: ModelParameters): DeepthinkApiCallEstimate {
     const strategiesCount = Math.max(1, Math.min(params.strategiesCount ?? 3, 5));
     const i = Math.max(1, Math.min(params.i ?? params.deepthinkDepth ?? 10, MAX_DEEPTHINK_DEPTH));
-    const j = Math.max(3, Math.min(params.j ?? 5, 8));
-    const k = Math.max(2, Math.min(params.k ?? 3, j));
+    const j = Math.max(3, Math.min(params.j ?? 4, 8));
+    const k = Math.max(2, Math.min(params.k ?? 4, j));
     const strategyProximityLoops = Math.max(0, Math.min(MAX_STRATEGY_PROXIMITY_LOOPS, params.strategyProximityLoops ?? 1));
     const hypothesisCount = Math.max(0, Math.min(MAX_HYPOTHESIS_COUNT, params.hypothesisCount ?? 0));
     const hypothesisProximityLoops = Math.max(0, Math.min(MAX_HYPOTHESIS_PROXIMITY_LOOPS, params.hypothesisProximityLoops ?? 1));

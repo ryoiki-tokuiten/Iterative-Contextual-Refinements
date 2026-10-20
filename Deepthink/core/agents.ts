@@ -7,7 +7,11 @@
  */
 
 import { Part } from "@google/genai";
-import { describeProviderError } from '../../Core/ProviderError';
+import {
+    describeProviderError,
+    isTerminalInferenceError,
+    isUserAbortError,
+} from '../../Core/ProviderError';
 
 // Agent response interface
 interface AgentResponse {
@@ -163,11 +167,14 @@ ${conversationHistory || 'This is the first proximity review.'}
 Act as the ${kind === 'strategies' ? 'Strategies' : 'Hypothesis'} Proximity Agent. Audit the candidate set for convergence, duplication, missing orthogonal domains, structural blind spots, untested assumptions, and local-minimum behavior. Be demanding and specific. Do not solve the core challenge and do not rewrite the candidates. Return a concise critique that a generator can use for its next revision.`;
 }
 
-/** Wraps an async agent body with standard error handling. */
+/** Wraps an async agent body with standard error handling, while rethrowing terminal inference/silence/abort errors. */
 async function wrapAgent(fn: () => Promise<AgentResponse>): Promise<AgentResponse> {
     try {
         return await fn();
     } catch (error) {
+        if (isTerminalInferenceError(error) || isUserAbortError(error)) {
+            throw error;
+        }
         return { success: false, error: describeProviderError(error) };
     }
 }

@@ -318,6 +318,28 @@ export function buildRevokedToolsFinalSubmitHarnessNote(): string {
   ].join('\n');
 }
 
+export function buildRemainingSandboxTimeHarnessNote(
+  remainingMinutes: number,
+  maxMinutes = 60
+): string {
+  return `[HARNESS NOTE — ${remainingMinutes} MINUTES REMAINING]: You have ${remainingMinutes} minutes of wall-clock time remaining out of your maximum ${maxMinutes}-minute sandbox budget. Begin wrapping up your verification and prepare to submit your complete response via final_output.`;
+}
+
+export function buildSandboxTimeExpiredFinalSubmitHarnessNote(
+  maxMinutes = 60
+): string {
+  return [
+    '================================================================================',
+    `[CRITICAL HARNESS ENFORCEMENT — MAXIMUM SANDBOX TIME BUDGET (${maxMinutes} MINUTES) REACHED]`,
+    'STOP ALL NEW EXPLORATION AND SUBMIT YOUR FINAL OUTPUT NOW!',
+    `You have reached the ${maxMinutes}-minute wall-clock time limit for this agent invocation without submitting via final_output.`,
+    'Your run is NOT being restarted—all of your sandbox work and conversation history remain intact.',
+    'Access to sandbox_exec and shared_workspace has now been revoked.',
+    'Only the final_output tool is available. Call final_output immediately with your complete response.',
+    '================================================================================',
+  ].join('\n');
+}
+
 export function buildFinalOutputTokenGateHarnessNote(
   agentName: string,
   actualTokens: number,

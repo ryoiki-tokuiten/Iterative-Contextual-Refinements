@@ -4,20 +4,30 @@
  */
 
 import type { ToolDefinition } from '@langchain/core/language_models/base';
-import { AIMessage, BaseMessage, ToolMessage } from '@langchain/core/messages';
+import { AIMessage, AIMessageChunk, BaseMessage, SystemMessage, ToolMessage } from '@langchain/core/messages';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { type Content as GeminiContent, type Part as GeminiPart } from '@google/genai';
 import { ChatOpenAI } from '@langchain/openai';
 import { nanoid } from 'nanoid';
-import { getRoutingManager, callAI } from '../Routing';
+import { getRoutingManager, callAI, type CallAIOptions } from '../Routing';
 import { getProviderType, type ProviderConfig, type ProviderType } from '../Routing/ProviderManager';
 import {
     getOpenAICompatibleProxyBaseURL,
     OPENAI_COMPATIBLE_ENDPOINT_HEADER,
 } from '../Routing/OpenAICompatibleProxy';
+import {
+    executeWithInferenceRetry,
+    normalizeOpenAICompatibleProviderError,
+    withSilenceWatchdog,
+} from './ProviderError';
 
-interface ToolCallingAgentOptions {
+export interface ToolCallingAgentOptions {
     modelName: string;
+    abortSignal?: AbortSignal;
+    retryDelaysMs?: readonly number[];
+    silenceTimeoutMs?: number;
+    label?: string;
+    onRetry?: (attempt: number, maxRetries: number, delayMs: number, error: unknown) => void;
 }
 
 export type ResolvedProvider = {
@@ -83,7 +93,8 @@ function createOpenAICompatibleAgentModel(
 export function createToolCallingAgentModel(
     providerName: Exclude<ResolvedProvider['providerName'], 'gemini'>,
     providerConfig: ProviderConfig,
-    options: ToolCallingAgentOptions
+    options: ToolCallingAgentOptions,
+    enableAnthropicThinking = true
 ): ToolCallingChatModel {
     const commonOptions = getAgentModelOptions(options);
     const browserSafeConfig = {
@@ -116,7 +127,15 @@ export function createToolCallingAgentModel(
             return new ChatAnthropic({
                 ...commonOptions,
                 apiKey: providerConfig.apiKey!,
-                maxTokens: 4096,
+                maxTokens: 16384,
+                ...(enableAnthropicThinking
+                    ? {
+                        thinking: {
+                            type: 'enabled',
+                            budget_tokens: 4096,
+                        },
+                    }
+                    : {}),
                 clientOptions: {
                     dangerouslyAllowBrowser: true
                 }
@@ -267,6 +286,13 @@ export async function invokeGeminiToolAgentTurn(
     options: ToolCallingAgentOptions
 ): Promise<AIMessage> {
     const contents = buildGeminiContents(messages);
+    const callOptions: CallAIOptions = {
+        abortSignal: options.abortSignal,
+        retryDelaysMs: options.retryDelaysMs,
+        silenceTimeoutMs: options.silenceTimeoutMs,
+        label: options.label || `gemini:${options.modelName}`,
+        onRetry: options.onRetry,
+    };
     const response = await callAI(
         contents as any,
         options.modelName,
@@ -276,10 +302,140 @@ export async function invokeGeminiToolAgentTurn(
             tools: [{
                 functionDeclarations: buildGeminiFunctionDeclarations(tools)
             }]
-        }
+        },
+        callOptions
     );
 
     return createGeminiAiMessage(response);
+}
+
+async function streamLangChainModelTurn(
+    boundModel: ReturnType<ToolCallingChatModel['bindTools']>,
+    inputMessages: BaseMessage[],
+    signal: AbortSignal,
+    touch: () => void
+): Promise<AIMessage> {
+    if (typeof (boundModel as any).stream !== 'function') {
+        const result = await boundModel.invoke(inputMessages, { signal });
+        touch();
+        return result as AIMessage;
+    }
+
+    const stream = await boundModel.stream(inputMessages, { signal });
+    let aggregated: AIMessageChunk | null = null;
+    for await (const chunk of stream) {
+        touch();
+        aggregated = aggregated ? aggregated.concat(chunk) : chunk;
+    }
+
+    if (!aggregated) {
+        return new AIMessage({ content: '' });
+    }
+
+    return new AIMessage({
+        content: aggregated.content,
+        tool_calls: aggregated.tool_calls,
+        invalid_tool_calls: aggregated.invalid_tool_calls,
+        additional_kwargs: aggregated.additional_kwargs,
+        response_metadata: aggregated.response_metadata,
+        id: aggregated.id,
+        usage_metadata: aggregated.usage_metadata,
+    });
+}
+
+/**
+ * Unified tool-calling turn invocation across all providers:
+ * - Streams responses with reasoning/thought traces enabled
+ * - Resets a 5-minute rolling silence watchdog on every chunk
+ * - Retries transient provider errors with 1m -> 3m -> 5m backoff (fast-failing permanent 4xx errors)
+ */
+export async function invokeToolCallingAgentTurn(
+    provider: ResolvedProvider,
+    messages: BaseMessage[],
+    systemPrompt: string,
+    tools: ToolDefinition[],
+    options: ToolCallingAgentOptions
+): Promise<AIMessage> {
+    if (provider.providerName === 'gemini') {
+        return invokeGeminiToolAgentTurn(
+            provider.providerConfig,
+            messages,
+            systemPrompt,
+            tools,
+            {
+                ...options,
+                modelName: provider.modelSelectionId || provider.modelName,
+            }
+        );
+    }
+
+    const label = options.label || `${provider.providerName}:${provider.modelName}`;
+    const inputMessages: BaseMessage[] = [
+        new SystemMessage(systemPrompt),
+        ...messages,
+    ];
+
+    return await executeWithInferenceRetry(
+        {
+            label,
+            retryDelaysMs: options.retryDelaysMs,
+            externalSignal: options.abortSignal,
+            onRetry: options.onRetry,
+        },
+        async () => {
+            return await withSilenceWatchdog(
+                {
+                    label,
+                    silenceTimeoutMs: options.silenceTimeoutMs,
+                    externalSignal: options.abortSignal,
+                },
+                async ({ signal, touch }) => {
+                    try {
+                        const model = createToolCallingAgentModel(
+                            provider.providerName as Exclude<ResolvedProvider['providerName'], 'gemini'>,
+                            provider.providerConfig,
+                            {
+                                ...options,
+                                modelName: provider.modelName,
+                            },
+                            true
+                        ).bindTools(tools);
+
+                        try {
+                            return await streamLangChainModelTurn(model, inputMessages, signal, touch);
+                        } catch (innerError: any) {
+                            const msg = String(innerError?.message || innerError || '').toLowerCase();
+                            if (
+                                provider.providerName === 'anthropic' &&
+                                (msg.includes('thinking') || msg.includes('budget_tokens'))
+                            ) {
+                                const fallbackModel = createToolCallingAgentModel(
+                                    'anthropic',
+                                    provider.providerConfig,
+                                    {
+                                        ...options,
+                                        modelName: provider.modelName,
+                                    },
+                                    false
+                                ).bindTools(tools);
+                                return await streamLangChainModelTurn(fallbackModel, inputMessages, signal, touch);
+                            }
+                            throw innerError;
+                        }
+                    } catch (error) {
+                        if (provider.providerName === 'openai-compatible' && provider.providerConfig.baseURL) {
+                            throw normalizeOpenAICompatibleProviderError(
+                                error,
+                                provider.providerConfig.baseURL,
+                                provider.modelName
+                            );
+                        }
+                        throw error;
+                    }
+                }
+            );
+        }
+    );
 }
 
 export function messageContentToText(content: BaseMessage['content']): string {

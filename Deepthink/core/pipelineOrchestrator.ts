@@ -75,6 +75,67 @@ import type {
   DeepthinkResultsContextFile,
 } from './types.ts';
 
+import {
+  DEFAULT_NORMALIZATION_BOUNDS,
+  normalizeTranscript,
+  validateTranscript,
+} from '@letta-ai/trajectory';
+import {
+  INFERENCE_RETRY_DELAYS_MS,
+  InferenceSilenceTimeoutError,
+  isTerminalInferenceError,
+  withSilenceWatchdog,
+} from '../../Core/ProviderError.ts';
+
+export function formatDirectCallTrajectoryJsonl(args: {
+  systemInstruction?: string;
+  userPrompt?: string;
+  assistantResponse: string;
+}): string {
+  const baseMs = Date.now();
+  const rows = [
+    {
+      kind: 'user',
+      text: args.userPrompt?.trim() || '[agent invocation]',
+      captured_at: new Date(baseMs).toISOString(),
+    },
+    {
+      kind: 'assistant',
+      text: args.assistantResponse?.trim() || '[completed]',
+      captured_at: new Date(baseMs + 1_000).toISOString(),
+    },
+  ];
+  try {
+    const normalized = normalizeTranscript({
+      source: 'letta-code',
+      transcript: rows.map(row => JSON.stringify(row)).join('\n'),
+      bounds: {
+        ...DEFAULT_NORMALIZATION_BOUNDS,
+        toolResults: { maxCharacters: null, strategy: 'head-tail' },
+      },
+      filters: {
+        systemMessages: 'include',
+        toolResults: 'include',
+      },
+    });
+    const records = args.systemInstruction?.trim()
+      ? [
+          normalized.records[0],
+          {
+            role: 'system' as const,
+            content: args.systemInstruction.trim(),
+            timestamp: new Date(baseMs).toISOString(),
+          },
+          ...normalized.records.slice(1),
+        ]
+      : normalized.records;
+    validateTranscript(records);
+    return records.map(record => JSON.stringify(record)).join('\n');
+  } catch {
+    return rows.map(row => JSON.stringify(row)).join('\n');
+  }
+}
+
 async function getSandboxToolAgentRunner() {
   try {
     const mod = await import('../../Core/SandboxToolRuntime.ts');
@@ -88,10 +149,9 @@ async function getSandboxToolAgentRunner() {
 // Constants & Failure Policy (§9)
 // ============================================================================
 
-/** Delays for 4 total attempts: 30s, 60s, 5m (§9) */
-const RETRY_DELAYS_MS = [30_000, 60_000, 5 * 60_000] as const;
+/** Delays for 4 total attempts: 1m, 3m, 5m */
+const RETRY_DELAYS_MS = INFERENCE_RETRY_DELAYS_MS;
 const MAX_API_ATTEMPTS = RETRY_DELAYS_MS.length + 1; // 4 attempts total
-const TOTAL_AGENT_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes shared by attempts and delays (§9)
 
 export interface PipelineExecutionCallbacks {
   callAI: (args: {
@@ -102,12 +162,18 @@ export interface PipelineExecutionCallbacks {
     responseSchema?: Record<string, unknown> | boolean;
     agentKind?: DeepthinkAgentKind;
     stepDescription?: string;
+    abortSignal?: AbortSignal;
+    retryDelaysMs?: readonly number[];
+    silenceTimeoutMs?: number;
+    onChunkActivity?: () => void;
+    onRetry?: (attempt: number, maxRetries: number, delayMs: number, error: unknown) => void;
   }) => Promise<string>;
   parseJsonStrict?: <T>(text: string) => T;
   parseJsonSafe?: <T>(text: string, fallback?: T) => T;
   onLiveEvent?: (event: DeepthinkLiveEvent) => void;
   onStateChange?: (state: DeepthinkPipelineState) => void;
   retryDelaysMs?: number[];
+  silenceTimeoutMs?: number;
 }
 
 export class PipelineStopRequestedError extends Error {
@@ -679,8 +745,7 @@ export class DeepthinkPipelineOrchestrator {
         ) {
           throw err;
         }
-        branch.status = 'error';
-        branch.error = err.message || String(err);
+        return this.pausePipelineOnInferenceFailure(err?.message || String(err));
       }
     }));
 
@@ -761,8 +826,7 @@ export class DeepthinkPipelineOrchestrator {
         ) {
           throw err;
         }
-        branch.solutionCritiqueStatus = 'error';
-        branch.error = err.message || String(err);
+        return this.pausePipelineOnInferenceFailure(err?.message || String(err));
       }
     }));
 
@@ -880,8 +944,7 @@ export class DeepthinkPipelineOrchestrator {
         ) {
           throw err;
         }
-        branch.correctionStatus = 'error';
-        branch.error = err.message || String(err);
+        return this.pausePipelineOnInferenceFailure(err?.message || String(err));
       }
     }));
 
@@ -972,8 +1035,7 @@ export class DeepthinkPipelineOrchestrator {
         ) {
           throw err;
         }
-        branch.solutionCritiqueStatus = 'error';
-        branch.error = err.message || String(err);
+        return this.pausePipelineOnInferenceFailure(err?.message || String(err));
       }
     }));
 
@@ -2372,23 +2434,15 @@ export class DeepthinkPipelineOrchestrator {
             `\n## Critique\n${historyEntry.critique}`,
           ].join('\n\n'),
         });
-        const solJsonl = (historyEntry as any).solutionTrajectoryJsonl || JSON.stringify({
-          role: 'assistant',
-          message_type: 'ai',
-          agent_kind: iteration === 1 ? 'solutionAttempt' : 'solutionCorrection',
-          branch_id: branch.id,
-          iteration,
-          content: historyEntry.correctedSolution,
+        const solJsonl = (historyEntry as any).solutionTrajectoryJsonl || formatDirectCallTrajectoryJsonl({
+          userPrompt: `[Strategy ${branch.id} Iteration ${iteration} Solution]`,
+          assistantResponse: historyEntry.correctedSolution,
         });
         const critJsonl = (historyEntry as any).critiqueTrajectoryJsonl || (
           historyEntry.critique
-            ? JSON.stringify({
-                role: 'assistant',
-                message_type: 'ai',
-                agent_kind: 'solutionCritique',
-                branch_id: branch.id,
-                iteration,
-                content: historyEntry.critique,
+            ? formatDirectCallTrajectoryJsonl({
+                userPrompt: `[Strategy ${branch.id} Iteration ${iteration} Critique]`,
+                assistantResponse: historyEntry.critique,
               })
             : ''
         );
@@ -2405,11 +2459,11 @@ export class DeepthinkPipelineOrchestrator {
   }
 
   /**
-   * Dispatches an agent model call with the strict failure and retry policy (§9):
-   * - 4 total attempts
-   * - Delays of 30s, 60s, 5m
-   * - 30-minute shared timeout
-   * - Output contract validation with auto-retry
+   * Dispatches an agent model call with the unified failure, watchdog, and retry policy:
+   * - 4 total attempts (initial + 3m, 10m, 15m backoff retries on real errors)
+   * - 5-minute rolling silence watchdog (stops/pauses immediately on 5m total silence)
+   * - 1-hour wall-clock budget and 64 tool-call budget for sandboxed invocations
+   * - On terminal failure, cleanly pauses the Deepthink pipeline instead of skipping branches
    */
   private async callAgentModelWithRetry<T = unknown>(args: {
     kind: DeepthinkAgentKind;
@@ -2439,7 +2493,6 @@ export class DeepthinkPipelineOrchestrator {
     const displayAgentName = metadata ? `${metadata.label} Agent` : `${args.kind} Agent`;
     const executionId = args.executionId || `inv-${nanoid(10)}`;
 
-    const startedAt = Date.now();
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= MAX_API_ATTEMPTS; attempt++) {
@@ -2456,11 +2509,6 @@ export class DeepthinkPipelineOrchestrator {
         codeExecutionEnabled: !!config.deepthinkCodeExecutionEnabled,
       });
 
-      const timeRemaining = Math.max(1, TOTAL_AGENT_TIMEOUT_MS - (Date.now() - startedAt));
-      if (timeRemaining <= 0) {
-        break;
-      }
-
       try {
         let outputText: string;
         let executionTraceText: string | undefined;
@@ -2468,8 +2516,34 @@ export class DeepthinkPipelineOrchestrator {
 
         const abortPromise = new Promise<never>((_, reject) => {
           if (this.isStopRequested) return reject(new PipelineStopRequestedError());
-          this.abortController.signal.addEventListener('abort', () => reject(new PipelineStopRequestedError()), { once: true });
+          this.abortController.signal.addEventListener('abort', () => {
+            const reason = this.abortController.signal.reason;
+            if (reason instanceof InferenceSilenceTimeoutError || isTerminalInferenceError(reason)) {
+              reject(reason);
+            } else {
+              reject(new PipelineStopRequestedError());
+            }
+          }, { once: true });
         });
+
+        const handleInnerRetry = (retryAttempt: number, maxRetries: number, delayMs: number, retryErr: unknown) => {
+          const errText = (retryErr as any)?.message || String(retryErr);
+          const delayMins = Math.round((delayMs / 60_000) * 10) / 10;
+          this.emitEvent(
+            displayAgentName,
+            `${args.stepDescription} failed (attempt ${retryAttempt}/${maxRetries + 1}): ${errText}. Retrying in ${delayMins}m...`,
+            'agent_retry',
+            {
+              error: errText,
+              modelName: model,
+              attempt: retryAttempt,
+              executionId,
+              executionGroupId: args.executionGroupId,
+              executionGroupName: args.executionGroupName,
+              codeExecutionEnabled: !!config.deepthinkCodeExecutionEnabled,
+            }
+          );
+        };
 
         const executePromise = (async () => {
           if (config.deepthinkCodeExecutionEnabled) {
@@ -2497,13 +2571,17 @@ export class DeepthinkPipelineOrchestrator {
               maxOutputTokens,
               repositoryAccess,
               sharedWorkspaceHandler,
+              abortSignal: this.abortController.signal,
+              retryDelaysMs: this.callbacks.retryDelaysMs,
+              silenceTimeoutMs: this.callbacks.silenceTimeoutMs,
+              onRetry: handleInnerRetry,
             });
 
-            const fallbackJsonl = [
-              JSON.stringify({ role: 'system', message_type: 'system', content: systemInstruction }),
-              JSON.stringify({ role: 'user', message_type: 'human', content: args.promptText }),
-              JSON.stringify({ role: 'assistant', message_type: 'ai', content: result.text || result.finalText }),
-            ].join('\n');
+            const fallbackJsonl = formatDirectCallTrajectoryJsonl({
+              systemInstruction,
+              userPrompt: args.promptText,
+              assistantResponse: result.text || result.finalText,
+            });
 
             return {
               text: result.text || result.finalText,
@@ -2511,41 +2589,39 @@ export class DeepthinkPipelineOrchestrator {
               jsonl: result.rawTrajectoryJsonl || fallbackJsonl,
             };
           } else {
-            const text = await this.callbacks.callAI({
-              prompt: args.promptText,
-              model,
+            const invokeDirectCall = async (signal?: AbortSignal, touch?: () => void) => {
+              return await this.callbacks.callAI({
+                prompt: args.promptText,
+                model,
+                systemInstruction,
+                responseSchema: args.jsonResponse ? true : undefined,
+                thinkingConfig: { thinkingLevel: config.thinkingLevel },
+                agentKind: args.kind,
+                stepDescription: args.stepDescription,
+                abortSignal: signal ?? this.abortController.signal,
+                retryDelaysMs: this.callbacks.retryDelaysMs,
+                silenceTimeoutMs: this.callbacks.silenceTimeoutMs,
+                onChunkActivity: touch,
+                onRetry: handleInnerRetry,
+              });
+            };
+
+            const text = this.callbacks.silenceTimeoutMs !== undefined
+              ? await withSilenceWatchdog(
+                  {
+                    label: `${displayAgentName} (${args.stepDescription})`,
+                    silenceTimeoutMs: this.callbacks.silenceTimeoutMs,
+                    externalSignal: this.abortController.signal,
+                  },
+                  ({ signal, touch }) => invokeDirectCall(signal, touch)
+                )
+              : await invokeDirectCall();
+
+            const jsonl = formatDirectCallTrajectoryJsonl({
               systemInstruction,
-              responseSchema: args.jsonResponse ? true : undefined,
-              thinkingConfig: { thinkingLevel: config.thinkingLevel },
-              agentKind: args.kind,
-              stepDescription: args.stepDescription,
+              userPrompt: args.promptText,
+              assistantResponse: text,
             });
-            const jsonl = [
-              JSON.stringify({
-                role: 'system',
-                message_type: 'system',
-                agent_kind: args.kind,
-                step_description: args.stepDescription,
-                model,
-                content: systemInstruction,
-              }),
-              JSON.stringify({
-                role: 'user',
-                message_type: 'human',
-                agent_kind: args.kind,
-                step_description: args.stepDescription,
-                model,
-                content: args.promptText,
-              }),
-              JSON.stringify({
-                role: 'assistant',
-                message_type: 'ai',
-                agent_kind: args.kind,
-                step_description: args.stepDescription,
-                model,
-                content: text,
-              }),
-            ].join('\n');
             return {
               text,
               trace: undefined,
@@ -2593,7 +2669,7 @@ export class DeepthinkPipelineOrchestrator {
         if (
           err instanceof PipelineStopRequestedError ||
           err?.name === 'PipelineStopRequestedError' ||
-          this.isStopRequested
+          (this.isStopRequested && !isTerminalInferenceError(err))
         ) {
           this.checkStopRequested();
           throw err;
@@ -2601,7 +2677,23 @@ export class DeepthinkPipelineOrchestrator {
 
         lastError = err;
         const errMsg = err?.message || String(err);
-        const shouldRetry = attempt < MAX_API_ATTEMPTS && (Date.now() - startedAt) < TOTAL_AGENT_TIMEOUT_MS;
+
+        // If the underlying inference layer already exhausted its 1m/3m/5m retries,
+        // fast-failed a permanent 4xx error, or hit the 5-minute silence timeout, pause Deepthink immediately.
+        if (isTerminalInferenceError(err)) {
+          this.emitEvent(displayAgentName, `${args.stepDescription} failed: ${errMsg}`, 'agent_error', {
+            error: errMsg,
+            modelName: model,
+            attempt,
+            executionId,
+            executionGroupId: args.executionGroupId,
+            executionGroupName: args.executionGroupName,
+            codeExecutionEnabled: !!config.deepthinkCodeExecutionEnabled,
+          });
+          return this.pausePipelineOnInferenceFailure(`${args.stepDescription}: ${errMsg}`);
+        }
+
+        const shouldRetry = attempt < MAX_API_ATTEMPTS;
 
         this.emitEvent(displayAgentName, `${args.stepDescription} failed: ${errMsg}`, shouldRetry ? 'agent_retry' : 'agent_error', {
           error: errMsg,
@@ -2616,13 +2708,12 @@ export class DeepthinkPipelineOrchestrator {
         if (!shouldRetry) break;
 
         const retryDelays = this.callbacks.retryDelaysMs ?? RETRY_DELAYS_MS;
-        const delay = retryDelays[attempt - 1] ?? 30_000;
-        const availableDelay = Math.min(delay, Math.max(0, TOTAL_AGENT_TIMEOUT_MS - (Date.now() - startedAt)));
+        const delay = retryDelays[attempt - 1] ?? RETRY_DELAYS_MS[0];
         const step = 200;
         let elapsed = 0;
-        while (elapsed < availableDelay) {
+        while (elapsed < delay) {
           this.checkStopRequested();
-          const waitTime = Math.min(step, availableDelay - elapsed);
+          const waitTime = Math.min(step, delay - elapsed);
           await new Promise(res => setTimeout(res, waitTime));
           elapsed += waitTime;
         }
@@ -2630,22 +2721,32 @@ export class DeepthinkPipelineOrchestrator {
       }
     }
 
-    const finalErrorMessage = `Agent call for ${args.stepDescription} exhausted all ${MAX_API_ATTEMPTS} attempts: ${String(lastError)}`;
+    const finalErrorMessage = `Agent call for ${args.stepDescription} exhausted all ${MAX_API_ATTEMPTS} attempts: ${String((lastError as any)?.message || lastError)}`;
 
-    if (args.isCritical) {
-      // Required strategy generation fails the run when exhausted (§9)
-      throw new Error(finalErrorMessage);
-    } else {
-      // Non-critical branch work records its error on that branch (§9)
-      this.emitEvent(displayAgentName, finalErrorMessage, 'agent_error', {
-        error: finalErrorMessage,
-        executionId,
-        executionGroupId: args.executionGroupId,
-        executionGroupName: args.executionGroupName,
-        codeExecutionEnabled: !!config.deepthinkCodeExecutionEnabled,
-      });
-      throw new Error(finalErrorMessage);
+    this.emitEvent(displayAgentName, finalErrorMessage, 'agent_error', {
+      error: finalErrorMessage,
+      executionId,
+      executionGroupId: args.executionGroupId,
+      executionGroupName: args.executionGroupName,
+      codeExecutionEnabled: !!config.deepthinkCodeExecutionEnabled,
+    });
+
+    return this.pausePipelineOnInferenceFailure(finalErrorMessage);
+  }
+
+  private pausePipelineOnInferenceFailure(reason: string): never {
+    const pauseMessage = `Deepthink pipeline paused due to terminal inference failure: ${reason}`;
+    this.emitEvent('Orchestrator', pauseMessage, 'info', {
+      error: reason,
+    });
+    this.state.status = 'stopped';
+    this.state.isStopRequested = false;
+    const stopErr = new PipelineStopRequestedError(pauseMessage);
+    if (!this.abortController.signal.aborted) {
+      this.abortController.abort(stopErr);
     }
+    this.syncCheckpointState();
+    throw stopErr;
   }
 
   private checkStopRequested(): void {

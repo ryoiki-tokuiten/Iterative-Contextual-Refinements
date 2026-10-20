@@ -88,12 +88,12 @@ export interface ModelParameters {
 const DEFAULT_MODEL_PARAMETERS: ModelParameters = {
     strategiesCount: 3,
     strategyProximityLoops: 1,
-    hypothesisCount: 3,
+    hypothesisCount: 4,
     hypothesisProximityLoops: 1,
     deepthinkDepth: 10,
     i: 10,
-    j: 5,
-    k: 3,
+    j: 4,
+    k: 4,
     isolateBranches: false,
     deepthinkCodeExecutionEnabled: false,
     thinkingLevel: 'high',
@@ -163,7 +163,7 @@ export class ModelConfigManager {
     }
 
     public getJ(): number {
-        return Math.max(3, Math.min(8, Math.round(this.parameters.j ?? 5)));
+        return Math.max(3, Math.min(8, Math.round(this.parameters.j ?? 4)));
     }
 
     public setJ(j: number): void {
@@ -172,7 +172,7 @@ export class ModelConfigManager {
 
     public getK(): number {
         const j = this.getJ();
-        return Math.max(2, Math.min(j, Math.round(this.parameters.k ?? 3)));
+        return Math.max(2, Math.min(j, Math.round(this.parameters.k ?? 4)));
     }
 
     public setK(k: number): void {

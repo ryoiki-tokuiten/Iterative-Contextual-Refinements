@@ -7,9 +7,11 @@
  * retired execution choices have been removed from the rendered controls.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { createRoot, type Root } from 'react-dom/client';
 import { getDeepthinkConfigController } from '../../Routing';
+import { calculateDeepthinkTokenEstimate } from '../../Routing/DeepthinkTokenEstimator';
 import { TotalLLMCallsTokenEstimationModal } from './TotalLLMCallsTokenEstimationModal';
 import {
     MAX_HYPOTHESIS_COUNT,
@@ -125,6 +127,22 @@ const SectionFrame: React.FC<SectionFrameProps> = ({ containerClass, headerClass
     </div>
 );
 
+let hasShownConfigWarning = false;
+let isConfigWarningModalOpen = false;
+let notifyConfigWarningListeners: (() => void) | null = null;
+
+function requestConfigWarning(): void {
+    if (hasShownConfigWarning) return;
+    hasShownConfigWarning = true;
+    isConfigWarningModalOpen = true;
+    notifyConfigWarningListeners?.();
+}
+
+function dismissConfigWarning(): void {
+    isConfigWarningModalOpen = false;
+    notifyConfigWarningListeners?.();
+}
+
 const SliderWithFill: React.FC<SliderWithFillProps> = ({ id, value, min, max, color, disabled, onChange }) => {
     const safeValue = clamp(value, min, max);
 
@@ -139,7 +157,13 @@ const SliderWithFill: React.FC<SliderWithFillProps> = ({ id, value, min, max, co
             value={safeValue}
             disabled={disabled}
             style={{ background: filledTrack(percentBetween(safeValue, min, max), color) }}
-            onChange={event => onChange(toInteger(event.currentTarget.value))}
+            onPointerDown={() => {
+                if (!disabled) requestConfigWarning();
+            }}
+            onChange={event => {
+                requestConfigWarning();
+                onChange(toInteger(event.currentTarget.value));
+            }}
         />
     );
 };
@@ -160,7 +184,13 @@ const VerticalBar: React.FC<{ id?: string, value: number, min: number, max: numb
                 step={1}
                 value={safeValue}
                 disabled={disabled}
-                onChange={event => onChange(toInteger(event.currentTarget.value))}
+                onPointerDown={() => {
+                    if (!disabled) requestConfigWarning();
+                }}
+                onChange={event => {
+                    requestConfigWarning();
+                    onChange(toInteger(event.currentTarget.value));
+                }}
             />
             <div className="vertical-bar-visual-track">
                 <div className="vertical-bar-visual-fill" style={{ height: `${percentage}%`, backgroundColor: color }} />
@@ -386,10 +416,28 @@ const SandboxEnvironmentPanel: React.FC<{
     </div>
 );
 
+const formatTokenCount = (value: number): string => {
+    const safeValue = Math.max(0, Number.isFinite(value) ? value : 0);
+    if (safeValue >= 1000000) {
+        const millions = safeValue / 1000000;
+        return String(millions >= 10 ? millions.toFixed(1) : millions.toFixed(2)) + 'M';
+    }
+    if (safeValue >= 1000) {
+        const thousands = safeValue / 1000;
+        return String(thousands >= 10 ? thousands.toFixed(0) : thousands.toFixed(1)) + 'K';
+    }
+    return String(Math.round(safeValue));
+};
+
+const formatTokenRange = (rangeValue: { average: number; worst: number }): string => (
+    formatTokenCount(rangeValue.average) + ' - ' + formatTokenCount(rangeValue.worst)
+);
+
 const TotalLLMCallsButton: React.FC<{
     sandboxEnabled: boolean;
+    tokenSummaryText: string;
     onClick: () => void;
-}> = ({ sandboxEnabled, onClick }) => (
+}> = ({ sandboxEnabled, tokenSummaryText, onClick }) => (
     <button
         type="button"
         id="total-llm-calls-token-estimation-button"
@@ -404,7 +452,7 @@ const TotalLLMCallsButton: React.FC<{
         <div className="code-execution-toggle-info">
             <span className="code-execution-toggle-title">Total LLM Calls &amp; Token Estimation</span>
             <span className="code-execution-toggle-subtitle">
-                {sandboxEnabled ? 'Sandbox active (12x - 36x API call multiplier)' : 'Detailed token and LLM call estimation graph'}
+                {tokenSummaryText}
             </span>
         </div>
     </button>
@@ -694,8 +742,110 @@ const BsrParametersSection: React.FC<{
     );
 };
 
+const CONFIG_WARNING_TEXT =
+    'The current default configuration is optimal for most of the situations and is decided after doing a lot of experiments. Change the configuration only if you know exactly what you are doing and how it will impact the overall state, and, more importantly the costs. This is very sensitive configuration (even when using with Frontier Models). Small tweaks can waste your compute significantly. This popup might look annoying to you but it is intentional tbh.';
+
+const ConfigSensitivityWarningModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+    const openedAtRef = useRef(Date.now());
+    const pointerDownOnBackdropRef = useRef(false);
+
+    useEffect(() => {
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') {
+                onClose();
+            }
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
+
+    return createPortal(
+        <div
+            className="dt-config-warning-overlay"
+            onPointerDown={event => {
+                pointerDownOnBackdropRef.current =
+                    event.target === event.currentTarget && Date.now() - openedAtRef.current > 200;
+            }}
+            onClick={event => {
+                if (pointerDownOnBackdropRef.current && event.target === event.currentTarget) {
+                    pointerDownOnBackdropRef.current = false;
+                    onClose();
+                }
+            }}
+        >
+            <div
+                className="dt-config-warning-popup"
+                role="alertdialog"
+                aria-modal="true"
+                aria-describedby="dt-config-warning-message"
+            >
+                <button
+                    type="button"
+                    className="dt-config-warning-close"
+                    onClick={onClose}
+                    aria-label="Close"
+                >
+                    <Icon name="close" size={16} />
+                </button>
+                <div className="dt-config-warning-icon-circle">
+                    <Icon name="circle_alert" size={24} />
+                </div>
+                <p id="dt-config-warning-message" className="dt-config-warning-text">
+                    {CONFIG_WARNING_TEXT}
+                </p>
+            </div>
+        </div>,
+        document.body
+    );
+};
+
 const DeepthinkConfigPanelComponent: React.FC<DeepthinkConfigPanelProps> = props => {
     const [isEstimationModalOpen, setIsEstimationModalOpen] = useState(false);
+    const [isConfigWarningOpen, setIsConfigWarningOpen] = useState(isConfigWarningModalOpen);
+    const safeDepth = Math.max(1, Math.round(props.i || 1));
+
+    useEffect(() => {
+        const syncWarningModal = () => {
+            setIsConfigWarningOpen(isConfigWarningModalOpen);
+        };
+        notifyConfigWarningListeners = syncWarningModal;
+        return () => {
+            if (notifyConfigWarningListeners === syncWarningModal) {
+                notifyConfigWarningListeners = null;
+            }
+        };
+    }, []);
+
+    const withConfigWarning = <T extends (...args: any[]) => void>(handler: T): T => (
+        ((...args: Parameters<T>) => {
+            requestConfigWarning();
+            handler(...args);
+        }) as T
+    );
+
+    const tokenSummary = useMemo(() => calculateDeepthinkTokenEstimate({
+        strategiesCount: props.strategiesCount,
+        strategyProximityLoops: props.strategyProximityLoops,
+        hypothesisCount: props.hypothesisEnabled ? props.hypothesisCount : 0,
+        hypothesisProximityLoops: props.hypothesisProximityLoops,
+        deepthinkDepth: safeDepth,
+        i: safeDepth,
+        j: props.j,
+        k: props.k,
+        isolateBranches: props.isolateBranches,
+        codeExecutionEnabled: props.codeExecutionEnabled,
+    }), [
+        props.strategiesCount,
+        props.strategyProximityLoops,
+        props.hypothesisEnabled,
+        props.hypothesisCount,
+        props.hypothesisProximityLoops,
+        safeDepth,
+        props.j,
+        props.k,
+        props.isolateBranches,
+        props.codeExecutionEnabled,
+    ]);
 
     return (
         <div className="deepthink-config-panel">
@@ -704,12 +854,13 @@ const DeepthinkConfigPanelComponent: React.FC<DeepthinkConfigPanelProps> = props
                     <StrategyExecutionSection
                         strategiesCount={props.strategiesCount}
                         strategyProximityLoops={props.strategyProximityLoops}
-                        onStrategiesChange={props.onStrategiesChange}
-                        onStrategyProximityLoopsChange={props.onStrategyProximityLoopsChange}
+                        onStrategiesChange={withConfigWarning(props.onStrategiesChange)}
+                        onStrategyProximityLoopsChange={withConfigWarning(props.onStrategyProximityLoopsChange)}
                     />
                     <SandboxEnvironmentPanel enabled={props.codeExecutionEnabled} onToggle={props.onCodeExecutionToggle} />
                     <TotalLLMCallsButton
                         sandboxEnabled={props.codeExecutionEnabled}
+                        tokenSummaryText={`${formatTokenRange(tokenSummary.total)} Tokens`}
                         onClick={() => setIsEstimationModalOpen(true)}
                     />
                 </div>
@@ -719,9 +870,9 @@ const DeepthinkConfigPanelComponent: React.FC<DeepthinkConfigPanelProps> = props
                         j={props.j}
                         k={props.k}
                         curatedContextEnabled={props.hypothesisEnabled}
-                        onIChange={props.onIChange}
-                        onJChange={props.onJChange}
-                        onKChange={props.onKChange}
+                        onIChange={withConfigWarning(props.onIChange)}
+                        onJChange={withConfigWarning(props.onJChange)}
+                        onKChange={withConfigWarning(props.onKChange)}
                     />
                 </div>
                 <div className="config-bottom-grid">
@@ -730,9 +881,9 @@ const DeepthinkConfigPanelComponent: React.FC<DeepthinkConfigPanelProps> = props
                             hypothesisEnabled={props.hypothesisEnabled}
                             hypothesisCount={props.hypothesisCount}
                             hypothesisProximityLoops={props.hypothesisProximityLoops}
-                            onHypothesisToggle={props.onHypothesisToggle}
-                            onHypothesisChange={props.onHypothesisChange}
-                            onHypothesisProximityLoopsChange={props.onHypothesisProximityLoopsChange}
+                            onHypothesisToggle={withConfigWarning(props.onHypothesisToggle)}
+                            onHypothesisChange={withConfigWarning(props.onHypothesisChange)}
+                            onHypothesisProximityLoopsChange={withConfigWarning(props.onHypothesisProximityLoopsChange)}
                         />
                         <div className="curated-subfeature-card">
                             <div className="curated-subfeature-header">
@@ -752,9 +903,9 @@ const DeepthinkConfigPanelComponent: React.FC<DeepthinkConfigPanelProps> = props
                             bsrNoiseLevel={props.bsrNoiseLevel}
                             bsrPressureFloor={props.bsrPressureFloor}
                             bsrWeightPreset={props.bsrWeightPreset}
-                            onBsrNoiseLevelChange={props.onBsrNoiseLevelChange}
-                            onBsrPressureFloorChange={props.onBsrPressureFloorChange}
-                            onBsrWeightPresetChange={props.onBsrWeightPresetChange}
+                            onBsrNoiseLevelChange={withConfigWarning(props.onBsrNoiseLevelChange)}
+                            onBsrPressureFloorChange={withConfigWarning(props.onBsrPressureFloorChange)}
+                            onBsrWeightPresetChange={withConfigWarning(props.onBsrWeightPresetChange)}
                         />
                     </div>
                 </div>
@@ -765,18 +916,23 @@ const DeepthinkConfigPanelComponent: React.FC<DeepthinkConfigPanelProps> = props
                     onClose={() => setIsEstimationModalOpen(false)}
                 />
             )}
+            {isConfigWarningOpen && (
+                <ConfigSensitivityWarningModal
+                    onClose={dismissConfigWarning}
+                />
+            )}
         </div>
     );
 };
 
 function deriveProps(controller: DeepthinkController): DeepthinkConfigPanelProps {
     const state = controller.getState();
-    const currentJ = state.j ?? 5;
+    const currentJ = state.j ?? 4;
     return {
         ...state,
         i: state.i ?? 10,
         j: currentJ,
-        k: state.k ?? 3,
+        k: state.k ?? 4,
         onStrategiesChange: value => controller.setStrategiesCount(value),
         onStrategyProximityLoopsChange: value => controller.setStrategyProximityLoops(value),
         onHypothesisChange: value => controller.setHypothesisCount(value),

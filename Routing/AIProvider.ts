@@ -7,7 +7,7 @@ import { GoogleGenAI, GenerateContentResponse, Part, ThinkingLevel } from "@goog
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { generateText, Output } from "ai";
+import { generateText, streamText, Output } from "ai";
 import { globalState } from "../Core/State";
 import { normalizeOpenAICompatibleProviderError } from "../Core/ProviderError";
 import { getModelsDevModels, extractReasoningEffortOptions } from "./ModelsDevCatalog";
@@ -33,6 +33,11 @@ export interface ThinkingConfig {
     thinkingBudget?: number;  // Optional token count if needed
     thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra' | string;
     tools?: any[];  // Function declarations to enable thought signatures
+}
+
+export interface AIProviderRequestOptions {
+    abortSignal?: AbortSignal;
+    onChunkActivity?: () => void;
 }
 
 export interface DiscoveredModel {
@@ -61,7 +66,8 @@ export interface AIProvider {
         modelToUse: string,
         systemInstruction?: string,
         isJsonOutput?: boolean,
-        thinkingConfig?: ThinkingConfig
+        thinkingConfig?: ThinkingConfig,
+        requestMeta?: AIProviderRequestOptions
     ): Promise<GenerateContentResponse>;
     isInitialized(): boolean;
     getProviderName(): string;
@@ -95,6 +101,61 @@ function wrapAsGeminiResponse(text: string): any {
             candidates: [{ content: { parts: [{ text }] } }]
         }
     };
+}
+
+/**
+ * Merges incoming streamed Gemini parts into an accumulated parts array.
+ * Preserves thought parts, thoughtSignature, functionCall, and inlineData while
+ * coalescing consecutive plain text or plain thought deltas.
+ */
+function appendStreamedGeminiParts(accumulatedParts: any[], incomingParts: any[]): void {
+    for (const part of incomingParts) {
+        if (!part || typeof part !== 'object') continue;
+        const cloned = JSON.parse(JSON.stringify(part));
+        const prev = accumulatedParts[accumulatedParts.length - 1];
+
+        const isPureThoughtText =
+            cloned.thought === true &&
+            typeof cloned.text === 'string' &&
+            !cloned.thoughtSignature &&
+            !cloned.functionCall &&
+            !cloned.functionResponse &&
+            !cloned.inlineData;
+
+        const isPureRegularText =
+            !cloned.thought &&
+            typeof cloned.text === 'string' &&
+            !cloned.thoughtSignature &&
+            !cloned.functionCall &&
+            !cloned.functionResponse &&
+            !cloned.inlineData;
+
+        if (
+            isPureThoughtText &&
+            prev &&
+            prev.thought === true &&
+            typeof prev.text === 'string' &&
+            !prev.thoughtSignature &&
+            !prev.functionCall &&
+            !prev.functionResponse &&
+            !prev.inlineData
+        ) {
+            prev.text += cloned.text;
+        } else if (
+            isPureRegularText &&
+            prev &&
+            !prev.thought &&
+            typeof prev.text === 'string' &&
+            !prev.thoughtSignature &&
+            !prev.functionCall &&
+            !prev.functionResponse &&
+            !prev.inlineData
+        ) {
+            prev.text += cloned.text;
+        } else {
+            accumulatedParts.push(cloned);
+        }
+    }
 }
 
 /**
@@ -415,7 +476,8 @@ class GoogleAIProvider implements AIProvider {
         modelToUse: string,
         systemInstruction?: string,
         isJsonOutput: boolean = false,
-        thinkingConfig?: any
+        thinkingConfig?: any,
+        requestMeta?: AIProviderRequestOptions
     ): Promise<GenerateContentResponse> {
         if (!this.client) throw new Error("Google AI client not initialized.");
 
@@ -490,6 +552,7 @@ class GoogleAIProvider implements AIProvider {
         const config: any = { maxOutputTokens: 65536 };
         if (systemInstruction) config.systemInstruction = systemInstruction;
         if (isJsonOutput) config.responseMimeType = "application/json";
+        if (requestMeta?.abortSignal) config.abortSignal = requestMeta.abortSignal;
 
         const selectedLevel = (thinkingConfig?.thinkingLevel || globalState.thinkingLevel || 'high').toLowerCase();
         let level = ThinkingLevel.HIGH;
@@ -498,7 +561,12 @@ class GoogleAIProvider implements AIProvider {
         else if (selectedLevel === 'minimal') level = ThinkingLevel.MINIMAL;
         else if (selectedLevel === 'high') level = ThinkingLevel.HIGH;
 
-        config.thinkingConfig = { thinkingLevel: level };
+        if (!modelToUse.toLowerCase().startsWith('gemma-')) {
+            config.thinkingConfig = {
+                thinkingLevel: level,
+                includeThoughts: true,
+            };
+        }
 
         if (thinkingConfig?.tools && thinkingConfig.tools.length > 0) {
             const toolsToPass = thinkingConfig.tools.filter(
@@ -510,17 +578,76 @@ class GoogleAIProvider implements AIProvider {
             }
         }
 
-        const requestOptions: any = {
-            model: modelToUse,
-            contents: sanitizeContentsForApi(contents),
-            config: config
+        const sanitizedContents = sanitizeContentsForApi(contents);
+
+        const consumeGeminiStream = async (activeConfig: any): Promise<GenerateContentResponse> => {
+            const stream = await this.client!.models.generateContentStream({
+                model: modelToUse,
+                contents: sanitizedContents,
+                config: activeConfig,
+            });
+
+            const accumulatedParts: any[] = [];
+            let lastChunk: any = null;
+
+            for await (const chunk of stream) {
+                requestMeta?.onChunkActivity?.();
+                lastChunk = chunk;
+                const chunkParts = chunk?.candidates?.[0]?.content?.parts;
+                if (Array.isArray(chunkParts) && chunkParts.length > 0) {
+                    appendStreamedGeminiParts(accumulatedParts, chunkParts);
+                } else if (typeof chunk?.text === 'string' && chunk.text.length > 0) {
+                    appendStreamedGeminiParts(accumulatedParts, [{ text: chunk.text }]);
+                }
+            }
+
+            const combinedText = accumulatedParts
+                .filter(p => typeof p?.text === 'string' && !p.thought)
+                .map(p => p.text)
+                .join('');
+
+            return {
+                ...(lastChunk || {}),
+                text: combinedText,
+                candidates: [
+                    {
+                        ...(lastChunk?.candidates?.[0] || {}),
+                        content: {
+                            role: 'model',
+                            parts: accumulatedParts,
+                        },
+                    },
+                ],
+                response: {
+                    text: () => combinedText,
+                    candidates: [
+                        {
+                            content: {
+                                role: 'model',
+                                parts: accumulatedParts,
+                            },
+                        },
+                    ],
+                },
+            } as any;
         };
 
         try {
-            const result = await this.client.models.generateContent(requestOptions);
-
-            return result as any;
+            return await consumeGeminiStream(config);
         } catch (error: any) {
+            const rawMsg = String(error?.message || error || '').toLowerCase();
+            if (
+                config.thinkingConfig &&
+                (rawMsg.includes('thinking') || rawMsg.includes('includethoughts') || rawMsg.includes('thinking_config'))
+            ) {
+                try {
+                    const fallbackConfig = { ...config };
+                    delete fallbackConfig.thinkingConfig;
+                    return await consumeGeminiStream(fallbackConfig);
+                } catch (fallbackError: any) {
+                    throw normalizeGoogleApiError(fallbackError, modelToUse);
+                }
+            }
             throw normalizeGoogleApiError(error, modelToUse);
         }
     }
@@ -573,20 +700,37 @@ class OpenAIProvider implements AIProvider {
         modelToUse: string,
         systemInstruction?: string,
         isJsonOutput: boolean = false,
-        _thinkingConfig?: any
+        _thinkingConfig?: any,
+        requestMeta?: AIProviderRequestOptions
     ): Promise<GenerateContentResponse> {
         if (!this.client) throw new Error("OpenAI client not initialized.");
 
         const messages = buildChatMessages(promptOrParts, systemInstruction, true);
         const effortLevel = (_thinkingConfig?.thinkingLevel || globalState.thinkingLevel || 'high').toLowerCase();
 
-        const requestOptions: any = { model: modelToUse, messages };
-        requestOptions.reasoning_effort = effortLevel;
+        const requestOptions: any = {
+            model: modelToUse,
+            messages,
+            reasoning_effort: effortLevel,
+            stream: true,
+        };
 
         if (isJsonOutput) requestOptions.response_format = { type: "json_object" };
 
-        const response = await this.client.chat.completions.create(requestOptions);
-        return wrapAsGeminiResponse(response.choices[0]?.message?.content || '');
+        const stream = await this.client.chat.completions.create(
+            requestOptions,
+            requestMeta?.abortSignal ? { signal: requestMeta.abortSignal } : undefined
+        ) as any;
+
+        let fullText = '';
+        for await (const chunk of stream) {
+            requestMeta?.onChunkActivity?.();
+            const delta = chunk?.choices?.[0]?.delta;
+            if (typeof delta?.content === 'string') {
+                fullText += delta.content;
+            }
+        }
+        return wrapAsGeminiResponse(fullText);
     }
 
     isInitialized(): boolean {
@@ -773,7 +917,8 @@ class OpenAICompatibleProvider implements AIProvider {
         modelToUse: string,
         systemInstruction?: string,
         isJsonOutput: boolean = false,
-        thinkingConfig?: ThinkingConfig
+        thinkingConfig?: ThinkingConfig,
+        requestMeta?: AIProviderRequestOptions
     ): Promise<GenerateContentResponse> {
         if (!this.client) {
             throw new Error('Error: OpenAI-compatible endpoint is not initialized. Check the endpoint URL or API compatibility.');
@@ -784,6 +929,7 @@ class OpenAICompatibleProvider implements AIProvider {
             const request: any = {
                 model: this.client.chatModel(modelToUse),
                 messages,
+                ...(requestMeta?.abortSignal ? { abortSignal: requestMeta.abortSignal } : {}),
             };
 
             if (instructions) request.instructions = instructions;
@@ -799,10 +945,41 @@ class OpenAICompatibleProvider implements AIProvider {
                 },
             };
 
-            const result = await generateText(request);
-            const text = result.text || (isJsonOutput && result.output !== undefined
-                ? JSON.stringify(result.output)
-                : '');
+            const streamResult = streamText(request);
+            let streamedText = '';
+            for await (const part of streamResult.fullStream as any) {
+                requestMeta?.onChunkActivity?.();
+                if (part?.type === 'text-delta') {
+                    const delta = typeof part.textDelta === 'string'
+                        ? part.textDelta
+                        : typeof part.text === 'string'
+                            ? part.text
+                            : '';
+                    streamedText += delta;
+                } else if (part?.type === 'error' && part.error) {
+                    throw part.error;
+                }
+            }
+
+            let text = streamedText;
+            if (!text) {
+                try {
+                    text = await streamResult.text;
+                } catch {
+                    // Fallback if streamResult.text is unavailable
+                }
+            }
+            if (!text && isJsonOutput) {
+                try {
+                    const out = await (streamResult as any).output;
+                    if (out !== undefined) {
+                        text = JSON.stringify(out);
+                    }
+                } catch {
+                    const fallbackResult = await generateText(request);
+                    text = fallbackResult.text || (fallbackResult.output !== undefined ? JSON.stringify(fallbackResult.output) : '');
+                }
+            }
             return wrapAsGeminiResponse(text);
         } catch (error) {
             throw normalizeOpenAICompatibleProviderError(error, this.endpointUrl, modelToUse);
@@ -854,7 +1031,8 @@ class AnthropicProvider implements AIProvider {
         modelToUse: string,
         systemInstruction?: string,
         isJsonOutput: boolean = false,
-        _thinkingConfig?: any
+        _thinkingConfig?: any,
+        requestMeta?: AIProviderRequestOptions
     ): Promise<GenerateContentResponse> {
         if (!this.client) throw new Error("Anthropic client not initialized.");
 
@@ -867,6 +1045,7 @@ class AnthropicProvider implements AIProvider {
             messages,
             thinking: { type: 'adaptive' },
             effort: level,
+            stream: true,
         };
 
         if (systemPrompt) requestOptions.system = systemPrompt;
@@ -878,9 +1057,34 @@ class AnthropicProvider implements AIProvider {
             requestOptions.system = 'You must respond with valid JSON only. Do not include any text outside the JSON structure.';
         }
 
-        const response = await this.client.messages.create(requestOptions);
-        const textContent = (response.content.find((c: any) => c.type === 'text') as any)?.text || '';
-        return wrapAsGeminiResponse(textContent);
+        const consumeAnthropicStream = async (opts: any): Promise<GenerateContentResponse> => {
+            const stream = await this.client!.messages.create(
+                opts,
+                requestMeta?.abortSignal ? { signal: requestMeta.abortSignal } : undefined
+            ) as any;
+
+            let textContent = '';
+            for await (const event of stream) {
+                requestMeta?.onChunkActivity?.();
+                if (event?.type === 'content_block_delta' && event.delta?.type === 'text_delta' && typeof event.delta.text === 'string') {
+                    textContent += event.delta.text;
+                }
+            }
+            return wrapAsGeminiResponse(textContent);
+        };
+
+        try {
+            return await consumeAnthropicStream(requestOptions);
+        } catch (error: any) {
+            const msg = String(error?.message || error || '').toLowerCase();
+            if (requestOptions.thinking && (msg.includes('thinking') || msg.includes('effort'))) {
+                const fallbackOpts = { ...requestOptions };
+                delete fallbackOpts.thinking;
+                delete fallbackOpts.effort;
+                return await consumeAnthropicStream(fallbackOpts);
+            }
+            throw error;
+        }
     }
 
     isInitialized(): boolean {
@@ -931,7 +1135,8 @@ class LocalModelsProvider implements AIProvider {
         modelToUse: string,
         systemInstruction?: string,
         isJsonOutput: boolean = false,
-        _thinkingConfig?: any
+        _thinkingConfig?: any,
+        requestMeta?: AIProviderRequestOptions
     ): Promise<GenerateContentResponse> {
         if (!this.client) throw new Error("Local Models client not initialized.");
 
@@ -943,10 +1148,26 @@ class LocalModelsProvider implements AIProvider {
         }
 
         const messages = buildChatMessages(promptOrParts, effectiveSystemInstruction, true);
-        const requestOptions: any = { model: modelToUse, messages };
+        const requestOptions: any = {
+            model: modelToUse,
+            messages,
+            stream: true,
+        };
 
-        const response = await this.client.chat.completions.create(requestOptions);
-        return wrapAsGeminiResponse(response.choices[0]?.message?.content || '');
+        const stream = await this.client.chat.completions.create(
+            requestOptions,
+            requestMeta?.abortSignal ? { signal: requestMeta.abortSignal } : undefined
+        ) as any;
+
+        let fullText = '';
+        for await (const chunk of stream) {
+            requestMeta?.onChunkActivity?.();
+            const delta = chunk?.choices?.[0]?.delta;
+            if (typeof delta?.content === 'string') {
+                fullText += delta.content;
+            }
+        }
+        return wrapAsGeminiResponse(fullText);
     }
 
     isInitialized(): boolean {

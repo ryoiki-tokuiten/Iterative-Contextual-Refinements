@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { getEncoding } from 'js-tiktoken';
+import { parse as parseBashAst } from 'just-bash';
 
 const encoder = getEncoding('cl100k_base');
 
@@ -91,6 +92,7 @@ interface SandboxExecutionResult {
     error?: string | null;
     durationMs: number;
     timedOut?: boolean;
+    readOnlyCommand?: boolean;
 }
 
 type SandboxRuntime = 'docker' | 'bwrap';
@@ -252,6 +254,99 @@ const RESULTS_EXCLUDED_FILES = new Set([
 
 let cachedHostRustSysroot: string | null | undefined;
 let sandboxEnvironmentPromise: Promise<SandboxEnvironmentProfile> | null = null;
+const sessionWorkspacePrepLocks = new Map<string, Promise<void>>();
+const activeSessionExecutions = new Map<string, number>();
+
+const RTK_VERSION = 'v1.0.1';
+const READ_ONLY_BASH_COMMANDS = new Set([
+    'ls', 'cat', 'rg', 'grep', 'egrep', 'fgrep', 'find', 'head', 'tail',
+    'wc', 'stat', 'file', 'tree', 'pwd', 'which', 'type', 'realpath', 'dirname', 'basename', 'du', 'df',
+]);
+const READ_ONLY_GIT_SUBCOMMANDS = new Set([
+    'status', 'log', 'diff', 'show', 'branch', 'rev-parse', 'ls-files', 'ls-tree',
+]);
+const FILE_WRITE_REDIRECT_OPERATORS = new Set(['>', '>>', '>|', '&>', '&>>', '<>']);
+const MUTATING_FIND_FLAGS = new Set(['-delete', '-exec', '-execdir', '-ok', '-okdir', '-fprint', '-fprint0', '-fls']);
+
+function extractBashWordText(word: any): string {
+    if (!word || !Array.isArray(word.parts)) return '';
+    return word.parts
+        .map((part: any) => (part.type === 'Literal' || part.type === 'SingleQuoted') ? String(part.value ?? '') : '')
+        .join('');
+}
+
+function isReadOnlySimpleCommandWords(words: string[]): boolean {
+    const tokens = words.filter(Boolean);
+    if (tokens.length === 0) return false;
+    const [first, ...rest] = tokens[0] === 'rtk' ? tokens.slice(1) : tokens;
+    if (!first) return false;
+    if (first === 'read' && tokens[0] === 'rtk') return true;
+    if (first === 'find') {
+        return !rest.some(arg => MUTATING_FIND_FLAGS.has(arg));
+    }
+    if (READ_ONLY_BASH_COMMANDS.has(first)) return true;
+    if (first === 'git') {
+        const subcommand = rest.find(arg => !arg.startsWith('-'));
+        return !!subcommand && READ_ONLY_GIT_SUBCOMMANDS.has(subcommand);
+    }
+    return false;
+}
+
+export function isReadOnlyBashCommand(command: string): boolean {
+    try {
+        const ast = parseBashAst(command);
+        let sawCommand = false;
+        const checkCommand = (cmd: any): boolean => {
+            if ((cmd.redirections || []).some((r: any) => FILE_WRITE_REDIRECT_OPERATORS.has(r.operator))) {
+                return false;
+            }
+            if (cmd.type === 'SimpleCommand') {
+                sawCommand = true;
+                const words = [extractBashWordText(cmd.name), ...(cmd.args || []).map(extractBashWordText)];
+                if (!isReadOnlySimpleCommandWords(words)) return false;
+                return ![cmd.name, ...(cmd.args || [])].filter(Boolean).some((w: any) =>
+                    Array.isArray(w.parts) && w.parts.some((p: any) => p.type === 'CommandSubstitution' || p.type === 'ProcessSubstitution')
+                );
+            }
+            if (cmd.type === 'Subshell' || cmd.type === 'Group') {
+                return Array.isArray(cmd.body) && cmd.body.every(checkStatement);
+            }
+            return false;
+        };
+        const checkStatement = (stmt: any): boolean =>
+            Array.isArray(stmt.pipelines) && stmt.pipelines.every((p: any) => Array.isArray(p.commands) && p.commands.every(checkCommand));
+        return Array.isArray(ast.statements) && ast.statements.every(checkStatement) && sawCommand;
+    } catch {
+        return false;
+    }
+}
+
+function rewriteCommandWithRtk(command: string): string {
+    const rtkExecutable = path.join(SANDBOX_ENV_BIN, 'rtk');
+    try {
+        accessSync(rtkExecutable, fsConstants.X_OK);
+    } catch {
+        return command;
+    }
+
+    const result = spawnSync(rtkExecutable, ['rewrite', command], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 2_000,
+        env: getHostEnv({
+            XDG_DATA_HOME: path.join(os.tmpdir(), 'iterative-studio-rtk-data'),
+            XDG_CONFIG_HOME: path.join(os.tmpdir(), 'iterative-studio-rtk-config'),
+        }),
+    });
+
+    if (!result.error && (result.status === 0 || result.status === 3)) {
+        const rewritten = (result.stdout || '').trim();
+        if (rewritten) {
+            return rewritten;
+        }
+    }
+    return command;
+}
 
 const DEFAULT_PYTHON_PACKAGES = [
     'numpy',
@@ -332,6 +427,7 @@ const PROBED_COMMANDS = [
     'Rscript',
     'julia',
     'lua',
+    'rtk',
 ];
 
 function sendJson(res: ServerResponse, statusCode: number, payload: unknown) {
@@ -1344,6 +1440,34 @@ function buildAgentEnvironmentSummary(profile: Omit<SandboxEnvironmentProfile, '
     return lines.join('\n');
 }
 
+async function ensureRtkBinary(setupErrors: string[]): Promise<void> {
+    const rtkBinaryPath = path.join(SANDBOX_ENV_BIN, 'rtk');
+    try {
+        accessSync(rtkBinaryPath, fsConstants.X_OK);
+        return;
+    } catch {
+        // Install rtk binary into SANDBOX_ENV_BIN below
+    }
+
+    try {
+        await mkdir(SANDBOX_ENV_BIN, { recursive: true });
+        const archAsset = process.arch === 'arm64'
+            ? 'rtk-aarch64-unknown-linux-gnu.tar.gz'
+            : 'rtk-x86_64-unknown-linux-musl.tar.gz';
+        const downloadUrl = `https://github.com/rtk-ai/rtk/releases/download/${RTK_VERSION}/${archAsset}`;
+        const installResult = await runHostCommand(
+            'bash',
+            ['-lc', `curl -fsSL "${downloadUrl}" | tar -xz -C "${SANDBOX_ENV_BIN}" && chmod 755 "${rtkBinaryPath}"`],
+            { timeoutMs: 60_000 }
+        );
+        if (!installResult.ok) {
+            setupErrors.push(`rtk binary install failed: ${installResult.stderr || installResult.stdout}`);
+        }
+    } catch (error) {
+        setupErrors.push(`rtk setup failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+}
+
 async function buildSandboxEnvironmentProfile(): Promise<SandboxEnvironmentProfile> {
     const setupErrors: string[] = [];
 
@@ -1353,6 +1477,7 @@ async function buildSandboxEnvironmentProfile(): Promise<SandboxEnvironmentProfi
         ensurePythonEnvironment(setupErrors),
         ensureNodeEnvironment(setupErrors),
         ensureLeanEnvironment(setupErrors),
+        ensureRtkBinary(setupErrors),
     ]);
 
     await ensureSharedBinScripts(lean.available, !!lean.mathlibAvailable);
@@ -1567,8 +1692,12 @@ async function prepareSandboxWorkspace(
     const fullRepositoryWrite = repositoryAccess.fullRepositoryWrite === true;
     const usesFilteredFullRepository = fullRepositoryRead && hiddenDirectories.length > 0;
 
+    const hasActiveExecution = (activeSessionExecutions.get(sessionId) ?? 0) > 0;
+
     if (!fullRepositoryRead || usesFilteredFullRepository) {
-        await rm(viewRoot, { recursive: true, force: true });
+        if (!hasActiveExecution) {
+            await rm(viewRoot, { recursive: true, force: true });
+        }
         await mkdir(viewRoot, { recursive: true });
         if (usesFilteredFullRepository) {
             await copyReadOnlyDirectory(readRoot, viewRoot, [...hiddenDirectories, 'tmp', '.tmp']);
@@ -1593,7 +1722,9 @@ async function prepareSandboxWorkspace(
     }
 
     const readonlyMountRoot = path.join(privateScratchRoot, 'readonly-mounts');
-    await rm(readonlyMountRoot, { recursive: true, force: true });
+    if (!hasActiveExecution) {
+        await rm(readonlyMountRoot, { recursive: true, force: true });
+    }
     const readableMounts = await Promise.all(readableExistingDirectories.map(async directory => {
         const excludedRelativePaths = hiddenDirectories
             .filter(hiddenDirectory => hiddenDirectory.startsWith(`${directory}/`))
@@ -2117,6 +2248,7 @@ function buildDockerArgs(args: {
     command: string,
     containerName: string,
     hostRustSysroot: string | null,
+    viewDir: string,
 }): string[] {
     const workspaceHome = sandboxHomeDirectory(args.workspace);
     const rustMountArgs = args.hostRustSysroot
@@ -2152,6 +2284,8 @@ function buildDockerArgs(args: {
         '--env', `HOME=${workspaceHome}`,
         '--env', 'TMPDIR=/tmp',
         '--env', `XDG_CACHE_HOME=${workspaceHome}/.cache`,
+        '--env', 'XDG_DATA_HOME=/tmp/.local/share',
+        '--env', 'XDG_CONFIG_HOME=/tmp/.config',
         '--env', 'MPLBACKEND=Agg',
         '--env', `MPLCONFIGDIR=${workspaceHome}/.matplotlib`,
         '--env', 'PYTHONUNBUFFERED=1',
@@ -2166,7 +2300,7 @@ function buildDockerArgs(args: {
         getSandboxImage(),
         'bash',
         '-c',
-        `umask 077; view() { mkdir -p /tmp/.sandbox-view; i=0; for f in "$@"; do i=$((i + 1)); touch -c "$f" 2>/dev/null || cp -- "$f" "/tmp/.sandbox-view/$i-$(basename "$f")" 2>/dev/null; done; }; open() { view "$@"; }; ${args.command}`,
+        `umask 077; view() { mkdir -p "${args.viewDir}"; i=0; for f in "$@"; do i=$((i + 1)); touch -c "$f" 2>/dev/null || cp -- "$f" "${args.viewDir}/$i-$(basename "$f")" 2>/dev/null; done; }; open() { view "$@"; }; ${args.command}`,
     ];
 }
 
@@ -2174,6 +2308,7 @@ function buildBubblewrapArgs(args: {
     workspace: SandboxCommandWorkspace,
     command: string,
     hostRustSysroot: string | null,
+    viewDir: string,
 }): string[] {
     const workspaceHome = sandboxHomeDirectory(args.workspace);
     const networkMode = getSandboxNetworkMode();
@@ -2227,6 +2362,8 @@ function buildBubblewrapArgs(args: {
         '--setenv', 'HOME', workspaceHome,
         '--setenv', 'TMPDIR', '/tmp',
         '--setenv', 'XDG_CACHE_HOME', `${workspaceHome}/.cache`,
+        '--setenv', 'XDG_DATA_HOME', '/tmp/.local/share',
+        '--setenv', 'XDG_CONFIG_HOME', '/tmp/.config',
         '--setenv', 'MPLBACKEND', 'Agg',
         '--setenv', 'MPLCONFIGDIR', `${workspaceHome}/.matplotlib`,
         '--setenv', 'PYTHONUNBUFFERED', '1',
@@ -2240,7 +2377,7 @@ function buildBubblewrapArgs(args: {
         '--setenv', 'PATH', getSandboxPath(args.hostRustSysroot, workspaceHome),
         'bash',
         '-c',
-        `umask 077; view() { mkdir -p /tmp/.sandbox-view; i=0; for f in "$@"; do i=$((i + 1)); touch -c "$f" 2>/dev/null || cp -- "$f" "/tmp/.sandbox-view/$i-$(basename "$f")" 2>/dev/null; done; }; open() { view "$@"; }; ${args.command}`,
+        `umask 077; view() { mkdir -p "${args.viewDir}"; i=0; for f in "$@"; do i=$((i + 1)); touch -c "$f" 2>/dev/null || cp -- "$f" "${args.viewDir}/$i-$(basename "$f")" 2>/dev/null; done; }; open() { view "$@"; }; ${args.command}`,
     ];
 }
 
@@ -2249,6 +2386,7 @@ function getRuntimeInvocation(args: {
     workspace: SandboxCommandWorkspace,
     command: string,
     containerName: string,
+    viewDir: string,
 }): { executable: string; args: string[] } {
     const hostRustSysroot = getHostRustSysroot();
 
@@ -2281,12 +2419,15 @@ async function runSandboxCommand(
     sessionId: string,
     workspace: SandboxCommandWorkspace,
     command: string,
-    timeoutMs: number
+    timeoutMs: number,
+    viewDir = '/tmp/.sandbox-view',
 ): Promise<SandboxExecutionResult> {
     const startedAt = Date.now();
     const boundedTimeout = Math.max(1_000, Math.min(timeoutMs || DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS));
     const containerName = `iterative-studio-${sessionId}-${randomUUID().slice(0, 8)}`;
     const runtime = getSandboxRuntime();
+    const readOnlyCommand = isReadOnlyBashCommand(command);
+    const effectiveCommand = rewriteCommandWithRtk(command);
 
     await mkdir(workspace.tmpDir, { recursive: true });
 
@@ -2304,8 +2445,9 @@ async function runSandboxCommand(
         const invocation = getRuntimeInvocation({
             runtime,
             workspace,
-            command,
+            command: effectiveCommand,
             containerName,
+            viewDir,
         });
 
         const child = spawn(invocation.executable, invocation.args, {
@@ -2340,6 +2482,7 @@ async function runSandboxCommand(
                 stderr,
                 error: `Failed to start sandbox runtime '${runtime}' (${invocation.executable}): ${error.message}`,
                 durationMs: Date.now() - startedAt,
+                readOnlyCommand,
             });
         });
 
@@ -2360,6 +2503,7 @@ async function runSandboxCommand(
                     : null,
                 timedOut,
                 durationMs: Date.now() - startedAt,
+                readOnlyCommand,
             });
         });
     });
@@ -2517,6 +2661,24 @@ async function syncDeepthinkResultsSnapshot(payload: DeepthinkResultsSnapshotReq
     return sourceRepository;
 }
 
+async function withSessionPrepLock<T>(lockKey: string, fn: () => Promise<T>): Promise<T> {
+    const previous = sessionWorkspacePrepLocks.get(lockKey) ?? Promise.resolve();
+    let release!: () => void;
+    const next = new Promise<void>(resolve => {
+        release = resolve;
+    });
+    sessionWorkspacePrepLocks.set(lockKey, previous.then(() => next));
+    await previous;
+    try {
+        return await fn();
+    } finally {
+        release();
+        if (sessionWorkspacePrepLocks.get(lockKey) === next) {
+            sessionWorkspacePrepLocks.delete(lockKey);
+        }
+    }
+}
+
 async function handleExecute(req: IncomingMessage, res: ServerResponse) {
     if (req.method !== 'POST') {
         sendJson(res, 405, { ok: false, error: 'Method not allowed.' });
@@ -2533,20 +2695,48 @@ async function handleExecute(req: IncomingMessage, res: ServerResponse) {
     }
 
     await getSandboxEnvironmentProfile();
-    const workspace = await prepareSandboxWorkspace(payload.sessionId, payload.repositoryAccess, payload.files);
-    const viewedImagesRoot = path.join(workspace.tmpDir, '.sandbox-view');
-    await rm(viewedImagesRoot, { recursive: true, force: true });
+    const executionViewId = randomUUID().slice(0, 8);
+    const sandboxViewMountDir = `/tmp/.sandbox-view-${executionViewId}`;
 
-    // Legacy sessions retain their own workspace history. Repository sessions
-    // are initialized once at the shared root above.
-    const hasGit = await fileExists(path.join(gitWorkspaceFor(workspace), '.git'));
-    if (!hasGit) {
-        await initAndCommitWorkspace(gitWorkspaceFor(workspace), 'Initial workspace seed');
+    const { workspace, viewedImagesRoot, beforeImages } = await withSessionPrepLock(payload.sessionId, async () => {
+        const preparedWorkspace = await prepareSandboxWorkspace(payload.sessionId, payload.repositoryAccess, payload.files);
+        const viewHostRoot = path.join(preparedWorkspace.tmpDir, `.sandbox-view-${executionViewId}`);
+        await rm(viewHostRoot, { recursive: true, force: true });
+
+        // Legacy sessions retain their own workspace history. Repository sessions
+        // are initialized once at the shared root above.
+        const hasGit = await fileExists(path.join(gitWorkspaceFor(preparedWorkspace), '.git'));
+        if (!hasGit) {
+            await initAndCommitWorkspace(gitWorkspaceFor(preparedWorkspace), 'Initial workspace seed');
+        }
+
+        const initialImages = snapshotImages(await listVisibleImageFiles(preparedWorkspace, false));
+        activeSessionExecutions.set(payload.sessionId, (activeSessionExecutions.get(payload.sessionId) ?? 0) + 1);
+        return {
+            workspace: preparedWorkspace,
+            viewedImagesRoot: viewHostRoot,
+            beforeImages: initialImages,
+        };
+    });
+
+    let execution: SandboxExecutionResult;
+    try {
+        execution = await runSandboxCommand(
+            payload.sessionId,
+            workspace,
+            command,
+            payload.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+            sandboxViewMountDir,
+        );
+    } finally {
+        const remaining = (activeSessionExecutions.get(payload.sessionId) ?? 1) - 1;
+        if (remaining <= 0) {
+            activeSessionExecutions.delete(payload.sessionId);
+        } else {
+            activeSessionExecutions.set(payload.sessionId, remaining);
+        }
     }
 
-    const beforeImages = snapshotImages(await listVisibleImageFiles(workspace, false));
-    const execution = await runSandboxCommand(payload.sessionId, workspace, command, payload.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-    
     // Removed automatic post-execution git commit to prevent too many git revisions
 
     const imagesAfterExecution = await listVisibleImageFiles(workspace, true);
@@ -2560,6 +2750,7 @@ async function handleExecute(req: IncomingMessage, res: ServerResponse) {
         viewedImages,
         filename => safeJoin(viewedImagesRoot, filename),
     );
+    await rm(viewedImagesRoot, { recursive: true, force: true }).catch(() => undefined);
 
     sendJson(res, 200, {
         ...execution,

@@ -48,8 +48,13 @@ import {
     type SandboxRepositoryAccess,
     type SeedFile,
 } from '../Core/SandboxToolRuntime';
-import { describeProviderError } from '../Core/ProviderError';
+import {
+    describeProviderError,
+    isTerminalInferenceError,
+    isUserAbortError,
+} from '../Core/ProviderError';
 import { globalState } from '../Core/State';
+import type { CallAIOptions } from '../Routing';
 
 export type AdaptiveAgentRole =
     | 'strategy-generator'
@@ -154,7 +159,14 @@ export interface AdaptiveDeepthinkState {
 
 export interface AdaptiveDeepthinkToolExecutionContext {
     pipeline: DeepthinkPipelineState;
-    callAI: (parts: Part[], modelToUse: string, systemInstruction?: string, isJson?: boolean) => Promise<GenerateContentResponse>;
+    callAI: (
+        parts: Part[],
+        modelToUse: string,
+        systemInstruction?: string,
+        isJson?: boolean,
+        thinkingConfig?: any,
+        options?: CallAIOptions
+    ) => Promise<GenerateContentResponse>;
     cleanOutputByType: (raw: string, type?: string) => string;
     parseJsonSafe: (raw: string, context: string) => any;
     getSelectedModel: () => string;
@@ -345,6 +357,29 @@ function syncAgentContext(
                         modelName,
                         systemPrompt,
                         isJson,
+                        undefined,
+                        {
+                            abortSignal: context.abortSignal,
+                            label: `${agentName} (${modelName})`,
+                            onRetry: (attempt, maxRetries, delayMs, err) => {
+                                const mins = Math.round((delayMs / 60_000) * 10) / 10;
+                                addAdaptiveLiveEvent(
+                                    context,
+                                    agentName,
+                                    `${agentName} call failed (attempt ${attempt}/${maxRetries + 1}): ${describeProviderError(err)}. Retrying in ${mins}m...`,
+                                    'agent_retry',
+                                    {
+                                        error: describeProviderError(err),
+                                        attempt,
+                                        modelName,
+                                        codeExecutionEnabled: false,
+                                        executionId,
+                                        executionGroupId,
+                                        executionGroupName,
+                                    }
+                                );
+                            },
+                        }
                     );
                     const output = context.cleanOutputByType(response.text || '', isJson ? 'json' : undefined);
                     const outputPath = nextArtifactPath(state, artifactOutputPath(state, strategyId, role));
@@ -375,6 +410,25 @@ function syncAgentContext(
                     seedFiles: seedFiles(),
                     runScopeDescription: 'same Adaptive Deepthink run',
                     repositoryAccess: access,
+                    abortSignal: context.abortSignal,
+                    onRetry: (attempt, maxRetries, delayMs, err) => {
+                        const mins = Math.round((delayMs / 60_000) * 10) / 10;
+                        addAdaptiveLiveEvent(
+                            context,
+                            agentName,
+                            `${agentName} sandbox turn failed (attempt ${attempt}/${maxRetries + 1}): ${describeProviderError(err)}. Retrying in ${mins}m...`,
+                            'agent_retry',
+                            {
+                                error: describeProviderError(err),
+                                attempt,
+                                modelName,
+                                codeExecutionEnabled: true,
+                                executionId,
+                                executionGroupId,
+                                executionGroupName,
+                            }
+                        );
+                    },
                     agentFilesystemRules: [
                         '- This agent is one independent role in Adaptive Deepthink.',
                         '- Its submitted final_output is passed only through the orchestration contract described in the prompt.',
@@ -401,7 +455,7 @@ function syncAgentContext(
                 });
                 return output;
             } catch (error) {
-                const message = describeProviderError(error);
+                const message = error instanceof Error ? error.message : describeProviderError(error);
                 addAdaptiveLiveEvent(context, agentName, `${agentName} agent failed: ${message}`, 'agent_error', {
                     error: message,
                     modelName,
@@ -537,6 +591,9 @@ async function executeWithRetry<T extends { success: boolean; error?: string }>(
             console.warn(`[Retry Warning] Agent ${agentRole} attempt ${attempt} failed: ${errorMsg}`);
             addAdaptiveLiveEvent(context, 'Orchestrator' as any, `Agent ${agentRole} attempt ${attempt} failed internally. Retrying... (Error: ${errorMsg})`, 'info');
         } catch (err: any) {
+            if (isTerminalInferenceError(err) || isUserAbortError(err) || context.abortSignal?.aborted) {
+                throw err;
+            }
             const errorMsg = err?.message || String(err);
             console.warn(`[Retry Warning] Agent ${agentRole} attempt ${attempt} threw error: ${errorMsg}`);
             addAdaptiveLiveEvent(context, 'Orchestrator' as any, `Agent ${agentRole} attempt ${attempt} threw error internally. Retrying... (Error: ${errorMsg})`, 'info');
@@ -1017,6 +1074,9 @@ export async function executeAdaptiveDeepthinkTool(
         syncAdaptiveDeepthinkPipeline(state, context.pipeline);
         return output;
     } catch (error) {
+        if (isTerminalInferenceError(error) || isUserAbortError(error) || context.abortSignal?.aborted) {
+            throw error;
+        }
         return `[ERROR: ${describeProviderError(error)}]`;
     }
 }

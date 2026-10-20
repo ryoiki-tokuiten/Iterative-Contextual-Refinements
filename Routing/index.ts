@@ -5,7 +5,7 @@
 
 import { RoutingManager } from './RoutingManager';
 
-export { callAI } from './AIService';
+export { callAI, type CallAIOptions } from './AIService';
 
 
 // Global routing manager instance - initialized lazily
